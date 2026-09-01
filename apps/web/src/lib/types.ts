@@ -79,3 +79,25 @@ export interface RecrutementResultat {
   idFacture: number;
   statutFacture: "BROUILLON" | "VALIDEE";
 }
+
+export interface Produit {
+  idProduit: number;
+  siteId: number;
+  type: "BIEN" | "SERVICE" | "SAV" | "KIT";
+  libelle: string;
+  prixVente: number;
+  coutRevient: number;
+  margeType: "VALEUR" | "POURCENTAGE";
+  margeValeur: number | null;
+  margePourcentage: number | null;
+  suiviStock: number;
+  quantiteStock: number;
+  seuilAlerte: number | null;
+}
+
+export interface EchangeMaterielResultat {
+  idMateriel: number;
+  idFacture: number;
+  montantFacture: number;
+  statutFacture: "BROUILLON" | "VALIDEE";
+}

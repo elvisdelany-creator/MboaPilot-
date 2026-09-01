@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Wrench } from "lucide-react";
 import { calculerPrixKit } from "@mboapilot/shared";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -14,6 +15,7 @@ interface Props {
   numeroAbonnementARenouveler: number | null;
   enCours: boolean;
   onValider: (montantEncaisse: number) => void;
+  onEchangerMateriel: () => void;
 }
 
 const formateurFcfa = new Intl.NumberFormat("fr-FR");
@@ -28,6 +30,7 @@ export function TicketPanel({
   numeroAbonnementARenouveler,
   enCours,
   onValider,
+  onEchangerMateriel,
 }: Props) {
   const prixKit =
     kitSelectionne && formuleSelectionnee
@@ -51,6 +54,18 @@ export function TicketPanel({
             </Badge>
           )}
         </div>
+
+        {numeroAbonnementARenouveler && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="mb-3 w-full cursor-pointer gap-2"
+            onClick={onEchangerMateriel}
+          >
+            <Wrench className="size-4" />
+            Échanger le matériel (panne/vol)
+          </Button>
+        )}
 
         {!formuleSelectionnee && !kitSelectionne && (
           <p className="text-sm text-muted-foreground">Aucun article sélectionné.</p>

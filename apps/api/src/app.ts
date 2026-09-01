@@ -5,6 +5,7 @@ import { registerAbonnesRoutes } from "./modules/abonnes/abonnes.routes.js";
 import { registerCatalogueRoutes } from "./modules/catalogue/catalogue.routes.js";
 import { registerAuthPlugin, registerAuthRoutes, authRequis, exigerRole } from "./modules/auth/index.js";
 import { registerJobsRoutes } from "./modules/jobs/jobs.routes.js";
+import { registerProduitsRoutes } from "./modules/produits/produits.routes.js";
 
 export interface BuildAppOptions {
   jwtSecret: string;
@@ -23,6 +24,7 @@ export function buildApp(db: Db, options: BuildAppOptions) {
   registerAbonnesRoutes(app, db, { authRequis, ventes });
   registerCatalogueRoutes(app, db, { authRequis });
   registerJobsRoutes(app, db, { authRequis, ventes, admin });
+  registerProduitsRoutes(app, db, { authRequis });
 
   return app;
 }

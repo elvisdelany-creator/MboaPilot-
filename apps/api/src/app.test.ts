@@ -352,3 +352,50 @@ describe("GET /api/v1/alertes-echeance", () => {
     expect(Array.isArray(reponse.json())).toBe(true);
   });
 });
+
+describe("POST /api/v1/abonnements/:numeroAbonnement/echange-materiel (7.3)", () => {
+  it("échange le matériel et renvoie 201", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const token = await connecter(app);
+    const creation = await app.inject({
+      method: "POST",
+      url: "/api/v1/recrutements",
+      headers: authHeader(token),
+      payload: {
+        siteId,
+        userId,
+        aujourdHui: "2025-11-16",
+        abonne: { nom: "Nga Ndongo", prenom: "Valentin", telephone: "690000000" },
+        idFormule,
+        montantEncaisse: 13000,
+      },
+    });
+    const { numeroAbonnement } = creation.json();
+    const produit = db.insert(schema.produit).values({ siteId, type: "BIEN", libelle: "Décodeur", prixVente: 15000 }).returning().get();
+
+    const reponse = await app.inject({
+      method: "POST",
+      url: `/api/v1/abonnements/${numeroAbonnement}/echange-materiel`,
+      headers: authHeader(token),
+      payload: { siteId, userId, idProduit: produit.idProduit, typeMateriel: "DECODEUR", sousGarantie: true, motif: "panne", montantEncaisse: 0 },
+    });
+
+    expect(reponse.statusCode).toBe(201);
+    expect(reponse.json()).toEqual(expect.objectContaining({ montantFacture: 0, statutFacture: "VALIDEE" }));
+  });
+
+  it("renvoie 404 pour un numéro d'abonnement inconnu", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const token = await connecter(app);
+    const produit = db.insert(schema.produit).values({ siteId, type: "BIEN", libelle: "Décodeur", prixVente: 15000 }).returning().get();
+
+    const reponse = await app.inject({
+      method: "POST",
+      url: "/api/v1/abonnements/999999/echange-materiel",
+      headers: authHeader(token),
+      payload: { siteId, userId, idProduit: produit.idProduit, typeMateriel: "DECODEUR", sousGarantie: true, motif: "panne", montantEncaisse: 0 },
+    });
+
+    expect(reponse.statusCode).toBe(404);
+  });
+});

@@ -1,4 +1,14 @@
-import type { AlerteEcheance, Abonne, Abonnement, CatalogueFamille, NouvelAbonne, RecrutementResultat, Utilisateur } from "./types";
+import type {
+  AlerteEcheance,
+  Abonne,
+  Abonnement,
+  CatalogueFamille,
+  EchangeMaterielResultat,
+  NouvelAbonne,
+  Produit,
+  RecrutementResultat,
+  Utilisateur,
+} from "./types";
 
 const BASE = "/api/v1";
 
@@ -71,6 +81,36 @@ export async function recruter(token: string, payload: RecruterPayload): Promise
     body: JSON.stringify(payload),
   });
   return lireJson<RecrutementResultat>(reponse);
+}
+
+// 5.2, 7.3 : catalogue des produits/pièces détachées, pour l'échange de matériel
+export async function chargerProduits(token: string, siteId: number): Promise<Produit[]> {
+  const reponse = await fetch(`${BASE}/produits?siteId=${siteId}`, { headers: headersAuth(token) });
+  return lireJson<Produit[]>(reponse);
+}
+
+export interface EchangerMaterielPayload {
+  siteId: number;
+  userId: number;
+  idProduit: number;
+  typeMateriel: string;
+  numeroSerie?: string;
+  sousGarantie: boolean;
+  motif: string;
+  montantEncaisse: number;
+}
+
+export async function echangerMaterielRequete(
+  token: string,
+  numeroAbonnement: number,
+  payload: EchangerMaterielPayload
+): Promise<EchangeMaterielResultat> {
+  const reponse = await fetch(`${BASE}/abonnements/${numeroAbonnement}/echange-materiel`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headersAuth(token) },
+    body: JSON.stringify(payload),
+  });
+  return lireJson<EchangeMaterielResultat>(reponse);
 }
 
 export interface ReabonnerPayload {

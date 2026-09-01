@@ -8,6 +8,7 @@ import { RechercheAbonne } from "./RechercheAbonne";
 import { CategoriesPanel } from "./CategoriesPanel";
 import { GrilleArticles } from "./GrilleArticles";
 import { TicketPanel } from "./TicketPanel";
+import { EchangeMaterielDialog } from "./EchangeMaterielDialog";
 
 interface Props {
   onNaviguer: (vue: Vue) => void;
@@ -28,6 +29,7 @@ export function CaissePage({ onNaviguer, abonneInitial, idFamilleInitiale }: Pro
   const [formuleSelectionnee, setFormuleSelectionnee] = useState<Formule | null>(null);
   const [kitSelectionne, setKitSelectionne] = useState<CatalogueKit | null>(null);
   const [enCours, setEnCours] = useState(false);
+  const [echangeMaterielOuvert, setEchangeMaterielOuvert] = useState(false);
 
   function gererErreur(erreur: unknown, messageParDefaut: string) {
     if (erreur instanceof ErreurAuthentification) {
@@ -87,8 +89,8 @@ export function CaissePage({ onNaviguer, abonneInitial, idFamilleInitiale }: Pro
     return candidats.find((a) => a.statut === "ACTIF") ?? candidats[0] ?? null;
   }, [abonnementsAbonne, familleSelectionneeId, formuleVersFamille]);
 
-  // un kit (matériel) n'a pas sa place dans un réabonnement — l'échange de matériel
-  // relève d'un autre scénario (7.3), non couvert par cet écran
+  // un kit (matériel neuf de recrutement) n'a pas sa place dans un réabonnement —
+  // l'échange de matériel (panne/vol, 7.3) est une action séparée, voir plus bas
   useEffect(() => {
     if (abonnementARenouveler) setKitSelectionne(null);
   }, [abonnementARenouveler]);
@@ -169,8 +171,15 @@ export function CaissePage({ onNaviguer, abonneInitial, idFamilleInitiale }: Pro
           numeroAbonnementARenouveler={abonnementARenouveler?.numeroAbonnement ?? null}
           enCours={enCours}
           onValider={valider}
+          onEchangerMateriel={() => setEchangeMaterielOuvert(true)}
         />
       </div>
+
+      <EchangeMaterielDialog
+        numeroAbonnement={echangeMaterielOuvert ? (abonnementARenouveler?.numeroAbonnement ?? null) : null}
+        onFerme={() => setEchangeMaterielOuvert(false)}
+        onSucces={() => setEchangeMaterielOuvert(false)}
+      />
     </div>
   );
 }

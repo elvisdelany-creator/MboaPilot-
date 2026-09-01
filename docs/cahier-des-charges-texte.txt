@@ -1,0 +1,1847 @@
+--- PAGE 1 ---
+MboaPilot — Cahier des charges fonctionnel et technique v1.0 — 30/08/2026
+CAHIER DES CHARGES
+FONCTIONNEL ET TECHNIQUE
+MBOA PILOT
+Suite de gestion et de pilotage d'activités multi-services
+pour petites entreprises — vente, abonnements TV/Streaming, SAV, caisse
+✔ Recommandation
+Document de référence destiné aux équipes de développement, de conception et de direction de
+projet. Il décrit exhaustivement le périmètre fonctionnel, l'architecture technique, le modèle de
+données, les règles de gestion et les scénarios opérationnels de l'application MboaPilot, ainsi que
+des recommandations d'architecte pour sécuriser sa réalisation.
+Élément Détail
+Nom du document Cahier des charges fonctionnel et technique — MboaPilot
+Version 1.0
+Date de rédaction 30 août 2026
+Auteur Business Analyst & Architecte Logiciel Senior
+Direction de projet, équipe de développement, équipe design/UX,
+Destinataires
+partenaires d'intégration (paiement mobile)
+Statut Version de travail — prête pour chiffrage et cadrage technique
+Version mono-entreprise, extensible multi-site et multi-utilisateurs,
+Portée
+déclinable en marque blanche
+MboaPilot — Page 1 / 50
+--- PAGE 2 ---
+MboaPilot — Cahier des charges fonctionnel et technique v1.0 — 30/08/2026
+Sommaire
+💡 Conseil d'architecte
+La pagination ci-dessous reflète la mise en page de ce document tel que généré ; en cas de
+retraitement dans Word, penser à mettre à jour les numéros de page si la pagination est amenée à
+changer.
+1. Introduction générale 5
+1.1 Contexte et objectifs du projet 5
+1.2 Présentation de la solution et nom de l'application 5
+1.3 Périmètre fonctionnel — vue d'ensemble 5
+1.4 Public cible et parties prenantes 6
+1.5 Glossaire et définitions clés 6
+2. Architecture technique 8
+2.1 Principes directeurs de l'architecture8
+2.2 Mode local (installation sur PC / réseau local) 8
+2.3 Mode en ligne (hébergement sur serveur Web) 9
+2.4 Choix de la base de données : SQLite — justification et limites 9
+2.5 Stratégie multi-site et multi-utilisateurs 10
+2.6 Sécurité, sauvegardes et continuité d'activité 11
+2.7 Stack technologique recommandée 11
+3. Modèle de données12
+3.1 Vue d'ensemble du modèle 12
+3.2 Dictionnaire des entités principales 12
+3.3 Extrait du script de création SQLite (DDL) 14
+4. Règles métier — Gestion des abonnements 16
+4.1 Principe du cycle « 30 jours date à date » 16
+4.2 Exemple de référence modélisé 16
+4.3 États d'un abonnement et transitions 17
+4.4 Alertes d'expiration automatiques (J-7, J-3, J-1) 18
+4.5 Numéro d'abonné vs numéro d'abonnement 18
+5. Catalogue multi-offres 19
+5.1 Structure générale du catalogue 19
+5.2 Produits physiques et gestion des stocks 20
+5.3 Services et prestations ponctuelles 20
+5.4 Abonnements TV par satellite — CANAL+ 20
+5.5 Abonnements TV par satellite — DStv 21
+5.6 Abonnements TV par satellite — StarTimes 22
+5.7 Abonnements TV par satellite — 24H Sport 22
+5.8 Abonnements TV par satellite — Moreplex 23
+5.9 Abonnements TV par Internet / Streaming & IPTV 23
+5.10 Service Après-Vente (SAV)23
+6. Gestion commerciale et financière 25
+MboaPilot — Page 2 / 50
+--- PAGE 3 ---
+MboaPilot — Cahier des charges fonctionnel et technique v1.0 — 30/08/2026
+6.1 Marges et gains — champ valeur/pourcentage par article 25
+6.2 Suivi des commissions CANAL+ sur 4 mois 25
+6.3 Sous-distributeurs et apporteurs d'affaires 26
+6.4 Facturation — cycle brouillon / validée / imprimée 26
+6.5 Moyens de paiement 27
+6.6 Intégration Orange Money (validation USSD / API) 27
+6.7 Ticket de caisse et facture pro-forma28
+7. Scénarios fonctionnels détaillés 29
+7.1 Scénario de recrutement (nouvel abonné) 29
+7.2 Scénario de réabonnement 29
+7.3 Scénario d'échange de matériel 30
+7.4 Scénario de changement de formule (migration) 30
+8. Modules fonctionnels de l'application 32
+8.1 Gestion des clients / abonnés 32
+8.2 Gestion des produits, services et stocks 32
+8.3 Gestion des abonnements (satellite, streaming, IPTV) 32
+8.4 Service après-vente (SAV) 32
+8.5 Caisse / Point de vente (POS) 33
+8.6 Tableau de bord et pilotage33
+8.7 Gestion des utilisateurs, rôles et sites 33
+8.8 Paramétrage (formules, tarifs, kits, options, taxes) 33
+9. Interface et expérience utilisateur 34
+9.1 Principes d'ergonomie 34
+9.2 Écran de vente rapide (Caisse / POS) 34
+9.3 Tableau de bord de pilotage35
+9.4 Parcours abonné (fiche 360°) 35
+10. Modèle de commercialisation de l'application 36
+10.1 Formules d'abonnement éditeur (SaaS) 36
+10.2 Contrats de maintenance / SAV logiciel 36
+10.3 Mises à jour et cycle de version 37
+10.4 Mécanisme technique de licence (mode local) 37
+11. Exigences non fonctionnelles 38
+11.1 Performance et disponibilité 38
+11.2 Sécurité et protection des données38
+11.3 Conformité réglementaire (Cameroun / CEMAC) 38
+11.4 Compatibilité et portabilité 39
+11.5 Journalisation, audit et traçabilité 39
+12. Plan de mise en œuvre 40
+12.1 Phasage MVP → V2 → V3 40
+12.2 Livrables attendus par phase 40
+12.3 Facteurs clés de succès et risques 40
+13. Recommandations, conseils et axes d'amélioration 42
+13.1 Recommandations fonctionnelles 42
+13.2 Recommandations techniques 42
+13.3 Idées d'évolution (V2 / V3)43
+MboaPilot — Page 3 / 50
+--- PAGE 4 ---
+MboaPilot — Cahier des charges fonctionnel et technique v1.0 — 30/08/2026
+14. Annexes 44
+14.1 Grille tarifaire complète (référence rapide) 44
+14.2 Dictionnaire de données détaillé 46
+14.3 Script SQL SQLite (extrait consolidé) 47
+14.4 Lexique des acronymes 49
+MboaPilot — Page 4 / 50
+--- PAGE 5 ---
+MboaPilot — Cahier des charges fonctionnel et technique v1.0 — 30/08/2026
+1. Introduction générale
+1.1 Contexte et objectifs du projet
+De nombreuses petites entreprises camerounaises et africaines cumulent aujourd'hui plusieurs métiers
+au sein d'une même boutique : vente de produits électroniques et d'accessoires, prestations de services,
+distribution et réabonnement de bouquets TV par satellite (CANAL+, DStv, StarTimes, 24H Sport,
+Moreplex), vente d'accès streaming/IPTV (Netflix, Prime Video, Crunchyroll, Disney+, IPTV) et service
+après-vente. Cette activité multi-métiers est aujourd'hui pilotée avec des outils disparates (cahiers papier,
+tableurs, mémoire du gérant), ce qui génère des pertes de chiffre d'affaires (oublis de réabonnement,
+ruptures de stock non anticipées, factures non recouvrées) et une absence de visibilité consolidée sur la
+rentabilité réelle de chaque activité.
+L'objectif du présent cahier des charges est de spécifier, avec un niveau de détail directement exploitable
+par une équipe de développement, une application de gestion et de pilotage — MboaPilot — capable de
+couvrir l'intégralité de ce périmètre multi-offres au sein d'un outil unique, cohérent et évolutif,
+déployable aussi bien en installation locale qu'en mode hébergé.
+💡 Conseil d'architecte
+Ce document combine trois niveaux de lecture : (1) des spécifications fonctionnelles opposables (ce
+que l'application doit faire), (2) des spécifications techniques structurantes (comment elle doit être
+bâtie), et (3) des recommandations d'architecte, clairement identifiées par ce type d'encadré, qui
+n'ont pas un caractère contractuel mais visent à sécuriser les choix de conception.
+1.2 Présentation de la solution et nom de l'application
+L'application est baptisée MboaPilot. « Mboa » désigne, dans le langage courant camerounais, le pays, le
+« chez-soi » — un ancrage identitaire fort et immédiatement reconnaissable ; « Pilot » renvoie à la
+fonction centrale de l'outil : donner au gérant les commandes de son activité (tableau de bord, alertes,
+pilotage financier), comme un poste de pilotage. L'ambition affichée est d'en faire l'outil de gestion de
+référence pour les distributeurs, revendeurs et boutiques multi-services au Cameroun, avec une vocation
+à s'étendre aux marchés d'Afrique centrale et de l'Ouest.
+Le nom est volontairement court, prononçable dans toutes les langues locales usuelles, disponible en tant
+que marque et non porteur d'un sens négatif dans les principales langues de la sous-région (à vérifier
+formellement lors du dépôt de marque — voir recommandations, section 13.1).
+💡 Conseil d'architecte
+Suggestion d'identité de marque : décliner MboaPilot en modules nommés simplement («
+MboaPilot Caisse », « MboaPilot Abonnements », « MboaPilot SAV ») pour communiquer
+clairement le périmètre couvert, tout en vendant une seule application intégrée. Une déclinaison «
+MboaPilot pour distributeurs » peut servir de produit d'appel spécifiquement pour les revendeurs
+de bouquets TV, qui constituent le cas d'usage le plus contraint fonctionnellement de ce cahier des
+charges.
+1.3 Périmètre fonctionnel — vue d'ensemble
+MboaPilot couvre six grands domaines fonctionnels, détaillés dans les chapitres suivants :
+MboaPilot — Page 5 / 50
+--- PAGE 6 ---
+MboaPilot — Cahier des charges fonctionnel et technique v1.0 — 30/08/2026
+Domaine Contenu couvert
+Produits physiques (téléviseurs, télécommandes, réfrigérateurs, piles,
+Catalogue & Stocks
+cosmétiques…), gestion des stocks, prestations de services.
+CANAL+, DStv, StarTimes, 24H Sport, Moreplex — kits, formules, options,
+Abonnements TV satellite
+réabonnement, changement de formule, échange de matériel.
+Netflix, Prime Video, Crunchyroll, Disney+, IPTV — comptes/écrans partagés,
+Abonnements Streaming/IPTV
+identifiants, dates d'expiration.
+Service Après-Vente (SAV) Réception, diagnostic, pièces détachées, statut de réparation, restitution.
+Facturation brouillon/validée, paiements cash et Orange Money, tickets de caisse,
+Ventes, caisse & finance
+factures pro-forma, marges et commissions.
+Tableau de bord, alertes d'échéance, multi-utilisateurs, multi-site, paramétrage du
+Pilotage & administration
+catalogue et des tarifs.
+Ces domaines s'articulent autour d'un socle commun : un abonné/client unique, un cycle de facturation
+unique et un moteur de règles de validité d'abonnement partagé par toutes les familles de formules
+(satellite comme streaming).
+1.4 Public cible et parties prenantes
+Profil Rôle vis-à-vis de l'outil Attentes principales
+Décideur, utilisateur du Visibilité sur le chiffre d'affaires, les marges, les
+Gérant / propriétaire de boutique
+tableau de bord stocks et les échéances clients
+Utilisateur quotidien de la Écran de vente rapide, simple, tolérant aux
+Caissier / vendeur
+caisse erreurs de saisie
+Utilisateur du module
+Technicien SAV Suivi clair des appareils reçus, pièces, statut
+réparation
+Sous-distributeur / apporteur Tiers rattaché à des
+Traçabilité de ses abonnés et de ses commissions
+d'affaires abonnés qu'il a recrutés
+Reçoit factures, tickets, relances d'échéance
+Client final / abonné Bénéficiaire indirect
+lisibles
+Commercialise et Modèle d'abonnement logiciel viable, mises à
+Éditeur de la solution
+maintient l'application jour, support
+1.5 Glossaire et définitions clés
+Terme Définition
+Personne physique ou morale identifiée de façon unique et pérenne (numéro
+Abonné d'abonné fixe) dans le système, indépendamment des abonnements qu'elle
+souscrit au fil du temps.
+Souscription à une formule donnée, pour une période donnée, associée à un
+Abonnement numéro d'abonnement propre (qui peut changer, contrairement au numéro
+d'abonné).
+Formule Offre commerciale de base d'un opérateur (ex. ACCESS, EVASION, TOUT CANAL+
+pour CANAL+ ; YANGA, COMPAQ pour DStv), rattachée à une famille
+MboaPilot — Page 6 / 50
+--- PAGE 7 ---
+MboaPilot — Cahier des charges fonctionnel et technique v1.0 — 30/08/2026
+Terme Définition
+d'abonnement (CANAL+, DStv, StarTimes, 24H Sport, Moreplex, Streaming/IPTV).
+Service additionnel payant venant s'ajouter à une formule (ex. Option Charme,
+Option / complément
+English Plus, Netflix via CANAL+).
+Produit composé regroupant le matériel nécessaire à un premier abonnement
+Kit
+(décodeur, parabole, accessoires) et, le cas échéant, une formule de départ.
+Processus de création d'un nouvel abonnement pour un abonné nouveau ou
+Recrutement
+existant.
+Réabonnement Renouvellement d'un abonnement déjà existant pour un abonné déjà connu.
+Migration / changement de Passage d'une formule en cours vers une formule strictement supérieure, en cours
+formule de période ou à la relance.
+Facture générée automatiquement à la validation d'une opération mais non
+Facture brouillon
+imprimable tant qu'aucun encaissement n'a été enregistré.
+Jalons d'alerte automatique avant l'échéance d'un abonnement (7, 3 et 1 jour(s)
+J-7 / J-3 / J-1
+avant la date de fin de validité).
+MboaPilot — Page 7 / 50
+--- PAGE 8 ---
+MboaPilot — Cahier des charges fonctionnel et technique v1.0 — 30/08/2026
+2. Architecture technique
+2.1 Principes directeurs de l'architecture
+L'application doit pouvoir être déployée selon deux modes, au choix de l'utilisateur final, sans divergence
+de code métier entre les deux : un même cœur applicatif (logique métier, règles de gestion, interface) est
+packagé différemment selon le mode retenu.
+• Mode local : installation sur le PC (ou le réseau local) de l'entreprise. Fonctionne sans connexion
+Internet permanente ; adapté aux zones à connectivité intermittente.
+• Mode en ligne : application hébergée sur un serveur Web, accessible par navigateur depuis
+n'importe quel poste autorisé ; adapté au multi-site et à l'accès distant (supervision par le gérant
+depuis son téléphone, par exemple).
+Le choix du mode est une décision d'exploitation (et non de conception) : la même base de code sert les
+deux, avec un fichier de configuration qui détermine si l'accès aux données se fait via un serveur
+embarqué local ou via l'API centrale hébergée.
+Figure 1 — Architecture hybride : mode local et mode en ligne
+2.2 Mode local (installation sur PC / réseau local)
+Le mode local repose sur trois composants installés sur le même poste (ou partagés sur le réseau local du
+point de vente) :
+1. Une interface utilisateur Web (HTML/JS) exécutée dans une fenêtre applicative (via un conteneur
+léger de type Electron/Tauri) ou dans le navigateur par défaut du poste.
+2. Un serveur applicatif embarqué (API REST locale, port local type 127.0.0.1:PORT) portant toute la
+logique métier et les règles de validation.
+3. Un fichier de base de données SQLite unique, stocké dans un dossier applicatif protégé du poste.
+Pour un usage multi-poste au sein d'un même site (plusieurs caisses dans une même boutique), un poste
+"maître" héberge le serveur applicatif et la base SQLite ; les autres postes s'y connectent en HTTP sur le
+MboaPilot — Page 8 / 50
+--- PAGE 9 ---
+MboaPilot — Cahier des charges fonctionnel et technique v1.0 — 30/08/2026
+réseau local (Wi-Fi/Ethernet interne), sans copie locale de la base. Cela évite tout conflit d'écriture
+concurrente sur le fichier SQLite lui-même (qui reste piloté par un seul processus).
+💡 Conseil d'architecte
+SQLite autorise plusieurs lecteurs simultanés mais un seul écrivain à la fois (renforcé par le mode
+WAL — Write-Ahead Logging — qui doit être activé par défaut). En confiant l'accès au fichier à un
+unique processus serveur qui sérialise les écritures, on élimine par construction les erreurs de type
+« database is locked », y compris en mode multi-poste local.
+2.3 Mode en ligne (hébergement sur serveur Web)
+En mode hébergé, l'architecture est mutualisée : un seul serveur applicatif (ou un cluster) sert plusieurs
+entreprises clientes (multi-tenant). Le principe retenu est l'isolation stricte des données par entreprise
+(et, en option, par site) via un fichier SQLite dédié :
+• Chaque entreprise cliente dispose de son propre fichier SQLite, stocké sur un volume persistant du
+serveur (ou un espace de stockage réseau performant type NVMe/SSD).
+• Chaque site d'une même entreprise multi-site peut disposer de son propre fichier (mode « multi-
+site distribué ») ou partager le fichier de l'entreprise avec une colonne site_id de cloisonnement
+logique (mode « multi-site centralisé », recommandé par défaut pour les petites structures — voir
+2.5).
+• Une réplication continue (ex. Litestream, ou un mécanisme équivalent de streaming des pages
+WAL) copie en temps quasi réel chaque fichier SQLite vers un stockage objet compatible S3,
+permettant une restauration au point dans le temps (PITR) en cas d'incident serveur.
+💡 Conseil d'architecte
+Ce schéma « une base SQLite par tenant » est un patron d'architecture reconnu (popularisé par des
+plateformes comme Fly.io/LiteFS ou Turso pour SQLite en production multi-tenant). Il offre trois
+avantages concrets pour ce projet : (1) sauvegarde et export natifs — copier le fichier .db suffit à
+exporter toutes les données d'une entreprise, ce qui facilite la portabilité vers le mode local ; (2)
+performance prévisible, une entreprise ne pouvant jamais être ralentie par la charge d'une autre ;
+(3) conformité simplifiée, chaque client pouvant obtenir une extraction complète et autonome de
+ses données sur simple demande.
+2.4 Choix de la base de données : SQLite — justification et limites
+SQLite est imposé comme moteur de base de données. Ce choix est pertinent pour le contexte ciblé
+(petites entreprises, connectivité parfois instable) à condition de respecter certaines règles d'ingénierie :
+Contrainte SQLite Risque si ignorée Mesure retenue
+Mode WAL activé + accès exclusivement
+Erreurs « database is locked » en
+Un seul écrivain à la fois via le serveur applicatif (jamais d'écriture
+usage concurrent
+directe multi-process sur le fichier)
+Impossible d'ouvrir le fichier Le fichier n'est jamais partagé par un
+Pas de moteur réseau natif directement depuis plusieurs dossier réseau monté ; il est toujours servi
+postes réseau via une API HTTP
+Fichier unique = unité de Perte de données si le fichier est Sauvegardes automatiques horodatées +
+sauvegarde corrompu sans sauvegarde réplication continue en ligne (2.6)
+Pas de gestion native des droits Fuite de données entre entreprises 1 fichier = 1 tenant (isolation physique, pas
+MboaPilot — Page 9 / 50
+--- PAGE 10 ---
+MboaPilot — Cahier des charges fonctionnel et technique v1.0 — 30/08/2026
+Contrainte SQLite Risque si ignorée Mesure retenue
+multi-tenant en mode hébergé seulement logique)
+Politique d'archivage des historiques
+Taille pratique confortable Non bloquant pour le segment ciblé
+anciens au-delà de N années
+jusqu'à plusieurs dizaines de Go (TPE/PME)
+(paramétrable)
+💡 Conseil d'architecte
+Recommandation : conserver systématiquement les clés étrangères activées (PRAGMA
+foreign_keys=ON) et exécuter des sauvegardes logiques régulières (VACUUM INTO) en plus de la
+copie physique du fichier, afin de garantir un fichier de secours toujours cohérent et compact.
+2.5 Stratégie multi-site et multi-utilisateurs
+L'application doit nativement supporter plusieurs utilisateurs avec des rôles différenciés, et plusieurs
+points de vente rattachés à une même entreprise.
+2.5.1 Multi-utilisateurs
+• Authentification individuelle obligatoire (identifiant + mot de passe, hashage fort — voir 11.2) ; pas
+de compte générique partagé.
+• Rôles prédéfinis avec droits granulaires : Administrateur, Gérant, Caissier/Vendeur, Technicien SAV,
+Comptable (lecture financière), Apporteur d'affaires (lecture restreinte à ses propres abonnés
+référés).
+• Journal d'audit : chaque création/modification de facture, d'abonnement ou de stock est tracée
+avec l'identité de l'utilisateur et l'horodatage (voir 11.5).
+2.5.2 Multi-site
+Deux configurations sont proposées, sélectionnées selon la taille et la connectivité de l'entreprise :
+Configuration Fonctionnement Cas d'usage recommandé
+Un seul fichier SQLite pour toute
+l'entreprise ; chaque enregistrement Sites proches, connectivité fiable entre
+Multi-site centralisé porte un site_id. Tous les sites doivent eux (ex. plusieurs boutiques d'une même
+être connectés au même serveur (local ville reliées à un hébergement en ligne)
+ou en ligne).
+Chaque site possède sa propre base
+locale et fonctionne de façon autonome
+hors ligne ; une synchronisation Sites éloignés ou zones à connectivité
+Multi-site distribué (fédéré) périodique agrège les données vers une intermittente, besoin de continuité
+base centrale de consolidation (lecture d'activité même hors ligne
+seule côté siège) dès qu'une connexion
+est disponible.
+MboaPilot — Page 10 / 50
+--- PAGE 11 ---
+MboaPilot — Cahier des charges fonctionnel et technique v1.0 — 30/08/2026
+💡 Conseil d'architecte
+Pour la majorité des petites entreprises visées par ce cahier des charges, le mode « multi-site
+centralisé » en ligne est recommandé par défaut : il est plus simple à opérer et offre un tableau de
+bord consolidé en temps réel. Le mode distribué doit néanmoins être conçu dès la V1 au niveau du
+modèle de données (champ site_id partout, horodatages de synchronisation) pour ne pas
+nécessiter de refonte lorsque l'éditeur proposera l'offre « multi-site distribué » en V2 (voir 12.1).
+2.6 Sécurité, sauvegardes et continuité d'activité
+• Sauvegarde automatique quotidienne (a minima) du fichier SQLite en mode local, avec
+conservation glissante sur 30 jours et export manuel à la demande (bouton « Exporter mes
+données »).
+• En mode en ligne : réplication continue + sauvegardes journalières externalisées, chiffrées au
+repos.
+• Chiffrement des mots de passe (algorithme à sel, type bcrypt/argon2) — jamais de mot de passe en
+clair, y compris dans les fichiers de sauvegarde exportés.
+• Connexions chiffrées (HTTPS/TLS) obligatoires en mode en ligne, et recommandées en mode local
+dès lors que plusieurs postes communiquent sur le réseau interne.
+• Procédure de restauration documentée et testée (restaurer une sauvegarde ne doit jamais
+nécessiter d'intervention développeur).
+2.7 Stack technologique recommandée
+Le choix précis relève de l'équipe de développement, mais la cohérence suivante est recommandée pour
+tenir les contraintes de ce cahier des charges (hybridation local/en ligne, SQLite, coût de possession réduit
+pour de petites entreprises) :
+Couche Recommandation
+Application Web responsive (utilisable aussi bien sur écran de caisse que sur
+Interface utilisateur tablette/mobile pour la supervision), empaquetée en application de bureau via
+Tauri ou Electron pour le mode local.
+Même code applicatif pour les deux modes (ex. Node.js/TypeScript ou
+Python/FastAPI), exposant une API REST versionnée ; couche d'accès aux
+Backend / API
+données isolée derrière un ORM léger compatible SQLite (ex. Prisma, Drizzle,
+SQLAlchemy).
+SQLite (imposé), mode WAL, migrations de schéma versionnées et automatisées
+Base de données
+à chaque mise à jour.
+Génération de PDF côté serveur pour factures/tickets (moteur type headless
+Impression / documents print ou bibliothèque PDF), imprimante thermique 80mm pour les tickets de
+caisse (pilote ESC/POS).
+SMS (passerelle locale) et/ou e-mail pour les alertes J-7/J-3/J-1 et les
+Notifications
+notifications de paiement Orange Money.
+Module adaptateur dédié pour l'API Orange Money (voir 6.6), conçu en couche
+Paiement mobile d'abstraction pour accueillir d'autres opérateurs (MTN Mobile Money, etc.) sans
+réécriture du cœur métier.
+MboaPilot — Page 11 / 50
+--- PAGE 12 ---
+MboaPilot — Cahier des charges fonctionnel et technique v1.0 — 30/08/2026
+3. Modèle de données
+3.1 Vue d'ensemble du modèle
+Le modèle de données ci-dessous constitue le socle conceptuel de la base SQLite. Il est volontairement
+présenté de façon simplifiée (sans toutes les tables de paramétrage) pour faire apparaître les relations
+structurantes entre les entités métier. Le script SQL complet (DDL) figure en annexe 14.3.
+Figure 2 — Modèle de données simplifié : entités clés et relations
+3.2 Dictionnaire des entités principales
+3.2.1 Référentiel entreprise, sites et utilisateurs
+Entité Clé Rôle
+Le tenant applicatif (une entreprise cliente de
+MboaPilot). Porte les paramètres de facturation,
+ENTREPRISE id_entreprise
+devise, logo, formule d'abonnement éditeur
+souscrite.
+Un point de vente/agence rattaché à une
+SITE id_site entreprise. Toute vente, tout stock et tout
+abonnement est rattaché à un site.
+Un compte nominatif, rattaché à un site principal,
+UTILISATEUR id_user
+avec un rôle (voir 2.5.1) déterminant ses droits.
+Tiers apporteur d'affaires. Peut être une personne
+ou une structure. Rattaché à un ou plusieurs
+SOUS_DISTRIBUTEUR id_apporteur
+abonnés qu'il a recrutés, avec un taux de
+commission.
+MboaPilot — Page 12 / 50
+--- PAGE 13 ---
+MboaPilot — Cahier des charges fonctionnel et technique v1.0 — 30/08/2026
+3.2.2 Abonnés, abonnements et catalogue
+Entité Clé Rôle
+Identité pérenne du client. Ne change jamais,
+même si ses abonnements ou son matériel
+ABONNE id_abonne (fixe)
+changent. Porte nom, prénom, e-mail, n° CNI,
+adresse, téléphone, apporteur_id (optionnel).
+Une souscription active ou passée à une formule,
+pour une période donnée (date_debut, date_fin).
+ABONNEMENT n° abonnement
+Peut changer de numéro (ex. lors d'un échange de
+matériel) sans changer d'abonné.
+CANAL+, DStv, StarTimes, 24H Sport, Moreplex,
+FAMILLE_ABONNEMENT id_famille Streaming/IPTV. Détermine quelles formules sont
+proposées à l'étape suivante de la souscription.
+Offre commerciale de base (ex. EVASION, COMPAQ)
+FORMULE id_formule
+rattachée à une famille, avec un prix de référence.
+Complément payant rattachable à une ou plusieurs
+formules (ex. Option Charme), avec règles de
+OPTION id_option
+compatibilité et de tarif différencié selon la formule
+support.
+Produit composé regroupant un ou plusieurs
+PRODUITs (décodeur, parabole, accessoires)
+KIT id_kit
+nécessaires au premier équipement,
+éventuellement lié à une formule de départ.
+Décodeur/carte d'accès effectivement installés chez
+MATERIEL_ABONNE id_materiel un abonné (numéros de série), rattachés à
+l'abonnement en cours.
+Trace chaque changement de formule, d'option ou
+HISTORIQUE_ABONNEMENT id_histo de matériel sur un abonnement (valeur
+avant/après, date, utilisateur, motif).
+SUIVI_COMMISSION_CANALPLU Table dédiée au suivi des 4 mois suivant un
+abonnement_id
+S recrutement CANAL+ (voir 6.2).
+3.2.3 Catalogue commercial, ventes et finance
+Entité Clé Rôle
+Article vendable : bien physique (avec suivi de
+stock), service, ou intervention SAV. Porte
+PRODUIT id_produit
+prix_vente, cout_revient, marge_valeur ou
+marge_pourcentage (voir 6.1).
+Historique des entrées/sorties de stock par produit
+STOCK_MOUVEMENT id_mouvement
+et par site (achat, vente, casse, transfert inter-site).
+Panier d'une transaction : une ou plusieurs lignes
+VENTE / LIGNE_VENTE id_vente (produits, abonnements, SAV) associées à une
+facture.
+FACTURE id_facture Document commercial en statut brouillon puis
+MboaPilot — Page 13 / 50
+--- PAGE 14 ---
+MboaPilot — Cahier des charges fonctionnel et technique v1.0 — 30/08/2026
+Entité Clé Rôle
+validée. Porte le total, la TVA/taxes le cas échéant,
+l'abonné, le site, l'utilisateur émetteur.
+Encaissement rattaché à une facture (mode,
+montant, référence de transaction), pouvant être
+PAIEMENT id_paiement
+partiel (plusieurs paiements pour une même
+facture).
+id_dossier_sav Dossier de réparation : état de réception,
+SAV_DOSSIER diagnostic, pièces utilisées, statut, dates, coût main-
+d'œuvre/pièces.
+3.3 Extrait du script de création SQLite (DDL)
+L'extrait ci-dessous illustre la structuration des tables centrales du cycle abonnement (le script complet,
+incluant catalogue, stocks, facturation et SAV, figure en annexe 14.3). Il matérialise notamment la
+distinction entre numéro d'abonné (identifiant pérenne) et numéro d'abonnement (identifiant de la
+souscription en cours), ainsi que le cloisonnement multi-site via site_id.
+Extrait — tables ABONNE, ABONNEMENT, FORMULE (SQLite)
+PRAGMA foreign_keys = ON;
+PRAGMA journal_mode = WAL;
+CREATE TABLE site (
+id_site INTEGER PRIMARY KEY AUTOINCREMENT,
+id_entreprise INTEGER NOT NULL,
+nom TEXT NOT NULL,
+adresse TEXT,
+actif INTEGER NOT NULL DEFAULT 1
+);
+CREATE TABLE abonne (
+id_abonne INTEGER PRIMARY KEY AUTOINCREMENT,
+site_id INTEGER NOT NULL REFERENCES site(id_site),
+nom TEXT NOT NULL,
+prenom TEXT NOT NULL,
+email TEXT,
+numero_cni TEXT,
+adresse TEXT,
+telephone TEXT NOT NULL,
+apporteur_id INTEGER REFERENCES sous_distributeur(id_apporteur),
+date_creation TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TABLE famille_abonnement (
+id_famille INTEGER PRIMARY KEY AUTOINCREMENT,
+libelle TEXT NOT NULL UNIQUE -- CANAL+, DSTV, STARTIMES, 24H_SPORT, MOREPLEX,
+STREAMING
+);
+CREATE TABLE formule (
+MboaPilot — Page 14 / 50
+--- PAGE 15 ---
+MboaPilot — Cahier des charges fonctionnel et technique v1.0 — 30/08/2026
+id_formule INTEGER PRIMARY KEY AUTOINCREMENT,
+id_famille INTEGER NOT NULL REFERENCES famille_abonnement(id_famille),
+libelle TEXT NOT NULL, -- ex. 'TOUT CANAL+', 'COMPAQ'
+prix INTEGER NOT NULL, -- en FCFA
+rang INTEGER NOT NULL, -- ordre croissant = hiérarchie des formules
+(pour migration)
+actif INTEGER NOT NULL DEFAULT 1
+);
+CREATE TABLE abonnement (
+numero_abonnement INTEGER PRIMARY KEY AUTOINCREMENT,
+id_abonne INTEGER NOT NULL REFERENCES abonne(id_abonne),
+id_formule INTEGER NOT NULL REFERENCES formule(id_formule),
+site_id INTEGER NOT NULL REFERENCES site(id_site),
+date_debut TEXT NOT NULL, -- format ISO 'YYYY-MM-DD'
+date_fin TEXT NOT NULL, -- calculée : voir règle 30 jours (chapitre
+4)
+statut TEXT NOT NULL DEFAULT 'ACTIF', -- ACTIF, EXPIRE, RESILIE
+apporteur_id INTEGER REFERENCES sous_distributeur(id_apporteur),
+cree_par INTEGER NOT NULL REFERENCES utilisateur(id_user),
+date_creation TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX idx_abonnement_echeance ON abonnement(date_fin, statut);
+CREATE INDEX idx_abonnement_abonne ON abonnement(id_abonne);
+💡 Conseil d'architecte
+L'index idx_abonnement_echeance est la pièce technique centrale du tableau de bord d'alertes
+(chapitre 4.4) : il permet de retrouver en une requête indexée tous les abonnements ACTIF dont
+date_fin tombe dans les 7 prochains jours.
+MboaPilot — Page 15 / 50
+--- PAGE 16 ---
+MboaPilot — Cahier des charges fonctionnel et technique v1.0 — 30/08/2026
+4. Règles métier — Gestion des abonnements
+4.1 Principe du cycle « 30 jours date à date »
+Règle de gestion impérative : par défaut, tout abonnement est valide sur un cycle strict de 30 jours
+calendaires « date à date », et non sur un mois civil. La date de fin de validité se calcule à partir de la date
+de début et de la durée souscrite (exprimée en nombre de cycles de 30 jours), selon la formule suivante :
+Formule de calcul de la date de fin de validité
+date_fin = date_debut + (duree_en_cycles_30j × 30) − 1 jour
+# Exemples :
+# - durée 1 mois (1 cycle de 30 jours) : date_fin = date_debut + 29 jours
+# - durée 3 mois (3 cycles de 30 jours), ex. 24H SPORT : date_fin = date_debut + 89
+jours
+# - durée 12 mois (12 cycles de 30 jours), ex. Netflix annuel : date_fin = date_debut
++ 359 jours
+Certaines formules commerciales dérogent à ce mode « 30 jours strict » et sont calculées en mois civil (du
+quantième de la date de début au même quantième du mois suivant, moins un jour, avec gestion des mois
+plus courts). Le champ mode_duree de la table FORMULE (voir 3.3) porte cette distinction formule par
+formule :
+Mode Calcul Utilisation
+Mode par défaut pour toutes les familles
+d'abonnement TV et streaming, sauf
+STRICT_30J date_debut + (N × 30) − 1 jour
+paramétrage contraire explicite sur une
+formule.
+date_debut + N mois calendaires − Réservé aux formules commerciales qui
+MOIS_CIVIL 1 jour (ex. 31 janv. + 1 mois civil = l'exigent explicitement (paramétrable par
+28/29 fév.) formule, désactivé par défaut).
+💡 Conseil d'architecte
+Le mode de calcul (STRICT_30J ou MOIS_CIVIL) doit être un paramètre par formule, jamais codé en
+dur, car la politique commerciale des opérateurs (CANAL+, DStv, StarTimes…) peut évoluer. À la
+mise en production, toutes les formules du catalogue fourni dans ce cahier des charges (chapitre 5)
+doivent être initialisées en STRICT_30J, conformément à l'exemple de référence ci-dessous.
+4.2 Exemple de référence modélisé
+Cet exemple doit être utilisé comme cas de test de non-régression automatisé sur le moteur de calcul de
+validité :
+MboaPilot — Page 16 / 50
+--- PAGE 17 ---
+MboaPilot — Cahier des charges fonctionnel et technique v1.0 — 30/08/2026
+✔ Recommandation
+Abonné : M. VALENTIN NGA NDONGO — Formule : « TOUT CANAL+ » — Durée souscrite : 1 mois —
+Date de début : 16 novembre 2025 — Date de fin calculée : 15 décembre 2025 (soit 16/11/2025 +
+29 jours). L'abonnement est donc valide 30 jours pleins, du 16 novembre au 15 décembre 2025
+inclus.
+Figure 3 — Cycle de vie de l'abonnement de référence, avec jalons d'alerte
+Point d'attention sur la date de début : si le client ne précise pas de date de validation souhaitée au
+moment de la souscription, la date du jour de la transaction est utilisée par défaut comme date_debut
+(voir scénario de recrutement, 7.1, étape 3).
+4.3 États d'un abonnement et transitions
+État Déclencheur Transitions possibles
+Facture de souscription/réabonnement encaissée → EXPIRE (passage
+(totalement ou partiellement, selon règle de facturation automatique du temps) ;
+ACTIF
+6.4) et date du jour comprise entre date_debut et → RESILIE (action
+date_fin. manuelle)
+→ ACTIF (un
+réabonnement est
+encaissé, nouvelle période
+Traitement automatique quotidien (tâche planifiée)
+calculée à partir de la date
+EXPIRE constatant date_fin < date du jour sans réabonnement
+de réabonnement ou de la
+enregistré.
+date de fin précédente
+selon règle de grâce —
+paramétrable)
+État terminal ; un nouvel
+Action explicite d'un utilisateur habilité (ex. demande du abonnement (nouveau
+RESILIE
+client, litige, matériel non restitué). numéro) peut être recréé
+pour le même abonné
+💡 Conseil d'architecte
+Recommandation : prévoir un paramètre de « délai de grâce » (par défaut 0 jour) permettant, si
+l'entreprise le souhaite commercialement, de faire redémarrer un réabonnement tardif à compter
+de la date de fin théorique précédente plutôt que de la date réelle de paiement, afin de ne pas
+pénaliser un client qui paie avec quelques jours de retard tout en marquant clairement la période
+d'interruption de service dans l'historique.
+MboaPilot — Page 17 / 50
+--- PAGE 18 ---
+MboaPilot — Cahier des charges fonctionnel et technique v1.0 — 30/08/2026
+4.4 Alertes d'expiration automatiques (J-7, J-3, J-1)
+Une tâche planifiée (exécutée quotidiennement, tôt le matin) parcourt tous les abonnements au statut
+ACTIF et déclenche une alerte lorsque la date du jour correspond exactement à J-7, J-3 ou J-1 avant la
+date_fin :
+1. J-7 : premier rappel — affichage dans le tableau de bord (liste « Abonnements à échéance ») +
+notification interne à l'utilisateur en charge du site ; envoi optionnel d'un SMS/e-mail de courtoisie
+au client si les coordonnées sont renseignées.
+2. J-3 : relance ferme — mise en évidence visuelle renforcée (couleur orange) dans le tableau de
+bord ; notification systématique au client si un canal de contact existe.
+3. J-1 : dernier rappel — mise en évidence critique (couleur rouge) ; notification client systématique ;
+suggestion automatique d'ouverture d'un réabonnement en un clic depuis la fiche abonné.
+Au-delà de la date_fin sans réabonnement, l'abonnement bascule en statut EXPIRE (4.3) et reste visible
+dans une liste dédiée « Abonnements expirés » du tableau de bord pendant une durée paramétrable (ex.
+90 jours), pour faciliter les campagnes de reconquête.
+Jalon Couleur d'alerte Actions proposées à l'utilisateur
+Voir fiche abonné, envoyer rappel manuel, planifier un
+J-7 Jaune / ambre
+appel
+J-3 Orange Envoyer relance, proposer réabonnement immédiat
+Réabonnement en un clic, appel prioritaire, alerte
+J-1 Rouge
+visible dès la connexion de l'utilisateur
+4.5 Numéro d'abonné vs numéro d'abonnement
+Cette distinction est structurante pour l'ensemble du système et doit être rigoureusement respectée dans
+le modèle de données (voir 3.2.2) :
+• Numéro d'abonné (id_abonne) : identifiant unique et définitif attribué à la création du client. Il ne
+change jamais, quels que soient les abonnements successifs, changements de formule ou échanges
+de matériel du client. Toute l'historicité (factures, abonnements, matériel, SAV) se rattache à ce
+numéro.
+• Numéro d'abonnement (numero_abonnement) : identifiant d'une souscription particulière, pour
+une période et une formule données. Il peut être amené à changer, notamment lors d'un échange
+de matériel (7.3) qui peut nécessiter la création d'un nouvel enregistrement d'abonnement
+rattaché au même matériel/à la même carte, selon la politique de l'opérateur concerné.
+💡 Conseil d'architecte
+Toute recherche client dans l'application (recrutement, réabonnement, SAV) doit permettre la saisie
+indifférente du numéro d'abonné, du numéro d'abonnement en cours, ou du nom/prénom, avec
+une résolution unique vers la fiche ABONNE (voir 7.2, étape 1).
+MboaPilot — Page 18 / 50
+--- PAGE 19 ---
+MboaPilot — Cahier des charges fonctionnel et technique v1.0 — 30/08/2026
+5. Catalogue multi-offres
+5.1 Structure générale du catalogue
+Le catalogue doit être entièrement paramétrable (aucun prix ni libellé en dur dans le code) et organisé
+selon la hiérarchie suivante, commune à tous les opérateurs :
+1. Famille d'abonnement (ex. CANAL+, DStv, StarTimes, 24H Sport, Moreplex, Streaming/IPTV) —
+détermine la liste de formules proposée.
+2. Formule (ex. EVASION, COMPAQ) — l'offre de base, avec un prix et un rang (pour la logique de
+migration, voir 7.4).
+3. Option / complément — additionnel payant rattachable à une ou plusieurs formules, avec règles
+de compatibilité et tarif éventuellement différencié par formule support.
+4. Kit matériel — produit composé nécessaire au premier équipement (décodeur, parabole,
+accessoires, carte d'accès), pouvant embarquer une formule de départ.
+Cette structure s'applique identiquement aux produits physiques (5.2), aux services (5.3), à toutes les
+familles d'abonnement satellite (5.4 à 5.8) et aux abonnements streaming/IPTV (5.9), qui partagent le
+même moteur de calcul de validité (chapitre 4) et le même moteur de facturation (chapitre 6).
+5.1.1 Logique de tarification d'un kit selon la formule choisie
+Plusieurs kits materiel (CANAL+ GlobalZ/Z4/G11, DStv Compaq) voient leur prix final dépendre de la
+formule d'abonnement sélectionnée par le client. Le moteur de devis doit donc calculer le prix du kit
+dynamiquement, et non le lire comme une valeur fixe :
+Logique de calcul du prix d'un kit dépendant de la formule
+SI kit.regle_prix == "PRIX_DECODEUR_VARIABLE_SELON_FORMULE":
+prix_kit = prix_decodeur(formule_choisie) + prix_parabole_accessoires +
+prix_formule_choisie
+# Exemple CANAL+ GlobalZ/Z4 :
+# formule = EVASION -> decodeur = 5 000 FCFA -> kit = 5 000 + 0 + 10 500 =
+15 500 FCFA
+# formule = TOUT CANAL+ -> decodeur = 1 000 FCFA -> kit = 1 000 + 0 + 28 000 =
+29 000 FCFA
+SI kit.regle_prix == "PRIX_KIT_FIXE_PAR_DIFFERENTIEL":
+prix_kit = prix_kit_reference + (prix_formule_choisie − prix_formule_reference)
+# Exemple DStv Compaq :
+# kit reference (formule COMPAQ, 13 000 FCFA) = 55 000 FCFA
+# formule choisie = PREMIUM (28 000 FCFA)
+# kit = 55 000 + (28 000 − 13 000) = 70 000 FCFA
+💡 Conseil d'architecte
+Chaque kit du catalogue (annexe 14.1) doit porter en base un champ regle_prix
+(PRIX_DECODEUR_VARIABLE_SELON_FORMULE, PRIX_KIT_FIXE_PAR_DIFFERENTIEL, ou PRIX_FIXE
+pour les kits StarTimes/24H Sport/Moreplex dont le prix n'évolue pas avec la formule), ainsi qu'une
+grille prix_decodeur_par_formule quand applicable, afin que l'ajout d'un nouvel opérateur ou d'une
+nouvelle formule ne nécessite qu'une saisie de paramétrage, jamais une évolution de code.
+MboaPilot — Page 19 / 50
+--- PAGE 20 ---
+MboaPilot — Cahier des charges fonctionnel et technique v1.0 — 30/08/2026
+5.2 Produits physiques et gestion des stocks
+Catégorie ouverte, non limitative : téléviseurs, télécommandes, réfrigérateurs, piles, cosmétiques, câbles,
+accessoires, décodeurs et paraboles vendus à l'unité, etc. Chaque produit physique porte :
+• Une fiche article (libellé, catégorie, code interne/code-barres optionnel, prix de vente, coût de
+revient, marge — voir 6.1).
+• Un suivi de stock par site : quantité disponible, seuil d'alerte de réapprovisionnement, historique
+des mouvements (achat, vente, casse/perte, transfert entre sites, inventaire).
+• Un statut « produit composé » optionnel pour les kits (5.1), qui décrémente automatiquement le
+stock de chacun de leurs composants à la vente.
+Mouvement de stock Effet
++ quantité au stock du site récepteur, mise à jour du coût de revient moyen
+Réception d'achat
+pondéré
+Vente (caisse/POS) − quantité, création automatique de la ligne de vente correspondante
+− quantité site source / + quantité site destination, tracé comme un mouvement
+Transfert inter-site
+double
+Casse / perte / retour fournisseur − quantité avec motif obligatoire, non rattaché à une vente
+Écart constaté vs stock théorique, avec justification obligatoire et validation par
+Ajustement d'inventaire
+un rôle habilité
+5.3 Services et prestations ponctuelles
+Les prestations de service (installation, dépannage ponctuel hors garantie, configuration, déplacement)
+sont gérées comme des articles du catalogue de type SERVICE : pas de suivi de stock, mais les mêmes
+attributs de tarification et de marge (6.1) que les produits physiques. Une prestation peut être facturée
+seule ou associée à une vente de matériel/à un abonnement (ex. frais d'installation d'un kit).
+5.4 Abonnements TV par satellite — CANAL+
+Le kit CANAL+ se décline en 4 références :
+Kit Composition Prix
+KIT CANAL+ DÉCODEUR OTT Décodeur OTT sérialisable Prix en attente
+Variable selon formule —
+Décodeur GLOBALZ sérialisable + parabole +
+KIT CANAL+ GLOBALZ voir 5.1.1 (ex. 15 500 FCFA
+accessoires
+sur base EVASION)
+Identique à GLOBALZ — voir
+KIT CANAL+ Z4 Décodeur Z4 sérialisable + parabole + accessoires
+5.1.1
+Variable selon formule —
+Décodeur G11 sérialisable + carte d'accès
+KIT CANAL+ G11 voir 5.1.1 (ex. 40 500 FCFA
+sérialisable + parabole + accessoires
+sur base EVASION)
+MboaPilot — Page 20 / 50
+--- PAGE 21 ---
+MboaPilot — Cahier des charges fonctionnel et technique v1.0 — 30/08/2026
+✔ Recommandation
+Le montant total du KIT CANAL+ G11 est confirmé à 40 500 FCFA sur base EVASION (décodeur 30
+000 + parabole/accessoires 0 + formule EVASION 10 500) ; le chiffre « 405 000 FCFA » mentionné
+par ailleurs était bien une coquille de saisie (séparateur de milliers) et non un montant distinct.
+⚠ Point d'attention
+Deux points de donnée restent à confirmer avec l'opérateur/la direction commerciale avant mise en
+production du catalogue : (1) le prix du KIT CANAL+ DÉCODEUR OTT, communiqué comme « en
+attente » ; (2) la composition du kit G11 mentionne un « décodeur Z4 » alors que le kit décrit un
+décodeur G11 — probable erreur de libellé à corriger dans la fiche article définitive. Le formulaire
+d'administration du catalogue (8.8) doit de toute façon permettre de corriger ces valeurs sans
+intervention technique.
+5.4.1 Formules d'abonnement et réabonnement CANAL+
+Formule Prix mensuel (30 jours)
+ACCESS 5 000 FCFA
+EVASION 10 500 FCFA
+ACCESS+ 15 000 FCFA
+TOUT CANAL+ 28 000 FCFA
+UNA WELCOME 8 000 FCFA
+5.4.2 Options CANAL+
+Option Prix
+Option Charme 7 000 FCFA
+Option English Plus (formules ACCESS, EVASION) 5 000 FCFA
+Option English Plus (formule ACCESS+) 2 000 FCFA
+Option CANAL+ Netflix Basic (1 écran à la fois) 3 000 FCFA
+Option CANAL+ Netflix Standard (2 écrans à la fois) 4 000 FCFA
+Option CANAL+ Netflix Premium (4 écrans à la fois) 5 000 FCFA
+5.5 Abonnements TV par satellite — DStv
+Le kit DStv se décline en une référence, avec un principe de tarification par différentiel de formule (voir
+5.1.1) :
+Kit Composition Prix de référence
+Décodeur DStv + installation + formule COMPAQ ; si le
+client choisit une formule supérieure, le prix du kit est 55 000 FCFA (base
+KIT DSTV COMPAQ
+majoré de la différence entre la formule choisie et COMPAQ)
+COMPAQ.
+MboaPilot — Page 21 / 50
+--- PAGE 22 ---
+MboaPilot — Cahier des charges fonctionnel et technique v1.0 — 30/08/2026
+5.5.1 Formules d'abonnement et réabonnement DStv
+Formule Prix mensuel (30 jours)
+YANGA 5 000 FCFA
+CONFAM 9 000 FCFA
+COMPAQ 13 000 FCFA
+COMPAQ+ 19 000 FCFA
+PREMIUM 28 000 FCFA
+5.5.2 Options DStv
+Option Prix
+French Plus 13 000 FCFA
+French Touch 6 000 FCFA
+Extra View 4 500 FCFA
+5.6 Abonnements TV par satellite — StarTimes
+Kit Composition Prix
+KIT STARTIMES Décodeur StarTimes + installation + formule GLOBAL 18 000 FCFA (prix fixe)
+5.6.1 Formules d'abonnement et réabonnement StarTimes
+Formule Prix mensuel (30 jours)
+NOVA 2 500 FCFA
+SMART 5 000 FCFA
+SUPER (EN/FR) 9 000 FCFA
+GLOBAL 10 500 FCFA
+5.7 Abonnements TV par satellite — 24H Sport
+Kit Composition Prix
+KIT 24H SPORT Décodeur + formule FULL 24H SPORT 3 MOIS 30 000 FCFA (prix fixe)
+5.7.1 Formule d'abonnement et réabonnement 24H Sport
+Formule Prix (cycle 3 mois — 90 jours)
+FULL 24H SPORT 3 MOIS 15 000 FCFA
+MboaPilot — Page 22 / 50
+--- PAGE 23 ---
+MboaPilot — Cahier des charges fonctionnel et technique v1.0 — 30/08/2026
+5.8 Abonnements TV par satellite — Moreplex
+Kit Composition Prix
+KIT MOREPLEX Décodeur + formule FULL MOREPLEX 30 000 FCFA (prix fixe)
+5.8.1 Formule d'abonnement et réabonnement Moreplex
+Formule Prix mensuel (30 jours)
+FULL MOREPLEX 5 000 FCFA
+5.9 Abonnements TV par Internet / Streaming & IPTV
+Cette famille suit un a modèle différent : pas de matériel/kit, mais un accès (compte, écran ou profil
+partagé), avec identifiants et une date d'expiration calculée selon la même règle « 30 jours date à date »
+(ou son multiple pour les offres 12 mois).
+Service Tarif 1 mois (30 jours) Tarif 12 mois (360 jours)
+Netflix 3 500 FCFA 26 000 FCFA
+Prime Vidéo 3 500 FCFA 26 000 FCFA
+Crunchyroll 3 500 FCFA 26 000 FCFA
+IPTV 5 000 FCFA 40 000 FCFA
+⚠ Point d'attention
+Disney+ est cité dans le périmètre fonctionnel attendu mais aucun tarif n'a été communiqué : la
+fiche formule doit être créée en catalogue dès la mise en production (structure identique aux autres
+services de streaming), avec un tarif à renseigner. Le modèle de données étant générique par
+famille (5.1), l'ajout d'un nouvel opérateur streaming (Disney+, ou tout autre à l'avenir) est une
+opération de paramétrage, jamais un développement.
+Spécificités à modéliser pour cette famille (module détaillé en 8.3) :
+• Suivi des comptes/écrans partagés : un compte fournisseur peut être mutualisé entre plusieurs
+abonnés MboaPilot, chacun occupant un « profil » ou un « écran » avec sa propre date d'expiration
+individuelle.
+• Stockage sécurisé des identifiants (couple identifiant/mot de passe du compte partagé, ou code
+d'accès IPTV), visibles uniquement par les rôles habilités (voir 11.2).
+• Alerte de capacité : blocage ou avertissement si l'on tente d'affecter plus d'abonnés que le nombre
+d'écrans simultanés autorisés par le compte fournisseur (ex. 4 écrans max pour un compte Netflix
+Premium partagé).
+5.10 Service Après-Vente (SAV)
+Le SAV est traité comme une troisième nature d'article (aux côtés des biens physiques et des services),
+avec un cycle de vie dédié :
+MboaPilot — Page 23 / 50
+--- PAGE 24 ---
+MboaPilot — Cahier des charges fonctionnel et technique v1.0 — 30/08/2026
+Statut du dossier SAV Description
+Appareil réceptionné, état des lieux à la réception consigné (accessoires fournis,
+Reçu
+état esthétique, panne annoncée par le client).
+En diagnostic Le technicien qualifie la panne et estime les pièces/le coût.
+Devis en attente Devis transmis au client, en attente d'accord (le cas échéant).
+Intervention en cours ; pièces de rechange affectées au dossier (avec décrément
+En réparation
+du stock de pièces).
+Réparation terminée, appareil disponible pour restitution, facturation générée
+Prêt
+(brouillon).
+Livré Appareil restitué au client, facture encaissée/imprimée.
+Irréparable / Abandonné Statuts de sortie alternatifs, avec motif obligatoire.
+• Chaque dossier SAV porte : date de réception, description de la panne annoncée, état de réception
+(accessoires, esthétique), diagnostic technicien, pièces de rechange utilisées (rattachées au stock),
+main-d'œuvre, statut courant, historique des changements de statut, photos optionnelles.
+• Rattachement possible à un abonné existant (matériel d'abonnement en panne, ex. décodeur
+CANAL+) ou à un client ponctuel non-abonné (réparation de télévision, par exemple).
+• Gestion de la garantie : la facturation d'un échange ou d'une réparation doit distinguer le cas «
+sous garantie » (gratuit ou tarif réduit selon la politique) du cas « hors garantie » (voir 7.3).
+MboaPilot — Page 24 / 50
+--- PAGE 25 ---
+MboaPilot — Cahier des charges fonctionnel et technique v1.0 — 30/08/2026
+6. Gestion commerciale et financière
+6.1 Marges et gains — champ valeur/pourcentage par article
+Toute fiche article — produit physique, service ou dossier SAV — doit permettre à l'entreprise de
+renseigner explicitement le gain qu'elle réalise sur sa vente, sous deux formes interchangeables au choix
+de l'utilisateur :
+Mode de saisie Champs Comportement
+L'utilisateur saisit un montant fixe de marge ;
+le prix de vente peut être suggéré
+Gain en valeur marge_valeur (FCFA) automatiquement (cout_revient +
+marge_valeur) ou saisi indépendamment,
+auquel cas le système affiche l'écart.
+L'utilisateur saisit un taux appliqué au coût
+de revient (ou, au choix paramétrable, au
+Gain en pourcentage marge_pourcentage (%)
+prix de vente) ; le système calcule le montant
+de marge correspondant.
+Le champ marge_type (VALEUR ou POURCENTAGE) détermine le mode actif ; l'autre valeur est recalculée
+et affichée à titre indicatif pour permettre une bascule sans perte d'information. Cette marge est calculée
+et consolidée sur chaque vente (ligne de vente), ce qui alimente directement le tableau de bord de
+rentabilité (8.6).
+💡 Conseil d'architecte
+Recommandation : appliquer ce même mécanisme de gain (valeur/pourcentage) non seulement
+aux produits/services/SAV explicitement demandés, mais aussi, en configuration avancée, aux
+formules et kits d'abonnement eux-mêmes (écart entre le tarif payé à l'opérateur et le tarif facturé
+au client). Cela permet un tableau de bord de rentabilité unique couvrant l'ensemble des familles
+du catalogue plutôt que deux logiques de calcul distinctes.
+6.2 Suivi des commissions CANAL+ sur 4 mois
+Règle métier spécifique et impérative : lorsqu'un kit CANAL+ est vendu à l'occasion d'un recrutement
+(nouvel abonné), une commission est due au vendeur/apporteur sur ce kit. Cette commission n'est
+toutefois définitivement acquise que si le client se réabonne à temps, sans interruption, pendant les 4
+mois suivant le recrutement. Un abonné qui laisse son abonnement expirer avant l'issue de cette période
+probatoire entraîne l'annulation (le « reversement ») de la commission correspondante.
+1. À la validation d'un recrutement CANAL+ (et uniquement un recrutement, pas un réabonnement),
+le système crée automatiquement un enregistrement de suivi de commission rattaché à
+l'abonnement initial, au vendeur et/ou à l'apporteur d'affaires, avec une date de fin de période
+probatoire = date de début de l'abonnement + 4 mois (4 cycles de 30 jours, soit 119 jours).
+2. Chaque échéance de l'abonnement au cours de cette période est surveillée par la même tâche
+planifiée que les alertes J-7/J-3/J-1 (4.4) : si le client se réabonne avant (ou à) la date de fin de la
+période en cours, le suivi se poursuit sans interruption.
+3. Si l'abonnement bascule en statut EXPIRE (aucun réabonnement à temps) à un moment
+quelconque de la période probatoire, le suivi de commission passe au statut ANNULÉE : la
+commission n'est pas due.
+MboaPilot — Page 25 / 50
+--- PAGE 26 ---
+MboaPilot — Cahier des charges fonctionnel et technique v1.0 — 30/08/2026
+4. Si la période probatoire de 4 mois s'achève sans qu'aucune expiration n'ait été constatée, le suivi
+passe au statut CONFIRMÉE : la commission devient définitivement acquise et peut être intégrée
+au relevé de commissions du vendeur/apporteur.
+Pseudo-code — cycle de vie du suivi de commission CANAL+
+ON recrutement_valide(abonnement) WHERE abonnement.famille == "CANAL+" AND
+type_operation == "RECRUTEMENT":
+creer SuiviCommission(
+abonnement_initial_id = abonnement.id,
+vendeur_id = abonnement.cree_par,
+apporteur_id = abonnement.apporteur_id,
+montant_commission = calculer_commission(kit_vendu),
+date_fin_probatoire = abonnement.date_debut + 119 jours,
+statut = "EN_COURS"
+)
+JOB quotidien evaluer_commissions_canalplus():
+POUR CHAQUE suivi IN SuiviCommission WHERE statut == "EN_COURS":
+SI abonnement_courant(suivi).statut == "EXPIRE" ET aujourd_hui <=
+suivi.date_fin_probatoire:
+suivi.statut = "ANNULEE"
+SINON SI aujourd_hui > suivi.date_fin_probatoire:
+suivi.statut = "CONFIRMEE"
+💡 Conseil d'architecte
+Le tableau de bord doit exposer une liste dédiée « Commissions CANAL+ en période probatoire »
+avec, par ligne : abonné, date de recrutement, échéance de fin de probation, nombre de cycles déjà
+honorés, statut. Cette visibilité permet au gérant de relancer préventivement les clients dont la
+commission de son vendeur est en jeu — un double bénéfice pour la fidélisation client et la
+motivation commerciale.
+6.3 Sous-distributeurs et apporteurs d'affaires
+Lorsqu'un recrutement est réalisé pour le compte d'un sous-distributeur ou d'un apporteur d'affaires,
+celui-ci doit être renseigné et un lien permanent est conservé entre l'apporteur et tous les abonnés qu'il a
+fait recruter, y compris pour leurs réabonnements et évolutions futures :
+• Chaque ABONNE porte un champ apporteur_id optionnel, renseigné à la création et non
+modifiable ensuite sans action explicite d'un administrateur (pour préserver la traçabilité des
+commissions).
+• Une fiche « Apporteur » consolide : liste de ses abonnés, chiffre d'affaires généré, commissions
+dues/confirmées/annulées (y compris le suivi CANAL+ 4 mois de 6.2), historique de règlement de
+ses commissions.
+• Le taux de commission peut être défini globalement pour un apporteur, ou surchargé par famille
+d'abonnement/type d'article.
+6.4 Facturation — cycle brouillon / validée / imprimée
+Le cycle de facturation est unique, quel que soit le type de vente (produit, service, abonnement, SAV), et
+suit les règles suivantes :
+MboaPilot — Page 26 / 50
+--- PAGE 27 ---
+MboaPilot — Cahier des charges fonctionnel et technique v1.0 — 30/08/2026
+1. À la validation de toute opération (recrutement, réabonnement, vente de produit, dossier SAV
+prêt), une facture est générée automatiquement à l'état BROUILLON, réunissant sur des lignes
+distinctes le matériel/kit éventuel et la prestation ou l'abonnement proprement dit.
+2. Une facture au statut BROUILLON ne peut jamais être imprimée ni transmise au client — c'est une
+contrainte système, pas seulement une convention d'usage.
+3. Le tarif appliqué sur chaque ligne tient compte d'une éventuelle promotion active à la date de la
+vente (remise ponctuelle, tarif préférentiel apporteur, etc.).
+4. Le mode de paiement choisi est enregistré (comptant, chèque, virement, mobile money) et un
+encaissement est saisi, partiel ou total.
+5. Dès qu'un encaissement (même partiel) est enregistré, la facture passe au statut VALIDÉE et
+devient imprimable ; un solde restant dû reste visible et peut faire l'objet d'encaissements
+complémentaires ultérieurs.
+6. Après paiement, une étape facultative permet de compléter ou corriger les informations du nouvel
+abonné (ex. e-mail, adresse) sans bloquer la vente si ces informations ne sont pas immédiatement
+disponibles.
+💡 Conseil d'architecte
+Une facture BROUILLON doit rester modifiable sans restriction (lignes, quantités, remises). Une fois
+VALIDÉE, toute correction doit passer par un avoir/une note de crédit tracée plutôt que par une
+modification directe, afin de préserver l'intégrité de l'historique comptable.
+6.5 Moyens de paiement
+Moyen de paiement Validation Champs à saisir
+Comptant (cash) Immédiate Montant remis, monnaie rendue
+Chèque Immédiate (avec risque d'impayé) Banque, numéro de chèque, titulaire, date
+Virement bancaire Différée (rapprochement) Banque émettrice, référence de virement
+Mobile money (Orange Numéro de téléphone, référence de
+Immédiate via API/USSD (voir 6.6)
+Money et extensible) transaction, statut retourné par l'opérateur
+6.6 Intégration Orange Money (validation USSD / API)
+L'encaissement par Orange Money doit être intégré via l'API officielle de l'opérateur (souscription
+marchand préalable requise auprès d'Orange), selon un parcours en deux volets possibles à supporter :
+• Paiement initié côté client (USSD/OTP) : le client compose un code USSD sur son téléphone pour
+générer un mot de passe à usage unique (OTP), qu'il communique ou saisit sur le poste de caisse ;
+l'application soumet la transaction à l'API Orange Money et attend la confirmation.
+• Paiement initié côté marchand (push/notification) : l'application déclenche une demande de
+paiement vers le numéro du client via l'API, qui reçoit une notification à valider sur son propre
+téléphone.
+Statut de transaction Traitement applicatif
+Transaction créée côté application, en attente d'action du client ou de retour
+INITIÉE
+de l'opérateur.
+Transaction soumise à l'API, en attente de confirmation (polling ou
+EN ATTENTE
+callback/webhook).
+MboaPilot — Page 27 / 50
+--- PAGE 28 ---
+MboaPilot — Cahier des charges fonctionnel et technique v1.0 — 30/08/2026
+Statut de transaction Traitement applicatif
+Paiement confirmé : création automatique du PAIEMENT rattaché à la
+RÉUSSIE facture, avec la référence de transaction opérateur ; passage de la facture à
+VALIDÉE si le montant couvre le total.
+Solde insuffisant, annulation client ou refus opérateur : la facture reste en
+ÉCHOUÉE
+attente d'un autre mode de règlement.
+Délai de validation dépassé (OTP non saisi à temps) : la transaction est
+EXPIRÉE
+annulée et doit être relancée.
+💡 Conseil d'architecte
+Les spécifications techniques précises (points d'accès, mécanisme d'authentification, format des
+webhooks) évoluent au gré de la documentation développeur Orange (portail
+developer.orange.com et espace marchand Orange Money Business). Il est recommandé de bâtir un
+module d'intégration en couche d'abstraction (interface « fournisseur de paiement mobile ») afin
+de pouvoir brancher Orange Money en premier lieu, puis MTN Mobile Money ou d'autres
+opérateurs, sans modifier le cœur applicatif (facturation, stock, abonnements). Le développeur en
+charge de cette intégration doit consulter la documentation officielle à jour avant implémentation.
+6.7 Ticket de caisse et facture pro-forma
+Document Usage et contenu
+Édition immédiate au comptoir sur imprimante thermique (format 80mm),
+remis au client à l'encaissement comptant. Contient : identification de
+Ticket de caisse
+l'entreprise/site, date/heure, lignes vendues, total, mode de paiement,
+monnaie rendue, mentions légales minimales.
+Document non définitif, sans valeur d'encaissement, édité avant paiement
+pour donner au client une estimation engageante (ex. devis kit +
+Facture pro-forma abonnement) ; se distingue de la facture BROUILLON en ce qu'elle peut être
+imprimée et transmise, tout en portant clairement la mention « PRO-FORMA
+— document sans valeur comptable ».
+Émise uniquement après encaissement (6.4), numérotée séquentiellement et
+Facture définitive
+non modifiable ; base de la comptabilité de l'entreprise.
+MboaPilot — Page 28 / 50
+--- PAGE 29 ---
+MboaPilot — Cahier des charges fonctionnel et technique v1.0 — 30/08/2026
+7. Scénarios fonctionnels détaillés
+Les quatre scénarios ci-dessous couvrent l'intégralité du cycle de vie d'un abonnement TV (satellite ou
+streaming). Ils partagent le même moteur de calcul de validité (chapitre 4), le même moteur de
+facturation (6.4) et alimentent le même historique (3.2.2).
+7.1 Scénario de recrutement (nouvel abonné)
+Objectif : créer un nouvel abonnement, pour un client nouveau ou déjà connu du système.
+1. Création ou sélection de l'abonné. Si le client se présente pour la première fois, sa fiche est créée
+avec les informations obligatoires : nom, prénom, e-mail, numéro de carte d'identité, adresse
+complète, numéro de téléphone. Si le client existe déjà (recherche par numéro d'abonné, numéro
+d'abonnement, nom/prénom ou téléphone — voir 4.5), sa fiche existante est sélectionnée.
+2. Sélection de la formule et du matériel. L'utilisateur choisit la famille d'abonnement (CANAL+, DStv,
+StarTimes, 24H Sport, Moreplex, Streaming/IPTV), ce qui filtre la liste de formules proposées (5.1) ;
+il sélectionne la formule et, le cas échéant, une ou plusieurs options compatibles. Le matériel
+nécessaire (kit, produit composé — 5.1.1) est ensuite sélectionné et son prix calculé
+dynamiquement selon la formule retenue.
+3. Date de validation de l'abonnement. La date de début souhaitée par le client est saisie. Si aucune
+date n'est renseignée, la date du jour de la transaction est utilisée par défaut (voir 4.1/4.2). La date
+de fin est calculée automatiquement selon la règle des 30 jours (ou mois civil si la formule le
+prévoit).
+4. Choix du mode de paiement et facturation. Le mode de règlement est sélectionné (comptant,
+chèque, virement, mobile money). La facturation est automatique : le tarif appliqué tient compte
+d'une éventuelle promotion active. À la validation, une facture BROUILLON est générée, réunissant
+le matériel d'abonnement et l'abonnement proprement dit (6.4). Cette facture n'est pas
+imprimable tant qu'aucun encaissement n'est enregistré. Dès encaissement (partiel ou total), la
+facture devient VALIDÉE et imprimable.
+5. Mise à jour facultative de la fiche abonné. Après paiement, une étape optionnelle permet de
+compléter les informations du nouvel abonné si elles n'étaient pas toutes disponibles à l'étape 1.
+💡 Conseil d'architecte
+Un abonné dispose d'un numéro d'abonnement et d'un numéro d'abonné. Le numéro
+d'abonnement peut changer (notamment lors d'un changement ou échange de matériel — 7.3),
+mais le numéro d'abonné ne change jamais et suit le client tout au long de sa relation avec
+l'entreprise (voir 4.5).
+✔ Recommandation
+Recrutement pour un sous-distributeur ou apporteur d'affaires : si le recrutement est réalisé pour le
+compte d'un tiers apporteur, celui-ci doit impérativement être renseigné à l'étape 1. Un lien
+permanent est alors conservé entre l'apporteur et l'abonné, pour tous ses abonnements futurs (voir
+6.3). Si l'abonnement recruté relève de la famille CANAL+, le suivi de commission sur 4 mois (6.2)
+est automatiquement initié.
+7.2 Scénario de réabonnement
+Objectif : renouveler un abonnement déjà existant pour un abonné déjà connu.
+MboaPilot — Page 29 / 50
+--- PAGE 30 ---
+MboaPilot — Cahier des charges fonctionnel et technique v1.0 — 30/08/2026
+1. Sélection de l'abonné à réabonner. Recherche par numéro d'abonnement, numéro d'abonné, ou
+nom/prénom. La liste des abonnements de l'abonné sélectionné s'affiche (historique de ses
+formules précédentes), avec mise en évidence de l'abonnement à échéance proche ou déjà expiré.
+2. Changement éventuel de formule et/ou de compléments. Le client peut reconduire sa formule
+actuelle ou en changer (voir règles de migration, 7.4), et ajuster ses options.
+3. Choix du mode de paiement.
+4. Facturation. Identique au cycle décrit en 6.4 : facture BROUILLON puis VALIDÉE dès encaissement.
+La nouvelle période de validité est calculée à partir de la date de réabonnement (ou de la date de
+fin théorique précédente en cas de délai de grâce paramétré — voir 4.3).
+💡 Conseil d'architecte
+Chaque réabonnement au sein de la période probatoire de 4 mois d'un abonné CANAL+
+nouvellement recruté doit être évalué par le moteur de suivi de commission (6.2) : un
+réabonnement effectué à temps maintient la commission en cours ; un abonnement expiré avant
+réabonnement l'annule.
+7.3 Scénario d'échange de matériel
+Objectif : remplacer le matériel d'un abonné à la suite d'une panne ou d'un vol constaté.
+1. Sélection de l'abonnement. L'abonnement pour lequel un échange de matériel doit être effectué
+est sélectionné.
+2. Sélection du nouveau matériel. Le matériel de remplacement est choisi dans le catalogue (peut
+être une référence identique ou différente selon disponibilité).
+3. Facturation. Automatique, avec distinction du cas où l'ancien matériel était encore sous garantie
+(remplacement gratuit ou à tarif réduit selon la politique de l'entreprise) ou hors garantie
+(facturation au tarif plein du nouveau matériel).
+Un historique des changements de matériel est conservé pour chaque abonné (numéros de série
+successifs, dates, motif panne/vol, statut garantie), rattaché à l'entité HISTORIQUE_ABONNEMENT
+(3.2.2). Selon la politique de l'opérateur concerné, cet échange peut entraîner l'attribution d'un nouveau
+numéro d'abonnement (le numéro d'abonné, lui, ne change jamais — voir 4.5).
+7.4 Scénario de changement de formule (migration)
+Objectif : faire évoluer la formule d'un abonnement en cours vers une formule supérieure.
+1. Sélection de l'abonnement.
+2. Sélection de la nouvelle formule.
+3. Facturation. Calculée sur la différence entre la formule en cours et la formule supérieure choisie,
+selon la même logique de différentiel que celle décrite pour les kits en 5.1.1.
+Règle de gestion Détail
+Un changement vers une formule strictement identique à la formule en
+Formule identique cours est refusé par le système (ce n'est pas un changement de formule
+mais un simple réabonnement, 7.2).
+Un changement vers une formule strictement inférieure (rang inférieur,
+voir champ « rang » de la table FORMULE, 3.3) est refusé par le système
+Formule inférieure
+lors d'une migration en cours de période ; une telle rétrogradation ne peut
+être effectuée qu'au moment du réabonnement suivant.
+MboaPilot — Page 30 / 50
+--- PAGE 31 ---
+MboaPilot — Cahier des charges fonctionnel et technique v1.0 — 30/08/2026
+Règle de gestion Détail
+Seule une formule de rang strictement supérieur à la formule en cours
+Formule supérieure uniquement
+peut être sélectionnée en migration.
+Le changement de formule peut survenir à tout moment sur un
+Moment autorisé
+abonnement en cours (statut ACTIF), ou être combiné à un réabonnement.
+Comme pour le recrutement et le réabonnement, le changement de
+Validation obligatoire formule fait l'objet d'une facturation et d'une validation (encaissement)
+pour être définitivement appliqué.
+L'historique du changement de formule (et des compléments associés) est conservé pour chaque
+abonnement dans HISTORIQUE_ABONNEMENT, avec la valeur avant/après et la date du changement
+(voir 3.2.2 et 3.3).
+💡 Conseil d'architecte
+Le changement de formule (migration) ne s'applique qu'à un abonnement en cours ou actif ; il est
+sans objet sur un abonnement déjà EXPIRE ou RESILIE, pour lequel seul un nouveau recrutement ou
+un réabonnement est pertinent.
+MboaPilot — Page 31 / 50
+--- PAGE 32 ---
+MboaPilot — Cahier des charges fonctionnel et technique v1.0 — 30/08/2026
+8. Modules fonctionnels de l'application
+Ce chapitre détaille, module par module, les fonctions attendues, directement transposables en tickets de
+développement (backlog).
+8.1 Gestion des clients / abonnés
+• Création, recherche (numéro d'abonné, numéro d'abonnement, nom/prénom, téléphone),
+consultation et modification de fiche abonné.
+• Fiche « 360° » de l'abonné : coordonnées, historique complet des abonnements (toutes familles
+confondues), matériel installé, factures, dossiers SAV, apporteur d'affaires éventuel.
+• Fusion de doublons (deux fiches détectées comme un même client) avec conservation de tout
+l'historique.
+• Export de la fiche client (PDF) et de l'historique de facturation.
+8.2 Gestion des produits, services et stocks
+• Création/édition d'articles (produit physique, service, kit composé) avec catégorie, prix, coût,
+marge (6.1).
+• Gestion multi-site des stocks : niveaux, seuils d'alerte, mouvements, transferts inter-site,
+inventaires.
+• Import/export de catalogue (fichier CSV/Excel) pour l'initialisation et les mises à jour tarifaires en
+masse.
+• Historique des variations de prix par article.
+8.3 Gestion des abonnements (satellite, streaming, IPTV)
+• Paramétrage du catalogue : familles, formules (avec rang pour la migration), options, kits et leur
+règle de prix (5.1.1).
+• Exécution des quatre scénarios du chapitre 7 (recrutement, réabonnement, échange de matériel,
+changement de formule).
+• Vue « comptes partagés » pour le streaming/IPTV : un compte fournisseur, plusieurs profils/écrans
+affectés à des abonnés distincts, avec alerte de dépassement de capacité (5.9).
+• Journal des alertes envoyées (J-7/J-3/J-1) par abonnement, avec statut d'envoi (réussi/échoué) par
+canal.
+8.4 Service après-vente (SAV)
+• Ouverture de dossier SAV (avec ou sans rattachement à un abonné existant), état des lieux de
+réception.
+• Suivi du statut (5.10) avec horodatage de chaque changement et utilisateur responsable.
+• Affectation de pièces de rechange (décrément de stock automatique) et de temps de main-
+d'œuvre.
+• Facturation à la clôture du dossier (statut Prêt), avec distinction garantie/hors garantie.
+• Notification au client lorsque l'appareil passe au statut « Prêt ».
+MboaPilot — Page 32 / 50
+--- PAGE 33 ---
+MboaPilot — Cahier des charges fonctionnel et technique v1.0 — 30/08/2026
+8.5 Caisse / Point de vente (POS)
+Détaillé en 9.2 (spécification d'interface). Fonctions couvertes : vente rapide multi-articles (produits,
+services, abonnements, SAV), calcul automatique des totaux et de la monnaie rendue, sélection du mode
+de paiement (y compris Orange Money, 6.6), édition immédiate du ticket de caisse et/ou de la facture pro-
+forma (6.7).
+8.6 Tableau de bord et pilotage
+Détaillé en 9.3. Indicateurs clés attendus :
+Indicateur Détail
+Par période (jour/semaine/mois), par site, par famille d'activité (produits,
+Chiffre d'affaires
+abonnements TV, streaming, SAV).
+Consolidée à partir du champ gain valeur/pourcentage (6.1), par famille et
+Marge / rentabilité
+par article.
+État des stocks Alertes de rupture, valorisation du stock, produits à rotation lente.
+Abonnements à échéance Listes J-7/J-3/J-1 et expirés (4.4), filtrable par famille et par site.
+Commissions CANAL+ en cours Vue dédiée sur la période probatoire de 4 mois (6.2).
+Suivi des apporteurs d'affaires Chiffre d'affaires et commissions générés par chaque apporteur (6.3).
+Encaissements du jour Ventilation par mode de paiement (cash, Orange Money, chèque, virement).
+8.7 Gestion des utilisateurs, rôles et sites
+• Création/désactivation de comptes utilisateurs, attribution de rôle et de site principal (2.5.1).
+• Gestion des sites (création, coordonnées, rattachement à l'entreprise).
+• Vue de supervision multi-site (2.5.2) : bascule de site pour les rôles habilités à consulter plusieurs
+sites (ex. gérant multi-boutiques).
+• Journal d'audit consultable (11.5).
+8.8 Paramétrage (formules, tarifs, kits, options, taxes)
+• Back-office catalogue : gestion des familles, formules, options, kits, règles de prix dynamique
+(5.1.1) — sans intervention développeur.
+• Paramétrage du mode de calcul de validité par formule (STRICT_30J / MOIS_CIVIL — 4.1) et de la
+durée en cycles.
+• Paramétrage des jalons d'alerte (par défaut J-7/J-3/J-1, modifiable) et des canaux de notification
+actifs.
+• Paramétrage des taxes applicables (le cas échéant) et des mentions légales figurant sur les
+documents commerciaux.
+• Paramétrage des taux de commission par défaut (apporteurs, vendeurs, règle des 4 mois CANAL+).
+MboaPilot — Page 33 / 50
+--- PAGE 34 ---
+MboaPilot — Cahier des charges fonctionnel et technique v1.0 — 30/08/2026
+9. Interface et expérience utilisateur
+9.1 Principes d'ergonomie
+• Priorité absolue à la vitesse de saisie sur l'écran de caisse : un vendeur doit pouvoir enregistrer une
+vente courante (réabonnement CANAL+ simple, par exemple) en moins de 5 interactions.
+• Interface tactile-friendly (grandes zones cliquables) pour un usage sur tablette au comptoir, tout en
+restant utilisable au clavier/souris sur poste fixe.
+• Codes couleur cohérents dans toute l'application pour les niveaux d'alerte (ambre = J-7, orange = J-
+3, rouge = J-1/critique), repris à l'identique entre le tableau de bord et les fiches abonné.
+• Aucune opération destructrice (suppression de vente, annulation de paiement) sans confirmation
+et sans traçabilité (voir 11.5).
+• Interface disponible en français en priorité ; prévoir dès la conception une couche de traduction
+(anglais) pour l'extension vers d'autres marchés africains anglophones (voir 13.3).
+9.2 Écran de vente rapide (Caisse / POS)
+L'écran de caisse est le poste de travail le plus sollicité de l'application. Il doit rassembler, en un seul écran
+sans navigation, la recherche d'article/abonné, la sélection de la formule ou du matériel, le ticket en cours
+et l'encaissement.
+Figure 4 — Maquette basse fidélité : écran de vente rapide (Caisse / POS)
+Zone de l'écran Fonction
+Recherche unifiée article/abonné, sélection du site actif et identification du
+Barre de recherche (haut)
+caissier connecté.
+Accès direct aux familles du catalogue (produits, services, chaque opérateur TV,
+Catégories (gauche)
+streaming/IPTV, SAV) — voir 5.1.
+Formules, options et kits de la catégorie sélectionnée, avec prix affiché en temps
+Grille articles (centre)
+réel (y compris prix de kit dynamique — 5.1.1).
+Récapitulatif des lignes ajoutées, total, sélection du mode de paiement (y
+Ticket en cours (droite)
+compris Orange Money), bouton de validation/encaissement.
+MboaPilot — Page 34 / 50
+--- PAGE 35 ---
+MboaPilot — Cahier des charges fonctionnel et technique v1.0 — 30/08/2026
+La sélection d'une formule d'une famille d'abonnement bascule automatiquement la grille centrale sur le
+scénario correspondant (recrutement si l'abonné est nouveau, réabonnement/migration si un
+abonnement existant est détecté pour l'abonné sélectionné — voir chapitre 7), sans que le vendeur ait à
+choisir explicitement le type d'opération.
+9.3 Tableau de bord de pilotage
+Vue d'accueil de l'application pour les rôles Gérant/Administrateur, donnant en un coup d'œil le pouls de
+l'activité du jour et les actions prioritaires (relances d'échéance, ruptures de stock).
+Figure 5 — Maquette basse fidélité : tableau de bord de pilotage
+• Cartons d'indicateurs clés (KPI) en tête de page : chiffre d'affaires du jour, marge estimée, nombre
+d'abonnements à échéance sous 7 jours, alertes de stock actives.
+• Liste priorisée des abonnements à échéance, triée par urgence (J-1 en premier), avec accès direct
+au réabonnement en un clic (voir 4.4, 7.2).
+• Courbe d'évolution du chiffre d'affaires sur une période glissante (7/30 jours), filtrable par site et
+par famille d'activité.
+• Liste des alertes de stock, avec accès direct à la commande fournisseur ou au transfert inter-site.
+9.4 Parcours abonné (fiche 360°)
+Accessible depuis la recherche globale ou depuis le tableau de bord, la fiche abonné centralise toute
+l'information nécessaire à un agent pour traiter n'importe laquelle des quatre opérations du chapitre 7
+sans changer d'écran :
+• En-tête : identité, numéro d'abonné, apporteur d'affaires éventuel, coordonnées.
+• Onglet Abonnements : historique complet (toutes familles), statut courant, boutons d'action
+contextuels (réabonner, changer de formule, échanger le matériel).
+• Onglet Facturation : historique des factures et paiements, solde éventuel.
+• Onglet SAV : dossiers de réparation liés à l'abonné.
+• Onglet Suivi commission (si applicable) : état de la période probatoire CANAL+ 4 mois (6.2).
+MboaPilot — Page 35 / 50
+--- PAGE 36 ---
+MboaPilot — Cahier des charges fonctionnel et technique v1.0 — 30/08/2026
+10. Modèle de commercialisation de l'application
+MboaPilot n'est pas seulement un outil interne : c'est un produit destiné à être vendu à de nombreuses
+petites entreprises. Ce chapitre spécifie le modèle économique et les mécanismes techniques associés
+(licence, mise à jour, support), au même titre que les modules métier des chapitres précédents.
+10.1 Formules d'abonnement éditeur (SaaS)
+La solution est commercialisée par abonnement récurrent (mensuel ou annuel), quel que soit le mode de
+déploiement choisi par le client (local ou en ligne) — le mode de déploiement est une option technique,
+pas un modèle tarifaire distinct. Trois paliers sont proposés :
+Palier Périmètre inclus Cible
+1 site, jusqu'à 2 utilisateurs
+simultanés, catalogue complet, caisse,
+Essentiel Petite boutique mono-site
+abonnements, SAV, tableau de bord
+standard
+1 site, utilisateurs illimités, rôles
+avancés, suivi de commissions et
+Pro Boutique établie avec équipe
+apporteurs d'affaires, export
+comptable
+Multi-site (centralisé ou distribué —
+Réseau 2.5.2), tableau de bord consolidé Chaîne de boutiques / franchise
+multi-site, API d'intégration
+Chaque palier peut être souscrit en mode local (installation) ou en mode en ligne (hébergement par
+l'éditeur) ; le passage de l'un à l'autre doit être possible sans perte de données, via l'export/import du
+fichier SQLite (voir 2.4).
+10.2 Contrats de maintenance / SAV logiciel
+Indépendamment de l'abonnement fonctionnel, un contrat de maintenance (« SAV logiciel ») couvre :
+• Le support utilisateur (assistance à l'usage, résolution d'incidents bloquants) selon un niveau de
+service (SLA) différencié par palier.
+• La correction des anomalies (bugs) sans surcoût pour le client, pendant toute la durée de
+l'abonnement actif.
+• L'assistance à la migration de données (changement de matériel, passage local → en ligne, fusion
+de sites).
+💡 Conseil d'architecte
+L'abonnement logiciel inclut par défaut le SAV logiciel de premier niveau ; un contrat de support
+premium (délai de réponse garanti, ligne dédiée, formation sur site) peut être vendu en option, sur
+le même modèle que le SAV matériel décrit au chapitre 5.10 — cohérence volontaire entre l'offre
+que l'entreprise cliente vend à ses propres clients et celle que l'éditeur lui vend.
+MboaPilot — Page 36 / 50
+--- PAGE 37 ---
+MboaPilot — Cahier des charges fonctionnel et technique v1.0 — 30/08/2026
+10.3 Mises à jour et cycle de version
+• Les mises à jour correctives (sécurité, corrections de bugs) sont automatiques et gratuites pour
+tout abonnement actif, dans les deux modes de déploiement (en ligne : déploiement transparent
+côté serveur ; local : mise à jour applicative avec migration de schéma SQLite automatisée et
+réversible).
+• Les mises à jour fonctionnelles majeures (nouvelles familles d'abonnement, nouveaux modules)
+sont incluses dans l'abonnement en cours ; elles ne font pas l'objet d'une facturation
+supplémentaire tant que l'abonnement reste actif — c'est un argument de vente fort du modèle
+par abonnement face à une logique de licence perpétuelle figée.
+• Un abonnement expiré ou résilié bascule l'application en mode dégradé (lecture seule, export des
+données toujours possible) plutôt qu'en blocage brutal, afin de préserver la confiance et de faciliter
+la reprise d'abonnement.
+10.4 Mécanisme technique de licence (mode local)
+Le mode local doit pouvoir fonctionner sans connexion Internet permanente (2.2), tout en respectant le
+modèle par abonnement (10.1). Le mécanisme suivant est recommandé :
+1. À l'activation, l'application obtient un jeton de licence signé (incluant le palier souscrit, la date
+d'expiration de l'abonnement et l'empreinte de l'installation), stocké localement.
+2. L'application tente une revalidation périodique (ex. au démarrage, une fois par jour) auprès du
+serveur de licence de l'éditeur, dès qu'une connexion Internet est disponible.
+3. Un délai de grâce hors ligne (ex. 21 jours) est toléré sans revalidation, pour couvrir les périodes de
+connectivité intermittente propres au contexte visé.
+4. Au-delà du délai de grâce sans revalidation réussie, l'application bascule en mode dégradé (lecture
+seule) jusqu'à reconnexion et revalidation, sans jamais supprimer de données.
+💡 Conseil d'architecte
+Ce mécanisme doit être conçu comme un service dédié, découplé du cœur métier, afin de pouvoir
+être testé, audité et éventuellement désactivé pour des déploiements spécifiques (ex. offre
+institutionnelle avec licence perpétuelle) sans toucher au reste de l'application.
+MboaPilot — Page 37 / 50
+--- PAGE 38 ---
+MboaPilot — Cahier des charges fonctionnel et technique v1.0 — 30/08/2026
+11. Exigences non fonctionnelles
+11.1 Performance et disponibilité
+Exigence Cible
+< 300 ms pour une recherche ou l'ajout d'une ligne au ticket, y
+Temps de réponse écran de caisse
+compris en mode local sur poste d'entrée de gamme
+Temps de génération d'un ticket/facture < 2 s du clic « Valider » à l'affichage prêt à imprimer
+≥ 99,5 % hors fenêtres de maintenance planifiées et
+Disponibilité mode en ligne
+communiquées à l'avance
+Fonctionnement intégral sans connexion Internet (hors validation
+Continuité mode local de licence différée — 10.4, et paiement Orange Money qui
+requiert une connectivité au moment de la transaction)
+Dimensionner pour au moins 50 000 abonnés actifs et 500 000
+Volumétrie de référence lignes de vente par entreprise sans dégradation perceptible, avec
+une politique d'archivage au-delà (2.4)
+11.2 Sécurité et protection des données
+• Authentification individuelle obligatoire, mots de passe hachés (bcrypt/argon2), politique de
+complexité minimale configurable, verrouillage après tentatives infructueuses répétées.
+• Contrôle d'accès basé sur les rôles (RBAC) appliqué de bout en bout, y compris côté API (jamais
+uniquement côté interface).
+• Chiffrement des données sensibles au repos (identifiants de comptes streaming partagés, mots de
+passe) et en transit (HTTPS/TLS obligatoire en mode en ligne).
+• Aucune donnée de paiement (numéro de carte, identifiants Orange Money) stockée en clair ;
+seules les références de transaction opérateur sont conservées.
+• Sauvegardes chiffrées, testées régulièrement par des exercices de restauration (2.6).
+11.3 Conformité réglementaire (Cameroun / CEMAC)
+L'application traite des données à caractère personnel (identité, contact, numéro de carte d'identité) au
+sens de la loi n° 2024/017 du 23 décembre 2024 relative à la protection des données à caractère
+personnel au Cameroun, dont l'opérationnalisation complète est attendue à l'échéance de juin 2026. À ce
+titre, la conception doit intégrer nativement :
+• Une finalité déclarée et limitée de la collecte (gestion commerciale et du cycle d'abonnement),
+avec une base légale claire pour chaque traitement.
+• Un droit d'accès, de rectification et, sous réserve des obligations comptables/légales de
+conservation, de suppression des données d'un abonné, exerçable depuis l'interface
+d'administration.
+• Une durée de conservation définie et paramétrable, avec archivage ou anonymisation au-delà.
+• Une consignation des traitements (registre) et des mesures de sécurité proportionnées (11.2), en
+cohérence avec les obligations issues de cette loi.
+MboaPilot — Page 38 / 50
+--- PAGE 39 ---
+MboaPilot — Cahier des charges fonctionnel et technique v1.0 — 30/08/2026
+⚠ Point d'attention
+Ce cahier des charges ne constitue pas un avis juridique. La direction de projet doit faire valider par
+un conseil juridique local la conformité précise du traitement de données envisagé (notamment le
+numéro de carte d'identité collecté à l'abonnement, chapitre 7.1) au regard de la loi n° 2024/017 et
+de ses textes d'application, ainsi que, le cas échéant, du cadre CEMAC applicable aux transactions
+de paiement mobile.
+11.4 Compatibilité et portabilité
+• Interface utilisable sur les navigateurs récents standards (Chrome, Edge, Firefox) et sur les
+résolutions d'écran courantes, du poste de caisse fixe à la tablette.
+• Export intégral et portable des données d'une entreprise (fichier SQLite complet ou export
+structuré CSV/JSON) à tout moment, sans dépendance à l'éditeur — argument de confiance
+essentiel pour un logiciel par abonnement (voir 10.3).
+• Compatibilité imprimante thermique 80mm (protocole ESC/POS) pour les tickets de caisse (6.7).
+11.5 Journalisation, audit et traçabilité
+Toute action sensible doit être journalisée de façon immuable (utilisateur, horodatage, valeur
+avant/après) : création/modification/suppression de facture, encaissement, changement de statut
+d'abonnement, changement de formule ou de matériel, modification de stock, création/désactivation
+d'utilisateur, modification de tarif catalogue. Ce journal alimente le module d'audit (8.7) et constitue une
+preuve en cas de litige commercial ou de contrôle.
+MboaPilot — Page 39 / 50
+--- PAGE 40 ---
+MboaPilot — Cahier des charges fonctionnel et technique v1.0 — 30/08/2026
+12. Plan de mise en œuvre
+12.1 Phasage MVP → V2 → V3
+Phase Périmètre Objectif
+Mode local mono-site, catalogue
+CANAL+/DStv/StarTimes complet
+(chapitre 5), scénarios de
+Valider l'usage réel en boutique pilote, sécuriser
+MVP recrutement/réabonnement (7.1-7.2),
+le moteur de validité 30 jours (chapitre 4)
+caisse (9.2), facturation cash uniquement,
+tableau de bord de base avec alertes
+J-7/J-3/J-1
+Ajout 24H Sport/Moreplex/Streaming-
+IPTV, SAV complet, échange de matériel
+et changement de formule (7.3-7.4),
+Couvrir l'intégralité du périmètre métier de ce
+V1 marges et gains (6.1), sous-
+cahier des charges en mode local
+distributeurs/apporteurs (6.3), suivi
+commission CANAL+ 4 mois (6.2),
+intégration Orange Money (6.6)
+Mode en ligne hébergé, multi-utilisateurs
+avancé, multi-site centralisé (2.5), modèle
+V2 Ouvrir la commercialisation SaaS multi-client
+de commercialisation par abonnement et
+mécanisme de licence (chapitre 10)
+Multi-site distribué avec synchronisation
+hors ligne (2.5.2), API d'intégration
+Passage à l'échelle réseau/franchise et extension
+V3 tierces, tableau de bord consolidé
+régionale
+avancé, extension à de nouveaux
+opérateurs/pays (13.3)
+12.2 Livrables attendus par phase
+• Spécifications détaillées et maquettes validées (issues de ce cahier des charges) avant le début de
+chaque phase de développement.
+• Jeux de données de test couvrant systématiquement l'exemple de référence du chapitre 4.2 et les
+cas limites du calcul de validité (changement d'année, mois de 28/29/30/31 jours pour le mode
+MOIS_CIVIL).
+• Documentation d'exploitation (procédure de sauvegarde/restauration, procédure de mise à jour)
+livrée avec chaque version mise en production.
+• Formation des utilisateurs pilotes et support renforcé lors des deux premières semaines suivant
+chaque mise en production.
+12.3 Facteurs clés de succès et risques
+Risque Impact Mesure de mitigation
+Données catalogue incomplètes ou Validation métier formelle de la
+Erreurs de facturation dès le
+incohérentes à la mise en production grille tarifaire complète (annexe
+lancement
+(voir points d'attention, 5.4) 14.1) avant recette
+MboaPilot — Page 40 / 50
+--- PAGE 41 ---
+MboaPilot — Cahier des charges fonctionnel et technique v1.0 — 30/08/2026
+Risque Impact Mesure de mitigation
+Blocage des paiements Orange Mode dégradé gracieux (10.4), file
+Connectivité Internet instable sur
+Money ou de la revalidation de d'attente de transactions à rejouer à
+certains sites
+licence la reconnexion
+Complexité perçue de l'écran de caisse Conception centrée sur la rapidité
+Rejet de l'outil, retour aux pratiques
+par des utilisateurs peu formés au (9.1), formation terrain, mode
+papier
+numérique d'emploi illustré
+Évolution des offres commerciales des Paramétrage intégral du catalogue
+Catalogue rapidement obsolète si
+opérateurs (nouvelles formules, sans dépendance code (8.8), déjà
+codé en dur
+changements de prix) intégré à la conception
+Revue juridique dédiée avant la fin
+Non-conformité réglementaire sur les Risque juridique pour les entreprises
+de la période d'opérationnalisation
+données personnelles clientes et pour l'éditeur
+de la loi n°2024/017 (11.3)
+MboaPilot — Page 41 / 50
+--- PAGE 42 ---
+MboaPilot — Cahier des charges fonctionnel et technique v1.0 — 30/08/2026
+13. Recommandations, conseils et axes d'amélioration
+Les encadrés « Conseil d'architecte » et « Point d'attention » disséminés dans ce document couvrent les
+recommandations directement liées à chaque exigence. Ce chapitre rassemble des axes d'amélioration
+transverses, non demandés explicitement par le périmètre initial mais à forte valeur ajoutée pour la
+réussite commerciale et opérationnelle du produit.
+13.1 Recommandations fonctionnelles
+• Interface bilingue français/anglais dès la conception. Le Cameroun est officiellement bilingue et
+les régions anglophones constituent un marché immédiatement accessible ; traiter la traduction
+comme une fonctionnalité de lancement plutôt qu'une extension future (13.3) évite une dette
+technique coûteuse (chaînes de caractères en dur à traquer rétroactivement).
+• Clôture de caisse quotidienne. Non demandée explicitement mais indispensable en pratique : fond
+de caisse d'ouverture, comptage de fermeture, écart théorique/réel par mode de paiement, avec
+validation par un rôle habilité. C'est l'un des premiers contrôles qu'un gérant réclamera à l'usage.
+• Vente à crédit / paiement échelonné encadré. Certains kits représentent un montant élevé pour
+un ménage (ex. kit G11) ; un mode de vente à tempérament avec échéancier et relances, distinct
+du crédit fournisseur, augmenterait le volume de kits vendus tout en restant maîtrisé (plafond,
+historique de paiement de l'abonné comme critère d'éligibilité).
+• Canal WhatsApp pour les relances. En complément du SMS et de l'e-mail (4.4), WhatsApp Business
+API est le canal de messagerie dominant dans la zone cible ; son taux d'ouverture et son coût en
+font un candidat naturel pour les alertes J-7/J-3/J-1 et l'envoi de factures/tickets dématérialisés.
+• Programme de fidélisation et de parrainage. Au-delà des apporteurs d'affaires professionnels
+(6.3), un mécanisme de parrainage simple entre abonnés (remise sur réabonnement pour un client
+ayant recommandé un nouvel abonné) capitalise sur le même moteur de suivi et renforce la
+rétention, particulièrement utile pendant la période probatoire CANAL+ de 4 mois (6.2).
+• QR code de vérification sur factures et tickets. Un QR code renvoyant vers la fiche numérique de la
+facture (authenticité, état du dossier SAV) réduit la fraude documentaire et facilite le suivi client
+sans effort de saisie supplémentaire.
+13.2 Recommandations techniques
+• Suite de tests de non-régression dédiée au moteur de dates. Le calcul de validité (chapitre 4) est la
+pièce la plus critique du système : constituer, dès le MVP, un jeu de tests automatisés couvrant les
+changements d'année, les mois de 28/29/30/31 jours (mode MOIS_CIVIL), les fuseaux horaires et
+l'exemple de référence de M. Nga Ndongo, rejoué à chaque livraison.
+• Idempotence des callbacks de paiement mobile. L'intégration Orange Money (6.6) doit garantir
+qu'un même événement de confirmation reçu deux fois (retransmission réseau) ne crée jamais
+deux paiements : clé d'idempotence sur la référence de transaction opérateur.
+• File d'attente pour les notifications. Découpler l'envoi SMS/e-mail/WhatsApp du flux
+transactionnel principal (file d'attente asynchrone) pour qu'une passerelle de notification
+indisponible ne ralentisse jamais une vente au comptoir.
+• Marque blanche multi-tenant. Puisque l'application est commercialisée en SaaS (chapitre 10),
+prévoir dès le modèle de données la personnalisation par entreprise (logo, couleurs, mentions
+légales sur les documents) — un besoin quasi systématique en environnement multi-tenant, à
+faible coût s'il est anticipé, coûteux en reprise s'il ne l'est pas.
+MboaPilot — Page 42 / 50
+--- PAGE 43 ---
+MboaPilot — Cahier des charges fonctionnel et technique v1.0 — 30/08/2026
+• Télémétrie d'usage opt-in. Même en mode local (2.2), un envoi anonymisé et consenti
+d'indicateurs d'usage (fonctionnalités utilisées, erreurs rencontrées) au serveur de l'éditeur éclaire
+la feuille de route produit sans dépendre uniquement des retours terrain.
+13.3 Idées d'évolution (V2 / V3)
+• Application mobile compagnon pour agents terrain. Une application légère, fonctionnant hors
+ligne avec synchronisation différée, pour les techniciens et commerciaux itinérants (relances porte-
+à-porte, encaissement mobile, ouverture de dossier SAV sur site).
+• Extension régionale au-delà du Cameroun. L'architecture multi-tenant et le catalogue entièrement
+paramétrable (5.1) permettent nativement l'ouverture à d'autres marchés CEMAC/Afrique de
+l'Ouest ; anticiper le multi-devise (au-delà du seul FCFA) et la localisation des mentions légales par
+pays.
+• Statut de partenaire certifié auprès des opérateurs. À moyen terme, la donnée consolidée que
+MboaPilot produit sur les ventes de kits et de formules (par distributeur, par zone) a une valeur
+pour les opérateurs eux-mêmes (CANAL+, DStv, StarTimes) ; envisager des rapports agrégés et
+anonymisés comme argument de partenariat commercial.
+• Place de marché de pièces détachées SAV. Mutualiser, entre entreprises clientes d'une même
+zone, la visibilité sur les stocks de pièces de rechange disponibles, pour réduire les délais de
+réparation (5.10).
+MboaPilot — Page 43 / 50
+--- PAGE 44 ---
+MboaPilot — Cahier des charges fonctionnel et technique v1.0 — 30/08/2026
+14. Annexes
+14.1 Grille tarifaire complète (référence rapide)
+Cette annexe consolide, à titre de référence rapide pour la recette et la saisie initiale du catalogue (8.8),
+l'intégralité des tarifs détaillés au chapitre 5. Toute divergence entre cette annexe et une source
+commerciale plus récente des opérateurs doit être arbitrée en faveur de la source la plus récente, et mise
+à jour dans le catalogue paramétrable — jamais dans le code.
+CANAL+
+Kit Prix
+KIT CANAL+ DÉCODEUR OTT Prix en attente
+15 500 FCFA (base EVASION) — décodeur variable : 5 000
+KIT CANAL+ GLOBALZ
+FCFA, ou 1 000 FCFA si formule TOUT CANAL+
+KIT CANAL+ Z4 Identique GLOBALZ
+40 500 FCFA (base EVASION) — décodeur 30 000 FCFA +
+KIT CANAL+ G11 parabole/accessoires 0 FCFA + formule EVASION 10 500
+FCFA — confirmé
+Formule Prix / 30 jours
+ACCESS 5 000 FCFA
+EVASION 10 500 FCFA
+ACCESS+ 15 000 FCFA
+TOUT CANAL+ 28 000 FCFA
+UNA WELCOME 8 000 FCFA
+Option Prix
+Charme 7 000 FCFA
+English Plus (ACCESS/EVASION) 5 000 FCFA
+English Plus (ACCESS+) 2 000 FCFA
+Netflix Basic (1 écran) 3 000 FCFA
+Netflix Standard (2 écrans) 4 000 FCFA
+Netflix Premium (4 écrans) 5 000 FCFA
+DStv
+Kit Prix
+55 000 FCFA (base COMPAQ) + différentiel si formule
+KIT DSTV COMPAQ
+supérieure
+MboaPilot — Page 44 / 50
+--- PAGE 45 ---
+MboaPilot — Cahier des charges fonctionnel et technique v1.0 — 30/08/2026
+Formule Prix / 30 jours
+YANGA 5 000 FCFA
+CONFAM 9 000 FCFA
+COMPAQ 13 000 FCFA
+COMPAQ+ 19 000 FCFA
+PREMIUM 28 000 FCFA
+Option Prix
+French Plus 13 000 FCFA
+French Touch 6 000 FCFA
+Extra View 4 500 FCFA
+StarTimes
+Kit Prix
+KIT STARTIMES 18 000 FCFA (prix fixe)
+Formule Prix / 30 jours
+NOVA 2 500 FCFA
+SMART 5 000 FCFA
+SUPER (EN/FR) 9 000 FCFA
+GLOBAL 10 500 FCFA
+24H Sport
+Kit Prix
+KIT 24H SPORT 30 000 FCFA (prix fixe)
+Formule Prix / 90 jours
+FULL 24H SPORT 3 MOIS 15 000 FCFA
+Moreplex
+Kit Prix
+KIT MOREPLEX 30 000 FCFA (prix fixe)
+MboaPilot — Page 45 / 50
+--- PAGE 46 ---
+MboaPilot — Cahier des charges fonctionnel et technique v1.0 — 30/08/2026
+Formule Prix / 30 jours
+FULL MOREPLEX 5 000 FCFA
+Streaming & VOD
+Service 1 mois 12 mois
+Netflix 3 500 FCFA 26 000 FCFA
+Prime Vidéo 3 500 FCFA 26 000 FCFA
+Crunchyroll 3 500 FCFA 26 000 FCFA
+IPTV 5 000 FCFA 40 000 FCFA
+Disney+ à confirmer à confirmer
+14.2 Dictionnaire de données détaillé
+Extension du dictionnaire d'entités (3.2) au niveau des champs, pour les tables les plus structurantes.
+Table Champ Type Description / contrainte
+abonne id_abonne INTEGER PK Identifiant pérenne, ne change jamais (4.5)
+Nullable ; non modifiable après création sans
+abonne apporteur_id INTEGER FK
+droit administrateur (6.3)
+Peut être renouvelé (nouveau numéro) lors
+abonnement numero_abonnement INTEGER PK
+d'un échange de matériel (7.3)
+date_fin calculée selon 4.1 ; jamais saisie
+abonnement date_debut / date_fin TEXT (ISO)
+directement par l'utilisateur
+abonnement statut TEXT ACTIF | EXPIRE | RESILIE (4.3)
+formule mode_duree TEXT STRICT_30J | MOIS_CIVIL (4.1)
+Ordre croissant ; détermine ce qu'est une
+formule rang INTEGER
+formule « supérieure » pour la migration (7.4)
+PRIX_FIXE |
+kit regle_prix TEXT PRIX_DECODEUR_VARIABLE_SELON_FORMULE
+| PRIX_KIT_FIXE_PAR_DIFFERENTIEL (5.1.1)
+produit marge_type TEXT VALEUR | POURCENTAGE (6.1)
+BROUILLON | VALIDEE (6.4) ; jamais imprimable
+facture statut TEXT
+en BROUILLON
+CASH | CHEQUE | VIREMENT | MOBILE_MONEY
+paiement mode TEXT
+(6.5)
+Obligatoire si mode = MOBILE_MONEY ; utilisée
+paiement reference_transaction TEXT
+comme clé d'idempotence (13.2)
+suivi_commission_ca
+statut TEXT EN_COURS | CONFIRMEE | ANNULEE (6.2)
+nalplus
+sav_dossier statut TEXT RECU | DIAGNOSTIC | DEVIS_ATTENTE |
+REPARATION | PRET | LIVRE | IRREPARABLE |
+MboaPilot — Page 46 / 50
+--- PAGE 47 ---
+MboaPilot — Cahier des charges fonctionnel et technique v1.0 — 30/08/2026
+Table Champ Type Description / contrainte
+ABANDONNE (5.10)
+14.3 Script SQL SQLite (extrait consolidé)
+Complète l'extrait du chapitre 3.3 avec le catalogue, les stocks, la facturation et le SAV. Script fourni à titre
+de socle de départ pour l'équipe de développement — les migrations réelles doivent être versionnées via
+l'outil de migration retenu (2.7).
+Extrait consolidé — catalogue, stocks, facturation, SAV
+-- Catalogue
+CREATE TABLE option_complement (
+id_option INTEGER PRIMARY KEY AUTOINCREMENT,
+libelle TEXT NOT NULL,
+prix INTEGER NOT NULL
+);
+CREATE TABLE formule_option_compat (
+id_formule INTEGER NOT NULL REFERENCES formule(id_formule),
+id_option INTEGER NOT NULL REFERENCES option_complement(id_option),
+prix_surcharge INTEGER, -- NULL = utilise le prix par défaut de
+l'option
+PRIMARY KEY (id_formule, id_option)
+);
+CREATE TABLE kit (
+id_kit INTEGER PRIMARY KEY AUTOINCREMENT,
+id_famille INTEGER NOT NULL REFERENCES famille_abonnement(id_famille),
+libelle TEXT NOT NULL,
+regle_prix TEXT NOT NULL CHECK (regle_prix IN
+('PRIX_FIXE','PRIX_DECODEUR_VARIABLE_SELON_FORMULE','PRIX_KIT_FIXE_PAR_DIFFERENTIEL'))
+,
+prix_fixe INTEGER, -- utilisé si regle_prix = PRIX_FIXE
+id_formule_reference INTEGER REFERENCES formule(id_formule) -- pour
+PRIX_KIT_FIXE_PAR_DIFFERENTIEL
+);
+CREATE TABLE kit_prix_decodeur ( -- pour PRIX_DECODEUR_VARIABLE_SELON_FORMULE
+id_kit INTEGER NOT NULL REFERENCES kit(id_kit),
+id_formule INTEGER NOT NULL REFERENCES formule(id_formule),
+prix_decodeur INTEGER NOT NULL,
+PRIMARY KEY (id_kit, id_formule)
+);
+-- Produits & stocks
+CREATE TABLE produit (
+id_produit INTEGER PRIMARY KEY AUTOINCREMENT,
+site_id INTEGER NOT NULL REFERENCES site(id_site),
+type TEXT NOT NULL CHECK (type IN ('BIEN','SERVICE','SAV','KIT')),
+libelle TEXT NOT NULL,
+MboaPilot — Page 47 / 50
+--- PAGE 48 ---
+MboaPilot — Cahier des charges fonctionnel et technique v1.0 — 30/08/2026
+prix_vente INTEGER NOT NULL,
+cout_revient INTEGER NOT NULL DEFAULT 0,
+marge_type TEXT NOT NULL DEFAULT 'VALEUR' CHECK (marge_type IN
+('VALEUR','POURCENTAGE')),
+marge_valeur INTEGER,
+marge_pourcentage REAL,
+suivi_stock INTEGER NOT NULL DEFAULT 0 -- 0/1
+);
+CREATE TABLE stock_mouvement (
+id_mouvement INTEGER PRIMARY KEY AUTOINCREMENT,
+id_produit INTEGER NOT NULL REFERENCES produit(id_produit),
+site_id INTEGER NOT NULL REFERENCES site(id_site),
+type_mouvement TEXT NOT NULL CHECK (type_mouvement IN
+('ACHAT','VENTE','CASSE','TRANSFERT_ENTREE','TRANSFERT_SORTIE','INVENTAIRE')),
+quantite INTEGER NOT NULL,
+date_mouvement TEXT NOT NULL DEFAULT (datetime('now')),
+utilisateur_id INTEGER NOT NULL REFERENCES utilisateur(id_user)
+);
+-- Ventes & facturation
+CREATE TABLE facture (
+id_facture INTEGER PRIMARY KEY AUTOINCREMENT,
+site_id INTEGER NOT NULL REFERENCES site(id_site),
+id_abonne INTEGER REFERENCES abonne(id_abonne),
+statut TEXT NOT NULL DEFAULT 'BROUILLON' CHECK (statut IN
+('BROUILLON','VALIDEE')),
+montant_total INTEGER NOT NULL DEFAULT 0,
+cree_par INTEGER NOT NULL REFERENCES utilisateur(id_user),
+date_creation TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TABLE ligne_vente (
+id_ligne INTEGER PRIMARY KEY AUTOINCREMENT,
+id_facture INTEGER NOT NULL REFERENCES facture(id_facture),
+id_produit INTEGER REFERENCES produit(id_produit),
+numero_abonnement INTEGER REFERENCES abonnement(numero_abonnement),
+quantite INTEGER NOT NULL DEFAULT 1,
+prix_applique INTEGER NOT NULL
+);
+CREATE TABLE paiement (
+id_paiement INTEGER PRIMARY KEY AUTOINCREMENT,
+id_facture INTEGER NOT NULL REFERENCES facture(id_facture),
+mode TEXT NOT NULL CHECK (mode IN
+('CASH','CHEQUE','VIREMENT','MOBILE_MONEY')),
+montant INTEGER NOT NULL,
+reference_transaction TEXT, -- clé d'idempotence pour MOBILE_MONEY
+date_paiement TEXT NOT NULL DEFAULT (datetime('now'))
+);
+-- SAV
+MboaPilot — Page 48 / 50
+--- PAGE 49 ---
+MboaPilot — Cahier des charges fonctionnel et technique v1.0 — 30/08/2026
+CREATE TABLE sav_dossier (
+id_dossier_sav INTEGER PRIMARY KEY AUTOINCREMENT,
+site_id INTEGER NOT NULL REFERENCES site(id_site),
+id_abonne INTEGER REFERENCES abonne(id_abonne), -- nullable : client non-
+abonné
+description_panne TEXT NOT NULL,
+etat_reception TEXT,
+diagnostic TEXT,
+statut TEXT NOT NULL DEFAULT 'RECU' CHECK (statut IN
+('RECU','DIAGNOSTIC','DEVIS_ATTENTE','REPARATION','PRET','LIVRE','IRREPARABLE','ABANDO
+NNE')),
+sous_garantie INTEGER NOT NULL DEFAULT 0,
+date_reception TEXT NOT NULL DEFAULT (datetime('now'))
+);
+-- Suivi commission CANAL+ (chapitre 6.2)
+CREATE TABLE suivi_commission_canalplus (
+id_suivi INTEGER PRIMARY KEY AUTOINCREMENT,
+numero_abonnement INTEGER NOT NULL REFERENCES abonnement(numero_abonnement),
+vendeur_id INTEGER REFERENCES utilisateur(id_user),
+apporteur_id INTEGER REFERENCES sous_distributeur(id_apporteur),
+montant_commission INTEGER NOT NULL,
+date_fin_probatoire TEXT NOT NULL,
+statut TEXT NOT NULL DEFAULT 'EN_COURS' CHECK (statut IN
+('EN_COURS','CONFIRMEE','ANNULEE'))
+);
+14.4 Lexique des acronymes
+Sigle Signification
+SAV Service après-vente
+POS Point of Sale (point de vente / écran de caisse)
+WAL Write-Ahead Logging (mode d'écriture journalisée de SQLite)
+DDL Data Definition Language (langage de définition de données)
+RBAC Role-Based Access Control (contrôle d'accès basé sur les rôles)
+PITR Point-In-Time Recovery (restauration à un point dans le temps)
+USSD Unstructured Supplementary Service Data (protocole de menu interactif mobile)
+OTP One-Time Password (mot de passe à usage unique)
+KPI Key Performance Indicator (indicateur clé de performance)
+SLA Service Level Agreement (engagement de niveau de service)
+MVP Minimum Viable Product (produit minimum viable)
+TLS/HTTPS Transport Layer Security — protocole de chiffrement des échanges Web
+MboaPilot — Page 49 / 50
+--- PAGE 50 ---
+MboaPilot — Cahier des charges fonctionnel et technique v1.0 — 30/08/2026
+Fin du cahier des charges — MboaPilot v1.0
+MboaPilot — Page 50 / 50

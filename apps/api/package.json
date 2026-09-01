@@ -1,0 +1,30 @@
+{
+  "name": "@mboapilot/api",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "scripts": {
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "tsx src/db/migrate.ts",
+    "db:seed:dev": "tsx src/db/seed-dev.ts",
+    "dev": "tsx watch src/server.ts",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@mboapilot/shared": "*",
+    "@fastify/jwt": "^10.2.2",
+    "bcryptjs": "^2.4.3",
+    "better-sqlite3": "^11.3.0",
+    "drizzle-orm": "^0.45.2",
+    "fastify": "^5.12.1"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/better-sqlite3": "^7.6.11",
+    "@types/node": "^22.5.5",
+    "drizzle-kit": "^0.31.10",
+    "tsx": "^4.19.1",
+    "typescript": "^5.6.2",
+    "vitest": "^2.1.1"
+  }
+}

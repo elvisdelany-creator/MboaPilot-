@@ -1,0 +1,13 @@
+{
+  "name": "mboapilot",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "db:generate": "npm run db:generate --workspace=apps/api",
+    "db:migrate": "npm run db:migrate --workspace=apps/api",
+    "test": "npm run test --workspaces --if-present"
+  }
+}

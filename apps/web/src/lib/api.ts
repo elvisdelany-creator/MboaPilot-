@@ -1,4 +1,4 @@
-import type { Abonne, Abonnement, CatalogueFamille, NouvelAbonne, RecrutementResultat, Utilisateur } from "./types";
+import type { AlerteEcheance, Abonne, Abonnement, CatalogueFamille, NouvelAbonne, RecrutementResultat, Utilisateur } from "./types";
 
 const BASE = "/api/v1";
 
@@ -46,6 +46,12 @@ export async function chargerCatalogue(token: string): Promise<CatalogueFamille[
 export async function chargerAbonnementsAbonne(token: string, idAbonne: number): Promise<Abonnement[]> {
   const reponse = await fetch(`${BASE}/abonnes/${idAbonne}/abonnements`, { headers: headersAuth(token) });
   return lireJson<Abonnement[]>(reponse);
+}
+
+// 8.6, 9.3 : abonnements à échéance (J-7/J-3/J-1) pour le tableau de bord
+export async function chargerAlertesEcheance(token: string, siteId: number): Promise<AlerteEcheance[]> {
+  const reponse = await fetch(`${BASE}/alertes-echeance?siteId=${siteId}`, { headers: headersAuth(token) });
+  return lireJson<AlerteEcheance[]>(reponse);
 }
 
 export interface RecruterPayload {

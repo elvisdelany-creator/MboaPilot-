@@ -293,3 +293,62 @@ describe("GET /api/v1/abonnes", () => {
     expect(resultats[0].nom).toBe("Nga Ndongo");
   });
 });
+
+describe("POST /api/v1/jobs/quotidien (4.3, 4.4, 6.2)", () => {
+  it("réservé à l'administrateur : 403 pour un caissier", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const token = await connecter(app);
+
+    const reponse = await app.inject({ method: "POST", url: "/api/v1/jobs/quotidien", headers: authHeader(token) });
+
+    expect(reponse.statusCode).toBe(403);
+  });
+
+  it("exécute le job et renvoie le récapitulatif pour un administrateur", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    creerUtilisateur(db, {
+      siteId,
+      nom: "Admin",
+      prenom: "Démo",
+      identifiant: "admin1",
+      motDePasse: "motdepasse-secret",
+      role: "ADMINISTRATEUR",
+    });
+    const token = await connecter(app, "admin1");
+
+    const reponse = await app.inject({ method: "POST", url: "/api/v1/jobs/quotidien", headers: authHeader(token) });
+
+    expect(reponse.statusCode).toBe(200);
+    expect(reponse.json()).toEqual(
+      expect.objectContaining({ abonnementsExpires: expect.any(Number), alertesCreees: expect.any(Number) })
+    );
+  });
+});
+
+describe("GET /api/v1/alertes-echeance", () => {
+  it("renvoie la liste des alertes déclenchées pour le site", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const token = await connecter(app);
+    const creation = await app.inject({
+      method: "POST",
+      url: "/api/v1/recrutements",
+      headers: authHeader(token),
+      payload: {
+        siteId,
+        userId,
+        aujourdHui: "2025-10-01",
+        abonne: { nom: "Nga Ndongo", prenom: "Valentin", telephone: "690000000" },
+        idFormule,
+        montantEncaisse: 13000,
+      },
+    });
+    expect(creation.statusCode).toBe(201);
+
+    await app.inject({ method: "POST", url: "/api/v1/jobs/quotidien", headers: authHeader(token) });
+
+    const reponse = await app.inject({ method: "GET", url: `/api/v1/alertes-echeance?siteId=${siteId}`, headers: authHeader(token) });
+
+    expect(reponse.statusCode).toBe(200);
+    expect(Array.isArray(reponse.json())).toBe(true);
+  });
+});

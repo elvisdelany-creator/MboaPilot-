@@ -1,32 +1,29 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { LogOut } from "lucide-react";
 import { chargerAbonnementsAbonne, chargerCatalogue, ErreurAuthentification, reabonnerRequete, recruter } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import type { Abonne, Abonnement, CatalogueFamille, CatalogueKit, Formule, NouvelAbonne } from "@/lib/types";
-import { Button } from "@/components/ui/button";
+import { AppHeader, type Vue } from "@/components/layout/AppHeader";
 import { RechercheAbonne } from "./RechercheAbonne";
 import { CategoriesPanel } from "./CategoriesPanel";
 import { GrilleArticles } from "./GrilleArticles";
 import { TicketPanel } from "./TicketPanel";
 
-const LIBELLES_ROLES: Record<string, string> = {
-  ADMINISTRATEUR: "Administrateur",
-  GERANT: "Gérant",
-  CAISSIER: "Caissier",
-  TECHNICIEN_SAV: "Technicien SAV",
-  COMPTABLE: "Comptable",
-  APPORTEUR: "Apporteur d'affaires",
-};
+interface Props {
+  onNaviguer: (vue: Vue) => void;
+  // pré-sélection venant du tableau de bord (réabonnement en un clic depuis une alerte, 4.4/9.3)
+  abonneInitial?: Abonne;
+  idFamilleInitiale?: number;
+}
 
-export function CaissePage() {
+export function CaissePage({ onNaviguer, abonneInitial, idFamilleInitiale }: Props) {
   const { session, deconnecter } = useAuth();
   const token = session!.token;
   const utilisateur = session!.utilisateur;
 
   const [familles, setFamilles] = useState<CatalogueFamille[]>([]);
-  const [familleSelectionneeId, setFamilleSelectionneeId] = useState<number | null>(null);
-  const [abonneSelectionne, setAbonneSelectionne] = useState<Abonne | NouvelAbonne | null>(null);
+  const [familleSelectionneeId, setFamilleSelectionneeId] = useState<number | null>(idFamilleInitiale ?? null);
+  const [abonneSelectionne, setAbonneSelectionne] = useState<Abonne | NouvelAbonne | null>(abonneInitial ?? null);
   const [abonnementsAbonne, setAbonnementsAbonne] = useState<Abonnement[]>([]);
   const [formuleSelectionnee, setFormuleSelectionnee] = useState<Formule | null>(null);
   const [kitSelectionne, setKitSelectionne] = useState<CatalogueKit | null>(null);
@@ -142,17 +139,9 @@ export function CaissePage() {
 
   return (
     <div className="flex h-dvh flex-col bg-background">
-      <header className="flex shrink-0 items-center gap-4 border-b border-border bg-card px-4 py-3">
+      <AppHeader vueActive="caisse" onNaviguer={onNaviguer}>
         <RechercheAbonne siteId={utilisateur.siteId} abonneSelectionne={abonneSelectionne} onSelectionner={setAbonneSelectionne} />
-        <div className="ml-auto flex items-center gap-3 text-sm text-muted-foreground">
-          <span>
-            {utilisateur.prenom} {utilisateur.nom} · {LIBELLES_ROLES[utilisateur.role] ?? utilisateur.role}
-          </span>
-          <Button variant="ghost" size="icon" className="size-9 cursor-pointer" aria-label="Se déconnecter" onClick={deconnecter}>
-            <LogOut className="size-4" />
-          </Button>
-        </div>
-      </header>
+      </AppHeader>
 
       <div className="flex min-h-0 flex-1">
         <CategoriesPanel

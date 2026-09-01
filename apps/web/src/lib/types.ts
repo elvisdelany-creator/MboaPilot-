@@ -46,6 +46,17 @@ export interface Abonnement {
   dateCreation: string;
 }
 
+export type JalonAlerte = "J-7" | "J-3" | "J-1";
+
+export interface AlerteEcheance {
+  numeroAbonnement: number;
+  jalon: JalonAlerte;
+  joursRestants: number;
+  dateFin: string;
+  abonne: Abonne;
+  formule: Formule;
+}
+
 export type Role = "ADMINISTRATEUR" | "GERANT" | "CAISSIER" | "TECHNICIEN_SAV" | "COMPTABLE" | "APPORTEUR";
 
 export interface Utilisateur {

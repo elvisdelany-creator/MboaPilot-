@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "972bbd40-5150-446c-bb4b-95e5c48a09b7",
+  "id": "25100d8c-1fc8-443b-913d-1d38cbe5c56f",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "abonne": {
@@ -275,6 +275,76 @@
           ],
           "columnsTo": [
             "id_user"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "alerte_echeance": {
+      "name": "alerte_echeance",
+      "columns": {
+        "id_alerte": {
+          "name": "id_alerte",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "numero_abonnement": {
+          "name": "numero_abonnement",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "jalon": {
+          "name": "jalon",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "date_declenchement": {
+          "name": "date_declenchement",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "date_creation": {
+          "name": "date_creation",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(datetime('now'))"
+        }
+      },
+      "indexes": {
+        "idx_alerte_unique": {
+          "name": "idx_alerte_unique",
+          "columns": [
+            "numero_abonnement",
+            "jalon",
+            "date_declenchement"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {
+        "alerte_echeance_numero_abonnement_abonnement_numero_abonnement_fk": {
+          "name": "alerte_echeance_numero_abonnement_abonnement_numero_abonnement_fk",
+          "tableFrom": "alerte_echeance",
+          "tableTo": "abonnement",
+          "columnsFrom": [
+            "numero_abonnement"
+          ],
+          "columnsTo": [
+            "numero_abonnement"
           ],
           "onDelete": "no action",
           "onUpdate": "no action"
@@ -663,7 +733,7 @@
           "name": "utilisateur_id",
           "type": "integer",
           "primaryKey": false,
-          "notNull": true,
+          "notNull": false,
           "autoincrement": false
         },
         "date_changement": {

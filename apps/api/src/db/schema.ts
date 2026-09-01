@@ -153,7 +153,7 @@ export const historiqueAbonnement = sqliteTable("historique_abonnement", {
   valeurAvant: text("valeur_avant"),
   valeurApres: text("valeur_apres"),
   motif: text("motif"),
-  utilisateurId: integer("utilisateur_id").notNull().references(() => utilisateur.idUser),
+  utilisateurId: integer("utilisateur_id").references(() => utilisateur.idUser), // NULL = job automatique (4.3)
   dateChangement: text("date_changement").notNull().default(now),
 });
 
@@ -167,6 +167,20 @@ export const suiviCommissionCanalplus = sqliteTable("suivi_commission_canalplus"
   dateFinProbatoire: text("date_fin_probatoire").notNull(),
   statut: text("statut", { enum: ["EN_COURS", "CONFIRMEE", "ANNULEE"] }).notNull().default("EN_COURS"),
 });
+
+// journal des alertes d'échéance envoyées par le job quotidien (4.4, 8.3).
+// Le canal de diffusion effectif (SMS/e-mail, 13.2) est un point d'extension
+// futur, non câblé pour l'instant — ceci enregistre uniquement le jalon atteint.
+export const alerteEcheance = sqliteTable("alerte_echeance", {
+  idAlerte: integer("id_alerte").primaryKey({ autoIncrement: true }),
+  numeroAbonnement: integer("numero_abonnement").notNull().references(() => abonnement.numeroAbonnement),
+  jalon: text("jalon", { enum: ["J-7", "J-3", "J-1"] }).notNull(),
+  dateDeclenchement: text("date_declenchement").notNull(),
+  dateCreation: text("date_creation").notNull().default(now),
+}, (t) => ({
+  // idempotence : le job peut tourner plusieurs fois le même jour sans dupliquer l'alerte
+  uniqueParJalon: uniqueIndex("idx_alerte_unique").on(t.numeroAbonnement, t.jalon, t.dateDeclenchement),
+}));
 
 // --- 3.2.3 Catalogue commercial, ventes et finance ---
 

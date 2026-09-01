@@ -34,6 +34,16 @@ CREATE TABLE `abonnement` (
 --> statement-breakpoint
 CREATE INDEX `idx_abonnement_echeance` ON `abonnement` (`date_fin`,`statut`);--> statement-breakpoint
 CREATE INDEX `idx_abonnement_abonne` ON `abonnement` (`id_abonne`);--> statement-breakpoint
+CREATE TABLE `alerte_echeance` (
+	`id_alerte` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
+	`numero_abonnement` integer NOT NULL,
+	`jalon` text NOT NULL,
+	`date_declenchement` text NOT NULL,
+	`date_creation` text DEFAULT (datetime('now')) NOT NULL,
+	FOREIGN KEY (`numero_abonnement`) REFERENCES `abonnement`(`numero_abonnement`) ON UPDATE no action ON DELETE no action
+);
+--> statement-breakpoint
+CREATE UNIQUE INDEX `idx_alerte_unique` ON `alerte_echeance` (`numero_abonnement`,`jalon`,`date_declenchement`);--> statement-breakpoint
 CREATE TABLE `entreprise` (
 	`id_entreprise` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
 	`nom` text NOT NULL,
@@ -89,7 +99,7 @@ CREATE TABLE `historique_abonnement` (
 	`valeur_avant` text,
 	`valeur_apres` text,
 	`motif` text,
-	`utilisateur_id` integer NOT NULL,
+	`utilisateur_id` integer,
 	`date_changement` text DEFAULT (datetime('now')) NOT NULL,
 	FOREIGN KEY (`numero_abonnement`) REFERENCES `abonnement`(`numero_abonnement`) ON UPDATE no action ON DELETE no action,
 	FOREIGN KEY (`utilisateur_id`) REFERENCES `utilisateur`(`id_user`) ON UPDATE no action ON DELETE no action

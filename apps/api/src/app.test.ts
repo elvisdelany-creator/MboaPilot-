@@ -399,3 +399,82 @@ describe("POST /api/v1/abonnements/:numeroAbonnement/echange-materiel (7.3)", ()
     expect(reponse.statusCode).toBe(404);
   });
 });
+
+describe("Module SAV (5.10, 8.4)", () => {
+  it("cycle complet : ouverture, pièce, réparation, mise à disposition, restitution", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const token = await connecter(app);
+
+    const ouverture = await app.inject({
+      method: "POST",
+      url: "/api/v1/sav/dossiers",
+      headers: authHeader(token),
+      payload: { siteId, descriptionPanne: "Ne s'allume plus", sousGarantie: false, userId },
+    });
+    expect(ouverture.statusCode).toBe(201);
+    const { idDossierSav } = ouverture.json();
+
+    const produit = db.insert(schema.produit).values({ siteId, type: "BIEN", libelle: "Alimentation", prixVente: 3000 }).returning().get();
+
+    const piece = await app.inject({
+      method: "POST",
+      url: `/api/v1/sav/dossiers/${idDossierSav}/pieces`,
+      headers: authHeader(token),
+      payload: { idProduit: produit.idProduit, quantite: 1, userId },
+    });
+    expect(piece.statusCode).toBe(201);
+
+    await app.inject({
+      method: "POST",
+      url: `/api/v1/sav/dossiers/${idDossierSav}/statut`,
+      headers: authHeader(token),
+      payload: { nouveauStatut: "DIAGNOSTIC", userId },
+    });
+    await app.inject({
+      method: "POST",
+      url: `/api/v1/sav/dossiers/${idDossierSav}/statut`,
+      headers: authHeader(token),
+      payload: { nouveauStatut: "REPARATION", userId },
+    });
+    const pret = await app.inject({
+      method: "POST",
+      url: `/api/v1/sav/dossiers/${idDossierSav}/statut`,
+      headers: authHeader(token),
+      payload: { nouveauStatut: "PRET", montantMainOeuvre: 1000, userId },
+    });
+    expect(pret.statusCode).toBe(200);
+    expect(pret.json()).toEqual(expect.objectContaining({ montantFacture: 4000, statutFacture: "BROUILLON" }));
+
+    const livre = await app.inject({
+      method: "POST",
+      url: `/api/v1/sav/dossiers/${idDossierSav}/statut`,
+      headers: authHeader(token),
+      payload: { nouveauStatut: "LIVRE", montantEncaisse: 4000, userId },
+    });
+    expect(livre.statusCode).toBe(200);
+    expect(livre.json().statutFacture).toBe("VALIDEE");
+
+    const detail = await app.inject({ method: "GET", url: `/api/v1/sav/dossiers/${idDossierSav}`, headers: authHeader(token) });
+    expect(detail.statusCode).toBe(200);
+    const corps = detail.json();
+    expect(corps.statut).toBe("LIVRE");
+    expect(corps.pieces).toHaveLength(1);
+    expect(corps.historique.length).toBeGreaterThanOrEqual(5);
+    expect(corps.facture).toEqual(expect.objectContaining({ statut: "VALIDEE", montantTotal: 4000 }));
+  });
+
+  it("rejette un rôle non habilité (Comptable)", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    creerUtilisateur(db, { siteId, nom: "C", prenom: "D", identifiant: "compta1", motDePasse: "motdepasse-secret", role: "COMPTABLE" });
+    const token = await connecter(app, "compta1");
+
+    const reponse = await app.inject({
+      method: "POST",
+      url: "/api/v1/sav/dossiers",
+      headers: authHeader(token),
+      payload: { siteId, descriptionPanne: "Panne", sousGarantie: false, userId },
+    });
+
+    expect(reponse.statusCode).toBe(403);
+  });
+});

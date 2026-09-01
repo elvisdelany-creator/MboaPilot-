@@ -3,10 +3,14 @@ import type {
   Abonne,
   Abonnement,
   CatalogueFamille,
+  ChangerStatutSavResultat,
+  DossierSav,
+  DossierSavDetaille,
   EchangeMaterielResultat,
   NouvelAbonne,
   Produit,
   RecrutementResultat,
+  StatutSav,
   Utilisateur,
 } from "./types";
 
@@ -132,4 +136,68 @@ export async function reabonnerRequete(
     body: JSON.stringify(payload),
   });
   return lireJson<RecrutementResultat>(reponse);
+}
+
+// 5.10, 8.4 : module SAV
+export async function chargerDossiersSav(token: string, siteId: number): Promise<DossierSav[]> {
+  const reponse = await fetch(`${BASE}/sav/dossiers?siteId=${siteId}`, { headers: headersAuth(token) });
+  return lireJson<DossierSav[]>(reponse);
+}
+
+export async function chargerDossierSav(token: string, idDossierSav: number): Promise<DossierSavDetaille> {
+  const reponse = await fetch(`${BASE}/sav/dossiers/${idDossierSav}`, { headers: headersAuth(token) });
+  return lireJson<DossierSavDetaille>(reponse);
+}
+
+export interface OuvrirDossierSavPayload {
+  siteId: number;
+  idAbonne?: number;
+  descriptionPanne: string;
+  etatReception?: string;
+  sousGarantie: boolean;
+  userId: number;
+}
+
+export async function ouvrirDossierSav(token: string, payload: OuvrirDossierSavPayload): Promise<DossierSav> {
+  const reponse = await fetch(`${BASE}/sav/dossiers`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headersAuth(token) },
+    body: JSON.stringify(payload),
+  });
+  return lireJson<DossierSav>(reponse);
+}
+
+export async function affecterPieceSavRequete(
+  token: string,
+  idDossierSav: number,
+  payload: { idProduit: number; quantite: number; userId: number }
+): Promise<void> {
+  const reponse = await fetch(`${BASE}/sav/dossiers/${idDossierSav}/pieces`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headersAuth(token) },
+    body: JSON.stringify(payload),
+  });
+  await lireJson(reponse);
+}
+
+export interface ChangerStatutSavPayload {
+  nouveauStatut: StatutSav;
+  userId: number;
+  diagnostic?: string;
+  motif?: string;
+  montantMainOeuvre?: number;
+  montantEncaisse?: number;
+}
+
+export async function changerStatutSavRequete(
+  token: string,
+  idDossierSav: number,
+  payload: ChangerStatutSavPayload
+): Promise<ChangerStatutSavResultat> {
+  const reponse = await fetch(`${BASE}/sav/dossiers/${idDossierSav}/statut`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headersAuth(token) },
+    body: JSON.stringify(payload),
+  });
+  return lireJson<ChangerStatutSavResultat>(reponse);
 }

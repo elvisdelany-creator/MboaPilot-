@@ -12,7 +12,7 @@ const LIBELLES_ROLES: Record<string, string> = {
   APPORTEUR: "Apporteur d'affaires",
 };
 
-export type Vue = "dashboard" | "caisse";
+export type Vue = "dashboard" | "caisse" | "sav";
 
 interface Props {
   vueActive: Vue;
@@ -42,6 +42,14 @@ export function AppHeader({ vueActive, onNaviguer, children }: Props) {
           onClick={() => onNaviguer("caisse")}
         >
           Caisse
+        </Button>
+        <Button
+          variant={vueActive === "sav" ? "default" : "ghost"}
+          className="h-9 cursor-pointer"
+          aria-current={vueActive === "sav" ? "page" : undefined}
+          onClick={() => onNaviguer("sav")}
+        >
+          SAV
         </Button>
       </nav>
 

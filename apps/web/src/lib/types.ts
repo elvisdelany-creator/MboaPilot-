@@ -1,4 +1,6 @@
-import type { Kit } from "@mboapilot/shared";
+import type { Kit, StatutSav } from "@mboapilot/shared";
+
+export type { StatutSav };
 
 export interface Abonne {
   idAbonne: number;
@@ -100,4 +102,49 @@ export interface EchangeMaterielResultat {
   idFacture: number;
   montantFacture: number;
   statutFacture: "BROUILLON" | "VALIDEE";
+}
+
+export interface DossierSav {
+  idDossierSav: number;
+  siteId: number;
+  idAbonne: number | null;
+  descriptionPanne: string;
+  etatReception: string | null;
+  diagnostic: string | null;
+  statut: StatutSav;
+  sousGarantie: number;
+  montantMainOeuvre: number;
+  idFacture: number | null;
+  dateReception: string;
+}
+
+export interface SavPieceUtilisee {
+  idPieceUtilisee: number;
+  idDossierSav: number;
+  idProduit: number;
+  quantite: number;
+}
+
+export interface SavHistoriqueEntree {
+  idHistoSav: number;
+  idDossierSav: number;
+  statutAvant: StatutSav | null;
+  statutApres: StatutSav;
+  motif: string | null;
+  utilisateurId: number | null;
+  dateChangement: string;
+}
+
+export interface DossierSavDetaille extends DossierSav {
+  pieces: SavPieceUtilisee[];
+  historique: SavHistoriqueEntree[];
+  facture: { idFacture: number; statut: "BROUILLON" | "VALIDEE"; montantTotal: number } | null;
+}
+
+export interface ChangerStatutSavResultat {
+  idDossierSav: number;
+  statut: StatutSav;
+  idFacture: number | null;
+  montantFacture: number | null;
+  statutFacture: "BROUILLON" | "VALIDEE" | null;
 }

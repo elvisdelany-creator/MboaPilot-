@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "25100d8c-1fc8-443b-913d-1d38cbe5c56f",
+  "id": "6c8b2976-37a6-4bb0-bb3d-0e2a558bced6",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "abonne": {
@@ -1488,6 +1488,21 @@
           "autoincrement": false,
           "default": 0
         },
+        "montant_main_oeuvre": {
+          "name": "montant_main_oeuvre",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "id_facture": {
+          "name": "id_facture",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "date_reception": {
           "name": "date_reception",
           "type": "text",
@@ -1521,6 +1536,172 @@
           ],
           "columnsTo": [
             "id_abonne"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "sav_dossier_id_facture_facture_id_facture_fk": {
+          "name": "sav_dossier_id_facture_facture_id_facture_fk",
+          "tableFrom": "sav_dossier",
+          "tableTo": "facture",
+          "columnsFrom": [
+            "id_facture"
+          ],
+          "columnsTo": [
+            "id_facture"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "sav_historique": {
+      "name": "sav_historique",
+      "columns": {
+        "id_histo_sav": {
+          "name": "id_histo_sav",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "id_dossier_sav": {
+          "name": "id_dossier_sav",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "statut_avant": {
+          "name": "statut_avant",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "statut_apres": {
+          "name": "statut_apres",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "motif": {
+          "name": "motif",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "utilisateur_id": {
+          "name": "utilisateur_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "date_changement": {
+          "name": "date_changement",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(datetime('now'))"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "sav_historique_id_dossier_sav_sav_dossier_id_dossier_sav_fk": {
+          "name": "sav_historique_id_dossier_sav_sav_dossier_id_dossier_sav_fk",
+          "tableFrom": "sav_historique",
+          "tableTo": "sav_dossier",
+          "columnsFrom": [
+            "id_dossier_sav"
+          ],
+          "columnsTo": [
+            "id_dossier_sav"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "sav_historique_utilisateur_id_utilisateur_id_user_fk": {
+          "name": "sav_historique_utilisateur_id_utilisateur_id_user_fk",
+          "tableFrom": "sav_historique",
+          "tableTo": "utilisateur",
+          "columnsFrom": [
+            "utilisateur_id"
+          ],
+          "columnsTo": [
+            "id_user"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "sav_piece_utilisee": {
+      "name": "sav_piece_utilisee",
+      "columns": {
+        "id_piece_utilisee": {
+          "name": "id_piece_utilisee",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "id_dossier_sav": {
+          "name": "id_dossier_sav",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "id_produit": {
+          "name": "id_produit",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "quantite": {
+          "name": "quantite",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 1
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "sav_piece_utilisee_id_dossier_sav_sav_dossier_id_dossier_sav_fk": {
+          "name": "sav_piece_utilisee_id_dossier_sav_sav_dossier_id_dossier_sav_fk",
+          "tableFrom": "sav_piece_utilisee",
+          "tableTo": "sav_dossier",
+          "columnsFrom": [
+            "id_dossier_sav"
+          ],
+          "columnsTo": [
+            "id_dossier_sav"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "sav_piece_utilisee_id_produit_produit_id_produit_fk": {
+          "name": "sav_piece_utilisee_id_produit_produit_id_produit_fk",
+          "tableFrom": "sav_piece_utilisee",
+          "tableTo": "produit",
+          "columnsFrom": [
+            "id_produit"
+          ],
+          "columnsTo": [
+            "id_produit"
           ],
           "onDelete": "no action",
           "onUpdate": "no action"

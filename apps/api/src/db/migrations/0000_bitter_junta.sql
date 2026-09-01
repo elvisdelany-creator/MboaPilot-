@@ -206,9 +206,33 @@ CREATE TABLE `sav_dossier` (
 	`diagnostic` text,
 	`statut` text DEFAULT 'RECU' NOT NULL,
 	`sous_garantie` integer DEFAULT 0 NOT NULL,
+	`montant_main_oeuvre` integer DEFAULT 0 NOT NULL,
+	`id_facture` integer,
 	`date_reception` text DEFAULT (datetime('now')) NOT NULL,
 	FOREIGN KEY (`site_id`) REFERENCES `site`(`id_site`) ON UPDATE no action ON DELETE no action,
-	FOREIGN KEY (`id_abonne`) REFERENCES `abonne`(`id_abonne`) ON UPDATE no action ON DELETE no action
+	FOREIGN KEY (`id_abonne`) REFERENCES `abonne`(`id_abonne`) ON UPDATE no action ON DELETE no action,
+	FOREIGN KEY (`id_facture`) REFERENCES `facture`(`id_facture`) ON UPDATE no action ON DELETE no action
+);
+--> statement-breakpoint
+CREATE TABLE `sav_historique` (
+	`id_histo_sav` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
+	`id_dossier_sav` integer NOT NULL,
+	`statut_avant` text,
+	`statut_apres` text NOT NULL,
+	`motif` text,
+	`utilisateur_id` integer,
+	`date_changement` text DEFAULT (datetime('now')) NOT NULL,
+	FOREIGN KEY (`id_dossier_sav`) REFERENCES `sav_dossier`(`id_dossier_sav`) ON UPDATE no action ON DELETE no action,
+	FOREIGN KEY (`utilisateur_id`) REFERENCES `utilisateur`(`id_user`) ON UPDATE no action ON DELETE no action
+);
+--> statement-breakpoint
+CREATE TABLE `sav_piece_utilisee` (
+	`id_piece_utilisee` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
+	`id_dossier_sav` integer NOT NULL,
+	`id_produit` integer NOT NULL,
+	`quantite` integer DEFAULT 1 NOT NULL,
+	FOREIGN KEY (`id_dossier_sav`) REFERENCES `sav_dossier`(`id_dossier_sav`) ON UPDATE no action ON DELETE no action,
+	FOREIGN KEY (`id_produit`) REFERENCES `produit`(`id_produit`) ON UPDATE no action ON DELETE no action
 );
 --> statement-breakpoint
 CREATE TABLE `site` (

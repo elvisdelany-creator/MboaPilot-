@@ -255,7 +255,29 @@ export const savDossier = sqliteTable("sav_dossier", {
     enum: ["RECU", "DIAGNOSTIC", "DEVIS_ATTENTE", "REPARATION", "PRET", "LIVRE", "IRREPARABLE", "ABANDONNE"],
   }).notNull().default("RECU"),
   sousGarantie: integer("sous_garantie").notNull().default(0),
+  montantMainOeuvre: integer("montant_main_oeuvre").notNull().default(0),
+  idFacture: integer("id_facture").references(() => facture.idFacture), // générée au passage en PRET (5.10, 8.4)
   dateReception: text("date_reception").notNull().default(now),
+});
+
+// pièces de rechange affectées à un dossier SAV (5.10) — décrémente le stock du produit
+export const savPieceUtilisee = sqliteTable("sav_piece_utilisee", {
+  idPieceUtilisee: integer("id_piece_utilisee").primaryKey({ autoIncrement: true }),
+  idDossierSav: integer("id_dossier_sav").notNull().references(() => savDossier.idDossierSav),
+  idProduit: integer("id_produit").notNull().references(() => produit.idProduit),
+  quantite: integer("quantite").notNull().default(1),
+});
+
+// historique des changements de statut du dossier SAV (5.10, 8.4) — utilisateur_id
+// nullable pour rester cohérent avec historique_abonnement (actions automatisées)
+export const savHistorique = sqliteTable("sav_historique", {
+  idHistoSav: integer("id_histo_sav").primaryKey({ autoIncrement: true }),
+  idDossierSav: integer("id_dossier_sav").notNull().references(() => savDossier.idDossierSav),
+  statutAvant: text("statut_avant"),
+  statutApres: text("statut_apres").notNull(),
+  motif: text("motif"),
+  utilisateurId: integer("utilisateur_id").references(() => utilisateur.idUser),
+  dateChangement: text("date_changement").notNull().default(now),
 });
 
 // journal d'audit immuable — 11.5 : jamais de UPDATE/DELETE applicatif sur cette table

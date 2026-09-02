@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { ArrowUpCircle, GitMerge, Pencil, Printer, RefreshCw, Users, UserSquare2, Wrench } from "lucide-react";
-import { validerMigrationFormule } from "@mboapilot/shared";
-import { chargerCatalogue, chargerFiche360, rechercherAbonnes, ErreurAuthentification } from "@/lib/api";
+import { ArrowUpCircle, ChevronDown, ChevronUp, GitMerge, Pencil, Printer, RefreshCw, Users, UserSquare2, Wrench } from "lucide-react";
+import { peutTransitionnerSav, validerMigrationFormule, type StatutSav } from "@mboapilot/shared";
+import { chargerCatalogue, chargerDossierSav, chargerFiche360, rechercherAbonnes, ErreurAuthentification } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { AppHeader, type Vue } from "@/components/layout/AppHeader";
 import { Button } from "@/components/ui/button";
@@ -13,9 +13,11 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { EchangeMaterielDialog } from "@/components/caisse/EchangeMaterielDialog";
 import { ChangerFormuleDialog } from "@/components/caisse/ChangerFormuleDialog";
+import { ChangerStatutDialog } from "@/components/sav/ChangerStatutDialog";
+import { AjouterPieceDialog } from "@/components/sav/AjouterPieceDialog";
 import { ModifierAbonneDialog } from "./ModifierAbonneDialog";
 import { FusionDoublonsDialog } from "./FusionDoublonsDialog";
-import type { Abonne, AbonnementAvecFormule, CatalogueFamille, Facture, Fiche360 } from "@/lib/types";
+import type { Abonne, AbonnementAvecFormule, CatalogueFamille, DossierSavDetaille, Facture, Fiche360 } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 interface Props {
@@ -34,6 +36,28 @@ const VARIANTE_STATUT_ABONNEMENT: Record<string, "default" | "secondary" | "outl
 const LIBELLE_MODE_PAIEMENT: Record<string, string> = { CASH: "Comptant", CHEQUE: "Chèque", VIREMENT: "Virement", MOBILE_MONEY: "Mobile Money" };
 const LIBELLE_STATUT_COMMISSION: Record<string, string> = { EN_COURS: "En cours (probatoire)", CONFIRMEE: "Confirmée", ANNULEE: "Annulée" };
 const VARIANTE_STATUT_COMMISSION: Record<string, "secondary" | "default" | "destructive"> = { EN_COURS: "secondary", CONFIRMEE: "default", ANNULEE: "destructive" };
+
+const LIBELLE_STATUT_SAV: Record<StatutSav, string> = {
+  RECU: "Reçu",
+  DIAGNOSTIC: "En diagnostic",
+  DEVIS_ATTENTE: "Devis en attente",
+  REPARATION: "En réparation",
+  PRET: "Prêt",
+  LIVRE: "Livré",
+  IRREPARABLE: "Irréparable",
+  ABANDONNE: "Abandonné",
+};
+const VARIANTE_STATUT_SAV: Record<StatutSav, "secondary" | "default" | "outline" | "destructive"> = {
+  RECU: "secondary",
+  DIAGNOSTIC: "secondary",
+  DEVIS_ATTENTE: "secondary",
+  REPARATION: "default",
+  PRET: "default",
+  LIVRE: "outline",
+  IRREPARABLE: "destructive",
+  ABANDONNE: "destructive",
+};
+const TOUS_LES_STATUTS_SAV: StatutSav[] = ["RECU", "DIAGNOSTIC", "DEVIS_ATTENTE", "REPARATION", "PRET", "LIVRE", "IRREPARABLE", "ABANDONNE"];
 
 // 8.1, 9.4 : gestion des clients/abonnés — recherche, fiche « 360° » à
 // onglets (Abonnements avec actions contextuelles, Facturation, SAV, Suivi
@@ -56,6 +80,13 @@ export function ClientsPage({ onNaviguer, onReabonnerDepuisFiche }: Props) {
   const [echangeMaterielCible, setEchangeMaterielCible] = useState<number | null>(null);
   const [changerFormuleCible, setChangerFormuleCible] = useState<AbonnementAvecFormule | null>(null);
   const [filtreFacture, setFiltreFacture] = useState<"toutes" | "impayees">("toutes");
+  // 9.4 : actions contextuelles SAV — le dossier déplié récupère son détail
+  // complet (pièces, historique, facture) via l'API SAV existante, la fiche
+  // 360° elle-même n'exposant que la forme « plate » des dossiers
+  const [dossierSavDeplieId, setDossierSavDeplieId] = useState<number | null>(null);
+  const [detailSav, setDetailSav] = useState<DossierSavDetaille | null>(null);
+  const [pieceSavOuvert, setPieceSavOuvert] = useState(false);
+  const [statutSavCible, setStatutSavCible] = useState<StatutSav | null>(null);
 
   function gererErreur(erreur: unknown, messageParDefaut: string) {
     if (erreur instanceof ErreurAuthentification) {
@@ -99,6 +130,25 @@ export function ClientsPage({ onNaviguer, onReabonnerDepuisFiche }: Props) {
     else setFiche(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [idSelectionne]);
+
+  function rechargerDetailSav(idDossierSav: number) {
+    chargerDossierSav(token, idDossierSav)
+      .then(setDetailSav)
+      .catch((e) => gererErreur(e, "Impossible de charger le dossier SAV."));
+  }
+
+  useEffect(() => {
+    if (dossierSavDeplieId !== null) rechargerDetailSav(dossierSavDeplieId);
+    else setDetailSav(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dossierSavDeplieId]);
+
+  function onActionSavReussie() {
+    setPieceSavOuvert(false);
+    setStatutSavCible(null);
+    if (dossierSavDeplieId !== null) rechargerDetailSav(dossierSavDeplieId);
+    if (idSelectionne !== null) rechargerFiche(idSelectionne);
+  }
 
   const peutFusionner = utilisateur.role === "ADMINISTRATEUR" || utilisateur.role === "GERANT";
 
@@ -366,12 +416,60 @@ export function ClientsPage({ onNaviguer, onReabonnerDepuisFiche }: Props) {
                 <TabsContent value="sav" forceMount className="space-y-2 print:mb-6">
                   <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Dossiers SAV ({fiche.dossiersSav.length})</p>
                   {fiche.dossiersSav.length === 0 && <p className="text-sm text-muted-foreground">Aucun dossier SAV.</p>}
-                  <ul className="space-y-1 text-sm text-card-foreground">
-                    {fiche.dossiersSav.map((d) => (
-                      <li key={d.idDossierSav}>
-                        Dossier n° {d.idDossierSav} — {d.descriptionPanne} ({d.statut})
-                      </li>
-                    ))}
+                  <ul className="space-y-2">
+                    {fiche.dossiersSav.map((d) => {
+                      const deplie = dossierSavDeplieId === d.idDossierSav;
+                      const detail = deplie ? detailSav : null;
+                      const prochainesTransitions = detail !== null ? TOUS_LES_STATUTS_SAV.filter((s) => peutTransitionnerSav(detail.statut, s)) : [];
+                      const estTerminal = detail !== null && prochainesTransitions.length === 0;
+                      const peutAjouterPiece = detail !== null && !estTerminal && detail.statut !== "PRET" && detail.statut !== "LIVRE";
+                      return (
+                        <li key={d.idDossierSav}>
+                          <Card className="gap-2 p-3">
+                            <button
+                              type="button"
+                              className="no-print flex w-full cursor-pointer items-center justify-between gap-3 text-left"
+                              onClick={() => setDossierSavDeplieId(deplie ? null : d.idDossierSav)}
+                            >
+                              <div>
+                                <p className="font-medium text-card-foreground">Dossier n° {d.idDossierSav} — {d.descriptionPanne}</p>
+                                <p className="text-sm text-muted-foreground">Reçu le {formateurDateHeure.format(new Date(d.dateReception))}</p>
+                              </div>
+                              <span className="flex shrink-0 items-center gap-2">
+                                <Badge variant={VARIANTE_STATUT_SAV[d.statut]}>{LIBELLE_STATUT_SAV[d.statut]}</Badge>
+                                {deplie ? <ChevronUp className="size-4 text-muted-foreground" /> : <ChevronDown className="size-4 text-muted-foreground" />}
+                              </span>
+                            </button>
+                            <p className="hidden print:block text-sm text-card-foreground">
+                              Dossier n° {d.idDossierSav} — {d.descriptionPanne} ({LIBELLE_STATUT_SAV[d.statut]})
+                            </p>
+
+                            {deplie && (
+                              <div className="no-print flex flex-wrap items-center gap-2 border-t border-border pt-2">
+                                {!detail && <p className="text-sm text-muted-foreground">Chargement…</p>}
+                                {peutAjouterPiece && (
+                                  <Button variant="outline" size="sm" className="cursor-pointer" onClick={() => setPieceSavOuvert(true)}>
+                                    Ajouter une pièce
+                                  </Button>
+                                )}
+                                {prochainesTransitions.map((s) => (
+                                  <Button
+                                    key={s}
+                                    size="sm"
+                                    variant={s === "IRREPARABLE" || s === "ABANDONNE" ? "outline" : "default"}
+                                    className="cursor-pointer"
+                                    onClick={() => setStatutSavCible(s)}
+                                  >
+                                    {LIBELLE_STATUT_SAV[s]}
+                                  </Button>
+                                ))}
+                                {estTerminal && <p className="text-sm text-muted-foreground">Dossier clôturé — aucune action possible.</p>}
+                              </div>
+                            )}
+                          </Card>
+                        </li>
+                      );
+                    })}
                   </ul>
                 </TabsContent>
 
@@ -436,6 +534,23 @@ export function ClientsPage({ onNaviguer, onReabonnerDepuisFiche }: Props) {
         onFerme={() => setChangerFormuleCible(null)}
         onSucces={onActionAbonnementReussie}
       />
+
+      {detailSav && (
+        <>
+          <AjouterPieceDialog
+            ouvert={pieceSavOuvert}
+            idDossierSav={detailSav.idDossierSav}
+            onFerme={() => setPieceSavOuvert(false)}
+            onSucces={onActionSavReussie}
+          />
+          <ChangerStatutDialog
+            dossier={detailSav}
+            statutCible={statutSavCible}
+            onFerme={() => setStatutSavCible(null)}
+            onSucces={onActionSavReussie}
+          />
+        </>
+      )}
     </div>
   );
 }

@@ -6,15 +6,18 @@ import type {
   CatalogueFamille,
   ChangerFormuleResultat,
   ChangerStatutSavResultat,
+  CommissionCanalplusEnCours,
   DossierSav,
   DossierSavDetaille,
   EchangeMaterielResultat,
   Fiche360,
   FicheApporteur,
   HistoriquePrixProduit,
+  IndicateursJour,
   MargeType,
   NouvelAbonne,
   ParcoursPaiementMobile,
+  PointEvolutionCA,
   Produit,
   RecrutementResultat,
   StatutSav,
@@ -22,6 +25,7 @@ import type {
   TransactionMobileMoney,
   TypeProduit,
   Utilisateur,
+  VentilationPaiement,
 } from "./types";
 
 const BASE = "/api/v1";
@@ -453,4 +457,33 @@ export async function actualiserTransactionMobileRequete(token: string, idTransa
     headers: headersAuth(token),
   });
   return lireJson<TransactionMobileMoney>(reponse);
+}
+
+// 8.6, 9.3 : tableau de bord de pilotage (Administrateur/Gérant/Comptable)
+export async function chargerIndicateursJour(token: string, siteId: number, aujourdHui: string): Promise<IndicateursJour> {
+  const reponse = await fetch(`${BASE}/tableau-bord/indicateurs?siteId=${siteId}&aujourdHui=${aujourdHui}`, { headers: headersAuth(token) });
+  return lireJson<IndicateursJour>(reponse);
+}
+
+export async function chargerEvolutionCA(token: string, siteId: number, aujourdHui: string, jours: number): Promise<PointEvolutionCA[]> {
+  const reponse = await fetch(`${BASE}/tableau-bord/evolution-ca?siteId=${siteId}&aujourdHui=${aujourdHui}&jours=${jours}`, {
+    headers: headersAuth(token),
+  });
+  return lireJson<PointEvolutionCA[]>(reponse);
+}
+
+export async function chargerValorisationStock(token: string, siteId: number): Promise<number> {
+  const reponse = await fetch(`${BASE}/tableau-bord/valorisation-stock?siteId=${siteId}`, { headers: headersAuth(token) });
+  const { valorisation } = await lireJson<{ valorisation: number }>(reponse);
+  return valorisation;
+}
+
+export async function chargerEncaissementsJour(token: string, siteId: number, aujourdHui: string): Promise<VentilationPaiement[]> {
+  const reponse = await fetch(`${BASE}/tableau-bord/encaissements-jour?siteId=${siteId}&aujourdHui=${aujourdHui}`, { headers: headersAuth(token) });
+  return lireJson<VentilationPaiement[]>(reponse);
+}
+
+export async function chargerCommissionsCanalplusEnCours(token: string, siteId: number): Promise<CommissionCanalplusEnCours[]> {
+  const reponse = await fetch(`${BASE}/tableau-bord/commissions-canalplus?siteId=${siteId}`, { headers: headersAuth(token) });
+  return lireJson<CommissionCanalplusEnCours[]>(reponse);
 }

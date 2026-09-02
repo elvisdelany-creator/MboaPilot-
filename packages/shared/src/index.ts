@@ -8,3 +8,4 @@ export { calculerCoutMoyenPondere } from "./cout-moyen-pondere.js";
 export { calculerMarge, type MargeArticle, type MargeCalculee, type MargeType } from "./marge-article.js";
 export { peutTransitionnerPaiementMobile, type StatutPaiementMobile } from "./statut-paiement-mobile.js";
 export { validerMigrationFormule, type FormuleMigration, type ResultatValidationMigration } from "./migration-formule.js";
+export { genererPlageJours } from "./plage-jours.js";

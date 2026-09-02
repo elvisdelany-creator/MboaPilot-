@@ -266,3 +266,29 @@ export interface Fiche360 {
   factures: Facture[];
   dossiersSav: DossierSav[];
 }
+
+// 8.6, 9.3 : tableau de bord de pilotage
+export interface IndicateursJour {
+  chiffreAffairesJour: number;
+  margeEstimeeJour: number;
+  nombreEcheances7j: number;
+  nombreAlertesStock: number;
+}
+
+export interface PointEvolutionCA {
+  date: string;
+  montant: number;
+}
+
+export type ModePaiement = "CASH" | "CHEQUE" | "VIREMENT" | "MOBILE_MONEY";
+
+export interface VentilationPaiement {
+  mode: ModePaiement;
+  total: number;
+}
+
+export interface CommissionCanalplusEnCours {
+  commission: SuiviCommissionCanalplus;
+  abonnement: Abonnement;
+  abonne: Abonne;
+}

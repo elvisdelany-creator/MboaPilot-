@@ -988,3 +988,62 @@ describe("Fiche client 360° et fusion de doublons (8.1)", () => {
     expect(reponse.statusCode).toBe(404);
   });
 });
+
+describe("Tableau de bord de pilotage (8.6, 9.3)", () => {
+  it("un administrateur consulte les indicateurs, l'évolution du CA, la valorisation, les encaissements et les commissions", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    creerUtilisateur(db, { siteId, nom: "Admin", prenom: "D", identifiant: "admin1", motDePasse: "motdepasse-secret", role: "ADMINISTRATEUR" });
+    const token = await connecter(app, "admin1");
+    const aujourdHui = new Date().toISOString().slice(0, 10);
+
+    await app.inject({
+      method: "POST",
+      url: "/api/v1/recrutements",
+      headers: authHeader(token),
+      payload: { siteId, userId, aujourdHui, abonne: { nom: "Nga", prenom: "Paul", telephone: "690000000" }, idFormule, montantEncaisse: 13000 },
+    });
+
+    const indicateurs = await app.inject({
+      method: "GET",
+      url: `/api/v1/tableau-bord/indicateurs?siteId=${siteId}&aujourdHui=${aujourdHui}`,
+      headers: authHeader(token),
+    });
+    expect(indicateurs.statusCode).toBe(200);
+    expect(indicateurs.json().chiffreAffairesJour).toBe(13000);
+
+    const evolution = await app.inject({
+      method: "GET",
+      url: `/api/v1/tableau-bord/evolution-ca?siteId=${siteId}&aujourdHui=${aujourdHui}&jours=7`,
+      headers: authHeader(token),
+    });
+    expect(evolution.statusCode).toBe(200);
+    expect(evolution.json()).toHaveLength(7);
+
+    const valorisation = await app.inject({ method: "GET", url: `/api/v1/tableau-bord/valorisation-stock?siteId=${siteId}`, headers: authHeader(token) });
+    expect(valorisation.statusCode).toBe(200);
+
+    const encaissements = await app.inject({
+      method: "GET",
+      url: `/api/v1/tableau-bord/encaissements-jour?siteId=${siteId}&aujourdHui=${aujourdHui}`,
+      headers: authHeader(token),
+    });
+    expect(encaissements.statusCode).toBe(200);
+    expect(encaissements.json().find((v: { mode: string }) => v.mode === "CASH").total).toBe(13000);
+
+    const commissions = await app.inject({ method: "GET", url: `/api/v1/tableau-bord/commissions-canalplus?siteId=${siteId}`, headers: authHeader(token) });
+    expect(commissions.statusCode).toBe(200);
+  });
+
+  it("un caissier n'a pas accès au tableau de bord de pilotage (403)", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const token = await connecter(app);
+    const aujourdHui = new Date().toISOString().slice(0, 10);
+
+    const reponse = await app.inject({
+      method: "GET",
+      url: `/api/v1/tableau-bord/indicateurs?siteId=${siteId}&aujourdHui=${aujourdHui}`,
+      headers: authHeader(token),
+    });
+    expect(reponse.statusCode).toBe(403);
+  });
+});

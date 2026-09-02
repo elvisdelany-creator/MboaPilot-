@@ -12,6 +12,7 @@ import { registerStockRoutes } from "./modules/stock/stock.routes.js";
 import { registerPaiementMobileRoutes } from "./modules/paiement-mobile/paiement-mobile.routes.js";
 import { SimulateurOrangeMoney } from "./modules/paiement-mobile/simulateur-orange-money.js";
 import type { FournisseurPaiementMobile } from "./modules/paiement-mobile/fournisseur.js";
+import { registerTableauBordRoutes } from "./modules/tableau-bord/tableau-bord.routes.js";
 
 export interface BuildAppOptions {
   jwtSecret: string;
@@ -44,6 +45,9 @@ export function buildApp(db: Db, options: BuildAppOptions) {
   const gestionCatalogue = exigerRole("ADMINISTRATEUR", "GERANT");
   // 8.1 : fusion de doublons — opération destructrice, réservée à l'encadrement
   const fusionAbonnes = exigerRole("ADMINISTRATEUR", "GERANT");
+  // 8.6, 9.3 : indicateurs financiers du tableau de bord — vue Administrateur/
+  // Gérant/Comptable, distincte des alertes d'échéance/stock ouvertes aux ventes
+  const pilotage = exigerRole("ADMINISTRATEUR", "GERANT", "COMPTABLE");
 
   registerAbonnementsRoutes(app, db, { authRequis, ventes });
   registerAbonnesRoutes(app, db, { authRequis, ventes, fusionAbonnes });
@@ -54,6 +58,7 @@ export function buildApp(db: Db, options: BuildAppOptions) {
   registerApporteursRoutes(app, db, { authRequis, ventes, gestionApporteurs, consultationApporteurs });
   registerStockRoutes(app, db, { authRequis, ventes, gestionStock });
   registerPaiementMobileRoutes(app, db, fournisseurPaiementMobile, { authRequis, ventes });
+  registerTableauBordRoutes(app, db, { authRequis, ventes, pilotage });
 
   return app;
 }

@@ -6,3 +6,4 @@ export { evaluerSuiviCommission, type StatutCommission } from "./suivi-commissio
 export { peutTransitionnerSav, type StatutSav } from "./statut-sav.js";
 export { calculerCoutMoyenPondere } from "./cout-moyen-pondere.js";
 export { calculerMarge, type MargeArticle, type MargeCalculee, type MargeType } from "./marge-article.js";
+export { peutTransitionnerPaiementMobile, type StatutPaiementMobile } from "./statut-paiement-mobile.js";

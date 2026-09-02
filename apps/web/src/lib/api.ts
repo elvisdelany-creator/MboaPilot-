@@ -12,10 +12,12 @@ import type {
   HistoriquePrixProduit,
   MargeType,
   NouvelAbonne,
+  ParcoursPaiementMobile,
   Produit,
   RecrutementResultat,
   StatutSav,
   StockMouvement,
+  TransactionMobileMoney,
   TypeProduit,
   Utilisateur,
 } from "./types";
@@ -358,4 +360,36 @@ export async function ajusterInventaireRequete(token: string, payload: AjusterIn
     body: JSON.stringify(payload),
   });
   return lireJson<Produit>(reponse);
+}
+
+// 6.6 : paiement mobile (Orange Money et extensible)
+export interface InitierPaiementMobilePayload {
+  idFacture: number;
+  numeroTelephone: string;
+  montant: number;
+  parcours: ParcoursPaiementMobile;
+}
+
+export async function initierPaiementMobileRequete(token: string, payload: InitierPaiementMobilePayload): Promise<TransactionMobileMoney> {
+  const reponse = await fetch(`${BASE}/paiements-mobiles`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headersAuth(token) },
+    body: JSON.stringify(payload),
+  });
+  return lireJson<TransactionMobileMoney>(reponse);
+}
+
+export async function chargerTransactionMobile(token: string, idTransaction: number): Promise<TransactionMobileMoney> {
+  const reponse = await fetch(`${BASE}/paiements-mobiles/${idTransaction}`, { headers: headersAuth(token) });
+  return lireJson<TransactionMobileMoney>(reponse);
+}
+
+// 6.6 : "polling ou callback/webhook" — sans webhook opérateur réel, la
+// caisse interroge périodiquement ce point d'entrée.
+export async function actualiserTransactionMobileRequete(token: string, idTransaction: number): Promise<TransactionMobileMoney> {
+  const reponse = await fetch(`${BASE}/paiements-mobiles/${idTransaction}/actualiser`, {
+    method: "POST",
+    headers: headersAuth(token),
+  });
+  return lireJson<TransactionMobileMoney>(reponse);
 }

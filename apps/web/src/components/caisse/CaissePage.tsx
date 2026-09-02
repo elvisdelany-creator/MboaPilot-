@@ -2,13 +2,14 @@ import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { chargerAbonnementsAbonne, chargerCatalogue, ErreurAuthentification, reabonnerRequete, recruter } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
-import type { Abonne, Abonnement, CatalogueFamille, CatalogueKit, Formule, NouvelAbonne } from "@/lib/types";
+import type { Abonne, Abonnement, CatalogueFamille, CatalogueKit, Formule, NouvelAbonne, ParcoursPaiementMobile } from "@/lib/types";
 import { AppHeader, type Vue } from "@/components/layout/AppHeader";
 import { RechercheAbonne } from "./RechercheAbonne";
 import { CategoriesPanel } from "./CategoriesPanel";
 import { GrilleArticles } from "./GrilleArticles";
-import { TicketPanel } from "./TicketPanel";
+import { TicketPanel, type PaiementSaisi } from "./TicketPanel";
 import { EchangeMaterielDialog } from "./EchangeMaterielDialog";
+import { PaiementMobileMoneyDialog } from "./PaiementMobileMoneyDialog";
 
 interface Props {
   onNaviguer: (vue: Vue) => void;
@@ -30,6 +31,12 @@ export function CaissePage({ onNaviguer, abonneInitial, idFamilleInitiale }: Pro
   const [kitSelectionne, setKitSelectionne] = useState<CatalogueKit | null>(null);
   const [enCours, setEnCours] = useState(false);
   const [echangeMaterielOuvert, setEchangeMaterielOuvert] = useState(false);
+  const [paiementMobile, setPaiementMobile] = useState<{
+    idFacture: number;
+    montant: number;
+    numeroTelephone: string;
+    parcours: ParcoursPaiementMobile;
+  } | null>(null);
 
   function gererErreur(erreur: unknown, messageParDefaut: string) {
     if (erreur instanceof ErreurAuthentification) {
@@ -102,11 +109,15 @@ export function CaissePage({ onNaviguer, abonneInitial, idFamilleInitiale }: Pro
     setAbonnementsAbonne([]);
   }
 
-  async function valider(montantEncaisse: number) {
+  async function valider(paiement: PaiementSaisi) {
     if (!abonneSelectionne || !formuleSelectionnee) return;
     setEnCours(true);
     try {
       const aujourdHui = new Date().toISOString().slice(0, 10);
+      // 6.6 : Mobile Money n'encaisse jamais dans cet appel — la facture est
+      // créée BROUILLON (montantEncaisse=0), puis le paiement est initié à
+      // part sur cette facture, sans toucher au cœur du recrutement/réabonnement.
+      const montantEncaisse = paiement.mode === "CASH" ? paiement.montant : 0;
       const resultat = abonnementARenouveler
         ? await reabonnerRequete(token, abonnementARenouveler.numeroAbonnement, {
             siteId: utilisateur.siteId,
@@ -127,6 +138,16 @@ export function CaissePage({ onNaviguer, abonneInitial, idFamilleInitiale }: Pro
             // un abonné existant hérite déjà de son apporteur côté serveur
             apporteurId: "idAbonne" in abonneSelectionne ? undefined : abonneSelectionne.apporteurId,
           });
+
+      if (paiement.mode === "MOBILE_MONEY") {
+        setPaiementMobile({
+          idFacture: resultat.idFacture,
+          montant: paiement.montant,
+          numeroTelephone: paiement.numeroTelephone,
+          parcours: paiement.parcours,
+        });
+        return;
+      }
 
       const operation = abonnementARenouveler ? "Réabonnement" : "Recrutement";
       toast.success(
@@ -182,6 +203,20 @@ export function CaissePage({ onNaviguer, abonneInitial, idFamilleInitiale }: Pro
         numeroAbonnement={echangeMaterielOuvert ? (abonnementARenouveler?.numeroAbonnement ?? null) : null}
         onFerme={() => setEchangeMaterielOuvert(false)}
         onSucces={() => setEchangeMaterielOuvert(false)}
+      />
+
+      <PaiementMobileMoneyDialog
+        ouvert={paiementMobile !== null}
+        idFacture={paiementMobile?.idFacture ?? null}
+        montant={paiementMobile?.montant ?? 0}
+        numeroTelephone={paiementMobile?.numeroTelephone ?? ""}
+        parcours={paiementMobile?.parcours ?? "USSD_CLIENT"}
+        onFerme={() => setPaiementMobile(null)}
+        onSucces={() => {
+          toast.success("Paiement Mobile Money confirmé — facture encaissée.");
+          setPaiementMobile(null);
+          reinitialiserTicket();
+        }}
       />
     </div>
   );

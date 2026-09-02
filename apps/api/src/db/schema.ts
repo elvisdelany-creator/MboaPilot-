@@ -260,6 +260,21 @@ export const paiement = sqliteTable("paiement", {
   referenceUnique: uniqueIndex("idx_paiement_reference").on(t.referenceTransaction),
 }));
 
+// 6.6 : suivi d'une transaction de paiement mobile (Orange Money et
+// extensible) — distincte de "paiement", qui n'est créé qu'une fois la
+// transaction REUSSIE (cf. module fournisseur-paiement-mobile).
+export const transactionMobileMoney = sqliteTable("transaction_mobile_money", {
+  idTransaction: integer("id_transaction").primaryKey({ autoIncrement: true }),
+  idFacture: integer("id_facture").notNull().references(() => facture.idFacture),
+  parcours: text("parcours", { enum: ["USSD_CLIENT", "PUSH_MARCHAND"] }).notNull(),
+  numeroTelephone: text("numero_telephone").notNull(),
+  montant: integer("montant").notNull(),
+  statut: text("statut", { enum: ["INITIEE", "EN_ATTENTE", "REUSSIE", "ECHOUEE", "EXPIREE"] }).notNull().default("INITIEE"),
+  referenceTransaction: text("reference_transaction"), // fournie par l'opérateur à la soumission
+  dateCreation: text("date_creation").notNull().default(now),
+  dateExpiration: text("date_expiration").notNull(), // délai de validation de l'OTP dépassé (6.6)
+});
+
 export const savDossier = sqliteTable("sav_dossier", {
   idDossierSav: integer("id_dossier_sav").primaryKey({ autoIncrement: true }),
   siteId: integer("site_id").notNull().references(() => site.idSite),

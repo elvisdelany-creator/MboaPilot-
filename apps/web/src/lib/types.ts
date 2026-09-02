@@ -205,3 +205,18 @@ export interface StockMouvement {
   dateMouvement: string;
   utilisateurId: number;
 }
+
+export type ParcoursPaiementMobile = "USSD_CLIENT" | "PUSH_MARCHAND";
+export type StatutPaiementMobile = "INITIEE" | "EN_ATTENTE" | "REUSSIE" | "ECHOUEE" | "EXPIREE";
+
+export interface TransactionMobileMoney {
+  idTransaction: number;
+  idFacture: number;
+  parcours: ParcoursPaiementMobile;
+  numeroTelephone: string;
+  montant: number;
+  statut: StatutPaiementMobile;
+  referenceTransaction: string | null;
+  dateCreation: string;
+  dateExpiration: string;
+}

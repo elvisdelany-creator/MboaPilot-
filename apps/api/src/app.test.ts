@@ -709,3 +709,91 @@ describe("Module gestion du catalogue (8.2)", () => {
     expect(refusEdition.statusCode).toBe(403);
   });
 });
+
+// fournisseur entièrement pilotable pour les tests HTTP — indépendant du
+// minuteur réel du simulateur (SimulateurOrangeMoney)
+class FournisseurPaiementMobileFactice {
+  statut: "EN_ATTENTE" | "REUSSIE" | "ECHOUEE" | "EXPIREE" = "EN_ATTENTE";
+  async initier() {
+    return { referenceFournisseur: "REF-HTTP-TEST" };
+  }
+  async consulterStatut() {
+    return this.statut;
+  }
+}
+
+describe("Module paiement mobile Orange Money (6.6)", () => {
+  it("cycle complet : recrutement sans encaissement -> paiement mobile -> facture validée", async () => {
+    const fournisseur = new FournisseurPaiementMobileFactice();
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST, fournisseurPaiementMobile: fournisseur });
+    const token = await connecter(app);
+
+    const recrutement = await app.inject({
+      method: "POST",
+      url: "/api/v1/recrutements",
+      headers: authHeader(token),
+      payload: {
+        siteId,
+        userId,
+        aujourdHui: "2025-11-16",
+        abonne: { nom: "Nga", prenom: "Paul", telephone: "690000000" },
+        idFormule,
+        montantEncaisse: 0,
+      },
+    });
+    expect(recrutement.statusCode).toBe(201);
+    const { idFacture } = recrutement.json();
+
+    const initiation = await app.inject({
+      method: "POST",
+      url: "/api/v1/paiements-mobiles",
+      headers: authHeader(token),
+      payload: { idFacture, numeroTelephone: "690000000", montant: 13000, parcours: "USSD_CLIENT" },
+    });
+    expect(initiation.statusCode).toBe(201);
+    expect(initiation.json().statut).toBe("EN_ATTENTE");
+    const idTransaction = initiation.json().idTransaction;
+
+    // avant confirmation de l'opérateur : la facture reste BROUILLON
+    const avantConfirmation = await app.inject({
+      method: "POST",
+      url: `/api/v1/paiements-mobiles/${idTransaction}/actualiser`,
+      headers: authHeader(token),
+    });
+    expect(avantConfirmation.json().statut).toBe("EN_ATTENTE");
+
+    fournisseur.statut = "REUSSIE";
+    const confirmation = await app.inject({
+      method: "POST",
+      url: `/api/v1/paiements-mobiles/${idTransaction}/actualiser`,
+      headers: authHeader(token),
+    });
+    expect(confirmation.statusCode).toBe(200);
+    expect(confirmation.json().statut).toBe("REUSSIE");
+
+    const consultation = await app.inject({ method: "GET", url: `/api/v1/paiements-mobiles/${idTransaction}`, headers: authHeader(token) });
+    expect(consultation.json().statut).toBe("REUSSIE");
+  });
+
+  it("un rôle non habilité à la vente ne peut pas initier de paiement mobile (403)", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    creerUtilisateur(db, { siteId, nom: "Comptable", prenom: "C", identifiant: "comptable1", motDePasse: "motdepasse-secret", role: "COMPTABLE" });
+    const token = await connecter(app, "comptable1");
+
+    const reponse = await app.inject({
+      method: "POST",
+      url: "/api/v1/paiements-mobiles",
+      headers: authHeader(token),
+      payload: { idFacture: 1, numeroTelephone: "690000000", montant: 5000, parcours: "USSD_CLIENT" },
+    });
+    expect(reponse.statusCode).toBe(403);
+  });
+
+  it("renvoie 404 pour une transaction inconnue", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const token = await connecter(app);
+
+    const reponse = await app.inject({ method: "GET", url: "/api/v1/paiements-mobiles/999999", headers: authHeader(token) });
+    expect(reponse.statusCode).toBe(404);
+  });
+});

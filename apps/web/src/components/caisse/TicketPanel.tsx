@@ -6,7 +6,12 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
-import type { Abonne, CatalogueKit, Formule, NouvelAbonne } from "@/lib/types";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import type { Abonne, CatalogueKit, Formule, NouvelAbonne, ParcoursPaiementMobile } from "@/lib/types";
+
+export type PaiementSaisi =
+  | { mode: "CASH"; montant: number }
+  | { mode: "MOBILE_MONEY"; montant: number; numeroTelephone: string; parcours: ParcoursPaiementMobile };
 
 interface Props {
   abonneSelectionne: Abonne | NouvelAbonne | null;
@@ -14,15 +19,15 @@ interface Props {
   kitSelectionne: CatalogueKit | null;
   numeroAbonnementARenouveler: number | null;
   enCours: boolean;
-  onValider: (montantEncaisse: number) => void;
+  onValider: (paiement: PaiementSaisi) => void;
   onEchangerMateriel: () => void;
 }
 
 const formateurFcfa = new Intl.NumberFormat("fr-FR");
 
-// 9.2 : ticket en cours — récapitulatif, total, encaissement, validation.
-// Le mode (recrutement / réabonnement, 7.1/7.2) est détecté automatiquement
-// par CaissePage, jamais choisi explicitement par le caissier.
+// 9.2, 6.5, 6.6 : ticket en cours — récapitulatif, total, choix du mode de
+// paiement (comptant ou Mobile Money). Le mode recrutement/réabonnement
+// (7.1/7.2) est détecté automatiquement par CaissePage, jamais choisi ici.
 export function TicketPanel({
   abonneSelectionne,
   formuleSelectionnee,
@@ -38,10 +43,21 @@ export function TicketPanel({
       : 0;
   const total = (formuleSelectionnee?.prix ?? 0) + prixKit;
 
+  const [modePaiement, setModePaiement] = useState<"CASH" | "MOBILE_MONEY">("CASH");
   const [montant, setMontant] = useState(total);
+  const [numeroTelephone, setNumeroTelephone] = useState("");
+  const [parcours, setParcours] = useState<ParcoursPaiementMobile>("USSD_CLIENT");
   useEffect(() => setMontant(total), [total]);
 
-  const pretAValider = Boolean(abonneSelectionne && formuleSelectionnee) && !enCours;
+  const pretAValider =
+    Boolean(abonneSelectionne && formuleSelectionnee) &&
+    !enCours &&
+    (modePaiement === "CASH" || numeroTelephone.trim().length > 0);
+
+  function valider() {
+    if (modePaiement === "CASH") onValider({ mode: "CASH", montant });
+    else onValider({ mode: "MOBILE_MONEY", montant: total, numeroTelephone: numeroTelephone.trim(), parcours });
+  }
 
   return (
     <aside className="flex w-64 shrink-0 flex-col border-l border-border bg-card lg:w-80">
@@ -96,21 +112,64 @@ export function TicketPanel({
         </div>
 
         <div className="mt-4">
-          <Label htmlFor="montant-encaisse">Montant encaissé (comptant)</Label>
-          <Input
-            id="montant-encaisse"
-            type="number"
-            min={0}
-            value={montant}
-            onChange={(e) => setMontant(Number(e.target.value))}
-            className="mt-1 h-11 text-base tabular-nums"
-          />
-          {montant > 0 && montant < total && (
-            <p className="mt-1 text-sm text-alert-j3-fg">
-              Encaissement partiel — solde de {formateurFcfa.format(total - montant)} FCFA restant dû.
-            </p>
-          )}
+          <Label htmlFor="mode-paiement">Mode de paiement</Label>
+          <Select value={modePaiement} onValueChange={(v) => setModePaiement(v as "CASH" | "MOBILE_MONEY")}>
+            <SelectTrigger id="mode-paiement" className="mt-1 w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="CASH">Comptant (cash)</SelectItem>
+              <SelectItem value="MOBILE_MONEY">Mobile Money (Orange Money)</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
+
+        {modePaiement === "CASH" && (
+          <div className="mt-4">
+            <Label htmlFor="montant-encaisse">Montant encaissé (comptant)</Label>
+            <Input
+              id="montant-encaisse"
+              type="number"
+              min={0}
+              value={montant}
+              onChange={(e) => setMontant(Number(e.target.value))}
+              className="mt-1 h-11 text-base tabular-nums"
+            />
+            {montant > 0 && montant < total && (
+              <p className="mt-1 text-sm text-alert-j3-fg">
+                Encaissement partiel — solde de {formateurFcfa.format(total - montant)} FCFA restant dû.
+              </p>
+            )}
+          </div>
+        )}
+
+        {modePaiement === "MOBILE_MONEY" && (
+          <div className="mt-4 space-y-3">
+            <div>
+              <Label htmlFor="mobile-money-telephone">Numéro de téléphone</Label>
+              <Input
+                id="mobile-money-telephone"
+                type="tel"
+                value={numeroTelephone}
+                onChange={(e) => setNumeroTelephone(e.target.value)}
+                placeholder="690000000"
+                className="mt-1 h-11 text-base"
+              />
+            </div>
+            <div>
+              <Label htmlFor="mobile-money-parcours">Parcours</Label>
+              <Select value={parcours} onValueChange={(v) => setParcours(v as ParcoursPaiementMobile)}>
+                <SelectTrigger id="mobile-money-parcours" className="mt-1 w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="USSD_CLIENT">USSD (le client génère l'OTP)</SelectItem>
+                  <SelectItem value="PUSH_MARCHAND">Push (notification envoyée au client)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="border-t border-border p-4">
@@ -119,9 +178,9 @@ export function TicketPanel({
           size="lg"
           className="h-12 w-full cursor-pointer text-base"
           disabled={!pretAValider}
-          onClick={() => onValider(montant)}
+          onClick={valider}
         >
-          {enCours ? "Encaissement…" : "Valider et encaisser"}
+          {enCours ? "Encaissement…" : modePaiement === "CASH" ? "Valider et encaisser" : "Initier le paiement Mobile Money"}
         </Button>
       </div>
     </aside>

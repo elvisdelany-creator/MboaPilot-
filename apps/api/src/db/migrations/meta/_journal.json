@@ -15,6 +15,13 @@
       "when": 1788328441527,
       "tag": "0001_cynical_joseph",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1788329750906,
+      "tag": "0002_fair_mimic",
+      "breakpoints": true
     }
   ]
 }

@@ -9,15 +9,23 @@ import { registerProduitsRoutes } from "./modules/produits/produits.routes.js";
 import { registerSavRoutes } from "./modules/sav/sav.routes.js";
 import { registerApporteursRoutes } from "./modules/apporteurs/apporteurs.routes.js";
 import { registerStockRoutes } from "./modules/stock/stock.routes.js";
+import { registerPaiementMobileRoutes } from "./modules/paiement-mobile/paiement-mobile.routes.js";
+import { SimulateurOrangeMoney } from "./modules/paiement-mobile/simulateur-orange-money.js";
+import type { FournisseurPaiementMobile } from "./modules/paiement-mobile/fournisseur.js";
 
 export interface BuildAppOptions {
   jwtSecret: string;
+  // 6.6 : injectable pour brancher le véritable adaptateur Orange Money en
+  // production, ou un fournisseur factice déterministe dans les tests —
+  // par défaut le simulateur local (aucun accès réseau réel).
+  fournisseurPaiementMobile?: FournisseurPaiementMobile;
 }
 
 export function buildApp(db: Db, options: BuildAppOptions) {
   const app = Fastify();
   registerAuthPlugin(app, options.jwtSecret);
   registerAuthRoutes(app, db);
+  const fournisseurPaiementMobile = options.fournisseurPaiementMobile ?? new SimulateurOrangeMoney();
 
   // 2.5.1 : seuls Administrateur, Gérant et Caissier peuvent réaliser une vente
   const ventes = exigerRole("ADMINISTRATEUR", "GERANT", "CAISSIER");
@@ -43,6 +51,7 @@ export function buildApp(db: Db, options: BuildAppOptions) {
   registerSavRoutes(app, db, { authRequis, ventes, sav });
   registerApporteursRoutes(app, db, { authRequis, ventes, gestionApporteurs, consultationApporteurs });
   registerStockRoutes(app, db, { authRequis, ventes, gestionStock });
+  registerPaiementMobileRoutes(app, db, fournisseurPaiementMobile, { authRequis, ventes });
 
   return app;
 }

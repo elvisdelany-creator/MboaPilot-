@@ -32,12 +32,14 @@ export function buildApp(db: Db, options: BuildAppOptions) {
   // 5.2 : mouvements correctifs de stock (achat, casse, inventaire) réservés à
   // l'encadrement — "validation par un rôle habilité" pour l'ajustement d'inventaire
   const gestionStock = exigerRole("ADMINISTRATEUR", "GERANT");
+  // 8.2 : création/édition des fiches article réservée à l'encadrement
+  const gestionCatalogue = exigerRole("ADMINISTRATEUR", "GERANT");
 
   registerAbonnementsRoutes(app, db, { authRequis, ventes });
   registerAbonnesRoutes(app, db, { authRequis, ventes });
   registerCatalogueRoutes(app, db, { authRequis });
   registerJobsRoutes(app, db, { authRequis, ventes, admin });
-  registerProduitsRoutes(app, db, { authRequis });
+  registerProduitsRoutes(app, db, { authRequis, ventes, gestionCatalogue });
   registerSavRoutes(app, db, { authRequis, ventes, sav });
   registerApporteursRoutes(app, db, { authRequis, ventes, gestionApporteurs, consultationApporteurs });
   registerStockRoutes(app, db, { authRequis, ventes, gestionStock });

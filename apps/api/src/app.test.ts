@@ -637,3 +637,75 @@ describe("Module suivi de stock (5.2)", () => {
     expect(alertes.json()).toHaveLength(1); // 10 - 6 = 4 <= seuil 5
   });
 });
+
+describe("Module gestion du catalogue (8.2)", () => {
+  it("un administrateur crée un article, un caissier peut le consulter mais pas le créer", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    creerUtilisateur(db, { siteId, nom: "Admin", prenom: "D", identifiant: "admin1", motDePasse: "motdepasse-secret", role: "ADMINISTRATEUR" });
+    const tokenAdmin = await connecter(app, "admin1");
+
+    const creation = await app.inject({
+      method: "POST",
+      url: "/api/v1/produits",
+      headers: authHeader(tokenAdmin),
+      payload: { siteId, type: "BIEN", libelle: "Câble HDMI", categorie: "Accessoires", prixVente: 2500, coutRevient: 1000, margeType: "VALEUR", margeValeur: 1500 },
+    });
+    expect(creation.statusCode).toBe(201);
+    expect(creation.json().margePourcentage).toBe(15000);
+
+    const tokenCaissier = await connecter(app);
+    const liste = await app.inject({ method: "GET", url: `/api/v1/produits?siteId=${siteId}`, headers: authHeader(tokenCaissier) });
+    expect(liste.statusCode).toBe(200);
+    expect(liste.json()).toHaveLength(1);
+
+    const refusCreation = await app.inject({
+      method: "POST",
+      url: "/api/v1/produits",
+      headers: authHeader(tokenCaissier),
+      payload: { siteId, type: "BIEN", libelle: "Autre", prixVente: 1000 },
+    });
+    expect(refusCreation.statusCode).toBe(403);
+  });
+
+  it("l'édition d'un article journalise l'historique de prix, consultable par tout rôle authentifié", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    creerUtilisateur(db, { siteId, nom: "Admin", prenom: "D", identifiant: "admin1", motDePasse: "motdepasse-secret", role: "ADMINISTRATEUR" });
+    const tokenAdmin = await connecter(app, "admin1");
+
+    const produit = (
+      await app.inject({
+        method: "POST",
+        url: "/api/v1/produits",
+        headers: authHeader(tokenAdmin),
+        payload: { siteId, type: "BIEN", libelle: "Décodeur", prixVente: 15000, coutRevient: 8000 },
+      })
+    ).json();
+
+    const edition = await app.inject({
+      method: "PATCH",
+      url: `/api/v1/produits/${produit.idProduit}`,
+      headers: authHeader(tokenAdmin),
+      payload: { prixVente: 16000, userId },
+    });
+    expect(edition.statusCode).toBe(200);
+    expect(edition.json().prixVente).toBe(16000);
+
+    const tokenCaissier = await connecter(app);
+    const historique = await app.inject({
+      method: "GET",
+      url: `/api/v1/produits/${produit.idProduit}/historique-prix`,
+      headers: authHeader(tokenCaissier),
+    });
+    expect(historique.statusCode).toBe(200);
+    expect(historique.json()).toHaveLength(1);
+    expect(historique.json()[0].prixVenteApres).toBe(16000);
+
+    const refusEdition = await app.inject({
+      method: "PATCH",
+      url: `/api/v1/produits/${produit.idProduit}`,
+      headers: authHeader(tokenCaissier),
+      payload: { prixVente: 20000, userId },
+    });
+    expect(refusEdition.statusCode).toBe(403);
+  });
+});

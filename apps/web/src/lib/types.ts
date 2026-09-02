@@ -84,19 +84,34 @@ export interface RecrutementResultat {
   statutFacture: "BROUILLON" | "VALIDEE";
 }
 
+export type TypeProduit = "BIEN" | "SERVICE" | "SAV" | "KIT";
+export type MargeType = "VALEUR" | "POURCENTAGE";
+
 export interface Produit {
   idProduit: number;
   siteId: number;
-  type: "BIEN" | "SERVICE" | "SAV" | "KIT";
+  type: TypeProduit;
   libelle: string;
+  categorie: string | null;
   prixVente: number;
   coutRevient: number;
-  margeType: "VALEUR" | "POURCENTAGE";
+  margeType: MargeType;
   margeValeur: number | null;
   margePourcentage: number | null;
   suiviStock: number;
   quantiteStock: number;
   seuilAlerte: number | null;
+}
+
+export interface HistoriquePrixProduit {
+  idHistoPrix: number;
+  idProduit: number;
+  prixVenteAvant: number;
+  prixVenteApres: number;
+  coutRevientAvant: number;
+  coutRevientApres: number;
+  utilisateurId: number;
+  dateChangement: string;
 }
 
 export interface EchangeMaterielResultat {

@@ -9,11 +9,14 @@ import type {
   DossierSavDetaille,
   EchangeMaterielResultat,
   FicheApporteur,
+  HistoriquePrixProduit,
+  MargeType,
   NouvelAbonne,
   Produit,
   RecrutementResultat,
   StatutSav,
   StockMouvement,
+  TypeProduit,
   Utilisateur,
 } from "./types";
 
@@ -91,10 +94,59 @@ export async function recruter(token: string, payload: RecruterPayload): Promise
   return lireJson<RecrutementResultat>(reponse);
 }
 
-// 5.2, 7.3 : catalogue des produits/pièces détachées, pour l'échange de matériel
+// 5.2, 7.3, 8.2 : catalogue des produits/pièces détachées, pour l'échange de matériel et sa gestion
 export async function chargerProduits(token: string, siteId: number): Promise<Produit[]> {
   const reponse = await fetch(`${BASE}/produits?siteId=${siteId}`, { headers: headersAuth(token) });
   return lireJson<Produit[]>(reponse);
+}
+
+export interface CreerProduitPayload {
+  siteId: number;
+  type: TypeProduit;
+  libelle: string;
+  categorie?: string;
+  prixVente: number;
+  coutRevient?: number;
+  margeType?: MargeType;
+  margeValeur?: number;
+  margePourcentage?: number;
+  suiviStock?: boolean;
+  seuilAlerte?: number;
+}
+
+export async function creerProduitRequete(token: string, payload: CreerProduitPayload): Promise<Produit> {
+  const reponse = await fetch(`${BASE}/produits`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headersAuth(token) },
+    body: JSON.stringify(payload),
+  });
+  return lireJson<Produit>(reponse);
+}
+
+export interface ModifierProduitPayload {
+  libelle?: string;
+  categorie?: string;
+  prixVente?: number;
+  coutRevient?: number;
+  margeType?: MargeType;
+  margeValeur?: number;
+  margePourcentage?: number;
+  seuilAlerte?: number;
+  userId: number;
+}
+
+export async function modifierProduitRequete(token: string, idProduit: number, payload: ModifierProduitPayload): Promise<Produit> {
+  const reponse = await fetch(`${BASE}/produits/${idProduit}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...headersAuth(token) },
+    body: JSON.stringify(payload),
+  });
+  return lireJson<Produit>(reponse);
+}
+
+export async function chargerHistoriquePrixProduit(token: string, idProduit: number): Promise<HistoriquePrixProduit[]> {
+  const reponse = await fetch(`${BASE}/produits/${idProduit}/historique-prix`, { headers: headersAuth(token) });
+  return lireJson<HistoriquePrixProduit[]>(reponse);
 }
 
 export interface EchangerMaterielPayload {

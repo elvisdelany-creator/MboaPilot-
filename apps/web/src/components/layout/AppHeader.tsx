@@ -68,7 +68,7 @@ export function AppHeader({ vueActive, onNaviguer, children }: Props) {
             aria-current={vueActive === "stock" ? "page" : undefined}
             onClick={() => onNaviguer("stock")}
           >
-            Stock
+            Catalogue
           </Button>
         )}
       </nav>

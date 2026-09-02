@@ -192,6 +192,7 @@ export const produit = sqliteTable("produit", {
   siteId: integer("site_id").notNull().references(() => site.idSite),
   type: text("type", { enum: ["BIEN", "SERVICE", "SAV", "KIT"] }).notNull(),
   libelle: text("libelle").notNull(),
+  categorie: text("categorie"), // 5.2, 8.2 : catégorie ouverte, non limitative (texte libre)
   prixVente: integer("prix_vente").notNull(),
   coutRevient: integer("cout_revient").notNull().default(0),
   margeType: text("marge_type", { enum: ["VALEUR", "POURCENTAGE"] }).notNull().default("VALEUR"), // 6.1
@@ -200,6 +201,18 @@ export const produit = sqliteTable("produit", {
   suiviStock: integer("suivi_stock").notNull().default(0), // 0/1 — false pour SERVICE/SAV
   quantiteStock: integer("quantite_stock").notNull().default(0), // cache maintenu par stock_mouvement
   seuilAlerte: integer("seuil_alerte"),
+});
+
+// 8.2 : historique des variations de prix de vente / coût de revient par article
+export const historiquePrixProduit = sqliteTable("historique_prix_produit", {
+  idHistoPrix: integer("id_histo_prix").primaryKey({ autoIncrement: true }),
+  idProduit: integer("id_produit").notNull().references(() => produit.idProduit),
+  prixVenteAvant: integer("prix_vente_avant").notNull(),
+  prixVenteApres: integer("prix_vente_apres").notNull(),
+  coutRevientAvant: integer("cout_revient_avant").notNull(),
+  coutRevientApres: integer("cout_revient_apres").notNull(),
+  utilisateurId: integer("utilisateur_id").notNull().references(() => utilisateur.idUser),
+  dateChangement: text("date_changement").notNull().default(now),
 });
 
 export const stockMouvement = sqliteTable("stock_mouvement", {

@@ -1,16 +1,24 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { AlertTriangle, Package } from "lucide-react";
-import { chargerAlertesStock, chargerMouvementsProduit, chargerProduits, ErreurAuthentification } from "@/lib/api";
+import { AlertTriangle, Package, Pencil, Plus } from "lucide-react";
+import {
+  chargerAlertesStock,
+  chargerHistoriquePrixProduit,
+  chargerMouvementsProduit,
+  chargerProduits,
+  ErreurAuthentification,
+} from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { AppHeader, type Vue } from "@/components/layout/AppHeader";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
 import { ReceptionAchatDialog } from "./ReceptionAchatDialog";
 import { CasseDialog } from "./CasseDialog";
 import { AjusterInventaireDialog } from "./AjusterInventaireDialog";
-import type { Produit, StockMouvement, TypeMouvementStock } from "@/lib/types";
+import { ArticleDialog } from "./ArticleDialog";
+import type { HistoriquePrixProduit, Produit, StockMouvement, TypeMouvementStock, TypeProduit } from "@/lib/types";
 
 interface Props {
   onNaviguer: (vue: Vue) => void;
@@ -25,11 +33,19 @@ const LIBELLE_MOUVEMENT: Record<TypeMouvementStock, string> = {
   INVENTAIRE: "Ajustement d'inventaire",
 };
 
+const LIBELLE_TYPE: Record<TypeProduit, string> = {
+  BIEN: "Bien physique",
+  SERVICE: "Service",
+  SAV: "Article SAV",
+  KIT: "Kit composé",
+};
+
 const formateurFcfa = new Intl.NumberFormat("fr-FR");
 const formateurDate = new Intl.DateTimeFormat("fr-FR", { dateStyle: "short", timeStyle: "short" });
+const formateurDateCourte = new Intl.DateTimeFormat("fr-FR", { dateStyle: "short" });
 
-// 5.2, 8.6, 9.3 : suivi de stock — niveaux, seuils d'alerte, historique des
-// mouvements, et les trois actions correctives (achat, casse, inventaire).
+// 5.2, 8.2, 8.6, 9.3 : catalogue — création/édition des fiches article, suivi
+// de stock (niveaux, seuils, mouvements) et historique des variations de prix.
 export function StockPage({ onNaviguer }: Props) {
   const { session, deconnecter } = useAuth();
   const token = session!.token;
@@ -39,7 +55,9 @@ export function StockPage({ onNaviguer }: Props) {
   const [alertes, setAlertes] = useState<Produit[]>([]);
   const [idSelectionne, setIdSelectionne] = useState<number | null>(null);
   const [mouvements, setMouvements] = useState<StockMouvement[]>([]);
+  const [historiquePrix, setHistoriquePrix] = useState<HistoriquePrixProduit[]>([]);
   const [dialogueOuvert, setDialogueOuvert] = useState<"achat" | "casse" | "inventaire" | null>(null);
+  const [articleDialogueOuvert, setArticleDialogueOuvert] = useState<"creation" | "edition" | null>(null);
 
   function gererErreur(erreur: unknown, messageParDefaut: string) {
     if (erreur instanceof ErreurAuthentification) {
@@ -52,24 +70,30 @@ export function StockPage({ onNaviguer }: Props) {
 
   function rechargerListe() {
     chargerProduits(token, siteId)
-      .then((data) => setProduits(data.filter((p) => p.suiviStock === 1)))
+      .then(setProduits)
       .catch((e) => gererErreur(e, "Impossible de charger les produits."));
     chargerAlertesStock(token, siteId)
       .then(setAlertes)
       .catch(() => setAlertes([]));
   }
 
-  function rechargerMouvements(idProduit: number) {
+  function rechargerDetail(idProduit: number) {
     chargerMouvementsProduit(token, idProduit)
       .then(setMouvements)
       .catch((e) => gererErreur(e, "Impossible de charger l'historique des mouvements."));
+    chargerHistoriquePrixProduit(token, idProduit)
+      .then(setHistoriquePrix)
+      .catch(() => setHistoriquePrix([]));
   }
 
   useEffect(rechargerListe, [token, siteId]);
 
   useEffect(() => {
-    if (idSelectionne !== null) rechargerMouvements(idSelectionne);
-    else setMouvements([]);
+    if (idSelectionne !== null) rechargerDetail(idSelectionne);
+    else {
+      setMouvements([]);
+      setHistoriquePrix([]);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [idSelectionne]);
 
@@ -79,7 +103,13 @@ export function StockPage({ onNaviguer }: Props) {
   function onActionReussie() {
     setDialogueOuvert(null);
     rechargerListe();
-    if (idSelectionne !== null) rechargerMouvements(idSelectionne);
+    if (idSelectionne !== null) rechargerDetail(idSelectionne);
+  }
+
+  function onArticleEnregistre() {
+    setArticleDialogueOuvert(null);
+    rechargerListe();
+    if (idSelectionne !== null) rechargerDetail(idSelectionne);
   }
 
   return (
@@ -88,11 +118,15 @@ export function StockPage({ onNaviguer }: Props) {
 
       <div className="flex min-h-0 flex-1">
         <div className="flex w-80 shrink-0 flex-col border-r border-border">
-          <div className="border-b border-border p-4">
-            <h1 className="font-heading text-sm font-semibold uppercase tracking-wide text-muted-foreground">Stock</h1>
+          <div className="flex items-center justify-between border-b border-border p-4">
+            <h1 className="font-heading text-sm font-semibold uppercase tracking-wide text-muted-foreground">Catalogue</h1>
+            <Button size="sm" className="cursor-pointer gap-1" onClick={() => setArticleDialogueOuvert("creation")}>
+              <Plus className="size-4" />
+              Nouvel article
+            </Button>
           </div>
           <ul className="flex-1 overflow-y-auto">
-            {produits?.length === 0 && <li className="p-4 text-sm text-muted-foreground">Aucun produit suivi en stock.</li>}
+            {produits?.length === 0 && <li className="p-4 text-sm text-muted-foreground">Aucun article dans le catalogue.</li>}
             {produits?.map((p) => (
               <li key={p.idProduit}>
                 <button
@@ -102,7 +136,11 @@ export function StockPage({ onNaviguer }: Props) {
                 >
                   <div>
                     <p className="font-medium text-foreground">{p.libelle}</p>
-                    <p className="text-sm text-muted-foreground">{p.quantiteStock} en stock</p>
+                    <p className="text-sm text-muted-foreground">
+                      {LIBELLE_TYPE[p.type]}
+                      {p.categorie ? ` · ${p.categorie}` : ""}
+                      {p.suiviStock === 1 ? ` · ${p.quantiteStock} en stock` : ""}
+                    </p>
                   </div>
                   {idsEnAlerte.has(p.idProduit) && (
                     <Badge variant="destructive" className="shrink-0 gap-1">
@@ -121,7 +159,7 @@ export function StockPage({ onNaviguer }: Props) {
             <div className="flex h-full items-center justify-center text-muted-foreground">
               <div className="text-center">
                 <Package className="mx-auto mb-2 size-8" />
-                Sélectionnez un produit pour voir son détail.
+                Sélectionnez un article pour voir son détail.
               </div>
             </div>
           )}
@@ -131,52 +169,102 @@ export function StockPage({ onNaviguer }: Props) {
               <div className="flex items-start justify-between">
                 <div>
                   <h2 className="font-heading text-lg font-semibold text-foreground">{produitSelectionne.libelle}</h2>
-                  <p className="text-sm text-muted-foreground">Coût de revient moyen : {formateurFcfa.format(produitSelectionne.coutRevient)} FCFA</p>
+                  <p className="text-sm text-muted-foreground">
+                    {LIBELLE_TYPE[produitSelectionne.type]}
+                    {produitSelectionne.categorie ? ` · ${produitSelectionne.categorie}` : ""}
+                  </p>
                 </div>
-                {idsEnAlerte.has(produitSelectionne.idProduit) && (
-                  <Badge variant="destructive" className="gap-1">
-                    <AlertTriangle className="size-3" aria-hidden="true" />
-                    Sous le seuil d'alerte
-                  </Badge>
-                )}
+                <div className="flex items-center gap-2">
+                  {idsEnAlerte.has(produitSelectionne.idProduit) && (
+                    <Badge variant="destructive" className="gap-1">
+                      <AlertTriangle className="size-3" aria-hidden="true" />
+                      Sous le seuil d'alerte
+                    </Badge>
+                  )}
+                  <Button variant="outline" size="sm" className="cursor-pointer gap-1" onClick={() => setArticleDialogueOuvert("edition")}>
+                    <Pencil className="size-3.5" />
+                    Modifier
+                  </Button>
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <Card className="gap-1 p-4">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Quantité en stock</p>
-                  <p className="text-xl font-semibold tabular-nums text-card-foreground">{produitSelectionne.quantiteStock}</p>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Prix de vente</p>
+                  <p className="text-xl font-semibold tabular-nums text-card-foreground">{formateurFcfa.format(produitSelectionne.prixVente)} FCFA</p>
                 </Card>
                 <Card className="gap-1 p-4">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Seuil d'alerte</p>
-                  <p className="text-xl font-semibold tabular-nums text-card-foreground">{produitSelectionne.seuilAlerte ?? "—"}</p>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Coût de revient</p>
+                  <p className="text-xl font-semibold tabular-nums text-card-foreground">{formateurFcfa.format(produitSelectionne.coutRevient)} FCFA</p>
                 </Card>
+                <Card className="gap-1 p-4">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Marge</p>
+                  <p className="text-xl font-semibold tabular-nums text-card-foreground">
+                    {formateurFcfa.format(produitSelectionne.margeValeur ?? 0)} FCFA
+                    <span className="ml-1 text-sm font-normal text-muted-foreground">
+                      ({((produitSelectionne.margePourcentage ?? 0) / 100).toFixed(2)} %)
+                    </span>
+                  </p>
+                </Card>
+                {produitSelectionne.suiviStock === 1 && (
+                  <>
+                    <Card className="gap-1 p-4">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Quantité en stock</p>
+                      <p className="text-xl font-semibold tabular-nums text-card-foreground">{produitSelectionne.quantiteStock}</p>
+                    </Card>
+                    <Card className="gap-1 p-4">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Seuil d'alerte</p>
+                      <p className="text-xl font-semibold tabular-nums text-card-foreground">{produitSelectionne.seuilAlerte ?? "—"}</p>
+                    </Card>
+                  </>
+                )}
               </div>
 
-              <div className="flex flex-wrap gap-2">
-                <Button variant="outline" className="cursor-pointer" onClick={() => setDialogueOuvert("achat")}>
-                  Réceptionner un achat
-                </Button>
-                <Button variant="outline" className="cursor-pointer" onClick={() => setDialogueOuvert("casse")}>
-                  Casse / perte
-                </Button>
-                <Button variant="outline" className="cursor-pointer" onClick={() => setDialogueOuvert("inventaire")}>
-                  Ajuster l'inventaire
-                </Button>
-              </div>
+              {produitSelectionne.suiviStock === 1 && (
+                <div className="flex flex-wrap gap-2">
+                  <Button variant="outline" className="cursor-pointer" onClick={() => setDialogueOuvert("achat")}>
+                    Réceptionner un achat
+                  </Button>
+                  <Button variant="outline" className="cursor-pointer" onClick={() => setDialogueOuvert("casse")}>
+                    Casse / perte
+                  </Button>
+                  <Button variant="outline" className="cursor-pointer" onClick={() => setDialogueOuvert("inventaire")}>
+                    Ajuster l'inventaire
+                  </Button>
+                </div>
+              )}
+
+              {produitSelectionne.suiviStock === 1 && (
+                <div>
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Historique des mouvements</p>
+                  {mouvements.length === 0 && <p className="text-sm text-muted-foreground">Aucun mouvement enregistré.</p>}
+                  <ul className="space-y-1 text-sm">
+                    {mouvements.map((m) => (
+                      <li key={m.idMouvement} className="flex items-center justify-between gap-3">
+                        <span className="text-muted-foreground">
+                          {formateurDate.format(new Date(m.dateMouvement))} — {LIBELLE_MOUVEMENT[m.typeMouvement]}
+                          {m.motif ? ` (${m.motif})` : ""}
+                        </span>
+                        <span className="shrink-0 tabular-nums font-medium text-card-foreground">
+                          {m.typeMouvement === "INVENTAIRE" ? (m.quantite > 0 ? `+${m.quantite}` : m.quantite) : m.quantite}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              <Separator />
 
               <div>
-                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Historique des mouvements</p>
-                {mouvements.length === 0 && <p className="text-sm text-muted-foreground">Aucun mouvement enregistré.</p>}
-                <ul className="space-y-1 text-sm">
-                  {mouvements.map((m) => (
-                    <li key={m.idMouvement} className="flex items-center justify-between gap-3">
-                      <span className="text-muted-foreground">
-                        {formateurDate.format(new Date(m.dateMouvement))} — {LIBELLE_MOUVEMENT[m.typeMouvement]}
-                        {m.motif ? ` (${m.motif})` : ""}
-                      </span>
-                      <span className="shrink-0 tabular-nums font-medium text-card-foreground">
-                        {m.typeMouvement === "INVENTAIRE" ? (m.quantite > 0 ? `+${m.quantite}` : m.quantite) : m.quantite}
-                      </span>
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Historique des prix</p>
+                {historiquePrix.length === 0 && <p className="text-sm text-muted-foreground">Aucune variation de prix enregistrée.</p>}
+                <ul className="space-y-1 text-sm text-muted-foreground">
+                  {historiquePrix.map((h) => (
+                    <li key={h.idHistoPrix}>
+                      {formateurDateCourte.format(new Date(h.dateChangement))} — prix {formateurFcfa.format(h.prixVenteAvant)} → {formateurFcfa.format(h.prixVenteApres)} FCFA
+                      {h.coutRevientAvant !== h.coutRevientApres &&
+                        ` · coût ${formateurFcfa.format(h.coutRevientAvant)} → ${formateurFcfa.format(h.coutRevientApres)} FCFA`}
                     </li>
                   ))}
                 </ul>
@@ -189,6 +277,12 @@ export function StockPage({ onNaviguer }: Props) {
       <ReceptionAchatDialog produit={dialogueOuvert === "achat" ? produitSelectionne : null} onFerme={() => setDialogueOuvert(null)} onSucces={onActionReussie} />
       <CasseDialog produit={dialogueOuvert === "casse" ? produitSelectionne : null} onFerme={() => setDialogueOuvert(null)} onSucces={onActionReussie} />
       <AjusterInventaireDialog produit={dialogueOuvert === "inventaire" ? produitSelectionne : null} onFerme={() => setDialogueOuvert(null)} onSucces={onActionReussie} />
+      <ArticleDialog
+        ouvert={articleDialogueOuvert !== null}
+        produit={articleDialogueOuvert === "edition" ? produitSelectionne : null}
+        onFerme={() => setArticleDialogueOuvert(null)}
+        onSucces={onArticleEnregistre}
+      />
     </div>
   );
 }

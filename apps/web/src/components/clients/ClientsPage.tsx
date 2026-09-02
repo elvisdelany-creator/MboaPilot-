@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Pencil, Printer, Users, UserSquare2 } from "lucide-react";
-import { chargerFiche360, rechercherAbonnes, ErreurAuthentification } from "@/lib/api";
+import { ArrowUpCircle, Pencil, Printer, RefreshCw, Users, UserSquare2, Wrench } from "lucide-react";
+import { validerMigrationFormule } from "@mboapilot/shared";
+import { chargerCatalogue, chargerFiche360, rechercherAbonnes, ErreurAuthentification } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { AppHeader, type Vue } from "@/components/layout/AppHeader";
 import { Button } from "@/components/ui/button";
@@ -9,24 +10,34 @@ import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Input } from "@/components/ui/input";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { EchangeMaterielDialog } from "@/components/caisse/EchangeMaterielDialog";
+import { ChangerFormuleDialog } from "@/components/caisse/ChangerFormuleDialog";
 import { ModifierAbonneDialog } from "./ModifierAbonneDialog";
 import { FusionDoublonsDialog } from "./FusionDoublonsDialog";
-import type { Abonne, Fiche360 } from "@/lib/types";
+import type { Abonne, AbonnementAvecFormule, CatalogueFamille, Fiche360 } from "@/lib/types";
 
 interface Props {
   onNaviguer: (vue: Vue) => void;
+  // 7.2 : le réabonnement réutilise le même parcours que le tableau de bord
+  // (bascule vers la caisse, abonné et famille pré-sélectionnés)
+  onReabonnerDepuisFiche: (abonne: Abonne, idFamille: number) => void;
 }
 
 const formateurFcfa = new Intl.NumberFormat("fr-FR");
 const formateurDate = new Intl.DateTimeFormat("fr-FR", { dateStyle: "short" });
+const formateurDateHeure = new Intl.DateTimeFormat("fr-FR", { dateStyle: "short", timeStyle: "short" });
 
 const LIBELLE_STATUT_ABONNEMENT: Record<string, string> = { ACTIF: "Actif", EXPIRE: "Expiré", RESILIE: "Résilié" };
 const VARIANTE_STATUT_ABONNEMENT: Record<string, "default" | "secondary" | "outline"> = { ACTIF: "default", EXPIRE: "secondary", RESILIE: "outline" };
+const LIBELLE_MODE_PAIEMENT: Record<string, string> = { CASH: "Comptant", CHEQUE: "Chèque", VIREMENT: "Virement", MOBILE_MONEY: "Mobile Money" };
+const LIBELLE_STATUT_COMMISSION: Record<string, string> = { EN_COURS: "En cours (probatoire)", CONFIRMEE: "Confirmée", ANNULEE: "Annulée" };
+const VARIANTE_STATUT_COMMISSION: Record<string, "secondary" | "default" | "destructive"> = { EN_COURS: "secondary", CONFIRMEE: "default", ANNULEE: "destructive" };
 
-// 8.1 : gestion des clients/abonnés — recherche, fiche « 360° » consolidée
-// (coordonnées, historique complet toutes familles, matériel, factures,
-// SAV, apporteur), modification et fusion de doublons.
-export function ClientsPage({ onNaviguer }: Props) {
+// 8.1, 9.4 : gestion des clients/abonnés — recherche, fiche « 360° » à
+// onglets (Abonnements avec actions contextuelles, Facturation, SAV, Suivi
+// commission), modification et fusion de doublons.
+export function ClientsPage({ onNaviguer, onReabonnerDepuisFiche }: Props) {
   const { session, deconnecter } = useAuth();
   const token = session!.token;
   const utilisateur = session!.utilisateur;
@@ -35,8 +46,11 @@ export function ClientsPage({ onNaviguer }: Props) {
   const [resultats, setResultats] = useState<Abonne[]>([]);
   const [idSelectionne, setIdSelectionne] = useState<number | null>(null);
   const [fiche, setFiche] = useState<Fiche360 | null>(null);
+  const [catalogue, setCatalogue] = useState<CatalogueFamille[]>([]);
   const [modifierOuvert, setModifierOuvert] = useState(false);
   const [fusionOuvert, setFusionOuvert] = useState(false);
+  const [echangeMaterielCible, setEchangeMaterielCible] = useState<number | null>(null);
+  const [changerFormuleCible, setChangerFormuleCible] = useState<AbonnementAvecFormule | null>(null);
 
   function gererErreur(erreur: unknown, messageParDefaut: string) {
     if (erreur instanceof ErreurAuthentification) {
@@ -46,6 +60,12 @@ export function ClientsPage({ onNaviguer }: Props) {
     }
     toast.error(erreur instanceof Error ? erreur.message : messageParDefaut);
   }
+
+  useEffect(() => {
+    chargerCatalogue(token)
+      .then(setCatalogue)
+      .catch(() => setCatalogue([]));
+  }, [token]);
 
   useEffect(() => {
     if (!terme.trim()) {
@@ -73,6 +93,20 @@ export function ClientsPage({ onNaviguer }: Props) {
   }, [idSelectionne]);
 
   const peutFusionner = utilisateur.role === "ADMINISTRATEUR" || utilisateur.role === "GERANT";
+
+  function trouverFormule(idFamille: number, idFormule: number) {
+    return catalogue.find((f) => f.idFamille === idFamille)?.formules.find((fo) => fo.idFormule === idFormule) ?? null;
+  }
+
+  function formulesDeLaFamille(idFamille: number) {
+    return catalogue.find((f) => f.idFamille === idFamille)?.formules ?? [];
+  }
+
+  function onActionAbonnementReussie() {
+    setEchangeMaterielCible(null);
+    setChangerFormuleCible(null);
+    if (idSelectionne !== null) rechargerFiche(idSelectionne);
+  }
 
   return (
     <div className="flex h-dvh flex-col bg-background">
@@ -156,70 +190,118 @@ export function ClientsPage({ onNaviguer }: Props) {
 
               <Separator />
 
-              <div>
-                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  Abonnements ({fiche.abonnements.length})
-                </p>
-                {fiche.abonnements.length === 0 && <p className="text-sm text-muted-foreground">Aucun abonnement.</p>}
-                <ul className="space-y-2">
-                  {fiche.abonnements.map((a) => (
-                    <li key={a.numeroAbonnement}>
-                      <Card className="flex-row items-center justify-between gap-3 p-3">
-                        <div>
-                          <p className="font-medium text-card-foreground">
-                            {a.familleLibelle} — {a.formuleLibelle}
-                          </p>
-                          <p className="text-sm text-muted-foreground">
-                            n° {a.numeroAbonnement} · {formateurDate.format(new Date(a.dateDebut))} → {formateurDate.format(new Date(a.dateFin))}
-                          </p>
-                        </div>
-                        <Badge variant={VARIANTE_STATUT_ABONNEMENT[a.statut]}>{LIBELLE_STATUT_ABONNEMENT[a.statut]}</Badge>
-                      </Card>
-                    </li>
-                  ))}
-                </ul>
-              </div>
+              <Tabs defaultValue="abonnements">
+                <TabsList className="no-print">
+                  <TabsTrigger value="abonnements">Abonnements</TabsTrigger>
+                  <TabsTrigger value="facturation">Facturation</TabsTrigger>
+                  <TabsTrigger value="sav">SAV</TabsTrigger>
+                  {fiche.commissionsCanalplus.length > 0 && <TabsTrigger value="commission">Suivi commission</TabsTrigger>}
+                </TabsList>
 
-              {fiche.materiels.length > 0 && (
-                <div>
-                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Matériel installé</p>
-                  <ul className="space-y-1 text-sm text-card-foreground">
-                    {fiche.materiels.map((m) => (
-                      <li key={m.idMateriel} className="flex items-center justify-between">
-                        <span>
-                          {m.typeMateriel}
-                          {m.numeroSerie ? ` — S/N ${m.numeroSerie}` : ""} (abonnement n° {m.numeroAbonnement})
-                        </span>
-                        <Badge variant={m.statut === "ACTIF" ? "default" : "outline"}>{m.statut === "ACTIF" ? "Actif" : "Remplacé"}</Badge>
-                      </li>
-                    ))}
+                <TabsContent value="abonnements" forceMount className="space-y-3 print:mb-6">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground print:block">
+                    Abonnements ({fiche.abonnements.length})
+                  </p>
+                  {fiche.abonnements.length === 0 && <p className="text-sm text-muted-foreground">Aucun abonnement.</p>}
+                  <ul className="space-y-2">
+                    {fiche.abonnements.map((a) => {
+                      const materielActif = fiche.materiels.find((m) => m.numeroAbonnement === a.numeroAbonnement && m.statut === "ACTIF");
+                      const formuleActuelle = trouverFormule(a.idFamille, a.idFormule);
+                      const peutMigrer =
+                        a.statut === "ACTIF" &&
+                        formuleActuelle !== null &&
+                        formulesDeLaFamille(a.idFamille).some((f) => validerMigrationFormule(formuleActuelle, f).autorise);
+                      return (
+                        <li key={a.numeroAbonnement}>
+                          <Card className="gap-2 p-3">
+                            <div className="flex items-center justify-between gap-3">
+                              <div>
+                                <p className="font-medium text-card-foreground">
+                                  {a.familleLibelle} — {a.formuleLibelle}
+                                </p>
+                                <p className="text-sm text-muted-foreground">
+                                  n° {a.numeroAbonnement} · {formateurDate.format(new Date(a.dateDebut))} → {formateurDate.format(new Date(a.dateFin))}
+                                  {materielActif ? ` · ${materielActif.typeMateriel}${materielActif.numeroSerie ? ` (S/N ${materielActif.numeroSerie})` : ""}` : ""}
+                                </p>
+                              </div>
+                              <Badge variant={VARIANTE_STATUT_ABONNEMENT[a.statut]}>{LIBELLE_STATUT_ABONNEMENT[a.statut]}</Badge>
+                            </div>
+
+                            {a.statut !== "RESILIE" && (
+                              <div className="no-print flex flex-wrap gap-2 border-t border-border pt-2">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="cursor-pointer gap-1"
+                                  onClick={() => onReabonnerDepuisFiche(fiche.abonne, a.idFamille)}
+                                >
+                                  <RefreshCw className="size-3.5" />
+                                  Réabonner
+                                </Button>
+                                {peutMigrer && (
+                                  <Button variant="outline" size="sm" className="cursor-pointer gap-1" onClick={() => setChangerFormuleCible(a)}>
+                                    <ArrowUpCircle className="size-3.5" />
+                                    Changer de formule
+                                  </Button>
+                                )}
+                                {a.statut === "ACTIF" && (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="cursor-pointer gap-1"
+                                    onClick={() => setEchangeMaterielCible(a.numeroAbonnement)}
+                                  >
+                                    <Wrench className="size-3.5" />
+                                    Échanger le matériel
+                                  </Button>
+                                )}
+                              </div>
+                            )}
+                          </Card>
+                        </li>
+                      );
+                    })}
                   </ul>
-                </div>
-              )}
+                </TabsContent>
 
-              <div>
-                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  Factures ({fiche.factures.length})
-                </p>
-                {fiche.factures.length === 0 && <p className="text-sm text-muted-foreground">Aucune facture.</p>}
-                <ul className="space-y-1 text-sm">
-                  {fiche.factures.map((f) => (
-                    <li key={f.idFacture} className="flex items-center justify-between">
-                      <span className="text-muted-foreground">
-                        Facture n° {f.idFacture} — {formateurDate.format(new Date(f.dateCreation))}
-                      </span>
-                      <span className="flex items-center gap-2">
-                        <span className="tabular-nums font-medium text-card-foreground">{formateurFcfa.format(f.montantTotal)} FCFA</span>
-                        <Badge variant={f.statut === "VALIDEE" ? "default" : "secondary"}>{f.statut === "VALIDEE" ? "Validée" : "Brouillon"}</Badge>
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
+                <TabsContent value="facturation" forceMount className="space-y-2 print:mb-6">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Factures ({fiche.factures.length})</p>
+                  {fiche.factures.length === 0 && <p className="text-sm text-muted-foreground">Aucune facture.</p>}
+                  <ul className="space-y-2">
+                    {fiche.factures.map((f) => {
+                      const paiementsFacture = fiche.paiements.filter((p) => p.idFacture === f.idFacture);
+                      const totalPaye = paiementsFacture.reduce((total, p) => total + p.montant, 0);
+                      const solde = f.montantTotal - totalPaye;
+                      return (
+                        <li key={f.idFacture}>
+                          <Card className="gap-1.5 p-3">
+                            <div className="flex items-center justify-between text-sm">
+                              <span className="text-muted-foreground">
+                                Facture n° {f.idFacture} — {formateurDate.format(new Date(f.dateCreation))}
+                              </span>
+                              <span className="flex items-center gap-2">
+                                <span className="tabular-nums font-medium text-card-foreground">{formateurFcfa.format(f.montantTotal)} FCFA</span>
+                                <Badge variant={f.statut === "VALIDEE" ? "default" : "secondary"}>{f.statut === "VALIDEE" ? "Validée" : "Brouillon"}</Badge>
+                              </span>
+                            </div>
+                            {paiementsFacture.map((p) => (
+                              <p key={p.idPaiement} className="pl-3 text-xs text-muted-foreground">
+                                {formateurDateHeure.format(new Date(p.datePaiement))} — {LIBELLE_MODE_PAIEMENT[p.mode]} — {formateurFcfa.format(p.montant)} FCFA
+                              </p>
+                            ))}
+                            {solde > 0 && (
+                              <p className="pl-3 text-xs font-medium text-alert-j3-fg">Solde dû : {formateurFcfa.format(solde)} FCFA</p>
+                            )}
+                          </Card>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </TabsContent>
 
-              {fiche.dossiersSav.length > 0 && (
-                <div>
-                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Dossiers SAV</p>
+                <TabsContent value="sav" forceMount className="space-y-2 print:mb-6">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Dossiers SAV ({fiche.dossiersSav.length})</p>
+                  {fiche.dossiersSav.length === 0 && <p className="text-sm text-muted-foreground">Aucun dossier SAV.</p>}
                   <ul className="space-y-1 text-sm text-card-foreground">
                     {fiche.dossiersSav.map((d) => (
                       <li key={d.idDossierSav}>
@@ -227,8 +309,29 @@ export function ClientsPage({ onNaviguer }: Props) {
                       </li>
                     ))}
                   </ul>
-                </div>
-              )}
+                </TabsContent>
+
+                {fiche.commissionsCanalplus.length > 0 && (
+                  <TabsContent value="commission" forceMount className="space-y-2 print:mb-6">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Suivi commission CANAL+ (probatoire 4 mois)</p>
+                    <ul className="space-y-2">
+                      {fiche.commissionsCanalplus.map((c) => (
+                        <li key={c.idSuivi}>
+                          <Card className="flex-row items-center justify-between gap-3 p-3">
+                            <span className="text-sm text-muted-foreground">
+                              Abonnement n° {c.numeroAbonnement} · fin probatoire {formateurDate.format(new Date(c.dateFinProbatoire))}
+                            </span>
+                            <div className="flex shrink-0 items-center gap-2">
+                              <span className="tabular-nums font-medium text-card-foreground">{formateurFcfa.format(c.montantCommission)} FCFA</span>
+                              <Badge variant={VARIANTE_STATUT_COMMISSION[c.statut]}>{LIBELLE_STATUT_COMMISSION[c.statut]}</Badge>
+                            </div>
+                          </Card>
+                        </li>
+                      ))}
+                    </ul>
+                  </TabsContent>
+                )}
+              </Tabs>
             </div>
           )}
         </div>
@@ -250,6 +353,20 @@ export function ClientsPage({ onNaviguer }: Props) {
           setFusionOuvert(false);
           if (idSelectionne !== null) rechargerFiche(idSelectionne);
         }}
+      />
+
+      <EchangeMaterielDialog
+        numeroAbonnement={echangeMaterielCible}
+        onFerme={() => setEchangeMaterielCible(null)}
+        onSucces={onActionAbonnementReussie}
+      />
+
+      <ChangerFormuleDialog
+        numeroAbonnement={changerFormuleCible?.numeroAbonnement ?? null}
+        formuleActuelle={changerFormuleCible ? trouverFormule(changerFormuleCible.idFamille, changerFormuleCible.idFormule) : null}
+        formulesFamille={changerFormuleCible ? formulesDeLaFamille(changerFormuleCible.idFamille) : []}
+        onFerme={() => setChangerFormuleCible(null)}
+        onSucces={onActionAbonnementReussie}
       />
     </div>
   );

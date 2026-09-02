@@ -40,6 +40,12 @@ function Contenu() {
     setVue({ nom: "caisse", abonneInitial: alerte.abonne, idFamilleInitiale: alerte.formule.idFamille });
   }
 
+  // 9.4 : réabonner depuis l'onglet Abonnements de la fiche 360° — même
+  // parcours que le réabonnement en un clic du tableau de bord (4.4, 7.2)
+  function reabonnerDepuisFiche(abonne: Abonne, idFamille: number) {
+    setVue({ nom: "caisse", abonneInitial: abonne, idFamilleInitiale: idFamille });
+  }
+
   if (vue.nom === "dashboard") {
     return <DashboardPage onNaviguer={naviguer} onReabonnerDepuisAlerte={reabonnerDepuisAlerte} />;
   }
@@ -57,7 +63,7 @@ function Contenu() {
   }
 
   if (vue.nom === "clients") {
-    return <ClientsPage onNaviguer={naviguer} />;
+    return <ClientsPage onNaviguer={naviguer} onReabonnerDepuisFiche={reabonnerDepuisFiche} />;
   }
 
   return <CaissePage onNaviguer={naviguer} abonneInitial={vue.abonneInitial} idFamilleInitiale={vue.idFamilleInitiale} />;

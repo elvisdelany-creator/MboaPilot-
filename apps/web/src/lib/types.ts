@@ -251,11 +251,21 @@ export interface MaterielAbonne {
 export interface AbonnementAvecFormule {
   numeroAbonnement: number;
   idFormule: number;
+  idFamille: number;
   formuleLibelle: string;
   familleLibelle: string;
   dateDebut: string;
   dateFin: string;
   statut: "ACTIF" | "EXPIRE" | "RESILIE";
+}
+
+export interface Paiement {
+  idPaiement: number;
+  idFacture: number;
+  mode: "CASH" | "CHEQUE" | "VIREMENT" | "MOBILE_MONEY";
+  montant: number;
+  referenceTransaction: string | null;
+  datePaiement: string;
 }
 
 export interface Fiche360 {
@@ -264,7 +274,9 @@ export interface Fiche360 {
   abonnements: AbonnementAvecFormule[];
   materiels: MaterielAbonne[];
   factures: Facture[];
+  paiements: Paiement[];
   dossiersSav: DossierSav[];
+  commissionsCanalplus: SuiviCommissionCanalplus[];
 }
 
 // 8.6, 9.3 : tableau de bord de pilotage

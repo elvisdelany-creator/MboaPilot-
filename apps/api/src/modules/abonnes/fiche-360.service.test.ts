@@ -10,6 +10,7 @@ import * as schema from "../../db/schema.js";
 let db: Db;
 let siteId: number;
 let userId: number;
+let idFamilleCanalplus: number;
 let idFormuleCanalplus: number;
 let idFormuleDstv: number;
 
@@ -25,6 +26,7 @@ beforeEach(() => {
 
   const canal = db.insert(schema.familleAbonnement).values({ libelle: "CANAL+" }).returning().get();
   const dstv = db.insert(schema.familleAbonnement).values({ libelle: "DSTV" }).returning().get();
+  idFamilleCanalplus = canal.idFamille;
   idFormuleCanalplus = db.insert(schema.formule).values({ idFamille: canal.idFamille, libelle: "EVASION", prix: 10500, rang: 2 }).returning().get().idFormule;
   idFormuleDstv = db.insert(schema.formule).values({ idFamille: dstv.idFamille, libelle: "COMPAQ", prix: 13000, rang: 3 }).returning().get().idFormule;
 });
@@ -44,8 +46,33 @@ describe("construireFiche360 (8.1)", () => {
     expect(fiche.apporteur?.nom).toBe("Jean Apporteur");
     expect(fiche.abonnements).toHaveLength(2);
     expect(fiche.abonnements.map((a) => a.familleLibelle).sort()).toEqual(["CANAL+", "DSTV"]);
+    expect(fiche.abonnements.find((a) => a.familleLibelle === "CANAL+")?.idFamille).toBe(idFamilleCanalplus);
     expect(fiche.factures).toHaveLength(2);
     expect(fiche.dossiersSav).toHaveLength(1);
+  });
+
+  it("inclut les paiements de chaque facture et les commissions CANAL+ en cours", () => {
+    const apporteur = creerApporteur(db, { nom: "Jean Apporteur" });
+    const idAbonne = creerAbonne(db, { siteId, nom: "Nga", prenom: "Paul", telephone: "690000000", apporteurId: apporteur.idApporteur }).idAbonne;
+
+    recruterAbonne(db, {
+      siteId,
+      userId,
+      aujourdHui: "2025-11-16",
+      abonne: { idAbonne },
+      idFormule: idFormuleCanalplus,
+      montantEncaisse: 10500,
+      apporteurId: apporteur.idApporteur,
+      montantCommissionCanalplus: 1000,
+    });
+
+    const fiche = construireFiche360(db, idAbonne);
+
+    expect(fiche.paiements).toHaveLength(1);
+    expect(fiche.paiements[0].montant).toBe(10500);
+    expect(fiche.commissionsCanalplus).toHaveLength(1);
+    expect(fiche.commissionsCanalplus[0].montantCommission).toBe(1000);
+    expect(fiche.commissionsCanalplus[0].statut).toBe("EN_COURS");
   });
 
   it("un abonné sans apporteur renvoie apporteur: null", () => {

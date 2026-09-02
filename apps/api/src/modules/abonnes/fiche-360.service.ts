@@ -6,6 +6,7 @@ import { trouverAbonne } from "./abonne.repository.js";
 export interface AbonnementAvecFormule {
   numeroAbonnement: number;
   idFormule: number;
+  idFamille: number;
   formuleLibelle: string;
   familleLibelle: string;
   dateDebut: string;
@@ -19,12 +20,15 @@ export interface Fiche360 {
   abonnements: AbonnementAvecFormule[];
   materiels: (typeof schema.materielAbonne.$inferSelect)[];
   factures: (typeof schema.facture.$inferSelect)[];
+  paiements: (typeof schema.paiement.$inferSelect)[];
   dossiersSav: (typeof schema.savDossier.$inferSelect)[];
+  commissionsCanalplus: (typeof schema.suiviCommissionCanalplus.$inferSelect)[];
 }
 
-// 8.1 : fiche « 360° » — coordonnées, historique complet des abonnements
-// (toutes familles confondues), matériel installé, factures, dossiers SAV
-// et apporteur d'affaires éventuel, consolidés en une seule vue.
+// 8.1, 9.4 : fiche « 360° » — coordonnées, historique complet des
+// abonnements (toutes familles confondues), matériel installé, factures et
+// leurs paiements (solde éventuel), dossiers SAV, suivi commission CANAL+ et
+// apporteur d'affaires éventuel, consolidés en une seule vue.
 export function construireFiche360(db: Db, idAbonne: number): Fiche360 {
   const abonne = trouverAbonne(db, idAbonne);
   if (!abonne) throw new Error(`Abonné ${idAbonne} introuvable`);
@@ -37,6 +41,7 @@ export function construireFiche360(db: Db, idAbonne: number): Fiche360 {
     .select({
       numeroAbonnement: schema.abonnement.numeroAbonnement,
       idFormule: schema.abonnement.idFormule,
+      idFamille: schema.formule.idFamille,
       formuleLibelle: schema.formule.libelle,
       familleLibelle: schema.familleAbonnement.libelle,
       dateDebut: schema.abonnement.dateDebut,
@@ -56,7 +61,15 @@ export function construireFiche360(db: Db, idAbonne: number): Fiche360 {
       : [];
 
   const factures = db.select().from(schema.facture).where(eq(schema.facture.idAbonne, idAbonne)).all();
+  const idsFactures = factures.map((f) => f.idFacture);
+  const paiements = idsFactures.length > 0 ? db.select().from(schema.paiement).where(inArray(schema.paiement.idFacture, idsFactures)).all() : [];
+
   const dossiersSav = db.select().from(schema.savDossier).where(eq(schema.savDossier.idAbonne, idAbonne)).all();
 
-  return { abonne, apporteur, abonnements, materiels, factures, dossiersSav };
+  const commissionsCanalplus =
+    numerosAbonnement.length > 0
+      ? db.select().from(schema.suiviCommissionCanalplus).where(inArray(schema.suiviCommissionCanalplus.numeroAbonnement, numerosAbonnement)).all()
+      : [];
+
+  return { abonne, apporteur, abonnements, materiels, factures, paiements, dossiersSav, commissionsCanalplus };
 }

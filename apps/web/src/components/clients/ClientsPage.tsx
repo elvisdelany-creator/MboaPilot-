@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { ArrowUpCircle, Pencil, Printer, RefreshCw, Users, UserSquare2, Wrench } from "lucide-react";
+import { ArrowUpCircle, GitMerge, Pencil, Printer, RefreshCw, Users, UserSquare2, Wrench } from "lucide-react";
 import { validerMigrationFormule } from "@mboapilot/shared";
 import { chargerCatalogue, chargerFiche360, rechercherAbonnes, ErreurAuthentification } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
@@ -48,7 +48,10 @@ export function ClientsPage({ onNaviguer, onReabonnerDepuisFiche }: Props) {
   const [fiche, setFiche] = useState<Fiche360 | null>(null);
   const [catalogue, setCatalogue] = useState<CatalogueFamille[]>([]);
   const [modifierOuvert, setModifierOuvert] = useState(false);
-  const [fusionOuvert, setFusionOuvert] = useState(false);
+  // 8.1 : fiche à fusionner en tant que principale — déclenchée depuis l'en-
+  // tête de la fiche 360° ouverte, ou directement depuis un résultat de
+  // recherche sans avoir à d'abord ouvrir cette fiche
+  const [fusionPrincipal, setFusionPrincipal] = useState<Abonne | null>(null);
   const [echangeMaterielCible, setEchangeMaterielCible] = useState<number | null>(null);
   const [changerFormuleCible, setChangerFormuleCible] = useState<AbonnementAvecFormule | null>(null);
 
@@ -67,17 +70,20 @@ export function ClientsPage({ onNaviguer, onReabonnerDepuisFiche }: Props) {
       .catch(() => setCatalogue([]));
   }, [token]);
 
-  useEffect(() => {
+  function rechargerRecherche() {
     if (!terme.trim()) {
       setResultats([]);
       return;
     }
-    const identifiant = setTimeout(() => {
-      rechercherAbonnes(token, utilisateur.siteId, terme)
-        .then(setResultats)
-        .catch(() => setResultats([]));
-    }, 200);
+    rechercherAbonnes(token, utilisateur.siteId, terme)
+      .then(setResultats)
+      .catch(() => setResultats([]));
+  }
+
+  useEffect(() => {
+    const identifiant = setTimeout(rechargerRecherche, 200);
     return () => clearTimeout(identifiant);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [terme, token, utilisateur.siteId]);
 
   function rechargerFiche(idAbonne: number) {
@@ -131,15 +137,29 @@ export function ClientsPage({ onNaviguer, onReabonnerDepuisFiche }: Props) {
             {terme.trim() && resultats.length === 0 && <li className="p-4 text-sm text-muted-foreground">Aucun résultat.</li>}
             {!terme.trim() && <li className="p-4 text-sm text-muted-foreground">Recherchez un client pour voir sa fiche.</li>}
             {resultats.map((a) => (
-              <li key={a.idAbonne}>
+              <li key={a.idAbonne} className="flex items-stretch border-b border-border">
                 <button
                   type="button"
-                  className={`flex w-full cursor-pointer flex-col items-start gap-0.5 border-b border-border px-4 py-3 text-left hover:bg-muted ${idSelectionne === a.idAbonne ? "bg-muted" : ""}`}
+                  className={`flex flex-1 cursor-pointer flex-col items-start gap-0.5 px-4 py-3 text-left hover:bg-muted ${idSelectionne === a.idAbonne ? "bg-muted" : ""}`}
                   onClick={() => setIdSelectionne(a.idAbonne)}
                 >
                   <span className="font-medium text-foreground">{a.prenom} {a.nom}</span>
                   <span className="text-sm text-muted-foreground">n° {a.idAbonne} · {a.telephone}</span>
                 </button>
+                {peutFusionner && (
+                  <button
+                    type="button"
+                    className="flex shrink-0 cursor-pointer items-center px-3 text-muted-foreground hover:bg-muted hover:text-foreground"
+                    title="Fusionner cette fiche en tant que principale"
+                    aria-label={`Fusionner un doublon dans la fiche de ${a.prenom} ${a.nom}`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setFusionPrincipal(a);
+                    }}
+                  >
+                    <GitMerge className="size-4" aria-hidden="true" />
+                  </button>
+                )}
               </li>
             ))}
           </ul>
@@ -181,7 +201,7 @@ export function ClientsPage({ onNaviguer, onReabonnerDepuisFiche }: Props) {
                     Modifier
                   </Button>
                   {peutFusionner && (
-                    <Button variant="outline" size="sm" className="cursor-pointer" onClick={() => setFusionOuvert(true)}>
+                    <Button variant="outline" size="sm" className="cursor-pointer" onClick={() => setFusionPrincipal(fiche.abonne)}>
                       Fusionner un doublon
                     </Button>
                   )}
@@ -347,11 +367,15 @@ export function ClientsPage({ onNaviguer, onReabonnerDepuisFiche }: Props) {
       />
 
       <FusionDoublonsDialog
-        abonnePrincipal={fusionOuvert ? fiche?.abonne ?? null : null}
-        onFerme={() => setFusionOuvert(false)}
-        onSucces={() => {
-          setFusionOuvert(false);
-          if (idSelectionne !== null) rechargerFiche(idSelectionne);
+        abonnePrincipal={fusionPrincipal}
+        onFerme={() => setFusionPrincipal(null)}
+        onSucces={(idAbonnePrincipal, idAbonneDoublon) => {
+          setFusionPrincipal(null);
+          // la fiche doublon a disparu, et son libellé dans la liste de
+          // recherche affichée serait alors périmé (fusion 8.1)
+          rechargerRecherche();
+          if (idSelectionne === idAbonneDoublon) setIdSelectionne(idAbonnePrincipal);
+          else if (idSelectionne === idAbonnePrincipal) rechargerFiche(idAbonnePrincipal);
         }}
       />
 

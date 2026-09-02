@@ -18,7 +18,7 @@ import type { Abonne } from "@/lib/types";
 interface Props {
   abonnePrincipal: Abonne | null;
   onFerme: () => void;
-  onSucces: () => void;
+  onSucces: (idAbonnePrincipal: number, idAbonneDoublon: number) => void;
 }
 
 // 8.1 : fusion de doublons — opération destructrice (suppression définitive
@@ -67,7 +67,7 @@ export function FusionDoublonsDialog({ abonnePrincipal, onFerme, onSucces }: Pro
         userId: utilisateur.idUser,
       });
       toast.success(`Fiche « ${doublon.prenom} ${doublon.nom} » fusionnée et supprimée — historique conservé.`);
-      onSucces();
+      onSucces(abonnePrincipal.idAbonne, doublon.idAbonne);
     } catch (erreur) {
       if (erreur instanceof ErreurAuthentification) {
         toast.error("Session expirée — veuillez vous reconnecter.");

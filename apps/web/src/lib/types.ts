@@ -227,3 +227,42 @@ export interface TransactionMobileMoney {
   dateCreation: string;
   dateExpiration: string;
 }
+
+// 8.1 : fiche client 360°
+export interface Facture {
+  idFacture: number;
+  siteId: number;
+  idAbonne: number | null;
+  statut: "BROUILLON" | "VALIDEE";
+  montantTotal: number;
+  creePar: number;
+  dateCreation: string;
+}
+
+export interface MaterielAbonne {
+  idMateriel: number;
+  numeroAbonnement: number;
+  typeMateriel: string;
+  numeroSerie: string | null;
+  statut: "ACTIF" | "REMPLACE";
+  dateInstallation: string;
+}
+
+export interface AbonnementAvecFormule {
+  numeroAbonnement: number;
+  idFormule: number;
+  formuleLibelle: string;
+  familleLibelle: string;
+  dateDebut: string;
+  dateFin: string;
+  statut: "ACTIF" | "EXPIRE" | "RESILIE";
+}
+
+export interface Fiche360 {
+  abonne: Abonne;
+  apporteur: Apporteur | null;
+  abonnements: AbonnementAvecFormule[];
+  materiels: MaterielAbonne[];
+  factures: Facture[];
+  dossiersSav: DossierSav[];
+}

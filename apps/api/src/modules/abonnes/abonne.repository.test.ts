@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { creerDbTest, type Db } from "../../test-utils/db.js";
-import { creerAbonne, rechercherAbonnes } from "./abonne.repository.js";
+import { creerAbonne, modifierAbonne, rechercherAbonnes, trouverAbonne } from "./abonne.repository.js";
 import * as schema from "../../db/schema.js";
 
 let db: Db;
@@ -83,5 +83,34 @@ describe("rechercherAbonnes (4.5 : résolution unifiée id_abonne / numero_abonn
     creerAbonne(db, { siteId: autreSiteId, nom: "Nga Ndongo", prenom: "Valentin", telephone: "690000000" });
 
     expect(rechercherAbonnes(db, siteId, "Ndongo")).toHaveLength(0);
+  });
+});
+
+describe("trouverAbonne (8.1)", () => {
+  it("renvoie l'abonné correspondant", () => {
+    const ab = creerAbonne(db, { siteId, nom: "Nga Ndongo", prenom: "Valentin", telephone: "690000000" });
+
+    expect(trouverAbonne(db, ab.idAbonne)?.nom).toBe("Nga Ndongo");
+  });
+
+  it("renvoie undefined pour un abonné inconnu", () => {
+    expect(trouverAbonne(db, 999999)).toBeUndefined();
+  });
+});
+
+describe("modifierAbonne (8.1 : consultation et modification de fiche abonné)", () => {
+  it("met à jour les coordonnées fournies et conserve les autres champs", () => {
+    const ab = creerAbonne(db, { siteId, nom: "Nga Ndongo", prenom: "Valentin", telephone: "690000000" });
+
+    const modifie = modifierAbonne(db, ab.idAbonne, { email: "valentin@example.cm", adresse: "Douala, Akwa" });
+
+    expect(modifie.email).toBe("valentin@example.cm");
+    expect(modifie.adresse).toBe("Douala, Akwa");
+    expect(modifie.nom).toBe("Nga Ndongo"); // inchangé
+    expect(modifie.telephone).toBe("690000000"); // inchangé
+  });
+
+  it("rejette un abonné inconnu", () => {
+    expect(() => modifierAbonne(db, 999999, { email: "x@example.cm" })).toThrow(/introuvable/);
   });
 });

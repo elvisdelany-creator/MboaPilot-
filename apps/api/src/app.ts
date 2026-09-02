@@ -42,9 +42,11 @@ export function buildApp(db: Db, options: BuildAppOptions) {
   const gestionStock = exigerRole("ADMINISTRATEUR", "GERANT");
   // 8.2 : création/édition des fiches article réservée à l'encadrement
   const gestionCatalogue = exigerRole("ADMINISTRATEUR", "GERANT");
+  // 8.1 : fusion de doublons — opération destructrice, réservée à l'encadrement
+  const fusionAbonnes = exigerRole("ADMINISTRATEUR", "GERANT");
 
   registerAbonnementsRoutes(app, db, { authRequis, ventes });
-  registerAbonnesRoutes(app, db, { authRequis, ventes });
+  registerAbonnesRoutes(app, db, { authRequis, ventes, fusionAbonnes });
   registerCatalogueRoutes(app, db, { authRequis });
   registerJobsRoutes(app, db, { authRequis, ventes, admin });
   registerProduitsRoutes(app, db, { authRequis, ventes, gestionCatalogue });

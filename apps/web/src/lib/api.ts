@@ -9,6 +9,7 @@ import type {
   DossierSav,
   DossierSavDetaille,
   EchangeMaterielResultat,
+  Fiche360,
   FicheApporteur,
   HistoriquePrixProduit,
   MargeType,
@@ -57,6 +58,43 @@ export async function rechercherAbonnes(token: string, siteId: number, q: string
   const params = new URLSearchParams({ siteId: String(siteId), q });
   const reponse = await fetch(`${BASE}/abonnes?${params.toString()}`, { headers: headersAuth(token) });
   return lireJson<Abonne[]>(reponse);
+}
+
+// 8.1 : fiche client 360°
+export async function chargerFiche360(token: string, idAbonne: number): Promise<Fiche360> {
+  const reponse = await fetch(`${BASE}/abonnes/${idAbonne}/fiche-360`, { headers: headersAuth(token) });
+  return lireJson<Fiche360>(reponse);
+}
+
+export interface ModifierAbonnePayload {
+  nom?: string;
+  prenom?: string;
+  telephone?: string;
+  email?: string;
+  numeroCni?: string;
+  adresse?: string;
+}
+
+export async function modifierAbonneRequete(token: string, idAbonne: number, payload: ModifierAbonnePayload): Promise<Abonne> {
+  const reponse = await fetch(`${BASE}/abonnes/${idAbonne}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...headersAuth(token) },
+    body: JSON.stringify(payload),
+  });
+  return lireJson<Abonne>(reponse);
+}
+
+// 8.1 : fusion de doublons — opération destructrice, réservée à l'encadrement
+export async function fusionnerAbonnesRequete(
+  token: string,
+  payload: { idAbonnePrincipal: number; idAbonneDoublon: number; userId: number }
+): Promise<{ idAbonnePrincipal: number; idAbonneDoublon: number }> {
+  const reponse = await fetch(`${BASE}/abonnes/fusion`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headersAuth(token) },
+    body: JSON.stringify(payload),
+  });
+  return lireJson(reponse);
 }
 
 export async function chargerCatalogue(token: string): Promise<CatalogueFamille[]> {

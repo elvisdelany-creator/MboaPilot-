@@ -897,3 +897,94 @@ describe("Module changement de formule / migration (7.4)", () => {
     expect(reponse.statusCode).toBe(404);
   });
 });
+
+describe("Fiche client 360° et fusion de doublons (8.1)", () => {
+  async function creerAbonneViaRecrutement(app: FastifyInstance, token: string, nom: string, telephone: string) {
+    const recrutement = await app.inject({
+      method: "POST",
+      url: "/api/v1/recrutements",
+      headers: authHeader(token),
+      payload: { siteId, userId, aujourdHui: "2025-11-16", abonne: { nom, prenom: "Test", telephone }, idFormule, montantEncaisse: 13000 },
+    });
+    const abonnements = await app.inject({
+      method: "GET",
+      url: `/api/v1/abonnes?siteId=${siteId}&q=${telephone}`,
+      headers: authHeader(token),
+    });
+    return { idAbonne: abonnements.json()[0].idAbonne as number, numeroAbonnement: recrutement.json().numeroAbonnement as number };
+  }
+
+  it("consulte la fiche 360° d'un abonné (abonnements, factures, SAV consolidés)", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const token = await connecter(app);
+    const { idAbonne } = await creerAbonneViaRecrutement(app, token, "Nga Ndongo", "690000000");
+
+    const fiche = await app.inject({ method: "GET", url: `/api/v1/abonnes/${idAbonne}/fiche-360`, headers: authHeader(token) });
+
+    expect(fiche.statusCode).toBe(200);
+    expect(fiche.json().abonne.nom).toBe("Nga Ndongo");
+    expect(fiche.json().abonnements).toHaveLength(1);
+    expect(fiche.json().factures).toHaveLength(1);
+  });
+
+  it("modifie les coordonnées d'un abonné", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const token = await connecter(app);
+    const { idAbonne } = await creerAbonneViaRecrutement(app, token, "Nga Ndongo", "690000000");
+
+    const modification = await app.inject({
+      method: "PATCH",
+      url: `/api/v1/abonnes/${idAbonne}`,
+      headers: authHeader(token),
+      payload: { email: "valentin@example.cm" },
+    });
+
+    expect(modification.statusCode).toBe(200);
+    expect(modification.json().email).toBe("valentin@example.cm");
+  });
+
+  it("un administrateur fusionne deux fiches doublons, l'historique du doublon est conservé", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    creerUtilisateur(db, { siteId, nom: "Admin", prenom: "D", identifiant: "admin1", motDePasse: "motdepasse-secret", role: "ADMINISTRATEUR" });
+    const tokenAdmin = await connecter(app, "admin1");
+    const { idAbonne: idPrincipal } = await creerAbonneViaRecrutement(app, tokenAdmin, "Nga Ndongo", "690000000");
+    const { idAbonne: idDoublon } = await creerAbonneViaRecrutement(app, tokenAdmin, "Nga N.", "690000001");
+
+    const fusion = await app.inject({
+      method: "POST",
+      url: "/api/v1/abonnes/fusion",
+      headers: authHeader(tokenAdmin),
+      payload: { idAbonnePrincipal: idPrincipal, idAbonneDoublon: idDoublon, userId },
+    });
+    expect(fusion.statusCode).toBe(200);
+
+    const fiche = await app.inject({ method: "GET", url: `/api/v1/abonnes/${idPrincipal}/fiche-360`, headers: authHeader(tokenAdmin) });
+    expect(fiche.json().abonnements).toHaveLength(2); // les deux abonnements sont désormais rattachés au principal
+
+    const doublonSupprime = await app.inject({ method: "GET", url: `/api/v1/abonnes/${idDoublon}`, headers: authHeader(tokenAdmin) });
+    expect(doublonSupprime.statusCode).toBe(404);
+  });
+
+  it("un caissier ne peut pas fusionner des doublons (403)", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const token = await connecter(app);
+    const { idAbonne: idPrincipal } = await creerAbonneViaRecrutement(app, token, "Nga Ndongo", "690000000");
+    const { idAbonne: idDoublon } = await creerAbonneViaRecrutement(app, token, "Nga N.", "690000001");
+
+    const reponse = await app.inject({
+      method: "POST",
+      url: "/api/v1/abonnes/fusion",
+      headers: authHeader(token),
+      payload: { idAbonnePrincipal: idPrincipal, idAbonneDoublon: idDoublon, userId },
+    });
+    expect(reponse.statusCode).toBe(403);
+  });
+
+  it("renvoie 404 pour une fiche 360° d'un abonné inconnu", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const token = await connecter(app);
+
+    const reponse = await app.inject({ method: "GET", url: "/api/v1/abonnes/999999/fiche-360", headers: authHeader(token) });
+    expect(reponse.statusCode).toBe(404);
+  });
+});

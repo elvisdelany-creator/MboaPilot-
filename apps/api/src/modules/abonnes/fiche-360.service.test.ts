@@ -1,0 +1,64 @@
+import { describe, it, expect, beforeEach } from "vitest";
+import { creerDbTest, type Db } from "../../test-utils/db.js";
+import { creerAbonne } from "./abonne.repository.js";
+import { recruterAbonne } from "../abonnements/recrutement.service.js";
+import { creerApporteur } from "../apporteurs/apporteur.repository.js";
+import { creerDossierSav } from "../sav/sav.repository.js";
+import { construireFiche360 } from "./fiche-360.service.js";
+import * as schema from "../../db/schema.js";
+
+let db: Db;
+let siteId: number;
+let userId: number;
+let idFormuleCanalplus: number;
+let idFormuleDstv: number;
+
+beforeEach(() => {
+  db = creerDbTest();
+  const ent = db.insert(schema.entreprise).values({ nom: "Boutique Test" }).returning().get();
+  siteId = db.insert(schema.site).values({ idEntreprise: ent.idEntreprise, nom: "Site A" }).returning().get().idSite;
+  userId = db
+    .insert(schema.utilisateur)
+    .values({ siteId, nom: "A", prenom: "B", identifiant: "ab", motDePasseHash: "h", role: "CAISSIER" })
+    .returning()
+    .get().idUser;
+
+  const canal = db.insert(schema.familleAbonnement).values({ libelle: "CANAL+" }).returning().get();
+  const dstv = db.insert(schema.familleAbonnement).values({ libelle: "DSTV" }).returning().get();
+  idFormuleCanalplus = db.insert(schema.formule).values({ idFamille: canal.idFamille, libelle: "EVASION", prix: 10500, rang: 2 }).returning().get().idFormule;
+  idFormuleDstv = db.insert(schema.formule).values({ idFamille: dstv.idFamille, libelle: "COMPAQ", prix: 13000, rang: 3 }).returning().get().idFormule;
+});
+
+describe("construireFiche360 (8.1)", () => {
+  it("consolide coordonnées, abonnements toutes familles, matériel, factures, SAV et apporteur", () => {
+    const apporteur = creerApporteur(db, { nom: "Jean Apporteur" });
+    const idAbonne = creerAbonne(db, { siteId, nom: "Nga", prenom: "Paul", telephone: "690000000", apporteurId: apporteur.idApporteur }).idAbonne;
+
+    recruterAbonne(db, { siteId, userId, aujourdHui: "2025-11-16", abonne: { idAbonne }, idFormule: idFormuleCanalplus, montantEncaisse: 10500 });
+    recruterAbonne(db, { siteId, userId, aujourdHui: "2025-11-16", abonne: { idAbonne }, idFormule: idFormuleDstv, montantEncaisse: 13000 });
+    creerDossierSav(db, { siteId, idAbonne, descriptionPanne: "Ne s'allume plus", sousGarantie: false, userId });
+
+    const fiche = construireFiche360(db, idAbonne);
+
+    expect(fiche.abonne.nom).toBe("Nga");
+    expect(fiche.apporteur?.nom).toBe("Jean Apporteur");
+    expect(fiche.abonnements).toHaveLength(2);
+    expect(fiche.abonnements.map((a) => a.familleLibelle).sort()).toEqual(["CANAL+", "DSTV"]);
+    expect(fiche.factures).toHaveLength(2);
+    expect(fiche.dossiersSav).toHaveLength(1);
+  });
+
+  it("un abonné sans apporteur renvoie apporteur: null", () => {
+    const idAbonne = creerAbonne(db, { siteId, nom: "Nga", prenom: "Paul", telephone: "690000000" }).idAbonne;
+
+    const fiche = construireFiche360(db, idAbonne);
+
+    expect(fiche.apporteur).toBeNull();
+    expect(fiche.abonnements).toHaveLength(0);
+    expect(fiche.materiels).toHaveLength(0);
+  });
+
+  it("rejette un abonné inconnu", () => {
+    expect(() => construireFiche360(db, 999999)).toThrow(/introuvable/);
+  });
+});

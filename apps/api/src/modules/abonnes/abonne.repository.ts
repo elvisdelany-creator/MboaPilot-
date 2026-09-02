@@ -30,6 +30,40 @@ export function creerAbonne(db: Db, input: AbonneInput) {
     .get();
 }
 
+export function trouverAbonne(db: Db, idAbonne: number) {
+  return db.select().from(schema.abonne).where(eq(schema.abonne.idAbonne, idAbonne)).get();
+}
+
+export interface ModifierAbonneInput {
+  nom?: string;
+  prenom?: string;
+  telephone?: string;
+  email?: string;
+  numeroCni?: string;
+  adresse?: string;
+}
+
+// 8.1 : modification de fiche abonné — l'apporteur d'affaires n'est jamais
+// modifiable ici, il est permanent une fois renseigné à la création (6.3)
+export function modifierAbonne(db: Db, idAbonne: number, input: ModifierAbonneInput) {
+  const existant = trouverAbonne(db, idAbonne);
+  if (!existant) throw new Error(`Abonné ${idAbonne} introuvable`);
+
+  return db
+    .update(schema.abonne)
+    .set({
+      nom: input.nom ?? existant.nom,
+      prenom: input.prenom ?? existant.prenom,
+      telephone: input.telephone ?? existant.telephone,
+      email: input.email ?? existant.email,
+      numeroCni: input.numeroCni ?? existant.numeroCni,
+      adresse: input.adresse ?? existant.adresse,
+    })
+    .where(eq(schema.abonne.idAbonne, idAbonne))
+    .returning()
+    .get();
+}
+
 // 4.5 : recherche unifiée par numéro d'abonné, numéro d'abonnement en cours,
 // nom/prénom ou téléphone — résolution unique vers la fiche ABONNE.
 export function rechercherAbonnes(db: Db, siteId: number, terme: string) {

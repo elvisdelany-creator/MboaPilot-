@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { AlertTriangle, RotateCw } from "lucide-react";
-import { chargerAlertesEcheance, ErreurAuthentification } from "@/lib/api";
+import { AlertTriangle, PackageX, RotateCw } from "lucide-react";
+import { chargerAlertesEcheance, chargerAlertesStock, ErreurAuthentification } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { AppHeader, type Vue } from "@/components/layout/AppHeader";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import type { AlerteEcheance, JalonAlerte } from "@/lib/types";
+import type { AlerteEcheance, JalonAlerte, Produit } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 interface Props {
@@ -36,6 +36,7 @@ export function DashboardPage({ onNaviguer, onReabonnerDepuisAlerte }: Props) {
   const siteId = session!.utilisateur.siteId;
 
   const [alertes, setAlertes] = useState<AlerteEcheance[] | null>(null);
+  const [alertesStock, setAlertesStock] = useState<Produit[]>([]);
 
   function charger() {
     chargerAlertesEcheance(token, siteId)
@@ -48,6 +49,10 @@ export function DashboardPage({ onNaviguer, onReabonnerDepuisAlerte }: Props) {
         }
         toast.error(e instanceof Error ? e.message : "Impossible de charger les alertes.");
       });
+    // 8.6, 9.3 : état des stocks — alertes de rupture
+    chargerAlertesStock(token, siteId)
+      .then(setAlertesStock)
+      .catch(() => setAlertesStock([]));
   }
 
   useEffect(charger, [token, siteId]);
@@ -110,6 +115,30 @@ export function DashboardPage({ onNaviguer, onReabonnerDepuisAlerte }: Props) {
               </li>
             ))}
           </ul>
+
+          {alertesStock.length > 0 && (
+            <div className="mt-8">
+              <h2 className="mb-4 font-heading text-xl font-semibold text-foreground">Alertes de rupture de stock</h2>
+              <ul className="space-y-2">
+                {alertesStock.map((p) => (
+                  <li key={p.idProduit}>
+                    <Card className="flex-row items-center gap-3 p-4">
+                      <span className="flex items-center gap-1.5 rounded-full bg-alert-j1-bg px-2.5 py-1 text-xs font-semibold text-alert-j1-fg">
+                        <PackageX className="size-3.5" aria-hidden="true" />
+                        Rupture
+                      </span>
+                      <div>
+                        <p className="font-medium text-card-foreground">{p.libelle}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {p.quantiteStock} en stock · seuil {p.seuilAlerte}
+                        </p>
+                      </div>
+                    </Card>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
       </main>
     </div>

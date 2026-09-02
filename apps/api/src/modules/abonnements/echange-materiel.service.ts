@@ -1,6 +1,7 @@
 import { eq } from "drizzle-orm";
 import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
+import { enregistrerMouvement } from "../stock/stock.repository.js";
 
 export interface EchangerMaterielParams {
   siteId: number;
@@ -56,6 +57,18 @@ export function echangerMateriel(db: Db, params: EchangerMaterielParams): Echang
     })
     .returning()
     .get();
+
+  // 5.2 : le matériel de remplacement sort du stock du site, comme toute vente
+  if (produit.suiviStock === 1) {
+    enregistrerMouvement(db, {
+      idProduit: params.idProduit,
+      siteId: params.siteId,
+      typeMouvement: "VENTE",
+      quantite: 1,
+      motif: `Échange matériel — abonnement n° ${params.numeroAbonnement}`,
+      utilisateurId: params.userId,
+    });
+  }
 
   // 3.2.2 : historique des changements de matériel — numéros de série successifs, motif, garantie
   db.insert(schema.historiqueAbonnement)

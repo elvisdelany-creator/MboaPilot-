@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import { peutTransitionnerSav, type StatutSav } from "@mboapilot/shared";
 import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
+import { enregistrerMouvement } from "../stock/stock.repository.js";
 
 export interface AffecterPieceParams {
   idDossierSav: number;
@@ -10,33 +11,23 @@ export interface AffecterPieceParams {
   userId: number;
 }
 
-// 5.10 : affectation d'une pièce de rechange au dossier, avec décrément du stock
+// 5.10 : affectation d'une pièce de rechange au dossier, avec décrément du stock (5.2)
 export function affecterPieceSav(db: Db, params: AffecterPieceParams) {
   const dossier = db.select().from(schema.savDossier).where(eq(schema.savDossier.idDossierSav, params.idDossierSav)).get();
   if (!dossier) throw new Error(`Dossier SAV ${params.idDossierSav} introuvable`);
-
-  const produit = db.select().from(schema.produit).where(eq(schema.produit.idProduit, params.idProduit)).get();
-  if (!produit) throw new Error(`Produit ${params.idProduit} introuvable`);
 
   db.insert(schema.savPieceUtilisee)
     .values({ idDossierSav: params.idDossierSav, idProduit: params.idProduit, quantite: params.quantite })
     .run();
 
-  db.insert(schema.stockMouvement)
-    .values({
-      idProduit: params.idProduit,
-      siteId: dossier.siteId,
-      typeMouvement: "VENTE",
-      quantite: params.quantite,
-      motif: `SAV dossier ${params.idDossierSav}`,
-      utilisateurId: params.userId,
-    })
-    .run();
-
-  db.update(schema.produit)
-    .set({ quantiteStock: produit.quantiteStock - params.quantite })
-    .where(eq(schema.produit.idProduit, params.idProduit))
-    .run();
+  enregistrerMouvement(db, {
+    idProduit: params.idProduit,
+    siteId: dossier.siteId,
+    typeMouvement: "VENTE",
+    quantite: params.quantite,
+    motif: `SAV dossier ${params.idDossierSav}`,
+    utilisateurId: params.userId,
+  });
 }
 
 export interface ChangerStatutSavParams {

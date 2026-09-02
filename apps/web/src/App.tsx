@@ -7,6 +7,7 @@ import { DashboardPage } from "@/components/dashboard/DashboardPage";
 import { SavPage } from "@/components/sav/SavPage";
 import { ApporteursPage } from "@/components/apporteurs/ApporteursPage";
 import { ApporteurFichePage } from "@/components/apporteurs/ApporteurFichePage";
+import { StockPage } from "@/components/stock/StockPage";
 import type { Vue } from "@/components/layout/AppHeader";
 import type { Abonne, AlerteEcheance } from "@/lib/types";
 
@@ -14,7 +15,8 @@ type EtatVue =
   | { nom: "dashboard" }
   | { nom: "caisse"; abonneInitial?: Abonne; idFamilleInitiale?: number }
   | { nom: "sav" }
-  | { nom: "apporteurs" };
+  | { nom: "apporteurs" }
+  | { nom: "stock" };
 
 function Contenu() {
   const { session } = useAuth();
@@ -48,13 +50,25 @@ function Contenu() {
     return <ApporteursPage onNaviguer={naviguer} />;
   }
 
+  if (vue.nom === "stock") {
+    return <StockPage onNaviguer={naviguer} />;
+  }
+
   return <CaissePage onNaviguer={naviguer} abonneInitial={vue.abonneInitial} idFamilleInitiale={vue.idFamilleInitiale} />;
+}
+
+// remonte Contenu à chaque changement d'utilisateur connecté (déconnexion
+// puis reconnexion sous un autre compte sur le même poste) pour ne jamais
+// garder l'écran précédent — potentiellement hors périmètre du nouveau rôle
+function ContenuAvecReset() {
+  const { session } = useAuth();
+  return <Contenu key={session?.utilisateur.idUser ?? "deconnecte"} />;
 }
 
 function App() {
   return (
     <AuthProvider>
-      <Contenu />
+      <ContenuAvecReset />
       <Toaster />
     </AuthProvider>
   );

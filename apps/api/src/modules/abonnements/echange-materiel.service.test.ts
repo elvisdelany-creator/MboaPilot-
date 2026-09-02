@@ -157,6 +157,32 @@ describe("echangerMateriel (7.3)", () => {
     ).toThrow(/introuvable/);
   });
 
+  it("5.2 : décrémente le stock du produit de remplacement quand il est suivi", () => {
+    const idProduitSuivi = db
+      .insert(schema.produit)
+      .values({ siteId, type: "BIEN", libelle: "Décodeur GLOBALZ (suivi)", prixVente: 15000, suiviStock: 1, quantiteStock: 10 })
+      .returning()
+      .get().idProduit;
+
+    echangerMateriel(db, {
+      siteId,
+      userId,
+      numeroAbonnement,
+      idProduit: idProduitSuivi,
+      typeMateriel: "DECODEUR",
+      sousGarantie: false,
+      motif: "panne",
+      montantEncaisse: 15000,
+    });
+
+    const produit = db.select().from(schema.produit).where(eq(schema.produit.idProduit, idProduitSuivi)).get();
+    expect(produit?.quantiteStock).toBe(9);
+
+    const mouvements = db.select().from(schema.stockMouvement).where(eq(schema.stockMouvement.idProduit, idProduitSuivi)).all();
+    expect(mouvements).toHaveLength(1);
+    expect(mouvements[0].typeMouvement).toBe("VENTE");
+  });
+
   it("rejette un produit de remplacement inconnu", () => {
     expect(() =>
       echangerMateriel(db, {

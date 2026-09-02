@@ -551,3 +551,89 @@ describe("Module apporteur d'affaires (6.3)", () => {
     expect(ficheAutrui.statusCode).toBe(403);
   });
 });
+
+describe("Module suivi de stock (5.2)", () => {
+  async function creerProduitSuivi(db: Db, siteId: number, seuilAlerte: number) {
+    return db
+      .insert(schema.produit)
+      .values({ siteId, type: "BIEN", libelle: "Décodeur", prixVente: 15000, coutRevient: 1000, suiviStock: 1, quantiteStock: 10, seuilAlerte })
+      .returning()
+      .get().idProduit;
+  }
+
+  it("un administrateur réceptionne un achat, un caissier peut consulter l'historique et les alertes", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    creerUtilisateur(db, { siteId, nom: "Admin", prenom: "D", identifiant: "admin1", motDePasse: "motdepasse-secret", role: "ADMINISTRATEUR" });
+    const tokenAdmin = await connecter(app, "admin1");
+    const idProduit = await creerProduitSuivi(db, siteId, 5);
+
+    const achat = await app.inject({
+      method: "POST",
+      url: "/api/v1/stock/achats",
+      headers: authHeader(tokenAdmin),
+      payload: { idProduit, siteId, quantite: 10, coutUnitaire: 2000, userId },
+    });
+    expect(achat.statusCode).toBe(201);
+    expect(achat.json().quantiteStock).toBe(20);
+
+    const tokenCaissier = await connecter(app);
+    const mouvements = await app.inject({
+      method: "GET",
+      url: `/api/v1/produits/${idProduit}/mouvements`,
+      headers: authHeader(tokenCaissier),
+    });
+    expect(mouvements.statusCode).toBe(200);
+    expect(mouvements.json()).toHaveLength(1);
+
+    const alertes = await app.inject({ method: "GET", url: `/api/v1/stock/alertes?siteId=${siteId}`, headers: authHeader(tokenCaissier) });
+    expect(alertes.statusCode).toBe(200);
+    expect(alertes.json()).toHaveLength(0); // 20 > seuil 5
+  });
+
+  it("un caissier ne peut pas réceptionner un achat, enregistrer une casse ni ajuster l'inventaire (403)", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const token = await connecter(app);
+    const idProduit = await creerProduitSuivi(db, siteId, 5);
+
+    const achat = await app.inject({
+      method: "POST",
+      url: "/api/v1/stock/achats",
+      headers: authHeader(token),
+      payload: { idProduit, siteId, quantite: 10, coutUnitaire: 2000, userId },
+    });
+    expect(achat.statusCode).toBe(403);
+
+    const casse = await app.inject({
+      method: "POST",
+      url: "/api/v1/stock/casses",
+      headers: authHeader(token),
+      payload: { idProduit, siteId, quantite: 1, motif: "Chute", userId },
+    });
+    expect(casse.statusCode).toBe(403);
+
+    const inventaire = await app.inject({
+      method: "POST",
+      url: "/api/v1/stock/inventaires",
+      headers: authHeader(token),
+      payload: { idProduit, siteId, quantiteComptee: 3, motif: "Comptage", userId },
+    });
+    expect(inventaire.statusCode).toBe(403);
+  });
+
+  it("une casse qui fait passer le stock sous le seuil déclenche l'alerte de rupture", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    creerUtilisateur(db, { siteId, nom: "Admin", prenom: "D", identifiant: "admin1", motDePasse: "motdepasse-secret", role: "ADMINISTRATEUR" });
+    const tokenAdmin = await connecter(app, "admin1");
+    const idProduit = await creerProduitSuivi(db, siteId, 5); // stock 10, seuil 5
+
+    await app.inject({
+      method: "POST",
+      url: "/api/v1/stock/casses",
+      headers: authHeader(tokenAdmin),
+      payload: { idProduit, siteId, quantite: 6, motif: "Casse transport", userId },
+    });
+
+    const alertes = await app.inject({ method: "GET", url: `/api/v1/stock/alertes?siteId=${siteId}`, headers: authHeader(tokenAdmin) });
+    expect(alertes.json()).toHaveLength(1); // 10 - 6 = 4 <= seuil 5
+  });
+});

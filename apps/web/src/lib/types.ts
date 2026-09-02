@@ -177,3 +177,16 @@ export interface FicheApporteur {
   chiffreAffaires: number;
   commissionsCanalplus: SuiviCommissionCanalplus[];
 }
+
+export type TypeMouvementStock = "ACHAT" | "VENTE" | "CASSE" | "TRANSFERT_ENTREE" | "TRANSFERT_SORTIE" | "INVENTAIRE";
+
+export interface StockMouvement {
+  idMouvement: number;
+  idProduit: number;
+  siteId: number;
+  typeMouvement: TypeMouvementStock;
+  quantite: number;
+  motif: string | null;
+  dateMouvement: string;
+  utilisateurId: number;
+}

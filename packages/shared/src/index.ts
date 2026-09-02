@@ -4,3 +4,4 @@ export { detecterJalonAlerte, joursAvantEcheance, type JalonAlerte } from "./ale
 export { calculerPrixKit, type Kit, type FormuleReference } from "./prix-kit.js";
 export { evaluerSuiviCommission, type StatutCommission } from "./suivi-commission.js";
 export { peutTransitionnerSav, type StatutSav } from "./statut-sav.js";
+export { calculerCoutMoyenPondere } from "./cout-moyen-pondere.js";

@@ -13,6 +13,7 @@ import type {
   Produit,
   RecrutementResultat,
   StatutSav,
+  StockMouvement,
   Utilisateur,
 } from "./types";
 
@@ -242,4 +243,67 @@ export async function modifierApporteurRequete(
 export async function chargerFicheApporteur(token: string, idApporteur: number): Promise<FicheApporteur> {
   const reponse = await fetch(`${BASE}/apporteurs/${idApporteur}/fiche`, { headers: headersAuth(token) });
   return lireJson<FicheApporteur>(reponse);
+}
+
+// 5.2 : suivi de stock — alertes de rupture, historique des mouvements, et
+// les trois actions correctives (réception d'achat, casse/perte, inventaire)
+export async function chargerAlertesStock(token: string, siteId: number): Promise<Produit[]> {
+  const reponse = await fetch(`${BASE}/stock/alertes?siteId=${siteId}`, { headers: headersAuth(token) });
+  return lireJson<Produit[]>(reponse);
+}
+
+export async function chargerMouvementsProduit(token: string, idProduit: number): Promise<StockMouvement[]> {
+  const reponse = await fetch(`${BASE}/produits/${idProduit}/mouvements`, { headers: headersAuth(token) });
+  return lireJson<StockMouvement[]>(reponse);
+}
+
+export interface ReceptionnerAchatPayload {
+  idProduit: number;
+  siteId: number;
+  quantite: number;
+  coutUnitaire: number;
+  userId: number;
+}
+
+export async function receptionnerAchatRequete(token: string, payload: ReceptionnerAchatPayload): Promise<Produit> {
+  const reponse = await fetch(`${BASE}/stock/achats`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headersAuth(token) },
+    body: JSON.stringify(payload),
+  });
+  return lireJson<Produit>(reponse);
+}
+
+export interface EnregistrerCassePayload {
+  idProduit: number;
+  siteId: number;
+  quantite: number;
+  motif: string;
+  userId: number;
+}
+
+export async function enregistrerCasseRequete(token: string, payload: EnregistrerCassePayload): Promise<Produit> {
+  const reponse = await fetch(`${BASE}/stock/casses`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headersAuth(token) },
+    body: JSON.stringify(payload),
+  });
+  return lireJson<Produit>(reponse);
+}
+
+export interface AjusterInventairePayload {
+  idProduit: number;
+  siteId: number;
+  quantiteComptee: number;
+  motif: string;
+  userId: number;
+}
+
+export async function ajusterInventaireRequete(token: string, payload: AjusterInventairePayload): Promise<Produit> {
+  const reponse = await fetch(`${BASE}/stock/inventaires`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headersAuth(token) },
+    body: JSON.stringify(payload),
+  });
+  return lireJson<Produit>(reponse);
 }

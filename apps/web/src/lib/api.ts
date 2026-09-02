@@ -4,6 +4,7 @@ import type {
   Abonnement,
   Apporteur,
   CatalogueFamille,
+  ChangerFormuleResultat,
   ChangerStatutSavResultat,
   DossierSav,
   DossierSavDetaille,
@@ -194,6 +195,28 @@ export async function reabonnerRequete(
     body: JSON.stringify(payload),
   });
   return lireJson<RecrutementResultat>(reponse);
+}
+
+// 7.4 : changement de formule (migration) — abonnement ACTIF uniquement,
+// formule de rang strictement supérieur, sans toucher aux dates de période.
+export interface ChangerFormulePayload {
+  siteId: number;
+  userId: number;
+  idNouvelleFormule: number;
+  montantEncaisse: number;
+}
+
+export async function changerFormuleRequete(
+  token: string,
+  numeroAbonnement: number,
+  payload: ChangerFormulePayload
+): Promise<ChangerFormuleResultat> {
+  const reponse = await fetch(`${BASE}/abonnements/${numeroAbonnement}/changement-formule`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headersAuth(token) },
+    body: JSON.stringify(payload),
+  });
+  return lireJson<ChangerFormuleResultat>(reponse);
 }
 
 // 5.10, 8.4 : module SAV

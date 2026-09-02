@@ -7,3 +7,4 @@ export { peutTransitionnerSav, type StatutSav } from "./statut-sav.js";
 export { calculerCoutMoyenPondere } from "./cout-moyen-pondere.js";
 export { calculerMarge, type MargeArticle, type MargeCalculee, type MargeType } from "./marge-article.js";
 export { peutTransitionnerPaiementMobile, type StatutPaiementMobile } from "./statut-paiement-mobile.js";
+export { validerMigrationFormule, type FormuleMigration, type ResultatValidationMigration } from "./migration-formule.js";

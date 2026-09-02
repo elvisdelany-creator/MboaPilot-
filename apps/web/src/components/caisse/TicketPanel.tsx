@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Wrench } from "lucide-react";
+import { ArrowUpCircle, Wrench } from "lucide-react";
 import { calculerPrixKit } from "@mboapilot/shared";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -18,9 +18,13 @@ interface Props {
   formuleSelectionnee: Formule | null;
   kitSelectionne: CatalogueKit | null;
   numeroAbonnementARenouveler: number | null;
+  // 7.4 : le changement de formule (migration) ne s'applique qu'à un
+  // abonnement ACTIF, jamais à un abonnement déjà EXPIRE
+  peutMigrerFormule: boolean;
   enCours: boolean;
   onValider: (paiement: PaiementSaisi) => void;
   onEchangerMateriel: () => void;
+  onChangerFormule: () => void;
 }
 
 const formateurFcfa = new Intl.NumberFormat("fr-FR");
@@ -33,9 +37,11 @@ export function TicketPanel({
   formuleSelectionnee,
   kitSelectionne,
   numeroAbonnementARenouveler,
+  peutMigrerFormule,
   enCours,
   onValider,
   onEchangerMateriel,
+  onChangerFormule,
 }: Props) {
   const prixKit =
     kitSelectionne && formuleSelectionnee
@@ -80,6 +86,18 @@ export function TicketPanel({
           >
             <Wrench className="size-4" />
             Échanger le matériel (panne/vol)
+          </Button>
+        )}
+
+        {peutMigrerFormule && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="mb-3 w-full cursor-pointer gap-2"
+            onClick={onChangerFormule}
+          >
+            <ArrowUpCircle className="size-4" />
+            Changer de formule (migration)
           </Button>
         )}
 

@@ -121,6 +121,13 @@ export interface EchangeMaterielResultat {
   statutFacture: "BROUILLON" | "VALIDEE";
 }
 
+export interface ChangerFormuleResultat {
+  numeroAbonnement: number;
+  idFacture: number;
+  montantDifferentiel: number;
+  statutFacture: "BROUILLON" | "VALIDEE";
+}
+
 export interface DossierSav {
   idDossierSav: number;
   siteId: number;

@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import type { FastifyInstance } from "fastify";
+import { eq } from "drizzle-orm";
 import { creerDbTest, type Db } from "./test-utils/db.js";
 import { buildApp } from "./app.js";
 import { creerUtilisateur } from "./modules/utilisateurs/utilisateur.repository.js";
@@ -794,6 +795,105 @@ describe("Module paiement mobile Orange Money (6.6)", () => {
     const token = await connecter(app);
 
     const reponse = await app.inject({ method: "GET", url: "/api/v1/paiements-mobiles/999999", headers: authHeader(token) });
+    expect(reponse.statusCode).toBe(404);
+  });
+});
+
+describe("Module changement de formule / migration (7.4)", () => {
+  it("migre vers une formule supérieure, facture le différentiel et journalise le changement", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const token = await connecter(app);
+
+    const idFamilleDstv = db.select().from(schema.formule).where(eq(schema.formule.idFormule, idFormule)).get()!.idFamille;
+    const idFormuleSuperieure = db
+      .insert(schema.formule)
+      .values({ idFamille: idFamilleDstv, libelle: "PREMIUM", prix: 28000, rang: 5 })
+      .returning()
+      .get().idFormule;
+
+    const recrutement = await app.inject({
+      method: "POST",
+      url: "/api/v1/recrutements",
+      headers: authHeader(token),
+      payload: { siteId, userId, aujourdHui: "2025-11-16", abonne: { nom: "Nga", prenom: "Paul", telephone: "690000000" }, idFormule, montantEncaisse: 13000 },
+    });
+    const { numeroAbonnement } = recrutement.json();
+
+    const migration = await app.inject({
+      method: "POST",
+      url: `/api/v1/abonnements/${numeroAbonnement}/changement-formule`,
+      headers: authHeader(token),
+      payload: { siteId, userId, idNouvelleFormule: idFormuleSuperieure, montantEncaisse: 15000 },
+    });
+
+    expect(migration.statusCode).toBe(200);
+    expect(migration.json().montantDifferentiel).toBe(15000); // 28000 - 13000
+    expect(migration.json().statutFacture).toBe("VALIDEE");
+  });
+
+  it("rejette une migration vers une formule de rang inférieur (400)", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const token = await connecter(app);
+
+    const recrutement = await app.inject({
+      method: "POST",
+      url: "/api/v1/recrutements",
+      headers: authHeader(token),
+      payload: { siteId, userId, aujourdHui: "2025-11-16", abonne: { nom: "Nga", prenom: "Paul", telephone: "690000000" }, idFormule, montantEncaisse: 13000 },
+    });
+    const { numeroAbonnement } = recrutement.json();
+
+    const idFamilleDstv = db.select().from(schema.formule).where(eq(schema.formule.idFormule, idFormule)).get()!.idFamille;
+    const idFormuleInferieure = db
+      .insert(schema.formule)
+      .values({ idFamille: idFamilleDstv, libelle: "YANGA", prix: 5000, rang: 1 })
+      .returning()
+      .get().idFormule;
+
+    const migration = await app.inject({
+      method: "POST",
+      url: `/api/v1/abonnements/${numeroAbonnement}/changement-formule`,
+      headers: authHeader(token),
+      payload: { siteId, userId, idNouvelleFormule: idFormuleInferieure, montantEncaisse: 0 },
+    });
+
+    expect(migration.statusCode).toBe(400);
+  });
+
+  it("un rôle non habilité à la vente ne peut pas migrer une formule (403)", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const token = await connecter(app);
+
+    const recrutement = await app.inject({
+      method: "POST",
+      url: "/api/v1/recrutements",
+      headers: authHeader(token),
+      payload: { siteId, userId, aujourdHui: "2025-11-16", abonne: { nom: "Nga", prenom: "Paul", telephone: "690000000" }, idFormule, montantEncaisse: 13000 },
+    });
+    const { numeroAbonnement } = recrutement.json();
+
+    creerUtilisateur(db, { siteId, nom: "Tech", prenom: "T", identifiant: "tech1", motDePasse: "motdepasse-secret", role: "TECHNICIEN_SAV" });
+    const tokenTech = await connecter(app, "tech1");
+
+    const reponse = await app.inject({
+      method: "POST",
+      url: `/api/v1/abonnements/${numeroAbonnement}/changement-formule`,
+      headers: authHeader(tokenTech),
+      payload: { siteId, userId, idNouvelleFormule: idFormule, montantEncaisse: 0 },
+    });
+    expect(reponse.statusCode).toBe(403);
+  });
+
+  it("renvoie 404 pour un abonnement inconnu", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const token = await connecter(app);
+
+    const reponse = await app.inject({
+      method: "POST",
+      url: "/api/v1/abonnements/999999/changement-formule",
+      headers: authHeader(token),
+      payload: { siteId, userId, idNouvelleFormule: idFormule, montantEncaisse: 0 },
+    });
     expect(reponse.statusCode).toBe(404);
   });
 });

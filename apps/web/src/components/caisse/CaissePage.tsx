@@ -10,6 +10,7 @@ import { GrilleArticles } from "./GrilleArticles";
 import { TicketPanel, type PaiementSaisi } from "./TicketPanel";
 import { EchangeMaterielDialog } from "./EchangeMaterielDialog";
 import { PaiementMobileMoneyDialog } from "./PaiementMobileMoneyDialog";
+import { ChangerFormuleDialog } from "./ChangerFormuleDialog";
 
 interface Props {
   onNaviguer: (vue: Vue) => void;
@@ -31,6 +32,7 @@ export function CaissePage({ onNaviguer, abonneInitial, idFamilleInitiale }: Pro
   const [kitSelectionne, setKitSelectionne] = useState<CatalogueKit | null>(null);
   const [enCours, setEnCours] = useState(false);
   const [echangeMaterielOuvert, setEchangeMaterielOuvert] = useState(false);
+  const [changerFormuleOuvert, setChangerFormuleOuvert] = useState(false);
   const [paiementMobile, setPaiementMobile] = useState<{
     idFacture: number;
     montant: number;
@@ -59,7 +61,7 @@ export function CaissePage({ onNaviguer, abonneInitial, idFamilleInitiale }: Pro
 
   // 9.2 : dès qu'un abonné existant est sélectionné, on récupère ses abonnements
   // pour savoir si l'opération à venir sera un recrutement ou un réabonnement.
-  useEffect(() => {
+  function rechargerAbonnementsAbonne() {
     if (abonneSelectionne && "idAbonne" in abonneSelectionne) {
       chargerAbonnementsAbonne(token, abonneSelectionne.idAbonne)
         .then(setAbonnementsAbonne)
@@ -70,8 +72,10 @@ export function CaissePage({ onNaviguer, abonneInitial, idFamilleInitiale }: Pro
     } else {
       setAbonnementsAbonne([]);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [abonneSelectionne, token]);
+  }
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(rechargerAbonnementsAbonne, [abonneSelectionne, token]);
 
   const familleSelectionnee = useMemo(
     () => familles.find((f) => f.idFamille === familleSelectionneeId),
@@ -95,6 +99,14 @@ export function CaissePage({ onNaviguer, abonneInitial, idFamilleInitiale }: Pro
     );
     return candidats.find((a) => a.statut === "ACTIF") ?? candidats[0] ?? null;
   }, [abonnementsAbonne, familleSelectionneeId, formuleVersFamille]);
+
+  // 7.4 : la migration ne s'applique qu'à un abonnement ACTIF, jamais à un
+  // abonnement déjà EXPIRE (seul un réabonnement est pertinent dans ce cas)
+  const peutMigrerFormule = abonnementARenouveler?.statut === "ACTIF";
+  const formuleActuelleAbonnement = useMemo(
+    () => familleSelectionnee?.formules.find((f) => f.idFormule === abonnementARenouveler?.idFormule) ?? null,
+    [familleSelectionnee, abonnementARenouveler]
+  );
 
   // un kit (matériel neuf de recrutement) n'a pas sa place dans un réabonnement —
   // l'échange de matériel (panne/vol, 7.3) est une action séparée, voir plus bas
@@ -193,9 +205,11 @@ export function CaissePage({ onNaviguer, abonneInitial, idFamilleInitiale }: Pro
           formuleSelectionnee={formuleSelectionnee}
           kitSelectionne={kitSelectionne}
           numeroAbonnementARenouveler={abonnementARenouveler?.numeroAbonnement ?? null}
+          peutMigrerFormule={peutMigrerFormule}
           enCours={enCours}
           onValider={valider}
           onEchangerMateriel={() => setEchangeMaterielOuvert(true)}
+          onChangerFormule={() => setChangerFormuleOuvert(true)}
         />
       </div>
 
@@ -203,6 +217,17 @@ export function CaissePage({ onNaviguer, abonneInitial, idFamilleInitiale }: Pro
         numeroAbonnement={echangeMaterielOuvert ? (abonnementARenouveler?.numeroAbonnement ?? null) : null}
         onFerme={() => setEchangeMaterielOuvert(false)}
         onSucces={() => setEchangeMaterielOuvert(false)}
+      />
+
+      <ChangerFormuleDialog
+        numeroAbonnement={changerFormuleOuvert ? (abonnementARenouveler?.numeroAbonnement ?? null) : null}
+        formuleActuelle={formuleActuelleAbonnement}
+        formulesFamille={familleSelectionnee?.formules ?? []}
+        onFerme={() => setChangerFormuleOuvert(false)}
+        onSucces={() => {
+          setChangerFormuleOuvert(false);
+          rechargerAbonnementsAbonne();
+        }}
       />
 
       <PaiementMobileMoneyDialog

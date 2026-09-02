@@ -75,6 +75,17 @@ describe("construireFiche360 (8.1)", () => {
     expect(fiche.commissionsCanalplus[0].statut).toBe("EN_COURS");
   });
 
+  it("trie les factures de la plus récente à la plus ancienne", () => {
+    const idAbonne = creerAbonne(db, { siteId, nom: "Nga", prenom: "Paul", telephone: "690000000" }).idAbonne;
+
+    const premiere = recruterAbonne(db, { siteId, userId, aujourdHui: "2025-11-16", abonne: { idAbonne }, idFormule: idFormuleCanalplus, montantEncaisse: 10500 });
+    const seconde = recruterAbonne(db, { siteId, userId, aujourdHui: "2025-11-16", abonne: { idAbonne }, idFormule: idFormuleDstv, montantEncaisse: 13000 });
+
+    const fiche = construireFiche360(db, idAbonne);
+
+    expect(fiche.factures.map((f) => f.idFacture)).toEqual([seconde.idFacture, premiere.idFacture]);
+  });
+
   it("un abonné sans apporteur renvoie apporteur: null", () => {
     const idAbonne = creerAbonne(db, { siteId, nom: "Nga", prenom: "Paul", telephone: "690000000" }).idAbonne;
 

@@ -1,4 +1,4 @@
-import { eq, inArray } from "drizzle-orm";
+import { desc, eq, inArray } from "drizzle-orm";
 import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
 import { trouverAbonne } from "./abonne.repository.js";
@@ -60,7 +60,8 @@ export function construireFiche360(db: Db, idAbonne: number): Fiche360 {
       ? db.select().from(schema.materielAbonne).where(inArray(schema.materielAbonne.numeroAbonnement, numerosAbonnement)).all()
       : [];
 
-  const factures = db.select().from(schema.facture).where(eq(schema.facture.idAbonne, idAbonne)).all();
+  // 9.4 : la plus récente en tête, pour repérer d'un coup d'œil ce qui reste à encaisser
+  const factures = db.select().from(schema.facture).where(eq(schema.facture.idAbonne, idAbonne)).orderBy(desc(schema.facture.idFacture)).all();
   const idsFactures = factures.map((f) => f.idFacture);
   const paiements = idsFactures.length > 0 ? db.select().from(schema.paiement).where(inArray(schema.paiement.idFacture, idsFactures)).all() : [];
 

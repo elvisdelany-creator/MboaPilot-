@@ -15,7 +15,8 @@ import { EchangeMaterielDialog } from "@/components/caisse/EchangeMaterielDialog
 import { ChangerFormuleDialog } from "@/components/caisse/ChangerFormuleDialog";
 import { ModifierAbonneDialog } from "./ModifierAbonneDialog";
 import { FusionDoublonsDialog } from "./FusionDoublonsDialog";
-import type { Abonne, AbonnementAvecFormule, CatalogueFamille, Fiche360 } from "@/lib/types";
+import type { Abonne, AbonnementAvecFormule, CatalogueFamille, Facture, Fiche360 } from "@/lib/types";
+import { cn } from "@/lib/utils";
 
 interface Props {
   onNaviguer: (vue: Vue) => void;
@@ -54,6 +55,7 @@ export function ClientsPage({ onNaviguer, onReabonnerDepuisFiche }: Props) {
   const [fusionPrincipal, setFusionPrincipal] = useState<Abonne | null>(null);
   const [echangeMaterielCible, setEchangeMaterielCible] = useState<number | null>(null);
   const [changerFormuleCible, setChangerFormuleCible] = useState<AbonnementAvecFormule | null>(null);
+  const [filtreFacture, setFiltreFacture] = useState<"toutes" | "impayees">("toutes");
 
   function gererErreur(erreur: unknown, messageParDefaut: string) {
     if (erreur instanceof ErreurAuthentification) {
@@ -112,6 +114,13 @@ export function ClientsPage({ onNaviguer, onReabonnerDepuisFiche }: Props) {
     setEchangeMaterielCible(null);
     setChangerFormuleCible(null);
     if (idSelectionne !== null) rechargerFiche(idSelectionne);
+  }
+
+  // 9.4 : solde éventuel — montant restant dû sur une facture, quel que
+  // soit son statut (une facture VALIDÉE peut rester partiellement encaissée)
+  function soldeFacture(f: Facture) {
+    const totalPaye = (fiche?.paiements ?? []).filter((p) => p.idFacture === f.idFacture).reduce((total, p) => total + p.montant, 0);
+    return f.montantTotal - totalPaye;
   }
 
   return (
@@ -284,39 +293,74 @@ export function ClientsPage({ onNaviguer, onReabonnerDepuisFiche }: Props) {
                   </ul>
                 </TabsContent>
 
-                <TabsContent value="facturation" forceMount className="space-y-2 print:mb-6">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Factures ({fiche.factures.length})</p>
-                  {fiche.factures.length === 0 && <p className="text-sm text-muted-foreground">Aucune facture.</p>}
-                  <ul className="space-y-2">
-                    {fiche.factures.map((f) => {
-                      const paiementsFacture = fiche.paiements.filter((p) => p.idFacture === f.idFacture);
-                      const totalPaye = paiementsFacture.reduce((total, p) => total + p.montant, 0);
-                      const solde = f.montantTotal - totalPaye;
-                      return (
-                        <li key={f.idFacture}>
-                          <Card className="gap-1.5 p-3">
-                            <div className="flex items-center justify-between text-sm">
-                              <span className="text-muted-foreground">
-                                Facture n° {f.idFacture} — {formateurDate.format(new Date(f.dateCreation))}
-                              </span>
-                              <span className="flex items-center gap-2">
-                                <span className="tabular-nums font-medium text-card-foreground">{formateurFcfa.format(f.montantTotal)} FCFA</span>
-                                <Badge variant={f.statut === "VALIDEE" ? "default" : "secondary"}>{f.statut === "VALIDEE" ? "Validée" : "Brouillon"}</Badge>
-                              </span>
-                            </div>
-                            {paiementsFacture.map((p) => (
-                              <p key={p.idPaiement} className="pl-3 text-xs text-muted-foreground">
-                                {formateurDateHeure.format(new Date(p.datePaiement))} — {LIBELLE_MODE_PAIEMENT[p.mode]} — {formateurFcfa.format(p.montant)} FCFA
-                              </p>
-                            ))}
-                            {solde > 0 && (
-                              <p className="pl-3 text-xs font-medium text-alert-j3-fg">Solde dû : {formateurFcfa.format(solde)} FCFA</p>
-                            )}
-                          </Card>
-                        </li>
-                      );
-                    })}
-                  </ul>
+                <TabsContent value="facturation" forceMount className="space-y-3 print:mb-6">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Factures ({fiche.factures.length})</p>
+                    <div className="no-print flex gap-1">
+                      <Button variant={filtreFacture === "toutes" ? "default" : "outline"} size="sm" className="cursor-pointer" onClick={() => setFiltreFacture("toutes")}>
+                        Toutes
+                      </Button>
+                      <Button
+                        variant={filtreFacture === "impayees" ? "default" : "outline"}
+                        size="sm"
+                        className="cursor-pointer"
+                        onClick={() => setFiltreFacture("impayees")}
+                      >
+                        Impayées ({fiche.factures.filter((f) => soldeFacture(f) > 0).length})
+                      </Button>
+                    </div>
+                  </div>
+
+                  {(() => {
+                    const soldeTotal = fiche.factures.reduce((total, f) => total + soldeFacture(f), 0);
+                    return (
+                      soldeTotal > 0 && (
+                        <p className="text-sm font-medium text-alert-j1-fg">Solde total dû : {formateurFcfa.format(soldeTotal)} FCFA</p>
+                      )
+                    );
+                  })()}
+
+                  {(() => {
+                    const facturesAffichees = filtreFacture === "impayees" ? fiche.factures.filter((f) => soldeFacture(f) > 0) : fiche.factures;
+                    if (fiche.factures.length === 0) return <p className="text-sm text-muted-foreground">Aucune facture.</p>;
+                    if (facturesAffichees.length === 0) return <p className="text-sm text-muted-foreground">Aucune facture impayée.</p>;
+                    return (
+                      <ul className="space-y-2">
+                        {facturesAffichees.map((f) => {
+                          const paiementsFacture = fiche.paiements.filter((p) => p.idFacture === f.idFacture);
+                          const solde = soldeFacture(f);
+                          const impayee = f.statut === "BROUILLON" && solde > 0;
+                          return (
+                            <li key={f.idFacture}>
+                              <Card className={cn("gap-1.5 p-3", impayee && "border-alert-j1-fg/30 bg-alert-j1-bg/25")}>
+                                <div className="flex items-center justify-between text-sm">
+                                  <span className="text-muted-foreground">
+                                    Facture n° {f.idFacture} — {formateurDate.format(new Date(f.dateCreation))}
+                                  </span>
+                                  <span className="flex items-center gap-2">
+                                    <span className="tabular-nums font-medium text-card-foreground">{formateurFcfa.format(f.montantTotal)} FCFA</span>
+                                    <Badge variant={f.statut === "VALIDEE" ? "default" : impayee ? "destructive" : "secondary"}>
+                                      {f.statut === "VALIDEE" ? "Validée" : impayee ? "Brouillon — en attente" : "Brouillon"}
+                                    </Badge>
+                                  </span>
+                                </div>
+                                {paiementsFacture.map((p) => (
+                                  <p key={p.idPaiement} className="pl-3 text-xs text-muted-foreground">
+                                    {formateurDateHeure.format(new Date(p.datePaiement))} — {LIBELLE_MODE_PAIEMENT[p.mode]} — {formateurFcfa.format(p.montant)} FCFA
+                                  </p>
+                                ))}
+                                {solde > 0 && (
+                                  <p className={cn("pl-3 text-xs font-medium", impayee ? "text-alert-j1-fg" : "text-alert-j3-fg")}>
+                                    Solde dû : {formateurFcfa.format(solde)} FCFA
+                                  </p>
+                                )}
+                              </Card>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    );
+                  })()}
                 </TabsContent>
 
                 <TabsContent value="sav" forceMount className="space-y-2 print:mb-6">

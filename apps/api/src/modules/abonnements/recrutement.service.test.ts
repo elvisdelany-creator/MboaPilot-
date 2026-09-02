@@ -187,3 +187,68 @@ describe("recruterAbonne (7.1)", () => {
     expect(tousLesAbonnes).toHaveLength(1);
   });
 });
+
+describe("recruterAbonne — apporteur d'affaires (6.3 : lien permanent abonné ↔ apporteur)", () => {
+  it("un nouvel abonné recruté pour le compte d'un apporteur reçoit le lien permanent dès la création", () => {
+    const apporteur = db.insert(schema.sousDistributeur).values({ nom: "Jean Apporteur" }).returning().get();
+
+    const resultat = recruterAbonne(db, {
+      siteId,
+      userId,
+      aujourdHui: "2025-11-16",
+      abonne: { nom: "Nga Ndongo", prenom: "Valentin", telephone: "690000000" },
+      idFormule: formuleDstvCompaq,
+      montantEncaisse: 13000,
+      apporteurId: apporteur.idApporteur,
+    });
+
+    const abonnement = db.select().from(schema.abonnement).where(eq(schema.abonnement.numeroAbonnement, resultat.numeroAbonnement)).get();
+    const abonne = db.select().from(schema.abonne).where(eq(schema.abonne.idAbonne, abonnement!.idAbonne)).get();
+    expect(abonne?.apporteurId).toBe(apporteur.idApporteur);
+    expect(abonnement?.apporteurId).toBe(apporteur.idApporteur);
+  });
+
+  it("un abonné existant déjà lié à un apporteur transmet ce lien à un nouveau recrutement sans le repréciser", () => {
+    const apporteur = db.insert(schema.sousDistributeur).values({ nom: "Jean Apporteur" }).returning().get();
+    const abonneExistant = db
+      .insert(schema.abonne)
+      .values({ siteId, nom: "Existant", prenom: "Client", telephone: "699999999", apporteurId: apporteur.idApporteur })
+      .returning()
+      .get();
+
+    const resultat = recruterAbonne(db, {
+      siteId,
+      userId,
+      aujourdHui: "2025-11-16",
+      abonne: { idAbonne: abonneExistant.idAbonne },
+      idFormule: formuleDstvCompaq,
+      montantEncaisse: 13000,
+      // pas d'apporteurId fourni : doit être hérité du lien permanent de l'abonné
+    });
+
+    const abonnement = db.select().from(schema.abonnement).where(eq(schema.abonnement.numeroAbonnement, resultat.numeroAbonnement)).get();
+    expect(abonnement?.apporteurId).toBe(apporteur.idApporteur);
+  });
+
+  it("un apporteurId fourni pour un abonné existant ne modifie jamais son lien permanent (6.3)", () => {
+    const abonneExistant = db
+      .insert(schema.abonne)
+      .values({ siteId, nom: "Existant", prenom: "Client", telephone: "699999999" })
+      .returning()
+      .get();
+    const apporteur = db.insert(schema.sousDistributeur).values({ nom: "Jean Apporteur" }).returning().get();
+
+    recruterAbonne(db, {
+      siteId,
+      userId,
+      aujourdHui: "2025-11-16",
+      abonne: { idAbonne: abonneExistant.idAbonne },
+      idFormule: formuleDstvCompaq,
+      montantEncaisse: 13000,
+      apporteurId: apporteur.idApporteur,
+    });
+
+    const abonne = db.select().from(schema.abonne).where(eq(schema.abonne.idAbonne, abonneExistant.idAbonne)).get();
+    expect(abonne?.apporteurId).toBeNull();
+  });
+});

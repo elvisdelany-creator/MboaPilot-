@@ -478,3 +478,76 @@ describe("Module SAV (5.10, 8.4)", () => {
     expect(reponse.statusCode).toBe(403);
   });
 });
+
+describe("Module apporteur d'affaires (6.3)", () => {
+  it("un administrateur crée un apporteur, un caissier peut le lister (choix au recrutement)", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    creerUtilisateur(db, { siteId, nom: "Admin", prenom: "D", identifiant: "admin1", motDePasse: "motdepasse-secret", role: "ADMINISTRATEUR" });
+    const tokenAdmin = await connecter(app, "admin1");
+
+    const creation = await app.inject({
+      method: "POST",
+      url: "/api/v1/apporteurs",
+      headers: authHeader(tokenAdmin),
+      payload: { nom: "Jean Apporteur", tauxCommissionDefaut: 500 },
+    });
+    expect(creation.statusCode).toBe(201);
+
+    const tokenCaissier = await connecter(app);
+    const liste = await app.inject({ method: "GET", url: "/api/v1/apporteurs", headers: authHeader(tokenCaissier) });
+    expect(liste.statusCode).toBe(200);
+    expect(liste.json()).toHaveLength(1);
+  });
+
+  it("un caissier ne peut pas créer d'apporteur (403)", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const token = await connecter(app);
+
+    const reponse = await app.inject({
+      method: "POST",
+      url: "/api/v1/apporteurs",
+      headers: authHeader(token),
+      payload: { nom: "Jean Apporteur" },
+    });
+
+    expect(reponse.statusCode).toBe(403);
+  });
+
+  it("un apporteur consulte sa propre fiche mais pas celle d'un autre apporteur", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    creerUtilisateur(db, { siteId, nom: "Admin", prenom: "D", identifiant: "admin1", motDePasse: "motdepasse-secret", role: "ADMINISTRATEUR" });
+    const tokenAdmin = await connecter(app, "admin1");
+
+    const apporteurA = (
+      await app.inject({ method: "POST", url: "/api/v1/apporteurs", headers: authHeader(tokenAdmin), payload: { nom: "Apporteur A" } })
+    ).json();
+    const apporteurB = (
+      await app.inject({ method: "POST", url: "/api/v1/apporteurs", headers: authHeader(tokenAdmin), payload: { nom: "Apporteur B" } })
+    ).json();
+
+    creerUtilisateur(db, {
+      siteId,
+      nom: "Compte",
+      prenom: "ApporteurA",
+      identifiant: "apporteurA",
+      motDePasse: "motdepasse-secret",
+      role: "APPORTEUR",
+      idApporteur: apporteurA.idApporteur,
+    });
+    const tokenApporteurA = await connecter(app, "apporteurA");
+
+    const propreFiche = await app.inject({
+      method: "GET",
+      url: `/api/v1/apporteurs/${apporteurA.idApporteur}/fiche`,
+      headers: authHeader(tokenApporteurA),
+    });
+    expect(propreFiche.statusCode).toBe(200);
+
+    const ficheAutrui = await app.inject({
+      method: "GET",
+      url: `/api/v1/apporteurs/${apporteurB.idApporteur}/fiche`,
+      headers: authHeader(tokenApporteurA),
+    });
+    expect(ficheAutrui.statusCode).toBe(403);
+  });
+});

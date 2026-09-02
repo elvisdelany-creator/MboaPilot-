@@ -68,12 +68,14 @@ export interface Utilisateur {
   prenom: string;
   identifiant: string;
   role: Role;
+  idApporteur: number | null;
 }
 
 export interface NouvelAbonne {
   nom: string;
   prenom: string;
   telephone: string;
+  apporteurId?: number; // 6.3 : lien permanent renseigné à la création, non modifiable ensuite
 }
 
 export interface RecrutementResultat {
@@ -147,4 +149,31 @@ export interface ChangerStatutSavResultat {
   idFacture: number | null;
   montantFacture: number | null;
   statutFacture: "BROUILLON" | "VALIDEE" | null;
+}
+
+export interface Apporteur {
+  idApporteur: number;
+  nom: string;
+  telephone: string | null;
+  tauxCommissionDefaut: number | null;
+  actif: number;
+}
+
+export type StatutCommission = "EN_COURS" | "CONFIRMEE" | "ANNULEE";
+
+export interface SuiviCommissionCanalplus {
+  idSuivi: number;
+  numeroAbonnement: number;
+  vendeurId: number | null;
+  apporteurId: number | null;
+  montantCommission: number;
+  dateFinProbatoire: string;
+  statut: StatutCommission;
+}
+
+export interface FicheApporteur {
+  apporteur: Apporteur;
+  abonnes: Abonne[];
+  chiffreAffaires: number;
+  commissionsCanalplus: SuiviCommissionCanalplus[];
 }

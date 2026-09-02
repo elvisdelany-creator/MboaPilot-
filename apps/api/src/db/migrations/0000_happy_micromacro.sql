@@ -287,9 +287,11 @@ CREATE TABLE `utilisateur` (
 	`identifiant` text NOT NULL,
 	`mot_de_passe_hash` text NOT NULL,
 	`role` text NOT NULL,
+	`id_apporteur` integer,
 	`actif` integer DEFAULT 1 NOT NULL,
 	`date_creation` text DEFAULT (datetime('now')) NOT NULL,
-	FOREIGN KEY (`site_id`) REFERENCES `site`(`id_site`) ON UPDATE no action ON DELETE no action
+	FOREIGN KEY (`site_id`) REFERENCES `site`(`id_site`) ON UPDATE no action ON DELETE no action,
+	FOREIGN KEY (`id_apporteur`) REFERENCES `sous_distributeur`(`id_apporteur`) ON UPDATE no action ON DELETE no action
 );
 --> statement-breakpoint
 CREATE UNIQUE INDEX `idx_utilisateur_identifiant` ON `utilisateur` (`identifiant`);

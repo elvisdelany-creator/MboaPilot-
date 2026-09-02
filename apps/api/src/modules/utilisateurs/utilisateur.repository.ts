@@ -14,6 +14,7 @@ export interface CreerUtilisateurInput {
   identifiant: string;
   motDePasse: string;
   role: Role;
+  idApporteur?: number; // requis en pratique pour un compte de rôle APPORTEUR (2.5.1, 6.3)
 }
 
 // 2.5.1, 11.2 : mot de passe haché (bcrypt), jamais stocké ni journalisé en clair
@@ -28,6 +29,7 @@ export function creerUtilisateur(db: Db, input: CreerUtilisateurInput) {
       identifiant: input.identifiant,
       motDePasseHash,
       role: input.role,
+      idApporteur: input.idApporteur,
     })
     .returning()
     .get();

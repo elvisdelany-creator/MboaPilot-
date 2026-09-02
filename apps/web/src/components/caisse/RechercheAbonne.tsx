@@ -3,9 +3,10 @@ import { Search, UserPlus, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { rechercherAbonnes } from "@/lib/api";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { chargerApporteurs, rechercherAbonnes } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
-import type { Abonne, NouvelAbonne } from "@/lib/types";
+import type { Abonne, Apporteur, NouvelAbonne } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 interface Props {
@@ -14,12 +15,16 @@ interface Props {
   onSelectionner: (abonne: Abonne | NouvelAbonne | null) => void;
 }
 
+const AUCUN_APPORTEUR = "aucun";
+
 export function RechercheAbonne({ siteId, abonneSelectionne, onSelectionner }: Props) {
   const { session } = useAuth();
   const [terme, setTerme] = useState("");
   const [resultats, setResultats] = useState<Abonne[]>([]);
   const [formulaireOuvert, setFormulaireOuvert] = useState(false);
-  const [nouveau, setNouveau] = useState<NouvelAbonne>({ nom: "", prenom: "", telephone: "" });
+  const [nouveau, setNouveau] = useState({ nom: "", prenom: "", telephone: "" });
+  const [idApporteur, setIdApporteur] = useState(AUCUN_APPORTEUR);
+  const [apporteurs, setApporteurs] = useState<Apporteur[]>([]);
 
   // recherche unifiée (4.5) — débounce simple pour ne pas spammer l'API à chaque frappe
   useEffect(() => {
@@ -34,6 +39,14 @@ export function RechercheAbonne({ siteId, abonneSelectionne, onSelectionner }: P
     }, 200);
     return () => clearTimeout(identifiant);
   }, [terme, siteId, abonneSelectionne, session]);
+
+  // 6.3 : liste des apporteurs pour le lien permanent, renseigné à la création du client
+  useEffect(() => {
+    if (!formulaireOuvert || !session) return;
+    chargerApporteurs(session.token)
+      .then(setApporteurs)
+      .catch(() => setApporteurs([]));
+  }, [formulaireOuvert, session]);
 
   if (abonneSelectionne) {
     const libelle =
@@ -138,15 +151,38 @@ export function RechercheAbonne({ siteId, abonneSelectionne, onSelectionner }: P
                 className="mt-1"
               />
             </div>
+            {apporteurs.length > 0 && (
+              <div className="col-span-2">
+                <Label htmlFor="nouveau-apporteur">Apporteur d'affaires (optionnel)</Label>
+                <Select value={idApporteur} onValueChange={setIdApporteur}>
+                  <SelectTrigger id="nouveau-apporteur" className="mt-1 w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={AUCUN_APPORTEUR}>Aucun</SelectItem>
+                    {apporteurs.map((a) => (
+                      <SelectItem key={a.idApporteur} value={String(a.idApporteur)}>
+                        {a.nom}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="mt-1 text-xs text-muted-foreground">Lien définitif — non modifiable après création (6.3).</p>
+              </div>
+            )}
           </div>
           <Button
             type="button"
             className="mt-3 w-full cursor-pointer"
             disabled={!nouveau.nom || !nouveau.prenom || !nouveau.telephone}
             onClick={() => {
-              onSelectionner(nouveau);
+              onSelectionner({
+                ...nouveau,
+                apporteurId: idApporteur === AUCUN_APPORTEUR ? undefined : Number(idApporteur),
+              });
               setFormulaireOuvert(false);
               setNouveau({ nom: "", prenom: "", telephone: "" });
+              setIdApporteur(AUCUN_APPORTEUR);
             }}
           >
             Confirmer le nouveau client

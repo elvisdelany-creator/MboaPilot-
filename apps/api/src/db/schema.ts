@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer, primaryKey, index, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, primaryKey, index, uniqueIndex, type AnySQLiteColumn } from "drizzle-orm/sqlite-core";
 import { sql } from "drizzle-orm";
 
 const now = sql`(datetime('now'))`;
@@ -32,6 +32,9 @@ export const utilisateur = sqliteTable("utilisateur", {
   role: text("role", {
     enum: ["ADMINISTRATEUR", "GERANT", "CAISSIER", "TECHNICIEN_SAV", "COMPTABLE", "APPORTEUR"],
   }).notNull(),
+  // relie un compte de rôle APPORTEUR à sa fiche sous_distributeur, pour que
+  // l'accès en lecture restreinte (2.5.1) sache "quels sont ses propres abonnés"
+  idApporteur: integer("id_apporteur").references((): AnySQLiteColumn => sousDistributeur.idApporteur),
   actif: integer("actif").notNull().default(1),
   dateCreation: text("date_creation").notNull().default(now),
 }, (t) => ({

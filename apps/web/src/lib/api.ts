@@ -2,11 +2,13 @@ import type {
   AlerteEcheance,
   Abonne,
   Abonnement,
+  Apporteur,
   CatalogueFamille,
   ChangerStatutSavResultat,
   DossierSav,
   DossierSavDetaille,
   EchangeMaterielResultat,
+  FicheApporteur,
   NouvelAbonne,
   Produit,
   RecrutementResultat,
@@ -76,6 +78,7 @@ export interface RecruterPayload {
   idFormule: number;
   idKit?: number;
   montantEncaisse: number;
+  apporteurId?: number;
 }
 
 export async function recruter(token: string, payload: RecruterPayload): Promise<RecrutementResultat> {
@@ -200,4 +203,43 @@ export async function changerStatutSavRequete(
     body: JSON.stringify(payload),
   });
   return lireJson<ChangerStatutSavResultat>(reponse);
+}
+
+// 6.3 : sous-distributeurs et apporteurs d'affaires
+export async function chargerApporteurs(token: string): Promise<Apporteur[]> {
+  const reponse = await fetch(`${BASE}/apporteurs`, { headers: headersAuth(token) });
+  return lireJson<Apporteur[]>(reponse);
+}
+
+export interface CreerApporteurPayload {
+  nom: string;
+  telephone?: string;
+  tauxCommissionDefaut?: number;
+}
+
+export async function creerApporteurRequete(token: string, payload: CreerApporteurPayload): Promise<Apporteur> {
+  const reponse = await fetch(`${BASE}/apporteurs`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headersAuth(token) },
+    body: JSON.stringify(payload),
+  });
+  return lireJson<Apporteur>(reponse);
+}
+
+export async function modifierApporteurRequete(
+  token: string,
+  idApporteur: number,
+  payload: { actif?: boolean; tauxCommissionDefaut?: number }
+): Promise<Apporteur> {
+  const reponse = await fetch(`${BASE}/apporteurs/${idApporteur}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...headersAuth(token) },
+    body: JSON.stringify(payload),
+  });
+  return lireJson<Apporteur>(reponse);
+}
+
+export async function chargerFicheApporteur(token: string, idApporteur: number): Promise<FicheApporteur> {
+  const reponse = await fetch(`${BASE}/apporteurs/${idApporteur}/fiche`, { headers: headersAuth(token) });
+  return lireJson<FicheApporteur>(reponse);
 }

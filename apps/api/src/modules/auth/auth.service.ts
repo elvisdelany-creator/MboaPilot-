@@ -14,6 +14,7 @@ export interface UtilisateurAuthentifie {
   prenom: string;
   identifiant: string;
   role: Role;
+  idApporteur: number | null; // 2.5.1 : identifie "ses propres abonnés" pour le rôle APPORTEUR
 }
 
 // 2.5.1, 11.2 : authentification individuelle, message générique pour ne pas

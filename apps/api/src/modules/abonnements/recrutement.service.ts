@@ -29,10 +29,20 @@ const LIBELLE_FAMILLE_CANALPLUS = "CANAL+";
 
 // 7.1 : création d'un nouvel abonnement, pour un abonné nouveau ou existant
 export function recruterAbonne(db: Db, params: RecruterAbonneParams): RecrutementResultat {
+  // 6.3 : le lien apporteur↔abonné n'est renseigné qu'à la création de l'abonné,
+  // jamais modifié ensuite par un recrutement — seul un abonné existant transmet
+  // son lien permanent (hérité) au recrutement en cours si aucun n'est précisé.
+  let apporteurIdEffectif = params.apporteurId;
+
   const idAbonne =
     "idAbonne" in params.abonne
       ? params.abonne.idAbonne
-      : creerAbonne(db, { siteId: params.siteId, ...params.abonne }).idAbonne;
+      : creerAbonne(db, { siteId: params.siteId, ...params.abonne, apporteurId: params.apporteurId }).idAbonne;
+
+  if ("idAbonne" in params.abonne && apporteurIdEffectif === undefined) {
+    const abonneExistant = db.select().from(schema.abonne).where(eq(schema.abonne.idAbonne, idAbonne)).get();
+    apporteurIdEffectif = abonneExistant?.apporteurId ?? undefined;
+  }
 
   const formule = db.select().from(schema.formule).where(eq(schema.formule.idFormule, params.idFormule)).get();
   if (!formule) throw new Error(`Formule ${params.idFormule} introuvable`);
@@ -54,7 +64,7 @@ export function recruterAbonne(db: Db, params: RecruterAbonneParams): Recrutemen
       siteId: params.siteId,
       dateDebut,
       dateFin,
-      apporteurId: params.apporteurId,
+      apporteurId: apporteurIdEffectif,
       creePar: params.userId,
     })
     .returning()
@@ -99,7 +109,7 @@ export function recruterAbonne(db: Db, params: RecruterAbonneParams): Recrutemen
         .values({
           numeroAbonnement: abonnement.numeroAbonnement,
           vendeurId: params.userId,
-          apporteurId: params.apporteurId,
+          apporteurId: apporteurIdEffectif,
           montantCommission: params.montantCommissionCanalplus ?? 0,
           dateFinProbatoire,
         })

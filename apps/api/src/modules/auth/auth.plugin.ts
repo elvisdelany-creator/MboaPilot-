@@ -4,8 +4,8 @@ import type { Role } from "../utilisateurs/utilisateur.repository.js";
 
 declare module "@fastify/jwt" {
   interface FastifyJWT {
-    payload: { idUser: number; siteId: number; role: Role };
-    user: { idUser: number; siteId: number; role: Role };
+    payload: { idUser: number; siteId: number; role: Role; idApporteur: number | null };
+    user: { idUser: number; siteId: number; role: Role; idApporteur: number | null };
   }
 }
 

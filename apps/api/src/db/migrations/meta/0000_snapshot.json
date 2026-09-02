@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "6c8b2976-37a6-4bb0-bb3d-0e2a558bced6",
+  "id": "55eeb942-ece2-4dc2-a5f9-3c66d00087df",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "abonne": {
@@ -2076,6 +2076,13 @@
           "notNull": true,
           "autoincrement": false
         },
+        "id_apporteur": {
+          "name": "id_apporteur",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "actif": {
           "name": "actif",
           "type": "integer",
@@ -2112,6 +2119,19 @@
           ],
           "columnsTo": [
             "id_site"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "utilisateur_id_apporteur_sous_distributeur_id_apporteur_fk": {
+          "name": "utilisateur_id_apporteur_sous_distributeur_id_apporteur_fk",
+          "tableFrom": "utilisateur",
+          "tableTo": "sous_distributeur",
+          "columnsFrom": [
+            "id_apporteur"
+          ],
+          "columnsTo": [
+            "id_apporteur"
           ],
           "onDelete": "no action",
           "onUpdate": "no action"

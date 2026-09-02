@@ -123,6 +123,9 @@ export function CaissePage({ onNaviguer, abonneInitial, idFamilleInitiale }: Pro
             idFormule: formuleSelectionnee.idFormule,
             idKit: kitSelectionne?.idKit,
             montantEncaisse,
+            // 6.3 : lien permanent — uniquement renseigné à la création d'un nouveau client,
+            // un abonné existant hérite déjà de son apporteur côté serveur
+            apporteurId: "idAbonne" in abonneSelectionne ? undefined : abonneSelectionne.apporteurId,
           });
 
       const operation = abonnementARenouveler ? "Réabonnement" : "Recrutement";

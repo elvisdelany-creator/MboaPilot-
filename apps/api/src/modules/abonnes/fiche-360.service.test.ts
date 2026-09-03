@@ -52,7 +52,7 @@ describe("construireFiche360 (8.1)", () => {
   });
 
   it("inclut les paiements de chaque facture et les commissions CANAL+ en cours", () => {
-    const apporteur = creerApporteur(db, { nom: "Jean Apporteur" });
+    const apporteur = creerApporteur(db, { nom: "Jean Apporteur", tauxCommissionDefaut: 100 }); // 10 %
     const idAbonne = creerAbonne(db, { siteId, nom: "Nga", prenom: "Paul", telephone: "690000000", apporteurId: apporteur.idApporteur }).idAbonne;
 
     recruterAbonne(db, {
@@ -63,7 +63,6 @@ describe("construireFiche360 (8.1)", () => {
       idFormule: idFormuleCanalplus,
       montantEncaisse: 10500,
       apporteurId: apporteur.idApporteur,
-      montantCommissionCanalplus: 1000,
     });
 
     const fiche = construireFiche360(db, idAbonne);
@@ -71,7 +70,7 @@ describe("construireFiche360 (8.1)", () => {
     expect(fiche.paiements).toHaveLength(1);
     expect(fiche.paiements[0].montant).toBe(10500);
     expect(fiche.commissionsCanalplus).toHaveLength(1);
-    expect(fiche.commissionsCanalplus[0].montantCommission).toBe(1000);
+    expect(fiche.commissionsCanalplus[0].montantCommission).toBe(1050); // 10 % de 10500
     expect(fiche.commissionsCanalplus[0].statut).toBe("EN_COURS");
   });
 

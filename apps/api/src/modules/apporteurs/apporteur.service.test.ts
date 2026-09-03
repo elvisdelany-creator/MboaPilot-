@@ -38,7 +38,6 @@ describe("construireFicheApporteur (6.3)", () => {
       idFormule: idFormuleCanal,
       montantEncaisse: 10500,
       apporteurId: apporteur.idApporteur,
-      montantCommissionCanalplus: 1000,
     });
     recruterAbonne(db, {
       siteId,
@@ -66,7 +65,7 @@ describe("construireFicheApporteur (6.3)", () => {
     expect(fiche.chiffreAffaires).toBe(23500); // 10500 + 13000
     expect(fiche.commissionsCanalplus).toHaveLength(1);
     expect(fiche.commissionsCanalplus[0].statut).toBe("EN_COURS");
-    expect(fiche.commissionsCanalplus[0].montantCommission).toBe(1000);
+    expect(fiche.commissionsCanalplus[0].montantCommission).toBe(5250); // 50 % (taux de l'apporteur) de 10500
   });
 
   it("rejette un apporteur inconnu", () => {

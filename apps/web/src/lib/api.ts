@@ -747,10 +747,11 @@ export async function chargerInfosEntreprise(token: string): Promise<InfosEntrep
   return lireJson<InfosEntreprise>(reponse);
 }
 
-// 6.1, 8.8 : taux de TVA (le cas échéant) et mentions légales des documents commerciaux
+// 6.1, 6.2, 8.8 : taux de TVA (le cas échéant), mentions légales des
+// documents commerciaux et taux de commission vendeur par défaut
 export async function modifierEntrepriseRequete(
   token: string,
-  payload: { tauxTva?: number | null; mentionsLegales?: string | null }
+  payload: { tauxTva?: number | null; mentionsLegales?: string | null; tauxCommissionVendeurDefaut?: number | null }
 ): Promise<InfosEntreprise["entreprise"]> {
   const reponse = await fetch(`${BASE}/entreprise`, {
     method: "PATCH",

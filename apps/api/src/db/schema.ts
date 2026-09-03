@@ -15,6 +15,10 @@ export const entreprise = sqliteTable("entreprise", {
   // par défaut, aucune obligation présumée pour l'utilisateur
   tauxTva: integer("taux_tva_centiemes_pourcent"),
   mentionsLegales: text("mentions_legales"),
+  // 6.2, 8.8 : taux de commission vendeur par défaut (pour-mille, comme
+  // sous_distributeur.taux_commission_defaut) — appliqué lors d'un
+  // recrutement CANAL+ sans apporteur d'affaires référent
+  tauxCommissionVendeurDefaut: integer("taux_commission_vendeur_defaut_pourmille"),
   dateCreation: text("date_creation").notNull().default(now),
 });
 

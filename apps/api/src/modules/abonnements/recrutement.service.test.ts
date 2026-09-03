@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { eq } from "drizzle-orm";
 import { creerDbTest, type Db } from "../../test-utils/db.js";
 import { recruterAbonne } from "./recrutement.service.js";
+import { creerApporteur } from "../apporteurs/apporteur.repository.js";
 import * as schema from "../../db/schema.js";
 
 let db: Db;
@@ -72,6 +73,9 @@ beforeEach(() => {
 
 describe("recruterAbonne (7.1)", () => {
   it("recrutement CANAL+ avec kit, payé comptant -> abonnement ACTIF, facture VALIDEE, commission en cours", () => {
+    // 6.2, 8.8 : taux vendeur par défaut de l'entreprise, appliqué en l'absence d'apporteur référent
+    db.update(schema.entreprise).set({ tauxCommissionVendeurDefaut: 100 }).run(); // 10 %
+
     const resultat = recruterAbonne(db, {
       siteId,
       userId,
@@ -80,7 +84,6 @@ describe("recruterAbonne (7.1)", () => {
       idFormule: formuleToutCanalPlus,
       idKit: kitGlobalZ,
       montantEncaisse: 57000, // 28000 (formule) + 29000 (kit : 1000 + 0 + 28000)
-      montantCommissionCanalplus: 5000,
     });
 
     expect(resultat.statutFacture).toBe("VALIDEE");
@@ -114,9 +117,49 @@ describe("recruterAbonne (7.1)", () => {
       .all();
     expect(suivis).toHaveLength(1);
     expect(suivis[0].statut).toBe("EN_COURS");
-    expect(suivis[0].montantCommission).toBe(5000);
+    expect(suivis[0].montantCommission).toBe(5700); // 10 % de 57000 (montant_total)
     // 6.2 : période probatoire de 4 mois (119 jours) à partir du recrutement
     expect(suivis[0].dateFinProbatoire).toBe("2026-03-15");
+  });
+
+  it("applique le taux de l'apporteur référent plutôt que le taux vendeur par défaut, quand les deux sont configurés", () => {
+    db.update(schema.entreprise).set({ tauxCommissionVendeurDefaut: 100 }).run(); // 10 %
+    const apporteur = creerApporteur(db, { nom: "Jean Apporteur", tauxCommissionDefaut: 200 }); // 20 %
+
+    const resultat = recruterAbonne(db, {
+      siteId,
+      userId,
+      aujourdHui: "2025-11-16",
+      abonne: { nom: "Nga Ndongo", prenom: "Valentin", telephone: "690000000" },
+      idFormule: formuleToutCanalPlus,
+      montantEncaisse: 28000,
+      apporteurId: apporteur.idApporteur,
+    });
+
+    const suivi = db
+      .select()
+      .from(schema.suiviCommissionCanalplus)
+      .where(eq(schema.suiviCommissionCanalplus.numeroAbonnement, resultat.numeroAbonnement))
+      .get();
+    expect(suivi?.montantCommission).toBe(5600); // 20 % de 28000, pas 10 %
+  });
+
+  it("sans aucun taux configuré (ni apporteur, ni vendeur par défaut), la commission est nulle", () => {
+    const resultat = recruterAbonne(db, {
+      siteId,
+      userId,
+      aujourdHui: "2025-11-16",
+      abonne: { nom: "Nga Ndongo", prenom: "Valentin", telephone: "690000000" },
+      idFormule: formuleToutCanalPlus,
+      montantEncaisse: 28000,
+    });
+
+    const suivi = db
+      .select()
+      .from(schema.suiviCommissionCanalplus)
+      .where(eq(schema.suiviCommissionCanalplus.numeroAbonnement, resultat.numeroAbonnement))
+      .get();
+    expect(suivi?.montantCommission).toBe(0);
   });
 
   it("sans encaissement, la facture reste BROUILLON et aucun suivi de commission n'est créé", () => {

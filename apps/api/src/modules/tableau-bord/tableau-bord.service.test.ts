@@ -107,7 +107,6 @@ describe("listerCommissionsCanalplusEnCours (8.6, 6.2)", () => {
       idFormule,
       montantEncaisse: 10500,
       apporteurId: apporteur.idApporteur,
-      montantCommissionCanalplus: 1000,
     });
 
     const commissions = listerCommissionsCanalplusEnCours(db, siteId);

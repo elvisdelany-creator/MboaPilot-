@@ -551,6 +551,36 @@ describe("Module apporteur d'affaires (6.3)", () => {
     });
     expect(ficheAutrui.statusCode).toBe(403);
   });
+
+  it("un recrutement CANAL+ calcule automatiquement la commission à partir du taux vendeur par défaut (6.2, 8.8)", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    creerUtilisateur(db, { siteId, nom: "Admin", prenom: "D", identifiant: "admin1", motDePasse: "motdepasse-secret", role: "ADMINISTRATEUR" });
+    const tokenAdmin = await connecter(app, "admin1");
+    const famille = db.insert(schema.familleAbonnement).values({ libelle: "CANAL+" }).returning().get();
+    const evasion = db.insert(schema.formule).values({ idFamille: famille.idFamille, libelle: "EVASION", prix: 10500, rang: 2 }).returning().get();
+
+    await app.inject({
+      method: "PATCH",
+      url: "/api/v1/entreprise",
+      headers: authHeader(tokenAdmin),
+      payload: { tauxCommissionVendeurDefaut: 100 }, // 10 %
+    });
+
+    const recrutement = await app.inject({
+      method: "POST",
+      url: "/api/v1/recrutements",
+      headers: authHeader(tokenAdmin),
+      payload: { siteId, userId, aujourdHui: "2025-11-16", abonne: { nom: "Nga", prenom: "Paul", telephone: "690000000" }, idFormule: evasion.idFormule, montantEncaisse: 10500 },
+    });
+    expect(recrutement.statusCode).toBe(201);
+
+    const abonnes = await app.inject({ method: "GET", url: `/api/v1/abonnes?siteId=${siteId}&q=690000000`, headers: authHeader(tokenAdmin) });
+    const idAbonne = abonnes.json()[0].idAbonne;
+
+    const fiche = await app.inject({ method: "GET", url: `/api/v1/abonnes/${idAbonne}/fiche-360`, headers: authHeader(tokenAdmin) });
+    expect(fiche.json().commissionsCanalplus).toHaveLength(1);
+    expect(fiche.json().commissionsCanalplus[0].montantCommission).toBe(1050); // 10 % de 10500
+  });
 });
 
 describe("Module suivi de stock (5.2)", () => {
@@ -1459,14 +1489,16 @@ describe("GET /api/v1/entreprise (6.7)", () => {
       method: "PATCH",
       url: "/api/v1/entreprise",
       headers: authHeader(tokenAdmin),
-      payload: { tauxTva: 1925, mentionsLegales: "RC/DLA/2024/B/1234" },
+      payload: { tauxTva: 1925, mentionsLegales: "RC/DLA/2024/B/1234", tauxCommissionVendeurDefaut: 100 },
     });
     expect(modification.statusCode).toBe(200);
     expect(modification.json().tauxTva).toBe(1925);
+    expect(modification.json().tauxCommissionVendeurDefaut).toBe(100);
 
     const reponse = await app.inject({ method: "GET", url: "/api/v1/entreprise", headers: authHeader(tokenAdmin) });
     expect(reponse.json().entreprise.tauxTva).toBe(1925);
     expect(reponse.json().entreprise.mentionsLegales).toBe("RC/DLA/2024/B/1234");
+    expect(reponse.json().entreprise.tauxCommissionVendeurDefaut).toBe(100);
   });
 
   it("un caissier ne peut pas modifier le taux de TVA ni les mentions légales (403)", async () => {

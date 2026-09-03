@@ -5,6 +5,8 @@ import * as schema from "../../db/schema.js";
 import { creerAbonne, type AbonneInput } from "../abonnes/abonne.repository.js";
 import { construireKitCalcul } from "../catalogue/kit-mapper.js";
 import { compterEcransOccupes, trouverComptePartage } from "../comptes-partages/compte-partage.repository.js";
+import { trouverApporteur } from "../apporteurs/apporteur.repository.js";
+import { trouverTauxCommissionVendeurParSite } from "../entreprise/entreprise.repository.js";
 
 export interface RecruterAbonneParams {
   siteId: number;
@@ -16,7 +18,6 @@ export interface RecruterAbonneParams {
   dateDebut?: string;
   montantEncaisse: number;
   apporteurId?: number;
-  montantCommissionCanalplus?: number; // taux vendeur/apporteur — fourni par le paramétrage (8.8)
   idComptePartage?: number; // 5.9 : écran/profil affecté sur un compte streaming mutualisé
 }
 
@@ -119,12 +120,20 @@ export function recruterAbonne(db: Db, params: RecruterAbonneParams): Recrutemen
     // 6.2 : uniquement sur un recrutement CANAL+ validé (encaissé), jamais un réabonnement
     if (famille?.libelle === LIBELLE_FAMILLE_CANALPLUS) {
       const dateFinProbatoire = calculerDateFin(dateDebut, DUREE_PROBATION_CANALPLUS_CYCLES, "STRICT_30J");
+      // 6.2, 8.8 : montant_commission = calculer_commission(...) — taux de
+      // l'apporteur référent s'il est renseigné (et configuré), sinon taux
+      // vendeur par défaut de l'entreprise ; 0 si rien n'est paramétré
+      const tauxPourMille =
+        (apporteurIdEffectif !== undefined ? trouverApporteur(db, apporteurIdEffectif)?.tauxCommissionDefaut : undefined) ??
+        trouverTauxCommissionVendeurParSite(db, params.siteId) ??
+        0;
+      const montantCommission = Math.round((montantTotal * tauxPourMille) / 1000);
       db.insert(schema.suiviCommissionCanalplus)
         .values({
           numeroAbonnement: abonnement.numeroAbonnement,
           vendeurId: params.userId,
           apporteurId: apporteurIdEffectif,
-          montantCommission: params.montantCommissionCanalplus ?? 0,
+          montantCommission,
           dateFinProbatoire,
         })
         .run();

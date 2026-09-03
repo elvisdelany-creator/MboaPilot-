@@ -72,6 +72,8 @@ export interface InfosEntreprise {
     // 6.1, 8.8 : taux en centièmes de %, ex. 1925 = 19,25 % ; null = pas de taxe applicable
     tauxTva: number | null;
     mentionsLegales: string | null;
+    // 6.2, 8.8 : taux en pour-mille, comme ComptePartage/apporteur ; null = non configuré
+    tauxCommissionVendeurDefaut: number | null;
   };
   site: { idSite: number; nom: string; adresse: string | null };
 }

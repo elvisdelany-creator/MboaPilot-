@@ -1,0 +1,1 @@
+ALTER TABLE `entreprise` ADD `taux_commission_vendeur_defaut_pourmille` integer;

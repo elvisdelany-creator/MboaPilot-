@@ -197,3 +197,100 @@ export function delierOptionFormule(db: Db, idFormule: number, idOption: number)
     .where(and(eq(schema.formuleOptionCompat.idFormule, idFormule), eq(schema.formuleOptionCompat.idOption, idOption)))
     .run();
 }
+
+// 5.1.1, 8.8 : règles de prix dynamique des kits — les trois variantes
+// (PRIX_FIXE, PRIX_DECODEUR_VARIABLE_SELON_FORMULE, PRIX_KIT_FIXE_PAR_DIFFERENTIEL)
+// portent chacune un sous-ensemble de champs différent, laissés optionnels ici.
+export interface CreerKitInput {
+  idFamille: number;
+  libelle: string;
+  reglePrix: "PRIX_FIXE" | "PRIX_DECODEUR_VARIABLE_SELON_FORMULE" | "PRIX_KIT_FIXE_PAR_DIFFERENTIEL";
+  prixFixe?: number;
+  prixParaboleAccessoires?: number;
+  idFormuleReference?: number;
+  prixKitReference?: number;
+}
+
+export function creerKit(db: Db, input: CreerKitInput) {
+  return db
+    .insert(schema.kit)
+    .values({
+      idFamille: input.idFamille,
+      libelle: input.libelle,
+      reglePrix: input.reglePrix,
+      prixFixe: input.prixFixe,
+      ...(input.prixParaboleAccessoires !== undefined && { prixParaboleAccessoires: input.prixParaboleAccessoires }),
+      idFormuleReference: input.idFormuleReference,
+      prixKitReference: input.prixKitReference,
+    })
+    .returning()
+    .get();
+}
+
+export interface ModifierKitInput {
+  libelle?: string;
+  reglePrix?: "PRIX_FIXE" | "PRIX_DECODEUR_VARIABLE_SELON_FORMULE" | "PRIX_KIT_FIXE_PAR_DIFFERENTIEL";
+  prixFixe?: number;
+  prixParaboleAccessoires?: number;
+  idFormuleReference?: number;
+  prixKitReference?: number;
+}
+
+export function modifierKit(db: Db, idKit: number, input: ModifierKitInput) {
+  return db
+    .update(schema.kit)
+    .set({
+      ...(input.libelle !== undefined && { libelle: input.libelle }),
+      ...(input.reglePrix !== undefined && { reglePrix: input.reglePrix }),
+      ...(input.prixFixe !== undefined && { prixFixe: input.prixFixe }),
+      ...(input.prixParaboleAccessoires !== undefined && { prixParaboleAccessoires: input.prixParaboleAccessoires }),
+      ...(input.idFormuleReference !== undefined && { idFormuleReference: input.idFormuleReference }),
+      ...(input.prixKitReference !== undefined && { prixKitReference: input.prixKitReference }),
+    })
+    .where(eq(schema.kit.idKit, idKit))
+    .returning()
+    .get();
+}
+
+// 8.8 : kits d'une famille pour le back-office (lignes brutes, à la
+// différence de listerCatalogue qui les enrichit pour le calcul de prix, 5.1.1)
+export function listerKits(db: Db, idFamille: number) {
+  return db.select().from(schema.kit).where(eq(schema.kit.idFamille, idFamille)).all();
+}
+
+export interface DefinirPrixDecodeurInput {
+  idKit: number;
+  idFormule: number;
+  prixDecodeur: number;
+}
+
+// grille de prix décodeur par formule (règle PRIX_DECODEUR_VARIABLE_SELON_FORMULE) —
+// idempotent, comme lierOptionFormule
+export function definirPrixDecodeurKit(db: Db, input: DefinirPrixDecodeurInput) {
+  const existant = db
+    .select()
+    .from(schema.kitPrixDecodeur)
+    .where(and(eq(schema.kitPrixDecodeur.idKit, input.idKit), eq(schema.kitPrixDecodeur.idFormule, input.idFormule)))
+    .get();
+
+  if (existant) {
+    return db
+      .update(schema.kitPrixDecodeur)
+      .set({ prixDecodeur: input.prixDecodeur })
+      .where(and(eq(schema.kitPrixDecodeur.idKit, input.idKit), eq(schema.kitPrixDecodeur.idFormule, input.idFormule)))
+      .returning()
+      .get();
+  }
+
+  return db
+    .insert(schema.kitPrixDecodeur)
+    .values({ idKit: input.idKit, idFormule: input.idFormule, prixDecodeur: input.prixDecodeur })
+    .returning()
+    .get();
+}
+
+export function supprimerPrixDecodeurKit(db: Db, idKit: number, idFormule: number) {
+  db.delete(schema.kitPrixDecodeur)
+    .where(and(eq(schema.kitPrixDecodeur.idKit, idKit), eq(schema.kitPrixDecodeur.idFormule, idFormule)))
+    .run();
+}

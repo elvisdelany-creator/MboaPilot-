@@ -3,15 +3,20 @@ import { creerDbTest, type Db } from "../../test-utils/db.js";
 import {
   creerFamille,
   creerFormule,
+  creerKit,
   creerOption,
   delierOptionFormule,
+  definirPrixDecodeurKit,
   lierOptionFormule,
   listerCatalogue,
   listerFamilles,
   listerFormules,
+  listerKits,
   listerOptions,
   modifierFormule,
+  modifierKit,
   modifierOption,
+  supprimerPrixDecodeurKit,
 } from "./catalogue.repository.js";
 import * as schema from "../../db/schema.js";
 
@@ -184,6 +189,76 @@ describe("Back-office catalogue (8.8) : familles, formules, options — sans int
 
       expect(modifiee?.libelle).toBe("Bouquet Sport Premium");
       expect(modifiee?.prix).toBe(2500);
+    });
+  });
+
+  describe("creerKit / modifierKit / listerKits (5.1.1)", () => {
+    it("crée un kit à prix fixe et le retrouve dans la liste de sa famille", () => {
+      const fam = db.insert(schema.familleAbonnement).values({ libelle: "24H SPORT" }).returning().get();
+
+      const kit = creerKit(db, { idFamille: fam.idFamille, libelle: "KIT 24H SPORT", reglePrix: "PRIX_FIXE", prixFixe: 30000 });
+
+      expect(kit.reglePrix).toBe("PRIX_FIXE");
+      const kits = listerKits(db, fam.idFamille);
+      expect(kits).toHaveLength(1);
+      expect(kits[0].prixFixe).toBe(30000);
+    });
+
+    it("crée un kit à différentiel par rapport à une formule de référence", () => {
+      const fam = db.insert(schema.familleAbonnement).values({ libelle: "DSTV" }).returning().get();
+      const compaq = creerFormule(db, { idFamille: fam.idFamille, libelle: "COMPAQ", prix: 13000, rang: 3 });
+
+      const kit = creerKit(db, {
+        idFamille: fam.idFamille,
+        libelle: "KIT DSTV COMPAQ",
+        reglePrix: "PRIX_KIT_FIXE_PAR_DIFFERENTIEL",
+        idFormuleReference: compaq.idFormule,
+        prixKitReference: 55000,
+      });
+
+      expect(kit.idFormuleReference).toBe(compaq.idFormule);
+      expect(kit.prixKitReference).toBe(55000);
+    });
+
+    it("modifie le libellé et le prix fixe d'un kit", () => {
+      const fam = db.insert(schema.familleAbonnement).values({ libelle: "MOREPLEX" }).returning().get();
+      const kit = creerKit(db, { idFamille: fam.idFamille, libelle: "KIT MOREPLEX", reglePrix: "PRIX_FIXE", prixFixe: 30000 });
+
+      const modifie = modifierKit(db, kit.idKit, { libelle: "KIT MOREPLEX v2", prixFixe: 32000 });
+
+      expect(modifie?.libelle).toBe("KIT MOREPLEX v2");
+      expect(modifie?.prixFixe).toBe(32000);
+    });
+
+    it("renvoie undefined pour un kit inconnu", () => {
+      expect(modifierKit(db, 999999, { prixFixe: 1000 })).toBeUndefined();
+    });
+  });
+
+  describe("definirPrixDecodeurKit / supprimerPrixDecodeurKit (5.1.1)", () => {
+    it("définit puis retire un prix décodeur pour une formule, reflété dans le catalogue de vente", () => {
+      const fam = db.insert(schema.familleAbonnement).values({ libelle: "CANAL+" }).returning().get();
+      const evasion = creerFormule(db, { idFamille: fam.idFamille, libelle: "EVASION", prix: 10500, rang: 2 });
+      const kit = creerKit(db, { idFamille: fam.idFamille, libelle: "KIT CANAL+ GLOBALZ", reglePrix: "PRIX_DECODEUR_VARIABLE_SELON_FORMULE" });
+
+      definirPrixDecodeurKit(db, { idKit: kit.idKit, idFormule: evasion.idFormule, prixDecodeur: 5000 });
+      const catalogue = listerCatalogue(db);
+      const kitVente = catalogue.find((f) => f.idFamille === fam.idFamille)!.kits[0];
+      expect(kitVente.reglePrix).toBe("PRIX_DECODEUR_VARIABLE_SELON_FORMULE");
+      if (kitVente.reglePrix === "PRIX_DECODEUR_VARIABLE_SELON_FORMULE") {
+        expect(kitVente.prixDecodeurParFormule[evasion.idFormule]).toBe(5000);
+      }
+
+      // idempotent : redéfinir la même paire met à jour, ne duplique pas
+      definirPrixDecodeurKit(db, { idKit: kit.idKit, idFormule: evasion.idFormule, prixDecodeur: 6000 });
+      expect(listerKits(db, fam.idFamille)[0]).toBeDefined();
+
+      supprimerPrixDecodeurKit(db, kit.idKit, evasion.idFormule);
+      const catalogueApres = listerCatalogue(db);
+      const kitApres = catalogueApres.find((f) => f.idFamille === fam.idFamille)!.kits[0];
+      if (kitApres.reglePrix === "PRIX_DECODEUR_VARIABLE_SELON_FORMULE") {
+        expect(kitApres.prixDecodeurParFormule[evasion.idFormule]).toBeUndefined();
+      }
     });
   });
 });

@@ -1325,6 +1325,111 @@ describe("Back-office catalogue : familles, formules, options (8.8)", () => {
   });
 });
 
+describe("Back-office catalogue : règles de prix dynamique des kits (5.1.1, 8.8)", () => {
+  it("un administrateur crée un kit à différentiel, le modifie, et le catalogue de vente reflète le changement", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    creerUtilisateur(db, { siteId, nom: "Admin", prenom: "D", identifiant: "admin1", motDePasse: "motdepasse-secret", role: "ADMINISTRATEUR" });
+    const tokenAdmin = await connecter(app, "admin1");
+    const famille = db.insert(schema.familleAbonnement).values({ libelle: "STARTIMES" }).returning().get();
+    const compaq = db.insert(schema.formule).values({ idFamille: famille.idFamille, libelle: "COMPAQ", prix: 13000, rang: 3 }).returning().get();
+
+    const creation = await app.inject({
+      method: "POST",
+      url: "/api/v1/catalogue/kits",
+      headers: authHeader(tokenAdmin),
+      payload: { idFamille: famille.idFamille, libelle: "KIT DSTV COMPAQ", reglePrix: "PRIX_KIT_FIXE_PAR_DIFFERENTIEL", idFormuleReference: compaq.idFormule, prixKitReference: 55000 },
+    });
+    expect(creation.statusCode).toBe(201);
+    const idKit = creation.json().idKit;
+
+    const catalogue = await app.inject({ method: "GET", url: "/api/v1/catalogue", headers: authHeader(tokenAdmin) });
+    const kitVente = catalogue.json().find((f: { idFamille: number }) => f.idFamille === famille.idFamille).kits[0];
+    expect(kitVente.reglePrix).toBe("PRIX_KIT_FIXE_PAR_DIFFERENTIEL");
+    expect(kitVente.prixKitReference).toBe(55000);
+
+    const modification = await app.inject({
+      method: "PATCH",
+      url: `/api/v1/catalogue/kits/${idKit}`,
+      headers: authHeader(tokenAdmin),
+      payload: { prixKitReference: 58000 },
+    });
+    expect(modification.statusCode).toBe(200);
+    expect(modification.json().prixKitReference).toBe(58000);
+
+    const listeBackOffice = await app.inject({ method: "GET", url: `/api/v1/catalogue/kits?idFamille=${famille.idFamille}`, headers: authHeader(tokenAdmin) });
+    expect(listeBackOffice.statusCode).toBe(200);
+    expect(listeBackOffice.json()).toHaveLength(1);
+  });
+
+  it("définit puis retire un prix décodeur par formule sur un kit à prix variable", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    creerUtilisateur(db, { siteId, nom: "Admin", prenom: "D", identifiant: "admin1", motDePasse: "motdepasse-secret", role: "ADMINISTRATEUR" });
+    const tokenAdmin = await connecter(app, "admin1");
+    const famille = db.insert(schema.familleAbonnement).values({ libelle: "CANAL+" }).returning().get();
+    const evasion = db.insert(schema.formule).values({ idFamille: famille.idFamille, libelle: "EVASION", prix: 10500, rang: 2 }).returning().get();
+    const kit = (
+      await app.inject({
+        method: "POST",
+        url: "/api/v1/catalogue/kits",
+        headers: authHeader(tokenAdmin),
+        payload: { idFamille: famille.idFamille, libelle: "KIT CANAL+ GLOBALZ", reglePrix: "PRIX_DECODEUR_VARIABLE_SELON_FORMULE" },
+      })
+    ).json();
+
+    const definition = await app.inject({
+      method: "POST",
+      url: "/api/v1/catalogue/kits/prix-decodeur",
+      headers: authHeader(tokenAdmin),
+      payload: { idKit: kit.idKit, idFormule: evasion.idFormule, prixDecodeur: 5000 },
+    });
+    expect(definition.statusCode).toBe(200);
+
+    const catalogue = await app.inject({ method: "GET", url: "/api/v1/catalogue", headers: authHeader(tokenAdmin) });
+    const kitVente = catalogue.json().find((f: { idFamille: number }) => f.idFamille === famille.idFamille).kits[0];
+    expect(kitVente.prixDecodeurParFormule[evasion.idFormule]).toBe(5000);
+
+    const suppression = await app.inject({
+      method: "DELETE",
+      url: `/api/v1/catalogue/kits/${kit.idKit}/prix-decodeur/${evasion.idFormule}`,
+      headers: authHeader(tokenAdmin),
+    });
+    expect(suppression.statusCode).toBe(204);
+
+    const catalogueApres = await app.inject({ method: "GET", url: "/api/v1/catalogue", headers: authHeader(tokenAdmin) });
+    const kitApres = catalogueApres.json().find((f: { idFamille: number }) => f.idFamille === famille.idFamille).kits[0];
+    expect(kitApres.prixDecodeurParFormule[evasion.idFormule]).toBeUndefined();
+  });
+
+  it("un caissier ne peut ni créer ni modifier de kit (403)", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const token = await connecter(app);
+    const famille = db.insert(schema.familleAbonnement).values({ libelle: "MOREPLEX" }).returning().get();
+
+    const creation = await app.inject({
+      method: "POST",
+      url: "/api/v1/catalogue/kits",
+      headers: authHeader(token),
+      payload: { idFamille: famille.idFamille, libelle: "KIT X", reglePrix: "PRIX_FIXE", prixFixe: 30000 },
+    });
+    expect(creation.statusCode).toBe(403);
+  });
+
+  it("renvoie 404 pour la modification d'un kit inconnu", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    creerUtilisateur(db, { siteId, nom: "Admin", prenom: "D", identifiant: "admin1", motDePasse: "motdepasse-secret", role: "ADMINISTRATEUR" });
+    const tokenAdmin = await connecter(app, "admin1");
+
+    const reponse = await app.inject({
+      method: "PATCH",
+      url: "/api/v1/catalogue/kits/999999",
+      headers: authHeader(tokenAdmin),
+      payload: { prixFixe: 1000 },
+    });
+
+    expect(reponse.statusCode).toBe(404);
+  });
+});
+
 describe("GET /api/v1/entreprise (6.7)", () => {
   it("renvoie l'entreprise et le site pour l'en-tête des documents commerciaux, à tout rôle authentifié", async () => {
     const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });

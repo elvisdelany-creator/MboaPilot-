@@ -21,6 +21,7 @@ import type {
   HistoriquePrixProduit,
   IndicateursJour,
   InfosEntreprise,
+  KitBrut,
   MargeType,
   NouvelAbonne,
   OptionCatalogue,
@@ -665,6 +666,72 @@ export async function lierOptionFormuleRequete(
 
 export async function delierOptionFormuleRequete(token: string, idOption: number, idFormule: number): Promise<void> {
   const reponse = await fetch(`${BASE}/catalogue/options/${idOption}/compat/${idFormule}`, {
+    method: "DELETE",
+    headers: headersAuth(token),
+  });
+  if (!reponse.ok) {
+    const corps = await reponse.json().catch(() => ({}));
+    throw new Error(corps?.erreur ?? "Erreur inattendue");
+  }
+}
+
+// 5.1.1, 8.8 : back-office des règles de prix dynamique des kits
+export async function chargerKits(token: string, idFamille: number): Promise<KitBrut[]> {
+  const reponse = await fetch(`${BASE}/catalogue/kits?idFamille=${idFamille}`, { headers: headersAuth(token) });
+  return lireJson<KitBrut[]>(reponse);
+}
+
+export interface CreerKitPayload {
+  idFamille: number;
+  libelle: string;
+  reglePrix: "PRIX_FIXE" | "PRIX_DECODEUR_VARIABLE_SELON_FORMULE" | "PRIX_KIT_FIXE_PAR_DIFFERENTIEL";
+  prixFixe?: number;
+  prixParaboleAccessoires?: number;
+  idFormuleReference?: number;
+  prixKitReference?: number;
+}
+
+export async function creerKitRequete(token: string, payload: CreerKitPayload): Promise<KitBrut> {
+  const reponse = await fetch(`${BASE}/catalogue/kits`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headersAuth(token) },
+    body: JSON.stringify(payload),
+  });
+  return lireJson<KitBrut>(reponse);
+}
+
+export interface ModifierKitPayload {
+  libelle?: string;
+  reglePrix?: "PRIX_FIXE" | "PRIX_DECODEUR_VARIABLE_SELON_FORMULE" | "PRIX_KIT_FIXE_PAR_DIFFERENTIEL";
+  prixFixe?: number;
+  prixParaboleAccessoires?: number;
+  idFormuleReference?: number;
+  prixKitReference?: number;
+}
+
+export async function modifierKitRequete(token: string, idKit: number, payload: ModifierKitPayload): Promise<KitBrut> {
+  const reponse = await fetch(`${BASE}/catalogue/kits/${idKit}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...headersAuth(token) },
+    body: JSON.stringify(payload),
+  });
+  return lireJson<KitBrut>(reponse);
+}
+
+export async function definirPrixDecodeurKitRequete(
+  token: string,
+  payload: { idKit: number; idFormule: number; prixDecodeur: number }
+): Promise<void> {
+  const reponse = await fetch(`${BASE}/catalogue/kits/prix-decodeur`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headersAuth(token) },
+    body: JSON.stringify(payload),
+  });
+  await lireJson(reponse);
+}
+
+export async function supprimerPrixDecodeurKitRequete(token: string, idKit: number, idFormule: number): Promise<void> {
+  const reponse = await fetch(`${BASE}/catalogue/kits/${idKit}/prix-decodeur/${idFormule}`, {
     method: "DELETE",
     headers: headersAuth(token),
   });

@@ -2,14 +2,18 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Plus } from "lucide-react";
 import {
+  chargerCatalogue,
   chargerFamilles,
   chargerFormulesFamille,
+  chargerKits,
   chargerOptions,
   creerFamilleRequete,
+  definirPrixDecodeurKitRequete,
   delierOptionFormuleRequete,
   ErreurAuthentification,
   lierOptionFormuleRequete,
   modifierFormuleRequete,
+  supprimerPrixDecodeurKitRequete,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
@@ -20,30 +24,41 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Separator } from "@/components/ui/separator";
 import { NouvelleFormuleDialog } from "./NouvelleFormuleDialog";
 import { NouvelleOptionDialog } from "./NouvelleOptionDialog";
-import type { Famille, Formule, OptionCatalogue } from "@/lib/types";
+import { NouveauKitDialog } from "./NouveauKitDialog";
+import type { CatalogueFamille, Famille, Formule, KitBrut, OptionCatalogue } from "@/lib/types";
 
 const formateurFcfa = new Intl.NumberFormat("fr-FR");
 const LIBELLES_MODE_DUREE: Record<"STRICT_30J" | "MOIS_CIVIL", string> = { STRICT_30J: "30 jours stricts", MOIS_CIVIL: "Mois civil" };
+const LIBELLES_REGLE_PRIX: Record<KitBrut["reglePrix"], string> = {
+  PRIX_FIXE: "Prix fixe",
+  PRIX_DECODEUR_VARIABLE_SELON_FORMULE: "Décodeur variable selon formule",
+  PRIX_KIT_FIXE_PAR_DIFFERENTIEL: "Fixe par différentiel",
+};
 
 // 8.8 : back-office catalogue — familles, formules (prix, rang, mode de
-// calcul de validité 4.1) et options/compléments, sans intervention
-// développeur. L'édition des règles de prix dynamique des kits (5.1.1)
-// reste hors périmètre de cette itération.
+// calcul de validité 4.1), kits (règles de prix dynamique, 5.1.1) et
+// options/compléments, sans intervention développeur.
 export function CatalogueTab() {
   const { session, deconnecter } = useAuth();
   const token = session!.token;
 
   const [familles, setFamilles] = useState<Famille[]>([]);
   const [formulesParFamille, setFormulesParFamille] = useState<Record<number, Formule[]>>({});
+  const [kitsParFamille, setKitsParFamille] = useState<Record<number, KitBrut[]>>({});
+  const [catalogueVente, setCatalogueVente] = useState<CatalogueFamille[]>([]);
   const [options, setOptions] = useState<OptionCatalogue[]>([]);
   const [nouvelleFamille, setNouvelleFamille] = useState("");
   const [enCoursFamille, setEnCoursFamille] = useState(false);
   const [formuleDialogFamilleId, setFormuleDialogFamilleId] = useState<number | null>(null);
   const [formuleEnEdition, setFormuleEnEdition] = useState<Formule | null>(null);
+  const [kitDialogFamilleId, setKitDialogFamilleId] = useState<number | null>(null);
+  const [kitEnEdition, setKitEnEdition] = useState<KitBrut | null>(null);
   const [optionDialogOuvert, setOptionDialogOuvert] = useState(false);
   const [optionEnEdition, setOptionEnEdition] = useState<OptionCatalogue | null>(null);
   const [liaisonFormuleId, setLiaisonFormuleId] = useState<Record<number, string>>({});
   const [liaisonPrixSurcharge, setLiaisonPrixSurcharge] = useState<Record<number, string>>({});
+  const [grilleFormuleId, setGrilleFormuleId] = useState<Record<number, string>>({});
+  const [grillePrix, setGrillePrix] = useState<Record<number, string>>({});
 
   function gererErreur(erreur: unknown, messageParDefaut: string) {
     if (erreur instanceof ErreurAuthentification) {
@@ -61,8 +76,17 @@ export function CatalogueTab() {
         Promise.all(liste.map((f) => chargerFormulesFamille(token, f.idFamille).then((formules) => [f.idFamille, formules] as const)))
           .then((paires) => setFormulesParFamille(Object.fromEntries(paires)))
           .catch(() => {});
+        Promise.all(liste.map((f) => chargerKits(token, f.idFamille).then((kits) => [f.idFamille, kits] as const)))
+          .then((paires) => setKitsParFamille(Object.fromEntries(paires)))
+          .catch(() => {});
       })
       .catch((e) => gererErreur(e, "Impossible de charger les familles."));
+  }
+
+  function rechargerCatalogueVente() {
+    chargerCatalogue(token)
+      .then(setCatalogueVente)
+      .catch(() => {});
   }
 
   function rechargerOptions() {
@@ -72,6 +96,7 @@ export function CatalogueTab() {
   }
 
   useEffect(rechargerFamilles, [token]);
+  useEffect(rechargerCatalogueVente, [token]);
   useEffect(rechargerOptions, [token]);
 
   async function creerFamille() {
@@ -95,6 +120,37 @@ export function CatalogueTab() {
       rechargerFamilles();
     } catch (erreur) {
       gererErreur(erreur, "Échec de la mise à jour de la formule.");
+    }
+  }
+
+  // grille de prix décodeur par formule — déjà calculée côté vente
+  // (construireKitCalcul), réutilisée ici plutôt que de dupliquer la logique
+  function grillePrixDecodeur(idFamille: number, idKit: number): Record<number, number> {
+    const kitVente = catalogueVente.find((f) => f.idFamille === idFamille)?.kits.find((k) => k.idKit === idKit);
+    if (kitVente?.reglePrix === "PRIX_DECODEUR_VARIABLE_SELON_FORMULE") return kitVente.prixDecodeurParFormule;
+    return {};
+  }
+
+  async function definirPrixDecodeur(idKit: number) {
+    const idFormule = grilleFormuleId[idKit];
+    const prix = grillePrix[idKit];
+    if (!idFormule || prix === undefined || prix === "") return;
+    try {
+      await definirPrixDecodeurKitRequete(token, { idKit, idFormule: Number(idFormule), prixDecodeur: Number(prix) });
+      setGrilleFormuleId((v) => ({ ...v, [idKit]: "" }));
+      setGrillePrix((v) => ({ ...v, [idKit]: "" }));
+      rechargerCatalogueVente();
+    } catch (erreur) {
+      gererErreur(erreur, "Échec de l'enregistrement du prix décodeur.");
+    }
+  }
+
+  async function supprimerPrixDecodeur(idKit: number, idFormule: number) {
+    try {
+      await supprimerPrixDecodeurKitRequete(token, idKit, idFormule);
+      rechargerCatalogueVente();
+    } catch (erreur) {
+      gererErreur(erreur, "Échec de la suppression du prix décodeur.");
     }
   }
 
@@ -198,6 +254,107 @@ export function CatalogueTab() {
                       </div>
                     </li>
                   ))}
+                </ul>
+
+                <div className="flex items-center justify-between border-t border-border pt-2">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Kits</p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="cursor-pointer gap-1"
+                    onClick={() => {
+                      setKitEnEdition(null);
+                      setKitDialogFamilleId(famille.idFamille);
+                    }}
+                  >
+                    <Plus className="size-3.5" />
+                    Kit
+                  </Button>
+                </div>
+                <ul className="space-y-1.5">
+                  {(kitsParFamille[famille.idFamille] ?? []).length === 0 && <li className="text-sm text-muted-foreground">Aucun kit.</li>}
+                  {(kitsParFamille[famille.idFamille] ?? []).map((k) => {
+                    const grille = grillePrixDecodeur(famille.idFamille, k.idKit);
+                    return (
+                      <li key={k.idKit} className="space-y-2 rounded-md border border-border px-3 py-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="text-sm">
+                            <span className="font-medium text-card-foreground">{k.libelle}</span>
+                            <span className="text-muted-foreground">
+                              {" "}
+                              — {LIBELLES_REGLE_PRIX[k.reglePrix]}
+                              {k.reglePrix === "PRIX_FIXE" && k.prixFixe !== null && ` · ${formateurFcfa.format(k.prixFixe)} FCFA`}
+                              {k.reglePrix === "PRIX_KIT_FIXE_PAR_DIFFERENTIEL" &&
+                                k.prixKitReference !== null &&
+                                ` · ${formateurFcfa.format(k.prixKitReference)} FCFA à ${libelleFormule(k.idFormuleReference!)}`}
+                            </span>
+                          </div>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="cursor-pointer"
+                            onClick={() => {
+                              setKitEnEdition(k);
+                              setKitDialogFamilleId(famille.idFamille);
+                            }}
+                          >
+                            Modifier
+                          </Button>
+                        </div>
+
+                        {k.reglePrix === "PRIX_DECODEUR_VARIABLE_SELON_FORMULE" && (
+                          <div className="space-y-1.5 border-t border-border pt-2">
+                            {Object.entries(grille).map(([idFormuleStr, prix]) => (
+                              <div key={idFormuleStr} className="flex items-center justify-between text-xs text-muted-foreground">
+                                <span>
+                                  {libelleFormule(Number(idFormuleStr))} — {formateurFcfa.format(prix)} FCFA
+                                </span>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-6 cursor-pointer px-2"
+                                  onClick={() => supprimerPrixDecodeur(k.idKit, Number(idFormuleStr))}
+                                >
+                                  Retirer
+                                </Button>
+                              </div>
+                            ))}
+                            <div className="flex items-center gap-2">
+                              <Select value={grilleFormuleId[k.idKit] ?? ""} onValueChange={(v) => setGrilleFormuleId((s) => ({ ...s, [k.idKit]: v }))}>
+                                <SelectTrigger className="h-8 flex-1 text-xs" aria-label={`Formule pour ${k.libelle}`}>
+                                  <SelectValue placeholder="Formule…" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {(formulesParFamille[famille.idFamille] ?? []).map((f) => (
+                                    <SelectItem key={f.idFormule} value={String(f.idFormule)}>
+                                      {f.libelle}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              <Input
+                                type="number"
+                                min={0}
+                                value={grillePrix[k.idKit] ?? ""}
+                                onChange={(e) => setGrillePrix((s) => ({ ...s, [k.idKit]: e.target.value }))}
+                                placeholder="Prix décodeur"
+                                className="h-8 w-32 text-xs"
+                              />
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-8 cursor-pointer px-2 text-xs"
+                                disabled={!grilleFormuleId[k.idKit] || !grillePrix[k.idKit]}
+                                onClick={() => definirPrixDecodeur(k.idKit)}
+                              >
+                                Enregistrer
+                              </Button>
+                            </div>
+                          </div>
+                        )}
+                      </li>
+                    );
+                  })}
                 </ul>
               </Card>
             </li>
@@ -309,6 +466,19 @@ export function CatalogueTab() {
         onSucces={() => {
           setOptionDialogOuvert(false);
           rechargerOptions();
+        }}
+      />
+
+      <NouveauKitDialog
+        ouvert={kitDialogFamilleId !== null}
+        idFamille={kitDialogFamilleId}
+        formulesFamille={kitDialogFamilleId ? (formulesParFamille[kitDialogFamilleId] ?? []) : []}
+        kit={kitEnEdition}
+        onFerme={() => setKitDialogFamilleId(null)}
+        onSucces={() => {
+          setKitDialogFamilleId(null);
+          rechargerFamilles();
+          rechargerCatalogueVente();
         }}
       />
     </div>

@@ -28,6 +28,19 @@ export interface Formule {
 
 export type CatalogueKit = Kit & { idKit: number; idFamille: number; libelle: string };
 
+// 5.1.1, 8.8 : ligne brute d'un kit pour le back-office (à la différence de
+// CatalogueKit, qui est enrichi/calculé pour la vente)
+export interface KitBrut {
+  idKit: number;
+  idFamille: number;
+  libelle: string;
+  reglePrix: "PRIX_FIXE" | "PRIX_DECODEUR_VARIABLE_SELON_FORMULE" | "PRIX_KIT_FIXE_PAR_DIFFERENTIEL";
+  prixFixe: number | null;
+  prixParaboleAccessoires: number;
+  idFormuleReference: number | null;
+  prixKitReference: number | null;
+}
+
 export interface CatalogueFamille {
   idFamille: number;
   libelle: string;

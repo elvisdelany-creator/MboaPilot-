@@ -120,6 +120,22 @@ export const kitPrixDecodeur = sqliteTable("kit_prix_decodeur", {
   pk: primaryKey({ columns: [t.idKit, t.idFormule] }),
 }));
 
+// 5.9 : compte fournisseur mutualisé (Netflix, Prime Vidéo, IPTV…) — plusieurs
+// abonnés MboaPilot occupent chacun un « écran »/profil de ce même compte,
+// avec leur propre date d'expiration individuelle (portée par abonnement.dateFin).
+// Identifiants stockés en clair (pas de coffre-fort de secrets en mode local) —
+// visibilité restreinte aux rôles habilités à la vente au niveau applicatif (11.2).
+export const comptePartageStreaming = sqliteTable("compte_partage_streaming", {
+  idComptePartage: integer("id_compte_partage").primaryKey({ autoIncrement: true }),
+  siteId: integer("site_id").notNull().references(() => site.idSite),
+  idFamille: integer("id_famille").notNull().references(() => familleAbonnement.idFamille),
+  libelle: text("libelle").notNull(), // ex. "Compte Netflix Premium #1"
+  identifiant: text("identifiant"), // email / identifiant de connexion du compte partagé
+  motDePasse: text("mot_de_passe"), // ou code d'accès IPTV
+  nombreEcransMax: integer("nombre_ecrans_max").notNull(),
+  actif: integer("actif").notNull().default(1),
+});
+
 export const abonnement = sqliteTable("abonnement", {
   numeroAbonnement: integer("numero_abonnement").primaryKey({ autoIncrement: true }), // peut changer (échange matériel, 7.3)
   idAbonne: integer("id_abonne").notNull().references(() => abonne.idAbonne),
@@ -131,10 +147,14 @@ export const abonnement = sqliteTable("abonnement", {
   apporteurId: integer("apporteur_id").references(() => sousDistributeur.idApporteur),
   creePar: integer("cree_par").notNull().references(() => utilisateur.idUser),
   dateCreation: text("date_creation").notNull().default(now),
+  // 5.9 : écran/profil occupé sur un compte partagé streaming — NULL pour les
+  // familles satellite/kit, qui n'ont pas ce concept.
+  idComptePartage: integer("id_compte_partage").references(() => comptePartageStreaming.idComptePartage),
 }, (t) => ({
   // pièce technique centrale du tableau de bord d'alertes J-7/J-3/J-1 (4.4)
   echeanceIdx: index("idx_abonnement_echeance").on(t.dateFin, t.statut),
   abonneIdx: index("idx_abonnement_abonne").on(t.idAbonne),
+  comptePartageIdx: index("idx_abonnement_compte_partage").on(t.idComptePartage),
 }));
 
 export const materielAbonne = sqliteTable("materiel_abonne", {

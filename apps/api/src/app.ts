@@ -15,6 +15,7 @@ import type { FournisseurPaiementMobile } from "./modules/paiement-mobile/fourni
 import { registerTableauBordRoutes } from "./modules/tableau-bord/tableau-bord.routes.js";
 import { registerUtilisateursRoutes } from "./modules/utilisateurs/utilisateurs.routes.js";
 import { registerEntrepriseRoutes } from "./modules/entreprise/entreprise.routes.js";
+import { registerComptesPartagesRoutes } from "./modules/comptes-partages/comptes-partages.routes.js";
 
 export interface BuildAppOptions {
   jwtSecret: string;
@@ -50,6 +51,8 @@ export function buildApp(db: Db, options: BuildAppOptions) {
   // 8.6, 9.3 : indicateurs financiers du tableau de bord — vue Administrateur/
   // Gérant/Comptable, distincte des alertes d'échéance/stock ouvertes aux ventes
   const pilotage = exigerRole("ADMINISTRATEUR", "GERANT", "COMPTABLE");
+  // 5.9 : création/édition des comptes partagés streaming réservée à l'encadrement
+  const gestionComptesPartages = exigerRole("ADMINISTRATEUR", "GERANT");
 
   registerAbonnementsRoutes(app, db, { authRequis, ventes });
   registerAbonnesRoutes(app, db, { authRequis, ventes, fusionAbonnes });
@@ -63,6 +66,7 @@ export function buildApp(db: Db, options: BuildAppOptions) {
   registerTableauBordRoutes(app, db, { authRequis, ventes, pilotage });
   registerUtilisateursRoutes(app, db, { authRequis, admin });
   registerEntrepriseRoutes(app, db, { authRequis });
+  registerComptesPartagesRoutes(app, db, { authRequis, ventes, gestionComptesPartages });
 
   return app;
 }

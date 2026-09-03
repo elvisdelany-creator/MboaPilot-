@@ -1,13 +1,22 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { calculerPrixKit } from "@mboapilot/shared";
-import { chargerAbonnementsAbonne, chargerCatalogue, chargerInfosEntreprise, ErreurAuthentification, reabonnerRequete, recruter } from "@/lib/api";
+import {
+  chargerAbonnementsAbonne,
+  chargerCatalogue,
+  chargerComptesPartages,
+  chargerInfosEntreprise,
+  ErreurAuthentification,
+  reabonnerRequete,
+  recruter,
+} from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import type {
   Abonne,
   Abonnement,
   CatalogueFamille,
   CatalogueKit,
+  ComptePartage,
   Formule,
   InfosEntreprise,
   NouvelAbonne,
@@ -42,6 +51,8 @@ export function CaissePage({ onNaviguer, abonneInitial, idFamilleInitiale }: Pro
   const [abonnementsAbonne, setAbonnementsAbonne] = useState<Abonnement[]>([]);
   const [formuleSelectionnee, setFormuleSelectionnee] = useState<Formule | null>(null);
   const [kitSelectionne, setKitSelectionne] = useState<CatalogueKit | null>(null);
+  const [comptesPartages, setComptesPartages] = useState<ComptePartage[]>([]);
+  const [comptePartageSelectionne, setComptePartageSelectionne] = useState<number | null>(null);
   const [enCours, setEnCours] = useState(false);
   const [echangeMaterielOuvert, setEchangeMaterielOuvert] = useState(false);
   const [changerFormuleOuvert, setChangerFormuleOuvert] = useState(false);
@@ -84,6 +95,15 @@ export function CaissePage({ onNaviguer, abonneInitial, idFamilleInitiale }: Pro
       .catch(() => setInfosEntreprise(null));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
+
+  // 5.9 : comptes partagés streaming — chargés une fois pour le site, filtrés
+  // par famille sélectionnée côté affichage (voir comptesPartagesFamille)
+  useEffect(() => {
+    chargerComptesPartages(token, utilisateur.siteId)
+      .then(setComptesPartages)
+      .catch(() => setComptesPartages([]));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token, utilisateur.siteId]);
 
   // 9.2 : dès qu'un abonné existant est sélectionné, on récupère ses abonnements
   // pour savoir si l'opération à venir sera un recrutement ou un réabonnement.
@@ -152,11 +172,27 @@ export function CaissePage({ onNaviguer, abonneInitial, idFamilleInitiale }: Pro
     ...(kitSelectionne ? [{ libelle: kitSelectionne.libelle, montant: prixKit }] : []),
   ];
 
+  // 5.9 : comptes actifs du service actuellement sélectionné — vide pour une
+  // famille satellite classique (aucun compte partagé n'y a jamais été créé)
+  const comptesPartagesFamille = useMemo(
+    () => comptesPartages.filter((c) => c.idFamille === familleSelectionneeId && c.actif === 1),
+    [comptesPartages, familleSelectionneeId]
+  );
+
+  useEffect(() => {
+    setComptePartageSelectionne(null);
+  }, [familleSelectionneeId, formuleSelectionnee]);
+
   function reinitialiserTicket() {
     setFormuleSelectionnee(null);
     setKitSelectionne(null);
     setAbonneSelectionne(null);
     setAbonnementsAbonne([]);
+    setComptePartageSelectionne(null);
+    // 5.9 : un écran vient peut-être d'être occupé — rafraîchit l'occupation affichée
+    chargerComptesPartages(token, utilisateur.siteId)
+      .then(setComptesPartages)
+      .catch(() => {});
   }
 
   async function valider(paiement: PaiementSaisi) {
@@ -187,6 +223,7 @@ export function CaissePage({ onNaviguer, abonneInitial, idFamilleInitiale }: Pro
             // 6.3 : lien permanent — uniquement renseigné à la création d'un nouveau client,
             // un abonné existant hérite déjà de son apporteur côté serveur
             apporteurId: "idAbonne" in abonneSelectionne ? undefined : abonneSelectionne.apporteurId,
+            idComptePartage: comptePartageSelectionne ?? undefined,
           });
 
       const operation = abonnementARenouveler ? "Réabonnement" : "Recrutement";
@@ -277,6 +314,9 @@ export function CaissePage({ onNaviguer, abonneInitial, idFamilleInitiale }: Pro
             kitSelectionne={kitSelectionne}
             numeroAbonnementARenouveler={abonnementARenouveler?.numeroAbonnement ?? null}
             peutMigrerFormule={peutMigrerFormule}
+            comptesPartagesDisponibles={comptesPartagesFamille}
+            comptePartageSelectionne={comptePartageSelectionne}
+            onSelectionnerComptePartage={setComptePartageSelectionne}
             enCours={enCours}
             onValider={valider}
             onEchangerMateriel={() => setEchangeMaterielOuvert(true)}

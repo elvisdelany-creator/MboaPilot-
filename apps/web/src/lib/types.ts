@@ -55,6 +55,24 @@ export interface InfosEntreprise {
   site: { idSite: number; nom: string; adresse: string | null };
 }
 
+// 5.9 : compte fournisseur mutualisé (Netflix, Prime Vidéo, IPTV…)
+export interface ComptePartage {
+  idComptePartage: number;
+  siteId: number;
+  idFamille: number;
+  libelle: string;
+  identifiant: string | null;
+  motDePasse: string | null;
+  nombreEcransMax: number;
+  actif: number;
+  ecransOccupes: number;
+}
+
+export interface FicheComptePartage {
+  compte: ComptePartage;
+  occupants: { numeroAbonnement: number; statut: "ACTIF" | "EXPIRE" | "RESILIE"; dateFin: string; abonne: Abonne }[];
+}
+
 export interface Abonnement {
   numeroAbonnement: number;
   idAbonne: number;

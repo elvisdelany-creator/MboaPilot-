@@ -22,6 +22,13 @@
       "when": 1788329750906,
       "tag": "0002_fair_mimic",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1788429782486,
+      "tag": "0003_little_mulholland_black",
+      "breakpoints": true
     }
   ]
 }

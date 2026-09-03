@@ -252,3 +252,73 @@ describe("recruterAbonne — apporteur d'affaires (6.3 : lien permanent abonné 
     expect(abonne?.apporteurId).toBeNull();
   });
 });
+
+describe("recruterAbonne — compte partagé streaming (5.9)", () => {
+  it("affecte l'abonnement à un écran du compte partagé", () => {
+    const familleNetflix = db.insert(schema.familleAbonnement).values({ libelle: "NETFLIX" }).returning().get().idFamille;
+    const formuleNetflix = db.insert(schema.formule).values({ idFamille: familleNetflix, libelle: "PREMIUM", prix: 3500, rang: 1 }).returning().get().idFormule;
+    const compte = db
+      .insert(schema.comptePartageStreaming)
+      .values({ siteId, idFamille: familleNetflix, libelle: "Compte Netflix #1", nombreEcransMax: 2 })
+      .returning()
+      .get();
+
+    const resultat = recruterAbonne(db, {
+      siteId,
+      userId,
+      aujourdHui: "2025-11-16",
+      abonne: { nom: "Nga", prenom: "Paul", telephone: "690000000" },
+      idFormule: formuleNetflix,
+      montantEncaisse: 3500,
+      idComptePartage: compte.idComptePartage,
+    });
+
+    const abonnement = db.select().from(schema.abonnement).where(eq(schema.abonnement.numeroAbonnement, resultat.numeroAbonnement)).get();
+    expect(abonnement?.idComptePartage).toBe(compte.idComptePartage);
+  });
+
+  it("refuse l'affectation quand le compte partagé est déjà à sa capacité maximale (403 métier)", () => {
+    const familleNetflix = db.insert(schema.familleAbonnement).values({ libelle: "NETFLIX" }).returning().get().idFamille;
+    const formuleNetflix = db.insert(schema.formule).values({ idFamille: familleNetflix, libelle: "PREMIUM", prix: 3500, rang: 1 }).returning().get().idFormule;
+    const compte = db
+      .insert(schema.comptePartageStreaming)
+      .values({ siteId, idFamille: familleNetflix, libelle: "Compte Netflix #1", nombreEcransMax: 1 })
+      .returning()
+      .get();
+    recruterAbonne(db, {
+      siteId,
+      userId,
+      aujourdHui: "2025-11-16",
+      abonne: { nom: "Premier", prenom: "Occupant", telephone: "690000001" },
+      idFormule: formuleNetflix,
+      montantEncaisse: 3500,
+      idComptePartage: compte.idComptePartage,
+    });
+
+    expect(() =>
+      recruterAbonne(db, {
+        siteId,
+        userId,
+        aujourdHui: "2025-11-16",
+        abonne: { nom: "Second", prenom: "Occupant", telephone: "690000002" },
+        idFormule: formuleNetflix,
+        montantEncaisse: 3500,
+        idComptePartage: compte.idComptePartage,
+      })
+    ).toThrow(/capacité|écran/i);
+  });
+
+  it("renvoie une erreur pour un compte partagé inconnu", () => {
+    expect(() =>
+      recruterAbonne(db, {
+        siteId,
+        userId,
+        aujourdHui: "2025-11-16",
+        abonne: { nom: "Nga", prenom: "Paul", telephone: "690000000" },
+        idFormule: formuleDstvCompaq,
+        montantEncaisse: 13000,
+        idComptePartage: 999999,
+      })
+    ).toThrow(/introuvable/i);
+  });
+});

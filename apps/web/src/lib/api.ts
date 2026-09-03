@@ -7,12 +7,14 @@ import type {
   ChangerFormuleResultat,
   ChangerStatutSavResultat,
   CommissionCanalplusEnCours,
+  ComptePartage,
   CompteUtilisateur,
   DossierSav,
   DossierSavDetaille,
   EchangeMaterielResultat,
   EntreeJournalAudit,
   Famille,
+  FicheComptePartage,
   Fiche360,
   FicheApporteur,
   Formule,
@@ -136,6 +138,7 @@ export interface RecruterPayload {
   idKit?: number;
   montantEncaisse: number;
   apporteurId?: number;
+  idComptePartage?: number; // 5.9 : écran affecté sur un compte streaming mutualisé
 }
 
 export async function recruter(token: string, payload: RecruterPayload): Promise<RecrutementResultat> {
@@ -675,4 +678,50 @@ export async function delierOptionFormuleRequete(token: string, idOption: number
 export async function chargerInfosEntreprise(token: string): Promise<InfosEntreprise> {
   const reponse = await fetch(`${BASE}/entreprise`, { headers: headersAuth(token) });
   return lireJson<InfosEntreprise>(reponse);
+}
+
+// 5.9 : comptes partagés streaming (Netflix, Prime Vidéo, IPTV…)
+export async function chargerComptesPartages(token: string, siteId: number): Promise<ComptePartage[]> {
+  const reponse = await fetch(`${BASE}/comptes-partages?siteId=${siteId}`, { headers: headersAuth(token) });
+  return lireJson<ComptePartage[]>(reponse);
+}
+
+export interface CreerComptePartagePayload {
+  siteId: number;
+  idFamille: number;
+  libelle: string;
+  identifiant?: string;
+  motDePasse?: string;
+  nombreEcransMax: number;
+}
+
+export async function creerComptePartageRequete(token: string, payload: CreerComptePartagePayload): Promise<ComptePartage> {
+  const reponse = await fetch(`${BASE}/comptes-partages`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headersAuth(token) },
+    body: JSON.stringify(payload),
+  });
+  return lireJson<ComptePartage>(reponse);
+}
+
+export interface ModifierComptePartagePayload {
+  libelle?: string;
+  identifiant?: string;
+  motDePasse?: string;
+  nombreEcransMax?: number;
+  actif?: boolean;
+}
+
+export async function modifierComptePartageRequete(token: string, idComptePartage: number, payload: ModifierComptePartagePayload): Promise<ComptePartage> {
+  const reponse = await fetch(`${BASE}/comptes-partages/${idComptePartage}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...headersAuth(token) },
+    body: JSON.stringify(payload),
+  });
+  return lireJson<ComptePartage>(reponse);
+}
+
+export async function chargerFicheComptePartage(token: string, idComptePartage: number): Promise<FicheComptePartage> {
+  const reponse = await fetch(`${BASE}/comptes-partages/${idComptePartage}/fiche`, { headers: headersAuth(token) });
+  return lireJson<FicheComptePartage>(reponse);
 }

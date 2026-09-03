@@ -1,9 +1,10 @@
 import { eq } from "drizzle-orm";
-import { calculerDateFin, calculerPrixKit } from "@mboapilot/shared";
+import { calculerDateFin, calculerPrixKit, peutAffecterEcran } from "@mboapilot/shared";
 import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
 import { creerAbonne, type AbonneInput } from "../abonnes/abonne.repository.js";
 import { construireKitCalcul } from "../catalogue/kit-mapper.js";
+import { compterEcransOccupes, trouverComptePartage } from "../comptes-partages/compte-partage.repository.js";
 
 export interface RecruterAbonneParams {
   siteId: number;
@@ -16,6 +17,7 @@ export interface RecruterAbonneParams {
   montantEncaisse: number;
   apporteurId?: number;
   montantCommissionCanalplus?: number; // taux vendeur/apporteur — fourni par le paramétrage (8.8)
+  idComptePartage?: number; // 5.9 : écran/profil affecté sur un compte streaming mutualisé
 }
 
 export interface RecrutementResultat {
@@ -56,6 +58,17 @@ export function recruterAbonne(db: Db, params: RecruterAbonneParams): Recrutemen
   const dateDebut = params.dateDebut ?? params.aujourdHui;
   const dateFin = calculerDateFin(dateDebut, formule.dureeCycles, formule.modeDuree);
 
+  // 5.9 : alerte de capacité — un compte partagé streaming ne peut pas
+  // accueillir plus d'écrans simultanés que sa limite fournisseur
+  if (params.idComptePartage !== undefined) {
+    const comptePartage = trouverComptePartage(db, params.idComptePartage);
+    if (!comptePartage) throw new Error(`Compte partagé ${params.idComptePartage} introuvable`);
+    const ecransOccupes = compterEcransOccupes(db, params.idComptePartage);
+    if (!peutAffecterEcran(comptePartage.nombreEcransMax, ecransOccupes)) {
+      throw new Error(`Capacité atteinte : ${comptePartage.libelle} n'a plus d'écran disponible (${ecransOccupes}/${comptePartage.nombreEcransMax})`);
+    }
+  }
+
   const abonnement = db
     .insert(schema.abonnement)
     .values({
@@ -66,6 +79,7 @@ export function recruterAbonne(db: Db, params: RecruterAbonneParams): Recrutemen
       dateFin,
       apporteurId: apporteurIdEffectif,
       creePar: params.userId,
+      idComptePartage: params.idComptePartage,
     })
     .returning()
     .get();

@@ -1345,3 +1345,95 @@ describe("GET /api/v1/entreprise (6.7)", () => {
     expect(reponse.statusCode).toBe(401);
   });
 });
+
+describe("Comptes partagés streaming (5.9)", () => {
+  it("un administrateur crée un compte partagé, un caissier le liste et recrute un abonné dessus", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    creerUtilisateur(db, { siteId, nom: "Admin", prenom: "D", identifiant: "admin1", motDePasse: "motdepasse-secret", role: "ADMINISTRATEUR" });
+    const tokenAdmin = await connecter(app, "admin1");
+    const tokenCaissier = await connecter(app);
+
+    const famille = db.insert(schema.familleAbonnement).values({ libelle: "NETFLIX" }).returning().get();
+    const formule = db.insert(schema.formule).values({ idFamille: famille.idFamille, libelle: "PREMIUM", prix: 3500, rang: 1 }).returning().get();
+
+    const creation = await app.inject({
+      method: "POST",
+      url: "/api/v1/comptes-partages",
+      headers: authHeader(tokenAdmin),
+      payload: { siteId, idFamille: famille.idFamille, libelle: "Compte Netflix #1", identifiant: "boutique@example.cm", motDePasse: "secret123", nombreEcransMax: 2 },
+    });
+    expect(creation.statusCode).toBe(201);
+    const idComptePartage = creation.json().idComptePartage;
+
+    const liste = await app.inject({ method: "GET", url: `/api/v1/comptes-partages?siteId=${siteId}`, headers: authHeader(tokenCaissier) });
+    expect(liste.statusCode).toBe(200);
+    expect(liste.json()[0].ecransOccupes).toBe(0);
+    expect(liste.json()[0].motDePasse).toBe("secret123");
+
+    const recrutement = await app.inject({
+      method: "POST",
+      url: "/api/v1/recrutements",
+      headers: authHeader(tokenCaissier),
+      payload: {
+        siteId,
+        userId,
+        aujourdHui: "2025-11-16",
+        abonne: { nom: "Nga", prenom: "Paul", telephone: "690000000" },
+        idFormule: formule.idFormule,
+        montantEncaisse: 3500,
+        idComptePartage,
+      },
+    });
+    expect(recrutement.statusCode).toBe(201);
+
+    const fiche = await app.inject({ method: "GET", url: `/api/v1/comptes-partages/${idComptePartage}/fiche`, headers: authHeader(tokenCaissier) });
+    expect(fiche.statusCode).toBe(200);
+    expect(fiche.json().occupants).toHaveLength(1);
+    expect(fiche.json().occupants[0].abonne.nom).toBe("Nga");
+
+    const listeApres = await app.inject({ method: "GET", url: `/api/v1/comptes-partages?siteId=${siteId}`, headers: authHeader(tokenCaissier) });
+    expect(listeApres.json()[0].ecransOccupes).toBe(1);
+  });
+
+  it("refuse le recrutement une fois la capacité du compte partagé atteinte (400)", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const token = await connecter(app);
+    const famille = db.insert(schema.familleAbonnement).values({ libelle: "NETFLIX" }).returning().get();
+    const formule = db.insert(schema.formule).values({ idFamille: famille.idFamille, libelle: "PREMIUM", prix: 3500, rang: 1 }).returning().get();
+    const compte = db
+      .insert(schema.comptePartageStreaming)
+      .values({ siteId, idFamille: famille.idFamille, libelle: "Compte Netflix #1", nombreEcransMax: 1 })
+      .returning()
+      .get();
+
+    const premier = await app.inject({
+      method: "POST",
+      url: "/api/v1/recrutements",
+      headers: authHeader(token),
+      payload: { siteId, userId, aujourdHui: "2025-11-16", abonne: { nom: "Premier", prenom: "Occupant", telephone: "690000001" }, idFormule: formule.idFormule, montantEncaisse: 3500, idComptePartage: compte.idComptePartage },
+    });
+    expect(premier.statusCode).toBe(201);
+
+    const second = await app.inject({
+      method: "POST",
+      url: "/api/v1/recrutements",
+      headers: authHeader(token),
+      payload: { siteId, userId, aujourdHui: "2025-11-16", abonne: { nom: "Second", prenom: "Occupant", telephone: "690000002" }, idFormule: formule.idFormule, montantEncaisse: 3500, idComptePartage: compte.idComptePartage },
+    });
+    expect(second.statusCode).toBe(400);
+  });
+
+  it("un caissier ne peut pas créer ni modifier de compte partagé (403)", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const token = await connecter(app);
+    const famille = db.insert(schema.familleAbonnement).values({ libelle: "NETFLIX" }).returning().get();
+
+    const creation = await app.inject({
+      method: "POST",
+      url: "/api/v1/comptes-partages",
+      headers: authHeader(token),
+      payload: { siteId, idFamille: famille.idFamille, libelle: "Compte Netflix #1", nombreEcransMax: 4 },
+    });
+    expect(creation.statusCode).toBe(403);
+  });
+});

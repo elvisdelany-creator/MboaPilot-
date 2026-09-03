@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import type { Abonne, CatalogueKit, Formule, NouvelAbonne, ParcoursPaiementMobile } from "@/lib/types";
+import type { Abonne, CatalogueKit, ComptePartage, Formule, NouvelAbonne, ParcoursPaiementMobile } from "@/lib/types";
 
 export type PaiementSaisi =
   | { mode: "CASH"; montant: number }
@@ -21,6 +21,11 @@ interface Props {
   // 7.4 : le changement de formule (migration) ne s'applique qu'à un
   // abonnement ACTIF, jamais à un abonnement déjà EXPIRE
   peutMigrerFormule: boolean;
+  // 5.9 : comptes partagés actifs de la famille sélectionnée (Netflix, IPTV…) —
+  // vide pour les familles satellite classiques, qui n'ont pas ce concept
+  comptesPartagesDisponibles: ComptePartage[];
+  comptePartageSelectionne: number | null;
+  onSelectionnerComptePartage: (idComptePartage: number | null) => void;
   enCours: boolean;
   onValider: (paiement: PaiementSaisi) => void;
   onEchangerMateriel: () => void;
@@ -39,6 +44,9 @@ export function TicketPanel({
   kitSelectionne,
   numeroAbonnementARenouveler,
   peutMigrerFormule,
+  comptesPartagesDisponibles,
+  comptePartageSelectionne,
+  onSelectionnerComptePartage,
   enCours,
   onValider,
   onEchangerMateriel,
@@ -123,6 +131,30 @@ export function TicketPanel({
             </li>
           )}
         </ul>
+
+        {/* 5.9 : affectation à un écran d'un compte streaming mutualisé — uniquement
+            au recrutement (un réabonnement reconduit l'écran déjà occupé) */}
+        {!numeroAbonnementARenouveler && formuleSelectionnee && comptesPartagesDisponibles.length > 0 && (
+          <div className="mt-4">
+            <Label htmlFor="compte-partage">Compte partagé (optionnel)</Label>
+            <Select
+              value={comptePartageSelectionne !== null ? String(comptePartageSelectionne) : "aucun"}
+              onValueChange={(v) => onSelectionnerComptePartage(v === "aucun" ? null : Number(v))}
+            >
+              <SelectTrigger id="compte-partage" className="mt-1 w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="aucun">Aucun (compte individuel)</SelectItem>
+                {comptesPartagesDisponibles.map((c) => (
+                  <SelectItem key={c.idComptePartage} value={String(c.idComptePartage)} disabled={c.ecransOccupes >= c.nombreEcransMax}>
+                    {c.libelle} ({c.ecransOccupes}/{c.nombreEcransMax} écrans)
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
 
         <Separator className="my-4" />
 

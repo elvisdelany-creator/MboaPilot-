@@ -9,3 +9,4 @@ export { calculerMarge, type MargeArticle, type MargeCalculee, type MargeType } 
 export { peutTransitionnerPaiementMobile, type StatutPaiementMobile } from "./statut-paiement-mobile.js";
 export { validerMigrationFormule, type FormuleMigration, type ResultatValidationMigration } from "./migration-formule.js";
 export { genererPlageJours } from "./plage-jours.js";
+export { peutAffecterEcran } from "./compte-partage-streaming.js";

@@ -20,6 +20,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { NouveauCompteDialog } from "./NouveauCompteDialog";
 import { NouveauSiteDialog } from "./NouveauSiteDialog";
 import { CatalogueTab } from "./CatalogueTab";
+import { ComptesPartagesTab } from "./ComptesPartagesTab";
 import type { CompteUtilisateur, EntreeJournalAudit, Role, Site } from "@/lib/types";
 
 interface Props {
@@ -136,6 +137,7 @@ export function AdministrationPage({ onNaviguer }: Props) {
               <TabsTrigger value="utilisateurs">Utilisateurs</TabsTrigger>
               <TabsTrigger value="sites">Sites</TabsTrigger>
               <TabsTrigger value="catalogue">Catalogue</TabsTrigger>
+              <TabsTrigger value="comptes-partages">Comptes streaming</TabsTrigger>
               <TabsTrigger value="audit">Journal d'audit</TabsTrigger>
             </TabsList>
 
@@ -221,6 +223,10 @@ export function AdministrationPage({ onNaviguer }: Props) {
 
             <TabsContent value="catalogue">
               <CatalogueTab />
+            </TabsContent>
+
+            <TabsContent value="comptes-partages">
+              <ComptesPartagesTab />
             </TabsContent>
 
             <TabsContent value="audit" className="space-y-3">

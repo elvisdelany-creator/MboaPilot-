@@ -35,6 +35,20 @@ export interface CatalogueFamille {
   kits: CatalogueKit[];
 }
 
+// 8.8 : back-office catalogue — famille au sens administratif (sans les
+// formules/kits imbriqués, contrairement à CatalogueFamille qui sert la vente)
+export interface Famille {
+  idFamille: number;
+  libelle: string;
+}
+
+export interface OptionCatalogue {
+  idOption: number;
+  libelle: string;
+  prix: number;
+  formulesCompatibles: { idFormule: number; prixSurcharge: number | null }[];
+}
+
 export interface Abonnement {
   numeroAbonnement: number;
   idAbonne: number;

@@ -1206,3 +1206,121 @@ describe("Module gestion des utilisateurs, rôles et sites (8.7)", () => {
     expect(sites.statusCode).toBe(403);
   });
 });
+
+describe("Back-office catalogue : familles, formules, options (8.8)", () => {
+  it("un administrateur crée une famille, une formule puis la modifie ; le catalogue de vente reflète le changement", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    creerUtilisateur(db, { siteId, nom: "Admin", prenom: "D", identifiant: "admin1", motDePasse: "motdepasse-secret", role: "ADMINISTRATEUR" });
+    const tokenAdmin = await connecter(app, "admin1");
+
+    const famille = await app.inject({
+      method: "POST",
+      url: "/api/v1/catalogue/familles",
+      headers: authHeader(tokenAdmin),
+      payload: { libelle: "MOREPLEX" },
+    });
+    expect(famille.statusCode).toBe(201);
+
+    const formule = await app.inject({
+      method: "POST",
+      url: "/api/v1/catalogue/formules",
+      headers: authHeader(tokenAdmin),
+      payload: { idFamille: famille.json().idFamille, libelle: "ESSENTIEL", prix: 4000, rang: 1 },
+    });
+    expect(formule.statusCode).toBe(201);
+
+    const catalogue = await app.inject({ method: "GET", url: "/api/v1/catalogue", headers: authHeader(tokenAdmin) });
+    expect(catalogue.json().find((f: { libelle: string }) => f.libelle === "MOREPLEX").formules).toHaveLength(1);
+
+    const modification = await app.inject({
+      method: "PATCH",
+      url: `/api/v1/catalogue/formules/${formule.json().idFormule}`,
+      headers: authHeader(tokenAdmin),
+      payload: { prix: 4500, actif: false },
+    });
+    expect(modification.statusCode).toBe(200);
+    expect(modification.json().prix).toBe(4500);
+
+    const catalogueApres = await app.inject({ method: "GET", url: "/api/v1/catalogue", headers: authHeader(tokenAdmin) });
+    expect(catalogueApres.json().find((f: { libelle: string }) => f.libelle === "MOREPLEX").formules).toHaveLength(0);
+
+    // le back-office, lui, continue de voir la formule désactivée
+    const formulesBackOffice = await app.inject({
+      method: "GET",
+      url: `/api/v1/catalogue/formules?idFamille=${famille.json().idFamille}`,
+      headers: authHeader(tokenAdmin),
+    });
+    expect(formulesBackOffice.statusCode).toBe(200);
+    expect(formulesBackOffice.json()).toHaveLength(1);
+    expect(formulesBackOffice.json()[0].actif).toBe(0);
+  });
+
+  it("crée une option, la lie à une formule avec un prix de surcharge, puis la délie", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    creerUtilisateur(db, { siteId, nom: "Admin", prenom: "D", identifiant: "admin1", motDePasse: "motdepasse-secret", role: "ADMINISTRATEUR" });
+    const tokenAdmin = await connecter(app, "admin1");
+
+    const option = await app.inject({
+      method: "POST",
+      url: "/api/v1/catalogue/options",
+      headers: authHeader(tokenAdmin),
+      payload: { libelle: "Bouquet Sport+", prix: 2000 },
+    });
+    expect(option.statusCode).toBe(201);
+
+    const compat = await app.inject({
+      method: "POST",
+      url: "/api/v1/catalogue/options/compat",
+      headers: authHeader(tokenAdmin),
+      payload: { idFormule, idOption: option.json().idOption, prixSurcharge: 2500 },
+    });
+    expect(compat.statusCode).toBe(200);
+
+    const liste = await app.inject({ method: "GET", url: "/api/v1/catalogue/options", headers: authHeader(tokenAdmin) });
+    expect(liste.json()[0].formulesCompatibles).toEqual([{ idFormule, prixSurcharge: 2500 }]);
+
+    const suppression = await app.inject({
+      method: "DELETE",
+      url: `/api/v1/catalogue/options/${option.json().idOption}/compat/${idFormule}`,
+      headers: authHeader(tokenAdmin),
+    });
+    expect(suppression.statusCode).toBe(204);
+
+    const listeApres = await app.inject({ method: "GET", url: "/api/v1/catalogue/options", headers: authHeader(tokenAdmin) });
+    expect(listeApres.json()[0].formulesCompatibles).toHaveLength(0);
+  });
+
+  it("un caissier ne peut ni créer de famille, ni de formule, ni d'option (403)", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const token = await connecter(app);
+
+    const famille = await app.inject({ method: "POST", url: "/api/v1/catalogue/familles", headers: authHeader(token), payload: { libelle: "X" } });
+    expect(famille.statusCode).toBe(403);
+
+    const formule = await app.inject({
+      method: "POST",
+      url: "/api/v1/catalogue/formules",
+      headers: authHeader(token),
+      payload: { idFamille: 1, libelle: "X", prix: 1000, rang: 1 },
+    });
+    expect(formule.statusCode).toBe(403);
+
+    const option = await app.inject({ method: "POST", url: "/api/v1/catalogue/options", headers: authHeader(token), payload: { libelle: "X", prix: 1000 } });
+    expect(option.statusCode).toBe(403);
+  });
+
+  it("renvoie 404 pour la modification d'une formule inconnue", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    creerUtilisateur(db, { siteId, nom: "Admin", prenom: "D", identifiant: "admin1", motDePasse: "motdepasse-secret", role: "ADMINISTRATEUR" });
+    const tokenAdmin = await connecter(app, "admin1");
+
+    const reponse = await app.inject({
+      method: "PATCH",
+      url: "/api/v1/catalogue/formules/999999",
+      headers: authHeader(tokenAdmin),
+      payload: { prix: 1000 },
+    });
+
+    expect(reponse.statusCode).toBe(404);
+  });
+});

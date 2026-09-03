@@ -12,12 +12,15 @@ import type {
   DossierSavDetaille,
   EchangeMaterielResultat,
   EntreeJournalAudit,
+  Famille,
   Fiche360,
   FicheApporteur,
+  Formule,
   HistoriquePrixProduit,
   IndicateursJour,
   MargeType,
   NouvelAbonne,
+  OptionCatalogue,
   ParcoursPaiementMobile,
   PointEvolutionCA,
   Produit,
@@ -560,4 +563,109 @@ export async function modifierSiteRequete(
 export async function chargerJournalAudit(token: string, tableCible?: string): Promise<EntreeJournalAudit[]> {
   const reponse = await fetch(`${BASE}/audit${tableCible ? `?tableCible=${tableCible}` : ""}`, { headers: headersAuth(token) });
   return lireJson<EntreeJournalAudit[]>(reponse);
+}
+
+// 8.8 : back-office catalogue — familles, formules, options (paramétrage
+// sans intervention développeur), réservé à l'encadrement (gestionCatalogue)
+export async function chargerFamilles(token: string): Promise<Famille[]> {
+  const reponse = await fetch(`${BASE}/catalogue/familles`, { headers: headersAuth(token) });
+  return lireJson<Famille[]>(reponse);
+}
+
+export async function creerFamilleRequete(token: string, payload: { libelle: string }): Promise<Famille> {
+  const reponse = await fetch(`${BASE}/catalogue/familles`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headersAuth(token) },
+    body: JSON.stringify(payload),
+  });
+  return lireJson<Famille>(reponse);
+}
+
+// toutes les formules de la famille, y compris désactivées (contrairement à
+// chargerCatalogue, filtré actif = 1 pour la vente)
+export async function chargerFormulesFamille(token: string, idFamille: number): Promise<Formule[]> {
+  const reponse = await fetch(`${BASE}/catalogue/formules?idFamille=${idFamille}`, { headers: headersAuth(token) });
+  return lireJson<Formule[]>(reponse);
+}
+
+export interface CreerFormulePayload {
+  idFamille: number;
+  libelle: string;
+  prix: number;
+  rang: number;
+  modeDuree?: "STRICT_30J" | "MOIS_CIVIL";
+  dureeCycles?: number;
+}
+
+export async function creerFormuleRequete(token: string, payload: CreerFormulePayload): Promise<Formule> {
+  const reponse = await fetch(`${BASE}/catalogue/formules`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headersAuth(token) },
+    body: JSON.stringify(payload),
+  });
+  return lireJson<Formule>(reponse);
+}
+
+export interface ModifierFormulePayload {
+  libelle?: string;
+  prix?: number;
+  rang?: number;
+  modeDuree?: "STRICT_30J" | "MOIS_CIVIL";
+  dureeCycles?: number;
+  actif?: boolean;
+}
+
+export async function modifierFormuleRequete(token: string, idFormule: number, payload: ModifierFormulePayload): Promise<Formule> {
+  const reponse = await fetch(`${BASE}/catalogue/formules/${idFormule}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...headersAuth(token) },
+    body: JSON.stringify(payload),
+  });
+  return lireJson<Formule>(reponse);
+}
+
+export async function chargerOptions(token: string): Promise<OptionCatalogue[]> {
+  const reponse = await fetch(`${BASE}/catalogue/options`, { headers: headersAuth(token) });
+  return lireJson<OptionCatalogue[]>(reponse);
+}
+
+export async function creerOptionRequete(token: string, payload: { libelle: string; prix: number }): Promise<OptionCatalogue> {
+  const reponse = await fetch(`${BASE}/catalogue/options`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headersAuth(token) },
+    body: JSON.stringify(payload),
+  });
+  return lireJson<OptionCatalogue>(reponse);
+}
+
+export async function modifierOptionRequete(token: string, idOption: number, payload: { libelle?: string; prix?: number }): Promise<OptionCatalogue> {
+  const reponse = await fetch(`${BASE}/catalogue/options/${idOption}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...headersAuth(token) },
+    body: JSON.stringify(payload),
+  });
+  return lireJson<OptionCatalogue>(reponse);
+}
+
+export async function lierOptionFormuleRequete(
+  token: string,
+  payload: { idFormule: number; idOption: number; prixSurcharge?: number }
+): Promise<void> {
+  const reponse = await fetch(`${BASE}/catalogue/options/compat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headersAuth(token) },
+    body: JSON.stringify(payload),
+  });
+  await lireJson(reponse);
+}
+
+export async function delierOptionFormuleRequete(token: string, idOption: number, idFormule: number): Promise<void> {
+  const reponse = await fetch(`${BASE}/catalogue/options/${idOption}/compat/${idFormule}`, {
+    method: "DELETE",
+    headers: headersAuth(token),
+  });
+  if (!reponse.ok) {
+    const corps = await reponse.json().catch(() => ({}));
+    throw new Error(corps?.erreur ?? "Erreur inattendue");
+  }
 }

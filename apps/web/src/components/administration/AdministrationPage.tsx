@@ -19,6 +19,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { NouveauCompteDialog } from "./NouveauCompteDialog";
 import { NouveauSiteDialog } from "./NouveauSiteDialog";
+import { CatalogueTab } from "./CatalogueTab";
 import type { CompteUtilisateur, EntreeJournalAudit, Role, Site } from "@/lib/types";
 
 interface Props {
@@ -134,6 +135,7 @@ export function AdministrationPage({ onNaviguer }: Props) {
             <TabsList>
               <TabsTrigger value="utilisateurs">Utilisateurs</TabsTrigger>
               <TabsTrigger value="sites">Sites</TabsTrigger>
+              <TabsTrigger value="catalogue">Catalogue</TabsTrigger>
               <TabsTrigger value="audit">Journal d'audit</TabsTrigger>
             </TabsList>
 
@@ -215,6 +217,10 @@ export function AdministrationPage({ onNaviguer }: Props) {
                   </li>
                 ))}
               </ul>
+            </TabsContent>
+
+            <TabsContent value="catalogue">
+              <CatalogueTab />
             </TabsContent>
 
             <TabsContent value="audit" className="space-y-3">

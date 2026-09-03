@@ -52,7 +52,7 @@ export function buildApp(db: Db, options: BuildAppOptions) {
 
   registerAbonnementsRoutes(app, db, { authRequis, ventes });
   registerAbonnesRoutes(app, db, { authRequis, ventes, fusionAbonnes });
-  registerCatalogueRoutes(app, db, { authRequis });
+  registerCatalogueRoutes(app, db, { authRequis, gestionCatalogue });
   registerJobsRoutes(app, db, { authRequis, ventes, admin });
   registerProduitsRoutes(app, db, { authRequis, ventes, gestionCatalogue });
   registerSavRoutes(app, db, { authRequis, ventes, sav });

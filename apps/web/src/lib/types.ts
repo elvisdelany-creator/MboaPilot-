@@ -64,7 +64,15 @@ export interface OptionCatalogue {
 
 // 6.7 : en-tête des documents commerciaux (ticket de caisse, pro-forma)
 export interface InfosEntreprise {
-  entreprise: { idEntreprise: number; nom: string; devise: string; logoUrl: string | null };
+  entreprise: {
+    idEntreprise: number;
+    nom: string;
+    devise: string;
+    logoUrl: string | null;
+    // 6.1, 8.8 : taux en centièmes de %, ex. 1925 = 19,25 % ; null = pas de taxe applicable
+    tauxTva: number | null;
+    mentionsLegales: string | null;
+  };
   site: { idSite: number; nom: string; adresse: string | null };
 }
 

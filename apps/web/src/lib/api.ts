@@ -747,6 +747,19 @@ export async function chargerInfosEntreprise(token: string): Promise<InfosEntrep
   return lireJson<InfosEntreprise>(reponse);
 }
 
+// 6.1, 8.8 : taux de TVA (le cas échéant) et mentions légales des documents commerciaux
+export async function modifierEntrepriseRequete(
+  token: string,
+  payload: { tauxTva?: number | null; mentionsLegales?: string | null }
+): Promise<InfosEntreprise["entreprise"]> {
+  const reponse = await fetch(`${BASE}/entreprise`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...headersAuth(token) },
+    body: JSON.stringify(payload),
+  });
+  return lireJson<InfosEntreprise["entreprise"]>(reponse);
+}
+
 // 5.9 : comptes partagés streaming (Netflix, Prime Vidéo, IPTV…)
 export async function chargerComptesPartages(token: string, siteId: number): Promise<ComptePartage[]> {
   const reponse = await fetch(`${BASE}/comptes-partages?siteId=${siteId}`, { headers: headersAuth(token) });

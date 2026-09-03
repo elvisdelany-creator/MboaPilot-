@@ -36,6 +36,12 @@ export function RecuVentePrintable({ infosEntreprise, recu, onNouvelleVente }: P
   const monnaieRendue = recu.modePaiement === "CASH" ? Math.max(0, recu.montantEncaisse - recu.total) : 0;
   const soldeDu = Math.max(0, recu.total - recu.montantEncaisse);
 
+  // 6.1, 8.8 : taux configurable (le cas échéant) — le total facturé reste
+  // inchangé (TTC), la TVA n'est qu'une mention informative de sa composition
+  const tauxTva = infosEntreprise?.entreprise.tauxTva ?? null;
+  const montantHT = tauxTva !== null ? Math.round((recu.total * 10000) / (10000 + tauxTva)) : recu.total;
+  const montantTaxe = recu.total - montantHT;
+
   return (
     <div className="flex h-dvh flex-col items-center overflow-y-auto bg-background p-6">
       <style>{`@media print { .no-print { display: none !important; } body { background: white; } }`}</style>
@@ -67,8 +73,20 @@ export function RecuVentePrintable({ infosEntreprise, recu, onNouvelleVente }: P
 
         <Separator />
 
+        {tauxTva !== null && (
+          <>
+            <div className="flex items-center justify-between text-xs text-muted-foreground">
+              <span>Total HT</span>
+              <span className="tabular-nums">{formateurFcfa.format(montantHT)}</span>
+            </div>
+            <div className="flex items-center justify-between text-xs text-muted-foreground">
+              <span>dont TVA {(tauxTva / 100).toString().replace(".", ",")} %</span>
+              <span className="tabular-nums">{formateurFcfa.format(montantTaxe)}</span>
+            </div>
+          </>
+        )}
         <div className="flex items-center justify-between font-semibold">
-          <span>TOTAL</span>
+          <span>TOTAL{tauxTva !== null ? " TTC" : ""}</span>
           <span className="tabular-nums">{formateurFcfa.format(recu.total)} {infosEntreprise?.entreprise.devise ?? "FCFA"}</span>
         </div>
         <div className="flex items-center justify-between text-xs">
@@ -90,7 +108,7 @@ export function RecuVentePrintable({ infosEntreprise, recu, onNouvelleVente }: P
 
         <Separator />
 
-        <p className="text-center text-xs text-muted-foreground">Merci de votre confiance.</p>
+        <p className="text-center text-xs text-muted-foreground">{infosEntreprise?.entreprise.mentionsLegales || "Merci de votre confiance."}</p>
       </div>
 
       <div className="no-print mt-6 flex gap-2">

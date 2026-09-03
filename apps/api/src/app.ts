@@ -65,7 +65,7 @@ export function buildApp(db: Db, options: BuildAppOptions) {
   registerPaiementMobileRoutes(app, db, fournisseurPaiementMobile, { authRequis, ventes });
   registerTableauBordRoutes(app, db, { authRequis, ventes, pilotage });
   registerUtilisateursRoutes(app, db, { authRequis, admin });
-  registerEntrepriseRoutes(app, db, { authRequis });
+  registerEntrepriseRoutes(app, db, { authRequis, admin });
   registerComptesPartagesRoutes(app, db, { authRequis, ventes, gestionComptesPartages });
 
   return app;

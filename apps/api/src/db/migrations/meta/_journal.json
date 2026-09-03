@@ -29,6 +29,13 @@
       "when": 1788429782486,
       "tag": "0003_little_mulholland_black",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1788443242546,
+      "tag": "0004_fresh_raider",
+      "breakpoints": true
     }
   ]
 }

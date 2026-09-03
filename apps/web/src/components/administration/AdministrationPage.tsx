@@ -21,6 +21,7 @@ import { NouveauCompteDialog } from "./NouveauCompteDialog";
 import { NouveauSiteDialog } from "./NouveauSiteDialog";
 import { CatalogueTab } from "./CatalogueTab";
 import { ComptesPartagesTab } from "./ComptesPartagesTab";
+import { ParametresTab } from "./ParametresTab";
 import type { CompteUtilisateur, EntreeJournalAudit, Role, Site } from "@/lib/types";
 
 interface Props {
@@ -138,6 +139,7 @@ export function AdministrationPage({ onNaviguer }: Props) {
               <TabsTrigger value="sites">Sites</TabsTrigger>
               <TabsTrigger value="catalogue">Catalogue</TabsTrigger>
               <TabsTrigger value="comptes-partages">Comptes streaming</TabsTrigger>
+              <TabsTrigger value="parametres">Paramètres</TabsTrigger>
               <TabsTrigger value="audit">Journal d'audit</TabsTrigger>
             </TabsList>
 
@@ -227,6 +229,10 @@ export function AdministrationPage({ onNaviguer }: Props) {
 
             <TabsContent value="comptes-partages">
               <ComptesPartagesTab />
+            </TabsContent>
+
+            <TabsContent value="parametres">
+              <ParametresTab />
             </TabsContent>
 
             <TabsContent value="audit" className="space-y-3">

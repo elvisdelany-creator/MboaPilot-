@@ -10,6 +10,11 @@ export const entreprise = sqliteTable("entreprise", {
   nom: text("nom").notNull(),
   devise: text("devise").notNull().default("XAF"),
   logoUrl: text("logo_url"),
+  // 6.1, 8.8 : taxe applicable "le cas échéant" (centièmes de %, ex. 1925 =
+  // 19,25 %) et mentions légales des documents commerciaux (6.7) — NULL/vide
+  // par défaut, aucune obligation présumée pour l'utilisateur
+  tauxTva: integer("taux_tva_centiemes_pourcent"),
+  mentionsLegales: text("mentions_legales"),
   dateCreation: text("date_creation").notNull().default(now),
 });
 

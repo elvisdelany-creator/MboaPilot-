@@ -10,3 +10,4 @@ export { peutTransitionnerPaiementMobile, type StatutPaiementMobile } from "./st
 export { validerMigrationFormule, type FormuleMigration, type ResultatValidationMigration } from "./migration-formule.js";
 export { genererPlageJours } from "./plage-jours.js";
 export { peutAffecterEcran } from "./compte-partage-streaming.js";
+export { calculerMontantTaxe } from "./taxe.js";

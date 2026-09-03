@@ -1449,6 +1449,39 @@ describe("GET /api/v1/entreprise (6.7)", () => {
 
     expect(reponse.statusCode).toBe(401);
   });
+
+  it("un administrateur définit le taux de TVA et les mentions légales, reflétés dans l'en-tête", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    creerUtilisateur(db, { siteId, nom: "Admin", prenom: "D", identifiant: "admin1", motDePasse: "motdepasse-secret", role: "ADMINISTRATEUR" });
+    const tokenAdmin = await connecter(app, "admin1");
+
+    const modification = await app.inject({
+      method: "PATCH",
+      url: "/api/v1/entreprise",
+      headers: authHeader(tokenAdmin),
+      payload: { tauxTva: 1925, mentionsLegales: "RC/DLA/2024/B/1234" },
+    });
+    expect(modification.statusCode).toBe(200);
+    expect(modification.json().tauxTva).toBe(1925);
+
+    const reponse = await app.inject({ method: "GET", url: "/api/v1/entreprise", headers: authHeader(tokenAdmin) });
+    expect(reponse.json().entreprise.tauxTva).toBe(1925);
+    expect(reponse.json().entreprise.mentionsLegales).toBe("RC/DLA/2024/B/1234");
+  });
+
+  it("un caissier ne peut pas modifier le taux de TVA ni les mentions légales (403)", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const token = await connecter(app);
+
+    const reponse = await app.inject({
+      method: "PATCH",
+      url: "/api/v1/entreprise",
+      headers: authHeader(token),
+      payload: { tauxTva: 1925 },
+    });
+
+    expect(reponse.statusCode).toBe(403);
+  });
 });
 
 describe("Comptes partagés streaming (5.9)", () => {

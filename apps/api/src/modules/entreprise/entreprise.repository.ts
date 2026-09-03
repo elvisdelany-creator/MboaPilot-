@@ -3,7 +3,14 @@ import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
 
 export interface InfosEntreprise {
-  entreprise: { idEntreprise: number; nom: string; devise: string; logoUrl: string | null };
+  entreprise: {
+    idEntreprise: number;
+    nom: string;
+    devise: string;
+    logoUrl: string | null;
+    tauxTva: number | null;
+    mentionsLegales: string | null;
+  };
   site: { idSite: number; nom: string; adresse: string | null };
 }
 
@@ -16,7 +23,33 @@ export function trouverInfosEntrepriseParSite(db: Db, siteId: number): InfosEntr
   if (!entreprise) return undefined;
 
   return {
-    entreprise: { idEntreprise: entreprise.idEntreprise, nom: entreprise.nom, devise: entreprise.devise, logoUrl: entreprise.logoUrl },
+    entreprise: {
+      idEntreprise: entreprise.idEntreprise,
+      nom: entreprise.nom,
+      devise: entreprise.devise,
+      logoUrl: entreprise.logoUrl,
+      tauxTva: entreprise.tauxTva,
+      mentionsLegales: entreprise.mentionsLegales,
+    },
     site: { idSite: site.idSite, nom: site.nom, adresse: site.adresse },
   };
+}
+
+export interface ModifierEntrepriseInput {
+  tauxTva?: number | null;
+  mentionsLegales?: string | null;
+}
+
+// 6.1, 8.8 : paramétrage des taxes applicables (le cas échéant) et des
+// mentions légales figurant sur les documents commerciaux (6.7)
+export function modifierEntreprise(db: Db, idEntreprise: number, input: ModifierEntrepriseInput) {
+  return db
+    .update(schema.entreprise)
+    .set({
+      ...(input.tauxTva !== undefined && { tauxTva: input.tauxTva }),
+      ...(input.mentionsLegales !== undefined && { mentionsLegales: input.mentionsLegales }),
+    })
+    .where(eq(schema.entreprise.idEntreprise, idEntreprise))
+    .returning()
+    .get();
 }

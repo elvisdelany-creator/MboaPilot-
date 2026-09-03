@@ -1,7 +1,12 @@
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyReply } from "fastify";
 import type { Db } from "../../db/types.js";
 import type { Guard } from "../auth/auth.plugin.js";
 import { modifierEntreprise, trouverInfosEntrepriseParSite, type ModifierEntrepriseInput } from "./entreprise.repository.js";
+
+function envoyerErreur(reply: FastifyReply, erreur: unknown) {
+  const message = erreur instanceof Error ? erreur.message : "Erreur inconnue";
+  reply.code(400).send({ erreur: message });
+}
 
 // 6.7 : identification de l'entreprise/site pour l'en-tête des documents
 // commerciaux (ticket de caisse, pro-forma) — accessible à tout rôle
@@ -27,8 +32,12 @@ export function registerEntrepriseRoutes(app: FastifyInstance, db: Db, guards: {
         reply.code(404).send({ erreur: "Entreprise introuvable" });
         return;
       }
-      const entreprise = modifierEntreprise(db, infosActuelles.entreprise.idEntreprise, request.body);
-      reply.code(200).send(entreprise);
+      try {
+        const entreprise = modifierEntreprise(db, infosActuelles.entreprise.idEntreprise, request.body);
+        reply.code(200).send(entreprise);
+      } catch (erreur) {
+        envoyerErreur(reply, erreur);
+      }
     }
   );
 }

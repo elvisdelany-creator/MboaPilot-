@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { creerDbTest, type Db } from "../../test-utils/db.js";
-import { modifierEntreprise, trouverInfosEntrepriseParSite, trouverTauxCommissionVendeurParSite } from "./entreprise.repository.js";
+import { modifierEntreprise, trouverInfosEntrepriseParSite, trouverJalonsAlerteParSite, trouverTauxCommissionVendeurParSite } from "./entreprise.repository.js";
 import * as schema from "../../db/schema.js";
 
 let db: Db;
@@ -57,6 +57,63 @@ describe("modifierEntreprise (6.1, 8.8)", () => {
     const modifiee = modifierEntreprise(db, ent.idEntreprise, { tauxCommissionVendeurDefaut: 100 });
 
     expect(modifiee?.tauxCommissionVendeurDefaut).toBe(100);
+  });
+});
+
+describe("modifierEntreprise — jalons d'alerte (4.4, 8.8)", () => {
+  it("définit des jalons personnalisés valides (anticipe > modere > urgent)", () => {
+    const ent = db.insert(schema.entreprise).values({ nom: "Boutique Test" }).returning().get();
+
+    const modifiee = modifierEntreprise(db, ent.idEntreprise, { jalonAlerteUrgent: 2, jalonAlerteModere: 5, jalonAlerteAnticipe: 10 });
+
+    expect(modifiee?.jalonAlerteUrgent).toBe(2);
+    expect(modifiee?.jalonAlerteModere).toBe(5);
+    expect(modifiee?.jalonAlerteAnticipe).toBe(10);
+  });
+
+  it("rejette des jalons non strictement croissants (urgent >= modere)", () => {
+    const ent = db.insert(schema.entreprise).values({ nom: "Boutique Test" }).returning().get();
+
+    expect(() => modifierEntreprise(db, ent.idEntreprise, { jalonAlerteUrgent: 5, jalonAlerteModere: 5, jalonAlerteAnticipe: 10 })).toThrow();
+  });
+
+  it("rejette des jalons non strictement croissants (modere >= anticipe)", () => {
+    const ent = db.insert(schema.entreprise).values({ nom: "Boutique Test" }).returning().get();
+
+    expect(() => modifierEntreprise(db, ent.idEntreprise, { jalonAlerteUrgent: 1, jalonAlerteModere: 10, jalonAlerteAnticipe: 5 })).toThrow();
+  });
+
+  it("rejette un jalon inférieur à 1 jour", () => {
+    const ent = db.insert(schema.entreprise).values({ nom: "Boutique Test" }).returning().get();
+
+    expect(() => modifierEntreprise(db, ent.idEntreprise, { jalonAlerteUrgent: 0, jalonAlerteModere: 3, jalonAlerteAnticipe: 7 })).toThrow();
+  });
+
+  it("valide la combinaison résultante même si un seul jalon est modifié à la fois", () => {
+    const ent = db.insert(schema.entreprise).values({ nom: "Boutique Test" }).returning().get();
+    // par défaut : urgent=1, modere=3, anticipe=7 — passer modere à 8 casserait modere < anticipe
+    expect(() => modifierEntreprise(db, ent.idEntreprise, { jalonAlerteModere: 8 })).toThrow();
+  });
+});
+
+describe("trouverJalonsAlerteParSite (4.4, 8.8)", () => {
+  it("renvoie les jalons par défaut (7/3/1) quand rien n'est configuré", () => {
+    const ent = db.insert(schema.entreprise).values({ nom: "Boutique Test" }).returning().get();
+    const site = db.insert(schema.site).values({ idEntreprise: ent.idEntreprise, nom: "Site A" }).returning().get();
+
+    expect(trouverJalonsAlerteParSite(db, site.idSite)).toEqual({ urgent: 1, modere: 3, anticipe: 7 });
+  });
+
+  it("renvoie les jalons personnalisés configurés pour l'entreprise du site", () => {
+    const ent = db.insert(schema.entreprise).values({ nom: "Boutique Test" }).returning().get();
+    const site = db.insert(schema.site).values({ idEntreprise: ent.idEntreprise, nom: "Site A" }).returning().get();
+    modifierEntreprise(db, ent.idEntreprise, { jalonAlerteUrgent: 2, jalonAlerteModere: 5, jalonAlerteAnticipe: 10 });
+
+    expect(trouverJalonsAlerteParSite(db, site.idSite)).toEqual({ urgent: 2, modere: 5, anticipe: 10 });
+  });
+
+  it("renvoie les jalons par défaut pour un site inconnu", () => {
+    expect(trouverJalonsAlerteParSite(db, 999999)).toEqual({ urgent: 1, modere: 3, anticipe: 7 });
   });
 });
 

@@ -8,10 +8,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { InfosEntreprise } from "@/lib/types";
 
-// 6.1, 6.2, 8.8 : paramétrage des taxes applicables (le cas échéant), des
-// mentions légales figurant sur les documents commerciaux (6.7) et du taux
-// de commission vendeur par défaut (6.2). Champs vides par défaut : aucune
-// obligation ou taux n'est présumé pour l'utilisateur.
+// 6.1, 6.2, 4.4, 8.8 : paramétrage des taxes applicables (le cas échéant),
+// des mentions légales figurant sur les documents commerciaux (6.7), du
+// taux de commission vendeur par défaut (6.2) et des jalons d'alerte
+// d'échéance (4.4, par défaut 1/3/7 jours).
 export function ParametresTab() {
   const { session, deconnecter } = useAuth();
   const token = session!.token;
@@ -20,7 +20,11 @@ export function ParametresTab() {
   const [tauxTva, setTauxTva] = useState("");
   const [mentionsLegales, setMentionsLegales] = useState("");
   const [tauxCommission, setTauxCommission] = useState("");
+  const [jalonUrgent, setJalonUrgent] = useState("1");
+  const [jalonModere, setJalonModere] = useState("3");
+  const [jalonAnticipe, setJalonAnticipe] = useState("7");
   const [enCours, setEnCours] = useState(false);
+  const [enCoursJalons, setEnCoursJalons] = useState(false);
 
   function gererErreur(erreur: unknown, messageParDefaut: string) {
     if (erreur instanceof ErreurAuthentification) {
@@ -38,6 +42,9 @@ export function ParametresTab() {
         setTauxTva(infos.entreprise.tauxTva !== null ? String(infos.entreprise.tauxTva / 100) : "");
         setMentionsLegales(infos.entreprise.mentionsLegales ?? "");
         setTauxCommission(infos.entreprise.tauxCommissionVendeurDefaut !== null ? String(infos.entreprise.tauxCommissionVendeurDefaut) : "");
+        setJalonUrgent(String(infos.entreprise.jalonAlerteUrgent));
+        setJalonModere(String(infos.entreprise.jalonAlerteModere));
+        setJalonAnticipe(String(infos.entreprise.jalonAlerteAnticipe));
       })
       .catch((e) => gererErreur(e, "Impossible de charger les paramètres de l'entreprise."));
   }
@@ -61,6 +68,23 @@ export function ParametresTab() {
       gererErreur(erreur, "Échec de l'enregistrement des paramètres.");
     } finally {
       setEnCours(false);
+    }
+  }
+
+  async function enregistrerJalons() {
+    setEnCoursJalons(true);
+    try {
+      await modifierEntrepriseRequete(token, {
+        jalonAlerteUrgent: Number(jalonUrgent),
+        jalonAlerteModere: Number(jalonModere),
+        jalonAlerteAnticipe: Number(jalonAnticipe),
+      });
+      toast.success("Jalons d'alerte enregistrés.");
+      rechargerEntreprise();
+    } catch (erreur) {
+      gererErreur(erreur, "Échec de l'enregistrement des jalons.");
+    } finally {
+      setEnCoursJalons(false);
     }
   }
 
@@ -116,6 +140,31 @@ export function ParametresTab() {
 
         <Button className="w-fit cursor-pointer" disabled={enCours} onClick={enregistrer}>
           {enCours ? "Enregistrement…" : "Enregistrer"}
+        </Button>
+      </Card>
+
+      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Jalons d'alerte d'échéance</p>
+      <Card className="max-w-xl gap-4 p-4">
+        <p className="text-sm text-muted-foreground">
+          Nombre de jours avant l'échéance d'un abonnement déclenchant une alerte (4.4) — par défaut 1, 3 et 7 jours. Doivent être
+          strictement croissants.
+        </p>
+        <div className="grid grid-cols-3 gap-3">
+          <div>
+            <Label htmlFor="parametres-jalon-urgent">Urgent (rouge)</Label>
+            <Input id="parametres-jalon-urgent" type="number" min={1} value={jalonUrgent} onChange={(e) => setJalonUrgent(e.target.value)} className="mt-1" />
+          </div>
+          <div>
+            <Label htmlFor="parametres-jalon-modere">Modéré (orange)</Label>
+            <Input id="parametres-jalon-modere" type="number" min={1} value={jalonModere} onChange={(e) => setJalonModere(e.target.value)} className="mt-1" />
+          </div>
+          <div>
+            <Label htmlFor="parametres-jalon-anticipe">Anticipé (ambre)</Label>
+            <Input id="parametres-jalon-anticipe" type="number" min={1} value={jalonAnticipe} onChange={(e) => setJalonAnticipe(e.target.value)} className="mt-1" />
+          </div>
+        </div>
+        <Button className="w-fit cursor-pointer" disabled={enCoursJalons} onClick={enregistrerJalons}>
+          {enCoursJalons ? "Enregistrement…" : "Enregistrer"}
         </Button>
       </Card>
     </div>

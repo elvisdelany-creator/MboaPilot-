@@ -1514,6 +1514,49 @@ describe("GET /api/v1/entreprise (6.7)", () => {
 
     expect(reponse.statusCode).toBe(403);
   });
+
+  it("8.8 : un administrateur configure des jalons d'alerte personnalisés, reflétés dans la liste d'échéance", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    creerUtilisateur(db, { siteId, nom: "Admin", prenom: "D", identifiant: "admin1", motDePasse: "motdepasse-secret", role: "ADMINISTRATEUR" });
+    const tokenAdmin = await connecter(app, "admin1");
+
+    const modification = await app.inject({
+      method: "PATCH",
+      url: "/api/v1/entreprise",
+      headers: authHeader(tokenAdmin),
+      payload: { jalonAlerteUrgent: 2, jalonAlerteModere: 5, jalonAlerteAnticipe: 10 },
+    });
+    expect(modification.statusCode).toBe(200);
+    expect(modification.json().jalonAlerteAnticipe).toBe(10);
+
+    const abonne = db.insert(schema.abonne).values({ siteId, nom: "Nga", prenom: "Paul", telephone: "690000000" }).returning().get();
+    const aujourdHui = new Date();
+    const dateFin = new Date(aujourdHui);
+    dateFin.setDate(dateFin.getDate() + 10);
+    db.insert(schema.abonnement)
+      .values({ idAbonne: abonne.idAbonne, idFormule, siteId, dateDebut: aujourdHui.toISOString().slice(0, 10), dateFin: dateFin.toISOString().slice(0, 10), statut: "ACTIF", creePar: userId })
+      .run();
+
+    const alertes = await app.inject({ method: "GET", url: `/api/v1/alertes-echeance?siteId=${siteId}`, headers: authHeader(tokenAdmin) });
+    expect(alertes.statusCode).toBe(200);
+    expect(alertes.json()).toHaveLength(1);
+    expect(alertes.json()[0].jalon).toBe(10);
+  });
+
+  it("8.8 : rejette des jalons non strictement croissants (400)", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    creerUtilisateur(db, { siteId, nom: "Admin", prenom: "D", identifiant: "admin1", motDePasse: "motdepasse-secret", role: "ADMINISTRATEUR" });
+    const tokenAdmin = await connecter(app, "admin1");
+
+    const reponse = await app.inject({
+      method: "PATCH",
+      url: "/api/v1/entreprise",
+      headers: authHeader(tokenAdmin),
+      payload: { jalonAlerteUrgent: 5, jalonAlerteModere: 3, jalonAlerteAnticipe: 7 },
+    });
+
+    expect(reponse.statusCode).toBe(400);
+  });
 });
 
 describe("Comptes partagés streaming (5.9)", () => {

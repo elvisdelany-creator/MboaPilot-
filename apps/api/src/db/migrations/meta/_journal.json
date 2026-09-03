@@ -43,6 +43,13 @@
       "when": 1788446002014,
       "tag": "0005_broad_reavers",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1788453690872,
+      "tag": "0006_needy_warbound",
+      "breakpoints": true
     }
   ]
 }

@@ -50,7 +50,8 @@ describe("listerAlertesEcheance — liste vivante des abonnements à échéance 
     const alertes = listerAlertesEcheance(db, siteId, "2025-10-16");
 
     expect(alertes).toHaveLength(1);
-    expect(alertes[0].jalon).toBe("J-7");
+    expect(alertes[0].jalon).toBe(7);
+    expect(alertes[0].rang).toBe(3);
     expect(alertes[0].abonne.nom).toBe("Nga Ndongo");
     expect(alertes[0].abonne.siteId).toBe(siteId);
     expect(alertes[0].formule.idFamille).toBe(idFamille);
@@ -58,7 +59,7 @@ describe("listerAlertesEcheance — liste vivante des abonnements à échéance 
 
   it("un abonnement réabonné (échéance repoussée) disparaît de la liste, même si une alerte a déjà été journalisée", () => {
     const sub = creerAbonnement(siteId, "2025-10-16"); // J-1 le 2025-10-15
-    db.insert(schema.alerteEcheance).values({ numeroAbonnement: sub.numeroAbonnement, jalon: "J-1", dateDeclenchement: "2025-10-15" }).run();
+    db.insert(schema.alerteEcheance).values({ numeroAbonnement: sub.numeroAbonnement, jalonJours: 1, dateDeclenchement: "2025-10-15" }).run();
 
     // réabonnement : la date de fin est repoussée
     db.update(schema.abonnement).set({ dateFin: "2025-11-14" }).where(eq(schema.abonnement.numeroAbonnement, sub.numeroAbonnement)).run();
@@ -91,6 +92,17 @@ describe("listerAlertesEcheance — liste vivante des abonnements à échéance 
 
     const alertes = listerAlertesEcheance(db, siteId, "2025-10-16");
 
-    expect(alertes.map((a) => a.jalon)).toEqual(["J-1", "J-7"]);
+    expect(alertes.map((a) => a.jalon)).toEqual([1, 7]);
+  });
+
+  it("8.8 : respecte des jalons personnalisés configurés sur le site", () => {
+    db.update(schema.entreprise).set({ jalonAlerteUrgent: 2, jalonAlerteModere: 5, jalonAlerteAnticipe: 10 }).run();
+    creerAbonnement(siteId, "2025-10-26"); // 10 jours restants au 2025-10-16
+
+    const alertes = listerAlertesEcheance(db, siteId, "2025-10-16");
+
+    expect(alertes).toHaveLength(1);
+    expect(alertes[0].jalon).toBe(10);
+    expect(alertes[0].rang).toBe(3);
   });
 });

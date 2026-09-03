@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import { detecterJalonAlerte, evaluerExpiration, evaluerSuiviCommission } from "@mboapilot/shared";
 import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
+import { trouverJalonsAlerteEntreprise } from "../entreprise/entreprise.repository.js";
 
 export interface JobQuotidienResultat {
   abonnementsExpires: number;
@@ -23,6 +24,9 @@ export function executerJobQuotidien(db: Db, aujourdHui: string): JobQuotidienRe
   };
 
   const abonnementsActifs = db.select().from(schema.abonnement).where(eq(schema.abonnement.statut, "ACTIF")).all();
+  // 8.8 : jalons paramétrables — mode local mono-entreprise (2.2), un seul
+  // jeu de seuils pour tous les sites traités par ce job
+  const jalonsConfigures = trouverJalonsAlerteEntreprise(db);
 
   for (const abonnement of abonnementsActifs) {
     const nouveauStatut = evaluerExpiration(abonnement.statut, abonnement.dateFin, aujourdHui);
@@ -45,17 +49,17 @@ export function executerJobQuotidien(db: Db, aujourdHui: string): JobQuotidienRe
       continue; // un abonnement qui vient d'expirer n'est plus éligible à une alerte de rappel
     }
 
-    const jalon = detecterJalonAlerte(abonnement.dateFin, aujourdHui);
+    const jalon = detecterJalonAlerte(abonnement.dateFin, aujourdHui, jalonsConfigures);
     if (jalon) {
       const dejaEnvoyee = db
         .select()
         .from(schema.alerteEcheance)
         .where(eq(schema.alerteEcheance.numeroAbonnement, abonnement.numeroAbonnement))
         .all()
-        .some((a) => a.jalon === jalon && a.dateDeclenchement === aujourdHui);
+        .some((a) => a.jalonJours === jalon.jours && a.dateDeclenchement === aujourdHui);
       if (!dejaEnvoyee) {
         db.insert(schema.alerteEcheance)
-          .values({ numeroAbonnement: abonnement.numeroAbonnement, jalon, dateDeclenchement: aujourdHui })
+          .values({ numeroAbonnement: abonnement.numeroAbonnement, jalonJours: jalon.jours, dateDeclenchement: aujourdHui })
           .run();
         resultat.alertesCreees += 1;
       }

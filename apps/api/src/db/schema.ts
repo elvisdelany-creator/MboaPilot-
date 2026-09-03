@@ -19,6 +19,12 @@ export const entreprise = sqliteTable("entreprise", {
   // sous_distributeur.taux_commission_defaut) — appliqué lors d'un
   // recrutement CANAL+ sans apporteur d'affaires référent
   tauxCommissionVendeurDefaut: integer("taux_commission_vendeur_defaut_pourmille"),
+  // 4.4, 8.8 : jalons d'alerte d'échéance, paramétrables (par défaut J-7/J-3/J-1,
+  // en jours avant date_fin) — jalonAlerteAnticipe > jalonAlerteModere >
+  // jalonAlerteUrgent, validé à la modification (entreprise.repository.ts)
+  jalonAlerteUrgent: integer("jalon_alerte_urgent_jours").notNull().default(1),
+  jalonAlerteModere: integer("jalon_alerte_modere_jours").notNull().default(3),
+  jalonAlerteAnticipe: integer("jalon_alerte_anticipe_jours").notNull().default(7),
   dateCreation: text("date_creation").notNull().default(now),
 });
 
@@ -206,12 +212,14 @@ export const suiviCommissionCanalplus = sqliteTable("suivi_commission_canalplus"
 export const alerteEcheance = sqliteTable("alerte_echeance", {
   idAlerte: integer("id_alerte").primaryKey({ autoIncrement: true }),
   numeroAbonnement: integer("numero_abonnement").notNull().references(() => abonnement.numeroAbonnement),
-  jalon: text("jalon", { enum: ["J-7", "J-3", "J-1"] }).notNull(),
+  // 4.4, 8.8 : nombre de jours du jalon atteint — un entier plutôt qu'un
+  // libellé fixe, pour rester valide quels que soient les jalons configurés
+  jalonJours: integer("jalon").notNull(),
   dateDeclenchement: text("date_declenchement").notNull(),
   dateCreation: text("date_creation").notNull().default(now),
 }, (t) => ({
   // idempotence : le job peut tourner plusieurs fois le même jour sans dupliquer l'alerte
-  uniqueParJalon: uniqueIndex("idx_alerte_unique").on(t.numeroAbonnement, t.jalon, t.dateDeclenchement),
+  uniqueParJalon: uniqueIndex("idx_alerte_unique").on(t.numeroAbonnement, t.jalonJours, t.dateDeclenchement),
 }));
 
 // --- 3.2.3 Catalogue commercial, ventes et finance ---

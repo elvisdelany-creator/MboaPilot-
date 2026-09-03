@@ -16,7 +16,7 @@ import { AppHeader, type Vue } from "@/components/layout/AppHeader";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { EvolutionCaChart } from "./EvolutionCaChart";
-import type { AlerteEcheance, CommissionCanalplusEnCours, IndicateursJour, JalonAlerte, ModePaiement, PointEvolutionCA, Produit, VentilationPaiement } from "@/lib/types";
+import type { AlerteEcheance, CommissionCanalplusEnCours, IndicateursJour, ModePaiement, PointEvolutionCA, Produit, VentilationPaiement } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 interface Props {
@@ -24,19 +24,18 @@ interface Props {
   onReabonnerDepuisAlerte: (alerte: AlerteEcheance) => void;
 }
 
-const ORDRE_URGENCE: Record<JalonAlerte, number> = { "J-1": 0, "J-3": 1, "J-7": 2 };
-
-const STYLE_JALON: Record<JalonAlerte, string> = {
-  "J-1": "bg-alert-j1-bg text-alert-j1-fg",
-  "J-3": "bg-alert-j3-bg text-alert-j3-fg",
-  "J-7": "bg-alert-j7-bg text-alert-j7-fg",
+// 4.4, 8.8 : le rang (1 = le plus urgent) pilote la couleur, indépendamment
+// des jours effectivement configurés pour chaque jalon (paramétrable en
+// Administration > Paramètres)
+const STYLE_JALON: Record<1 | 2 | 3, string> = {
+  1: "bg-alert-j1-bg text-alert-j1-fg",
+  2: "bg-alert-j3-bg text-alert-j3-fg",
+  3: "bg-alert-j7-bg text-alert-j7-fg",
 };
 
-const LIBELLE_JALON: Record<JalonAlerte, string> = {
-  "J-1": "Échéance demain",
-  "J-3": "Échéance dans 3 jours",
-  "J-7": "Échéance dans 7 jours",
-};
+function libelleJalon(jours: number): string {
+  return jours === 1 ? "Échéance demain" : `Échéance dans ${jours} jours`;
+}
 
 const LIBELLE_MODE_PAIEMENT: Record<ModePaiement, string> = {
   CASH: "Comptant",
@@ -109,10 +108,7 @@ export function DashboardPage({ onNaviguer, onReabonnerDepuisAlerte }: Props) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(charger, [token, siteId, periodeCA]);
 
-  const alertesTriees = useMemo(
-    () => [...(alertes ?? [])].sort((a, b) => ORDRE_URGENCE[a.jalon] - ORDRE_URGENCE[b.jalon]),
-    [alertes]
-  );
+  const alertesTriees = useMemo(() => [...(alertes ?? [])].sort((a, b) => a.rang - b.rang), [alertes]);
 
   const totalEncaisseJour = encaissements.reduce((total, v) => total + v.total, 0);
 
@@ -237,7 +233,7 @@ export function DashboardPage({ onNaviguer, onReabonnerDepuisAlerte }: Props) {
           {alertes !== null && alertesTriees.length === 0 && (
             <Card className="items-center gap-2 p-8 text-center">
               <p className="font-medium text-card-foreground">Aucune échéance à traiter.</p>
-              <p className="text-sm text-muted-foreground">Les abonnements à J-7, J-3 ou J-1 apparaîtront ici automatiquement.</p>
+              <p className="text-sm text-muted-foreground">Les abonnements proches de l'échéance apparaîtront ici automatiquement.</p>
             </Card>
           )}
 
@@ -249,18 +245,18 @@ export function DashboardPage({ onNaviguer, onReabonnerDepuisAlerte }: Props) {
                     <span
                       className={cn(
                         "flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold",
-                        STYLE_JALON[alerte.jalon]
+                        STYLE_JALON[alerte.rang]
                       )}
                     >
                       <AlertTriangle className="size-3.5" aria-hidden="true" />
-                      {alerte.jalon}
+                      J-{alerte.jalon}
                     </span>
                     <div>
                       <p className="font-medium text-card-foreground">
                         {alerte.abonne.prenom} {alerte.abonne.nom}
                       </p>
                       <p className="text-sm text-muted-foreground">
-                        {LIBELLE_JALON[alerte.jalon]} · {alerte.formule.libelle} · {alerte.abonne.telephone}
+                        {libelleJalon(alerte.jalon)} · {alerte.formule.libelle} · {alerte.abonne.telephone}
                       </p>
                     </div>
                   </div>

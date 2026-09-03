@@ -74,6 +74,10 @@ export interface InfosEntreprise {
     mentionsLegales: string | null;
     // 6.2, 8.8 : taux en pour-mille, comme ComptePartage/apporteur ; null = non configuré
     tauxCommissionVendeurDefaut: number | null;
+    // 4.4, 8.8 : jalons d'alerte d'échéance, en jours (par défaut 1/3/7)
+    jalonAlerteUrgent: number;
+    jalonAlerteModere: number;
+    jalonAlerteAnticipe: number;
   };
   site: { idSite: number; nom: string; adresse: string | null };
 }
@@ -109,11 +113,14 @@ export interface Abonnement {
   dateCreation: string;
 }
 
-export type JalonAlerte = "J-7" | "J-3" | "J-1";
-
+// 4.4, 8.8 : jalons d'alerte paramétrables (par défaut J-7/J-3/J-1) — jalon
+// est le nombre de jours du seuil atteint, rang classe l'urgence (1 = le
+// plus urgent) indépendamment des valeurs configurées, pour un affichage
+// (couleur, tri) stable même si les seuils changent.
 export interface AlerteEcheance {
   numeroAbonnement: number;
-  jalon: JalonAlerte;
+  jalon: number;
+  rang: 1 | 2 | 3;
   joursRestants: number;
   dateFin: string;
   abonne: Abonne;

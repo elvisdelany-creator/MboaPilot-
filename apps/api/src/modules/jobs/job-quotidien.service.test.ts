@@ -87,7 +87,7 @@ describe("executerJobQuotidien — alertes J-7/J-3/J-1 (4.4)", () => {
       .where(eq(schema.alerteEcheance.numeroAbonnement, sub.numeroAbonnement))
       .all();
     expect(alertes).toHaveLength(1);
-    expect(alertes[0].jalon).toBe("J-7");
+    expect(alertes[0].jalonJours).toBe(7);
     expect(alertes[0].dateDeclenchement).toBe("2025-10-23");
   });
 
@@ -110,6 +110,22 @@ describe("executerJobQuotidien — alertes J-7/J-3/J-1 (4.4)", () => {
     const resultat = executerJobQuotidien(db, "2025-10-15");
 
     expect(resultat.alertesCreees).toBe(0);
+  });
+
+  it("8.8 : respecte des jalons personnalisés configurés sur l'entreprise", () => {
+    db.update(schema.entreprise).set({ jalonAlerteUrgent: 2, jalonAlerteModere: 5, jalonAlerteAnticipe: 10 }).run();
+    const abonne = creerAbonne("690000009");
+    const sub = creerAbonnement(abonne.idAbonne, "2025-10-01", "2025-10-30");
+
+    // J-7 n'est plus un seuil configuré : aucune alerte
+    const resultatJ7 = executerJobQuotidien(db, "2025-10-23");
+    expect(resultatJ7.alertesCreees).toBe(0);
+
+    // J-10 (nouveau seuil "anticipé") déclenche bien une alerte
+    const resultatJ10 = executerJobQuotidien(db, "2025-10-20");
+    expect(resultatJ10.alertesCreees).toBe(1);
+    const alertes = db.select().from(schema.alerteEcheance).where(eq(schema.alerteEcheance.numeroAbonnement, sub.numeroAbonnement)).all();
+    expect(alertes[0].jalonJours).toBe(10);
   });
 });
 

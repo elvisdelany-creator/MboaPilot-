@@ -1,11 +1,13 @@
 import { eq } from "drizzle-orm";
-import { joursAvantEcheance, type JalonAlerte } from "@mboapilot/shared";
+import { classerUrgenceEcheance, joursAvantEcheance } from "@mboapilot/shared";
 import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
+import { trouverJalonsAlerteParSite } from "../entreprise/entreprise.repository.js";
 
 export interface AlerteEcheanceDetaillee {
   numeroAbonnement: number;
-  jalon: JalonAlerte;
+  jalon: number; // 8.8 : jours du seuil configuré atteint (plus un libellé fixe "J-7")
+  rang: 1 | 2 | 3; // 1 = le plus urgent, quels que soient les jalons configurés
   joursRestants: number;
   dateFin: string;
   // abonné et formule complets : le tableau de bord en a besoin pour
@@ -14,24 +16,13 @@ export interface AlerteEcheanceDetaillee {
   formule: typeof schema.formule.$inferSelect;
 }
 
-const SEUILS: [number, JalonAlerte][] = [
-  [1, "J-1"],
-  [3, "J-3"],
-  [7, "J-7"],
-];
-
-function classer(joursRestants: number): JalonAlerte | null {
-  for (const [seuil, jalon] of SEUILS) {
-    if (joursRestants <= seuil) return jalon;
-  }
-  return null;
-}
-
-// 9.3 : liste vivante (pas un rejeu du journal d'alertes, 4.4) des abonnements
-// ACTIF à échéance sous 7 jours, cloisonnée par site, triée par urgence.
-// Un abonnement réabonné (date_fin repoussée) sort naturellement de la liste,
-// sans qu'il soit nécessaire de purger le journal d'alertes.
+// 9.3, 8.8 : liste vivante (pas un rejeu du journal d'alertes, 4.4) des
+// abonnements ACTIF à échéance sous le jalon le plus anticipé configuré,
+// cloisonnée par site, triée par urgence. Un abonnement réabonné (date_fin
+// repoussée) sort naturellement de la liste, sans purger le journal d'alertes.
 export function listerAlertesEcheance(db: Db, siteId: number, aujourdHui: string): AlerteEcheanceDetaillee[] {
+  const jalonsConfigures = trouverJalonsAlerteParSite(db, siteId);
+
   const lignes = db
     .select({ abonnement: schema.abonnement, abonne: schema.abonne, formule: schema.formule })
     .from(schema.abonnement)
@@ -50,7 +41,8 @@ export function listerAlertesEcheance(db: Db, siteId: number, aujourdHui: string
       formule: l.formule,
     }))
     .filter((l) => l.joursRestants >= 0)
-    .map((l) => ({ ...l, jalon: classer(l.joursRestants) }))
-    .filter((l): l is AlerteEcheanceDetaillee => l.jalon !== null)
+    .map((l) => ({ ...l, classement: classerUrgenceEcheance(l.joursRestants, jalonsConfigures) }))
+    .filter((l): l is typeof l & { classement: NonNullable<typeof l.classement> } => l.classement !== null)
+    .map((l) => ({ ...l, jalon: l.classement.jours, rang: l.classement.rang }))
     .sort((a, b) => a.joursRestants - b.joursRestants);
 }

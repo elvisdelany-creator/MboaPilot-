@@ -9,6 +9,7 @@ import { ApporteursPage } from "@/components/apporteurs/ApporteursPage";
 import { ApporteurFichePage } from "@/components/apporteurs/ApporteurFichePage";
 import { StockPage } from "@/components/stock/StockPage";
 import { ClientsPage } from "@/components/clients/ClientsPage";
+import { AdministrationPage } from "@/components/administration/AdministrationPage";
 import type { Vue } from "@/components/layout/AppHeader";
 import type { Abonne, AlerteEcheance } from "@/lib/types";
 
@@ -18,7 +19,8 @@ type EtatVue =
   | { nom: "sav" }
   | { nom: "apporteurs" }
   | { nom: "stock" }
-  | { nom: "clients" };
+  | { nom: "clients" }
+  | { nom: "administration" };
 
 function Contenu() {
   const { session } = useAuth();
@@ -64,6 +66,10 @@ function Contenu() {
 
   if (vue.nom === "clients") {
     return <ClientsPage onNaviguer={naviguer} onReabonnerDepuisFiche={reabonnerDepuisFiche} />;
+  }
+
+  if (vue.nom === "administration") {
+    return <AdministrationPage onNaviguer={naviguer} />;
   }
 
   return <CaissePage onNaviguer={naviguer} abonneInitial={vue.abonneInitial} idFamilleInitiale={vue.idFamilleInitiale} />;

@@ -71,6 +71,42 @@ export interface Utilisateur {
   idApporteur: number | null;
 }
 
+// 8.7 : compte géré depuis l'administration (distinct de Utilisateur, qui
+// est le profil renvoyé à la connexion — celui-ci porte en plus le statut
+// actif/inactif consultable par un administrateur)
+export interface CompteUtilisateur {
+  idUser: number;
+  siteId: number;
+  nom: string;
+  prenom: string;
+  identifiant: string;
+  role: Role;
+  idApporteur: number | null;
+  actif: number;
+  dateCreation: string;
+}
+
+export interface Site {
+  idSite: number;
+  idEntreprise: number;
+  nom: string;
+  adresse: string | null;
+  actif: number;
+}
+
+export interface EntreeJournalAudit {
+  idAudit: number;
+  utilisateurId: number;
+  utilisateurNom: string;
+  utilisateurPrenom: string;
+  action: "CREATION" | "MODIFICATION" | "SUPPRESSION";
+  tableCible: string;
+  idCible: string;
+  valeurAvant: string | null;
+  valeurApres: string | null;
+  dateAction: string;
+}
+
 export interface NouvelAbonne {
   nom: string;
   prenom: string;

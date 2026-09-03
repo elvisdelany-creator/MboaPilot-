@@ -1047,3 +1047,162 @@ describe("Tableau de bord de pilotage (8.6, 9.3)", () => {
     expect(reponse.statusCode).toBe(403);
   });
 });
+
+describe("Module gestion des utilisateurs, rôles et sites (8.7)", () => {
+  async function connecterAdmin(app: FastifyInstance) {
+    creerUtilisateur(db, { siteId, nom: "Admin", prenom: "D", identifiant: "admin1", motDePasse: "motdepasse-secret", role: "ADMINISTRATEUR" });
+    return connecter(app, "admin1");
+  }
+
+  it("un administrateur crée un compte, le liste puis désactive et change son rôle", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const tokenAdmin = await connecterAdmin(app);
+
+    const creation = await app.inject({
+      method: "POST",
+      url: "/api/v1/utilisateurs",
+      headers: authHeader(tokenAdmin),
+      payload: { nom: "Nga", prenom: "Valentin", identifiant: "vnga", motDePasse: "motdepasse-secret", role: "CAISSIER" },
+    });
+    expect(creation.statusCode).toBe(201);
+    expect(creation.json()).not.toHaveProperty("motDePasseHash");
+    const idNouveau = creation.json().idUser;
+
+    const liste = await app.inject({ method: "GET", url: "/api/v1/utilisateurs", headers: authHeader(tokenAdmin) });
+    expect(liste.statusCode).toBe(200);
+    // le caissier créé au beforeEach + l'admin connecté + le nouveau compte
+    expect(liste.json()).toHaveLength(3);
+
+    const modification = await app.inject({
+      method: "PATCH",
+      url: `/api/v1/utilisateurs/${idNouveau}`,
+      headers: authHeader(tokenAdmin),
+      payload: { actif: false, role: "GERANT" },
+    });
+    expect(modification.statusCode).toBe(200);
+    expect(modification.json().actif).toBe(0);
+    expect(modification.json().role).toBe("GERANT");
+  });
+
+  it("un caissier ne peut ni lister ni créer de compte (403)", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const tokenCaissier = await connecter(app);
+
+    const liste = await app.inject({ method: "GET", url: "/api/v1/utilisateurs", headers: authHeader(tokenCaissier) });
+    expect(liste.statusCode).toBe(403);
+
+    const creation = await app.inject({
+      method: "POST",
+      url: "/api/v1/utilisateurs",
+      headers: authHeader(tokenCaissier),
+      payload: { nom: "X", prenom: "Y", identifiant: "xy", motDePasse: "motdepasse-secret", role: "CAISSIER" },
+    });
+    expect(creation.statusCode).toBe(403);
+  });
+
+  it("un administrateur ne peut pas désactiver son propre compte (400)", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const tokenAdmin = await connecterAdmin(app);
+    const idAdmin = (await app.inject({ method: "GET", url: "/api/v1/utilisateurs", headers: authHeader(tokenAdmin) }))
+      .json()
+      .find((u: { identifiant: string }) => u.identifiant === "admin1").idUser;
+
+    const reponse = await app.inject({
+      method: "PATCH",
+      url: `/api/v1/utilisateurs/${idAdmin}`,
+      headers: authHeader(tokenAdmin),
+      payload: { actif: false },
+    });
+
+    expect(reponse.statusCode).toBe(400);
+  });
+
+  it("renvoie 404 pour un utilisateur inconnu", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const tokenAdmin = await connecterAdmin(app);
+
+    const reponse = await app.inject({
+      method: "PATCH",
+      url: "/api/v1/utilisateurs/999999",
+      headers: authHeader(tokenAdmin),
+      payload: { actif: false },
+    });
+
+    expect(reponse.statusCode).toBe(404);
+  });
+
+  it("un administrateur crée un site et le liste parmi ceux de son entreprise", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const tokenAdmin = await connecterAdmin(app);
+
+    const creation = await app.inject({
+      method: "POST",
+      url: "/api/v1/sites",
+      headers: authHeader(tokenAdmin),
+      payload: { nom: "Site Bonamoussadi", adresse: "Douala" },
+    });
+    expect(creation.statusCode).toBe(201);
+
+    const liste = await app.inject({ method: "GET", url: "/api/v1/sites", headers: authHeader(tokenAdmin) });
+    expect(liste.statusCode).toBe(200);
+    expect(liste.json().map((s: { nom: string }) => s.nom)).toContain("Site Bonamoussadi");
+    expect(liste.json()).toHaveLength(2);
+
+    const idNouveauSite = creation.json().idSite;
+    const modification = await app.inject({
+      method: "PATCH",
+      url: `/api/v1/sites/${idNouveauSite}`,
+      headers: authHeader(tokenAdmin),
+      payload: { adresse: "Nouvelle adresse" },
+    });
+    expect(modification.statusCode).toBe(200);
+    expect(modification.json().adresse).toBe("Nouvelle adresse");
+  });
+
+  it("journalise et consulte l'audit d'une fusion de doublons, filtrable par table cible", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const tokenAdmin = await connecterAdmin(app);
+
+    async function creerAbonneViaRecrutement(telephone: string) {
+      await app.inject({
+        method: "POST",
+        url: "/api/v1/recrutements",
+        headers: authHeader(tokenAdmin),
+        payload: { siteId, userId, aujourdHui: "2025-11-16", abonne: { nom: "Nga", prenom: "Paul", telephone }, idFormule, montantEncaisse: 13000 },
+      });
+      const abonnes = await app.inject({ method: "GET", url: `/api/v1/abonnes?siteId=${siteId}&q=${telephone}`, headers: authHeader(tokenAdmin) });
+      return abonnes.json()[0].idAbonne as number;
+    }
+
+    const idPrincipal = await creerAbonneViaRecrutement("690000000");
+    const idDoublon = await creerAbonneViaRecrutement("690000001");
+
+    const fusion = await app.inject({
+      method: "POST",
+      url: "/api/v1/abonnes/fusion",
+      headers: authHeader(tokenAdmin),
+      payload: { idAbonnePrincipal: idPrincipal, idAbonneDoublon: idDoublon, userId },
+    });
+    expect(fusion.statusCode).toBe(200);
+
+    const journal = await app.inject({ method: "GET", url: "/api/v1/audit", headers: authHeader(tokenAdmin) });
+    expect(journal.statusCode).toBe(200);
+    expect(journal.json().length).toBeGreaterThanOrEqual(1);
+    expect(journal.json()[0].tableCible).toBe("abonne");
+
+    const journalFiltre = await app.inject({ method: "GET", url: "/api/v1/audit?tableCible=produit", headers: authHeader(tokenAdmin) });
+    expect(journalFiltre.statusCode).toBe(200);
+    expect(journalFiltre.json()).toHaveLength(0);
+  });
+
+  it("un caissier ne peut pas consulter le journal d'audit ni gérer les sites (403)", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const tokenCaissier = await connecter(app);
+
+    const audit = await app.inject({ method: "GET", url: "/api/v1/audit", headers: authHeader(tokenCaissier) });
+    expect(audit.statusCode).toBe(403);
+
+    const sites = await app.inject({ method: "GET", url: "/api/v1/sites", headers: authHeader(tokenCaissier) });
+    expect(sites.statusCode).toBe(403);
+  });
+});

@@ -12,7 +12,7 @@ const LIBELLES_ROLES: Record<string, string> = {
   APPORTEUR: "Apporteur d'affaires",
 };
 
-export type Vue = "dashboard" | "caisse" | "sav" | "apporteurs" | "stock" | "clients";
+export type Vue = "dashboard" | "caisse" | "sav" | "apporteurs" | "stock" | "clients" | "administration";
 
 interface Props {
   vueActive: Vue;
@@ -79,6 +79,16 @@ export function AppHeader({ vueActive, onNaviguer, children }: Props) {
             onClick={() => onNaviguer("stock")}
           >
             Catalogue
+          </Button>
+        )}
+        {utilisateur.role === "ADMINISTRATEUR" && (
+          <Button
+            variant={vueActive === "administration" ? "default" : "ghost"}
+            className="h-9 cursor-pointer"
+            aria-current={vueActive === "administration" ? "page" : undefined}
+            onClick={() => onNaviguer("administration")}
+          >
+            Administration
           </Button>
         )}
       </nav>

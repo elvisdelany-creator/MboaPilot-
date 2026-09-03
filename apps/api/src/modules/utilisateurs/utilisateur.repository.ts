@@ -38,3 +38,40 @@ export function creerUtilisateur(db: Db, input: CreerUtilisateurInput) {
 export function trouverUtilisateurParIdentifiant(db: Db, identifiant: string) {
   return db.select().from(schema.utilisateur).where(eq(schema.utilisateur.identifiant, identifiant)).get();
 }
+
+const COLONNES_SANS_HASH = {
+  idUser: schema.utilisateur.idUser,
+  siteId: schema.utilisateur.siteId,
+  nom: schema.utilisateur.nom,
+  prenom: schema.utilisateur.prenom,
+  identifiant: schema.utilisateur.identifiant,
+  role: schema.utilisateur.role,
+  idApporteur: schema.utilisateur.idApporteur,
+  actif: schema.utilisateur.actif,
+  dateCreation: schema.utilisateur.dateCreation,
+};
+
+// 8.7 : comptes du site, actifs et inactifs (une désactivation reste
+// consultable — ce n'est pas une suppression), jamais le hash du mot de passe
+export function listerUtilisateurs(db: Db, siteId: number) {
+  return db.select(COLONNES_SANS_HASH).from(schema.utilisateur).where(eq(schema.utilisateur.siteId, siteId)).all();
+}
+
+export interface ModifierUtilisateurInput {
+  actif?: boolean;
+  role?: Role;
+}
+
+// 8.7 : désactivation de compte et changement de rôle — jamais de suppression
+// (l'historique tracé par userId sur factures/abonnements/SAV doit rester valide)
+export function modifierUtilisateur(db: Db, idUser: number, input: ModifierUtilisateurInput) {
+  return db
+    .update(schema.utilisateur)
+    .set({
+      ...(input.actif !== undefined && { actif: input.actif ? 1 : 0 }),
+      ...(input.role !== undefined && { role: input.role }),
+    })
+    .where(eq(schema.utilisateur.idUser, idUser))
+    .returning(COLONNES_SANS_HASH)
+    .get();
+}

@@ -7,9 +7,11 @@ import type {
   ChangerFormuleResultat,
   ChangerStatutSavResultat,
   CommissionCanalplusEnCours,
+  CompteUtilisateur,
   DossierSav,
   DossierSavDetaille,
   EchangeMaterielResultat,
+  EntreeJournalAudit,
   Fiche360,
   FicheApporteur,
   HistoriquePrixProduit,
@@ -20,6 +22,8 @@ import type {
   PointEvolutionCA,
   Produit,
   RecrutementResultat,
+  Role,
+  Site,
   StatutSav,
   StockMouvement,
   TransactionMobileMoney,
@@ -486,4 +490,74 @@ export async function chargerEncaissementsJour(token: string, siteId: number, au
 export async function chargerCommissionsCanalplusEnCours(token: string, siteId: number): Promise<CommissionCanalplusEnCours[]> {
   const reponse = await fetch(`${BASE}/tableau-bord/commissions-canalplus?siteId=${siteId}`, { headers: headersAuth(token) });
   return lireJson<CommissionCanalplusEnCours[]>(reponse);
+}
+
+// 8.7 : gestion des comptes utilisateurs, des sites et journal d'audit —
+// réservé à l'Administrateur
+export async function chargerUtilisateurs(token: string): Promise<CompteUtilisateur[]> {
+  const reponse = await fetch(`${BASE}/utilisateurs`, { headers: headersAuth(token) });
+  return lireJson<CompteUtilisateur[]>(reponse);
+}
+
+export interface CreerCompteUtilisateurPayload {
+  nom: string;
+  prenom: string;
+  identifiant: string;
+  motDePasse: string;
+  role: Role;
+  siteId?: number;
+}
+
+export async function creerCompteUtilisateurRequete(token: string, payload: CreerCompteUtilisateurPayload): Promise<CompteUtilisateur> {
+  const reponse = await fetch(`${BASE}/utilisateurs`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headersAuth(token) },
+    body: JSON.stringify(payload),
+  });
+  return lireJson<CompteUtilisateur>(reponse);
+}
+
+export async function modifierCompteUtilisateurRequete(
+  token: string,
+  idUser: number,
+  payload: { actif?: boolean; role?: Role }
+): Promise<CompteUtilisateur> {
+  const reponse = await fetch(`${BASE}/utilisateurs/${idUser}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...headersAuth(token) },
+    body: JSON.stringify(payload),
+  });
+  return lireJson<CompteUtilisateur>(reponse);
+}
+
+export async function chargerSites(token: string): Promise<Site[]> {
+  const reponse = await fetch(`${BASE}/sites`, { headers: headersAuth(token) });
+  return lireJson<Site[]>(reponse);
+}
+
+export async function creerSiteRequete(token: string, payload: { nom: string; adresse?: string }): Promise<Site> {
+  const reponse = await fetch(`${BASE}/sites`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headersAuth(token) },
+    body: JSON.stringify(payload),
+  });
+  return lireJson<Site>(reponse);
+}
+
+export async function modifierSiteRequete(
+  token: string,
+  idSite: number,
+  payload: { nom?: string; adresse?: string; actif?: boolean }
+): Promise<Site> {
+  const reponse = await fetch(`${BASE}/sites/${idSite}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...headersAuth(token) },
+    body: JSON.stringify(payload),
+  });
+  return lireJson<Site>(reponse);
+}
+
+export async function chargerJournalAudit(token: string, tableCible?: string): Promise<EntreeJournalAudit[]> {
+  const reponse = await fetch(`${BASE}/audit${tableCible ? `?tableCible=${tableCible}` : ""}`, { headers: headersAuth(token) });
+  return lireJson<EntreeJournalAudit[]>(reponse);
 }

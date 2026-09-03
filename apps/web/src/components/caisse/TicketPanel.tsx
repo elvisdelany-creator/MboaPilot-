@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ArrowUpCircle, Wrench } from "lucide-react";
+import { ArrowUpCircle, FileText, Wrench } from "lucide-react";
 import { calculerPrixKit } from "@mboapilot/shared";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -25,6 +25,7 @@ interface Props {
   onValider: (paiement: PaiementSaisi) => void;
   onEchangerMateriel: () => void;
   onChangerFormule: () => void;
+  onImprimerProForma: () => void;
 }
 
 const formateurFcfa = new Intl.NumberFormat("fr-FR");
@@ -42,6 +43,7 @@ export function TicketPanel({
   onValider,
   onEchangerMateriel,
   onChangerFormule,
+  onImprimerProForma,
 }: Props) {
   const prixKit =
     kitSelectionne && formuleSelectionnee
@@ -190,7 +192,19 @@ export function TicketPanel({
         )}
       </div>
 
-      <div className="border-t border-border p-4">
+      <div className="space-y-2 border-t border-border p-4">
+        {/* 6.7 : estimation imprimable avant encaissement — distincte de la facture BROUILLON */}
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="w-full cursor-pointer gap-2"
+          disabled={!abonneSelectionne || !formuleSelectionnee}
+          onClick={onImprimerProForma}
+        >
+          <FileText className="size-4" />
+          Facture pro-forma
+        </Button>
         <Button
           type="button"
           size="lg"

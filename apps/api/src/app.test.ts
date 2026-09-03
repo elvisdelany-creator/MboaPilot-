@@ -1324,3 +1324,24 @@ describe("Back-office catalogue : familles, formules, options (8.8)", () => {
     expect(reponse.statusCode).toBe(404);
   });
 });
+
+describe("GET /api/v1/entreprise (6.7)", () => {
+  it("renvoie l'entreprise et le site pour l'en-tête des documents commerciaux, à tout rôle authentifié", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const token = await connecter(app);
+
+    const reponse = await app.inject({ method: "GET", url: "/api/v1/entreprise", headers: authHeader(token) });
+
+    expect(reponse.statusCode).toBe(200);
+    expect(reponse.json().entreprise.nom).toBe("Boutique Test");
+    expect(reponse.json().site.nom).toBe("Site A");
+  });
+
+  it("rejette une requête non authentifiée (401)", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+
+    const reponse = await app.inject({ method: "GET", url: "/api/v1/entreprise" });
+
+    expect(reponse.statusCode).toBe(401);
+  });
+});

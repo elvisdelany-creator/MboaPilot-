@@ -14,6 +14,7 @@ import { SimulateurOrangeMoney } from "./modules/paiement-mobile/simulateur-oran
 import type { FournisseurPaiementMobile } from "./modules/paiement-mobile/fournisseur.js";
 import { registerTableauBordRoutes } from "./modules/tableau-bord/tableau-bord.routes.js";
 import { registerUtilisateursRoutes } from "./modules/utilisateurs/utilisateurs.routes.js";
+import { registerEntrepriseRoutes } from "./modules/entreprise/entreprise.routes.js";
 
 export interface BuildAppOptions {
   jwtSecret: string;
@@ -61,6 +62,7 @@ export function buildApp(db: Db, options: BuildAppOptions) {
   registerPaiementMobileRoutes(app, db, fournisseurPaiementMobile, { authRequis, ventes });
   registerTableauBordRoutes(app, db, { authRequis, ventes, pilotage });
   registerUtilisateursRoutes(app, db, { authRequis, admin });
+  registerEntrepriseRoutes(app, db, { authRequis });
 
   return app;
 }

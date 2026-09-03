@@ -18,6 +18,7 @@ import type {
   Formule,
   HistoriquePrixProduit,
   IndicateursJour,
+  InfosEntreprise,
   MargeType,
   NouvelAbonne,
   OptionCatalogue,
@@ -668,4 +669,10 @@ export async function delierOptionFormuleRequete(token: string, idOption: number
     const corps = await reponse.json().catch(() => ({}));
     throw new Error(corps?.erreur ?? "Erreur inattendue");
   }
+}
+
+// 6.7 : en-tête entreprise/site pour le ticket de caisse et la facture pro-forma
+export async function chargerInfosEntreprise(token: string): Promise<InfosEntreprise> {
+  const reponse = await fetch(`${BASE}/entreprise`, { headers: headersAuth(token) });
+  return lireJson<InfosEntreprise>(reponse);
 }

@@ -49,6 +49,12 @@ export interface OptionCatalogue {
   formulesCompatibles: { idFormule: number; prixSurcharge: number | null }[];
 }
 
+// 6.7 : en-tête des documents commerciaux (ticket de caisse, pro-forma)
+export interface InfosEntreprise {
+  entreprise: { idEntreprise: number; nom: string; devise: string; logoUrl: string | null };
+  site: { idSite: number; nom: string; adresse: string | null };
+}
+
 export interface Abonnement {
   numeroAbonnement: number;
   idAbonne: number;

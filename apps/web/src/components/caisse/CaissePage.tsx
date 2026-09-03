@@ -1,8 +1,18 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { chargerAbonnementsAbonne, chargerCatalogue, ErreurAuthentification, reabonnerRequete, recruter } from "@/lib/api";
+import { calculerPrixKit } from "@mboapilot/shared";
+import { chargerAbonnementsAbonne, chargerCatalogue, chargerInfosEntreprise, ErreurAuthentification, reabonnerRequete, recruter } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
-import type { Abonne, Abonnement, CatalogueFamille, CatalogueKit, Formule, NouvelAbonne, ParcoursPaiementMobile } from "@/lib/types";
+import type {
+  Abonne,
+  Abonnement,
+  CatalogueFamille,
+  CatalogueKit,
+  Formule,
+  InfosEntreprise,
+  NouvelAbonne,
+  ParcoursPaiementMobile,
+} from "@/lib/types";
 import { AppHeader, type Vue } from "@/components/layout/AppHeader";
 import { RechercheAbonne } from "./RechercheAbonne";
 import { CategoriesPanel } from "./CategoriesPanel";
@@ -11,6 +21,8 @@ import { TicketPanel, type PaiementSaisi } from "./TicketPanel";
 import { EchangeMaterielDialog } from "./EchangeMaterielDialog";
 import { PaiementMobileMoneyDialog } from "./PaiementMobileMoneyDialog";
 import { ChangerFormuleDialog } from "./ChangerFormuleDialog";
+import { RecuVentePrintable, type LigneRecu, type RecuVente } from "./RecuVentePrintable";
+import { FactureProFormaPrintable } from "./FactureProFormaPrintable";
 
 interface Props {
   onNaviguer: (vue: Vue) => void;
@@ -38,7 +50,14 @@ export function CaissePage({ onNaviguer, abonneInitial, idFamilleInitiale }: Pro
     montant: number;
     numeroTelephone: string;
     parcours: ParcoursPaiementMobile;
+    // 6.7 : base du ticket de caisse, figée au moment de l'initiation du
+    // paiement (l'état de la vente en cours aura été réinitialisé lorsque la
+    // confirmation Mobile Money arrivera plus tard, de façon asynchrone)
+    recuBase: Omit<RecuVente, "montantEncaisse">;
   } | null>(null);
+  const [infosEntreprise, setInfosEntreprise] = useState<InfosEntreprise | null>(null);
+  const [recu, setRecu] = useState<RecuVente | null>(null);
+  const [proFormaVisible, setProFormaVisible] = useState(false);
 
   function gererErreur(erreur: unknown, messageParDefaut: string) {
     if (erreur instanceof ErreurAuthentification) {
@@ -56,6 +75,13 @@ export function CaissePage({ onNaviguer, abonneInitial, idFamilleInitiale }: Pro
         setFamilleSelectionneeId((id) => id ?? data[0]?.idFamille ?? null);
       })
       .catch((e) => gererErreur(e, "Impossible de charger le catalogue."));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token]);
+
+  useEffect(() => {
+    chargerInfosEntreprise(token)
+      .then(setInfosEntreprise)
+      .catch(() => setInfosEntreprise(null));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
@@ -114,6 +140,18 @@ export function CaissePage({ onNaviguer, abonneInitial, idFamilleInitiale }: Pro
     if (abonnementARenouveler) setKitSelectionne(null);
   }, [abonnementARenouveler]);
 
+  // 6.7 : base du ticket / pro-forma — même calcul que TicketPanel, dupliqué
+  // ici pour que CaissePage puisse construire le récapitulatif imprimable
+  const prixKit =
+    kitSelectionne && formuleSelectionnee
+      ? calculerPrixKit(kitSelectionne, { idFormule: formuleSelectionnee.idFormule, prix: formuleSelectionnee.prix })
+      : 0;
+  const totalTicket = (formuleSelectionnee?.prix ?? 0) + prixKit;
+  const lignesTicket: LigneRecu[] = [
+    ...(formuleSelectionnee ? [{ libelle: formuleSelectionnee.libelle, montant: formuleSelectionnee.prix }] : []),
+    ...(kitSelectionne ? [{ libelle: kitSelectionne.libelle, montant: prixKit }] : []),
+  ];
+
   function reinitialiserTicket() {
     setFormuleSelectionnee(null);
     setKitSelectionne(null);
@@ -151,22 +189,40 @@ export function CaissePage({ onNaviguer, abonneInitial, idFamilleInitiale }: Pro
             apporteurId: "idAbonne" in abonneSelectionne ? undefined : abonneSelectionne.apporteurId,
           });
 
+      const operation = abonnementARenouveler ? "Réabonnement" : "Recrutement";
+
       if (paiement.mode === "MOBILE_MONEY") {
         setPaiementMobile({
           idFacture: resultat.idFacture,
           montant: paiement.montant,
           numeroTelephone: paiement.numeroTelephone,
           parcours: paiement.parcours,
+          recuBase: {
+            operation,
+            numeroAbonnement: resultat.numeroAbonnement,
+            lignes: lignesTicket,
+            total: totalTicket,
+            modePaiement: "MOBILE_MONEY",
+            dateHeure: new Date().toISOString(),
+          },
         });
         return;
       }
 
-      const operation = abonnementARenouveler ? "Réabonnement" : "Recrutement";
       toast.success(
         resultat.statutFacture === "VALIDEE"
           ? `${operation} — abonnement n° ${resultat.numeroAbonnement} — facture encaissée.`
           : `${operation} — abonnement n° ${resultat.numeroAbonnement} — facture en attente d'encaissement.`
       );
+      setRecu({
+        operation,
+        numeroAbonnement: resultat.numeroAbonnement,
+        lignes: lignesTicket,
+        total: totalTicket,
+        modePaiement: "CASH",
+        montantEncaisse: paiement.montant,
+        dateHeure: new Date().toISOString(),
+      });
       reinitialiserTicket();
     } catch (erreur) {
       gererErreur(erreur, "Échec de l'opération.");
@@ -175,43 +231,60 @@ export function CaissePage({ onNaviguer, abonneInitial, idFamilleInitiale }: Pro
     }
   }
 
+  const nomClientTicket = abonneSelectionne ? `${abonneSelectionne.prenom} ${abonneSelectionne.nom}` : "";
+
   return (
     <div className="flex h-dvh flex-col bg-background">
-      <AppHeader vueActive="caisse" onNaviguer={onNaviguer}>
-        <RechercheAbonne siteId={utilisateur.siteId} abonneSelectionne={abonneSelectionne} onSelectionner={setAbonneSelectionne} />
-      </AppHeader>
-
-      <div className="flex min-h-0 flex-1">
-        <CategoriesPanel
-          familles={familles}
-          familleSelectionnee={familleSelectionneeId}
-          onSelectionner={(id) => {
-            setFamilleSelectionneeId(id);
-            setFormuleSelectionnee(null);
-            setKitSelectionne(null);
-          }}
-        />
-        <GrilleArticles
-          famille={familleSelectionnee}
-          formuleSelectionnee={formuleSelectionnee}
-          idKitSelectionne={kitSelectionne?.idKit ?? null}
-          idFormuleActuelle={abonnementARenouveler?.idFormule ?? null}
-          masquerKits={Boolean(abonnementARenouveler)}
-          onSelectionnerFormule={setFormuleSelectionnee}
-          onSelectionnerKit={(idKit) => setKitSelectionne(familleSelectionnee?.kits.find((k) => k.idKit === idKit) ?? null)}
-        />
-        <TicketPanel
-          abonneSelectionne={abonneSelectionne}
-          formuleSelectionnee={formuleSelectionnee}
-          kitSelectionne={kitSelectionne}
-          numeroAbonnementARenouveler={abonnementARenouveler?.numeroAbonnement ?? null}
-          peutMigrerFormule={peutMigrerFormule}
-          enCours={enCours}
-          onValider={valider}
-          onEchangerMateriel={() => setEchangeMaterielOuvert(true)}
-          onChangerFormule={() => setChangerFormuleOuvert(true)}
-        />
+      <div className="no-print">
+        <AppHeader vueActive="caisse" onNaviguer={onNaviguer}>
+          <RechercheAbonne siteId={utilisateur.siteId} abonneSelectionne={abonneSelectionne} onSelectionner={setAbonneSelectionne} />
+        </AppHeader>
       </div>
+
+      {recu ? (
+        <RecuVentePrintable infosEntreprise={infosEntreprise} recu={recu} onNouvelleVente={() => setRecu(null)} />
+      ) : proFormaVisible ? (
+        <FactureProFormaPrintable
+          infosEntreprise={infosEntreprise}
+          nomClient={nomClientTicket}
+          lignes={lignesTicket}
+          total={totalTicket}
+          onRetour={() => setProFormaVisible(false)}
+        />
+      ) : (
+        <div className="flex min-h-0 flex-1">
+          <CategoriesPanel
+            familles={familles}
+            familleSelectionnee={familleSelectionneeId}
+            onSelectionner={(id) => {
+              setFamilleSelectionneeId(id);
+              setFormuleSelectionnee(null);
+              setKitSelectionne(null);
+            }}
+          />
+          <GrilleArticles
+            famille={familleSelectionnee}
+            formuleSelectionnee={formuleSelectionnee}
+            idKitSelectionne={kitSelectionne?.idKit ?? null}
+            idFormuleActuelle={abonnementARenouveler?.idFormule ?? null}
+            masquerKits={Boolean(abonnementARenouveler)}
+            onSelectionnerFormule={setFormuleSelectionnee}
+            onSelectionnerKit={(idKit) => setKitSelectionne(familleSelectionnee?.kits.find((k) => k.idKit === idKit) ?? null)}
+          />
+          <TicketPanel
+            abonneSelectionne={abonneSelectionne}
+            formuleSelectionnee={formuleSelectionnee}
+            kitSelectionne={kitSelectionne}
+            numeroAbonnementARenouveler={abonnementARenouveler?.numeroAbonnement ?? null}
+            peutMigrerFormule={peutMigrerFormule}
+            enCours={enCours}
+            onValider={valider}
+            onEchangerMateriel={() => setEchangeMaterielOuvert(true)}
+            onChangerFormule={() => setChangerFormuleOuvert(true)}
+            onImprimerProForma={() => setProFormaVisible(true)}
+          />
+        </div>
+      )}
 
       <EchangeMaterielDialog
         numeroAbonnement={echangeMaterielOuvert ? (abonnementARenouveler?.numeroAbonnement ?? null) : null}
@@ -239,6 +312,7 @@ export function CaissePage({ onNaviguer, abonneInitial, idFamilleInitiale }: Pro
         onFerme={() => setPaiementMobile(null)}
         onSucces={() => {
           toast.success("Paiement Mobile Money confirmé — facture encaissée.");
+          if (paiementMobile) setRecu({ ...paiementMobile.recuBase, montantEncaisse: paiementMobile.montant });
           setPaiementMobile(null);
           reinitialiserTicket();
         }}

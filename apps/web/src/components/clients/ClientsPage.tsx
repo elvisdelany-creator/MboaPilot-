@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { ArrowUpCircle, ChevronDown, ChevronUp, GitMerge, Pencil, Printer, RefreshCw, Users, UserSquare2, Wrench } from "lucide-react";
+import { ArrowUpCircle, ChevronDown, ChevronUp, GitMerge, Pencil, Printer, RefreshCw, ShieldAlert, Users, UserSquare2, Wrench } from "lucide-react";
 import { peutTransitionnerSav, validerMigrationFormule, type StatutSav } from "@mboapilot/shared";
 import { chargerCatalogue, chargerDossierSav, chargerFiche360, rechercherAbonnes, ErreurAuthentification } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
@@ -17,6 +17,7 @@ import { ChangerStatutDialog } from "@/components/sav/ChangerStatutDialog";
 import { AjouterPieceDialog } from "@/components/sav/AjouterPieceDialog";
 import { ModifierAbonneDialog } from "./ModifierAbonneDialog";
 import { FusionDoublonsDialog } from "./FusionDoublonsDialog";
+import { AnonymiserAbonneDialog } from "./AnonymiserAbonneDialog";
 import type { Abonne, AbonnementAvecFormule, CatalogueFamille, DossierSavDetaille, Facture, Fiche360 } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -77,6 +78,8 @@ export function ClientsPage({ onNaviguer, onReabonnerDepuisFiche }: Props) {
   // tête de la fiche 360° ouverte, ou directement depuis un résultat de
   // recherche sans avoir à d'abord ouvrir cette fiche
   const [fusionPrincipal, setFusionPrincipal] = useState<Abonne | null>(null);
+  // 11.3 : fiche à anonymiser (droit de suppression) — depuis l'en-tête de la fiche 360°
+  const [anonymiserCible, setAnonymiserCible] = useState<Abonne | null>(null);
   const [echangeMaterielCible, setEchangeMaterielCible] = useState<number | null>(null);
   const [changerFormuleCible, setChangerFormuleCible] = useState<AbonnementAvecFormule | null>(null);
   const [filtreFacture, setFiltreFacture] = useState<"toutes" | "impayees">("toutes");
@@ -151,6 +154,8 @@ export function ClientsPage({ onNaviguer, onReabonnerDepuisFiche }: Props) {
   }
 
   const peutFusionner = utilisateur.role === "ADMINISTRATEUR" || utilisateur.role === "GERANT";
+  // 11.3 : droit de suppression — sensibilité plus élevée que la fusion, réservé à l'Administrateur seul
+  const peutAnonymiser = utilisateur.role === "ADMINISTRATEUR";
 
   function trouverFormule(idFamille: number, idFormule: number) {
     return catalogue.find((f) => f.idFamille === idFamille)?.formules.find((fo) => fo.idFormule === idFormule) ?? null;
@@ -262,6 +267,18 @@ export function ClientsPage({ onNaviguer, onReabonnerDepuisFiche }: Props) {
                   {peutFusionner && (
                     <Button variant="outline" size="sm" className="cursor-pointer" onClick={() => setFusionPrincipal(fiche.abonne)}>
                       Fusionner un doublon
+                    </Button>
+                  )}
+                  {peutAnonymiser && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="cursor-pointer gap-1"
+                      title="Droit de suppression (11.3) — outil technique, à valider juridiquement avant usage réel"
+                      onClick={() => setAnonymiserCible(fiche.abonne)}
+                    >
+                      <ShieldAlert className="size-4" />
+                      Anonymiser
                     </Button>
                   )}
                 </div>
@@ -518,6 +535,16 @@ export function ClientsPage({ onNaviguer, onReabonnerDepuisFiche }: Props) {
           rechargerRecherche();
           if (idSelectionne === idAbonneDoublon) setIdSelectionne(idAbonnePrincipal);
           else if (idSelectionne === idAbonnePrincipal) rechargerFiche(idAbonnePrincipal);
+        }}
+      />
+
+      <AnonymiserAbonneDialog
+        abonne={anonymiserCible}
+        onFerme={() => setAnonymiserCible(null)}
+        onSucces={() => {
+          setAnonymiserCible(null);
+          rechargerRecherche();
+          if (idSelectionne !== null) rechargerFiche(idSelectionne);
         }}
       />
 

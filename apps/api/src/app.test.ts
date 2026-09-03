@@ -1017,6 +1017,43 @@ describe("Fiche client 360° et fusion de doublons (8.1)", () => {
     const reponse = await app.inject({ method: "GET", url: "/api/v1/abonnes/999999/fiche-360", headers: authHeader(token) });
     expect(reponse.statusCode).toBe(404);
   });
+
+  it("11.3 : un administrateur anonymise la fiche d'un abonné — identité effacée, historique conservé", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    creerUtilisateur(db, { siteId, nom: "Admin", prenom: "D", identifiant: "admin1", motDePasse: "motdepasse-secret", role: "ADMINISTRATEUR" });
+    const tokenAdmin = await connecter(app, "admin1");
+    const { idAbonne } = await creerAbonneViaRecrutement(app, tokenAdmin, "Nga Ndongo", "690000000");
+
+    const reponse = await app.inject({
+      method: "POST",
+      url: `/api/v1/abonnes/${idAbonne}/anonymiser`,
+      headers: authHeader(tokenAdmin),
+      payload: { userId },
+    });
+
+    expect(reponse.statusCode).toBe(200);
+    expect(reponse.json().nom).not.toBe("Nga Ndongo");
+
+    const fiche = await app.inject({ method: "GET", url: `/api/v1/abonnes/${idAbonne}/fiche-360`, headers: authHeader(tokenAdmin) });
+    expect(fiche.json().abonnements).toHaveLength(1);
+    expect(fiche.json().factures).toHaveLength(1);
+  });
+
+  it("11.3 : un gérant ne peut pas anonymiser une fiche abonné, réservé à l'administrateur (403)", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    creerUtilisateur(db, { siteId, nom: "Gerant", prenom: "G", identifiant: "gerant1", motDePasse: "motdepasse-secret", role: "GERANT" });
+    const tokenGerant = await connecter(app, "gerant1");
+    const { idAbonne } = await creerAbonneViaRecrutement(app, tokenGerant, "Nga Ndongo", "690000000");
+
+    const reponse = await app.inject({
+      method: "POST",
+      url: `/api/v1/abonnes/${idAbonne}/anonymiser`,
+      headers: authHeader(tokenGerant),
+      payload: { userId },
+    });
+
+    expect(reponse.statusCode).toBe(403);
+  });
 });
 
 describe("Tableau de bord de pilotage (8.6, 9.3)", () => {

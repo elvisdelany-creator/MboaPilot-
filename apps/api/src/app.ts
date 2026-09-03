@@ -55,7 +55,8 @@ export function buildApp(db: Db, options: BuildAppOptions) {
   const gestionComptesPartages = exigerRole("ADMINISTRATEUR", "GERANT");
 
   registerAbonnementsRoutes(app, db, { authRequis, ventes });
-  registerAbonnesRoutes(app, db, { authRequis, ventes, fusionAbonnes });
+  // 11.3 : anonymisation (droit de suppression) réservée à l'Administrateur seul
+  registerAbonnesRoutes(app, db, { authRequis, ventes, fusionAbonnes, anonymisationAbonne: admin });
   registerCatalogueRoutes(app, db, { authRequis, gestionCatalogue });
   registerJobsRoutes(app, db, { authRequis, ventes, admin });
   registerProduitsRoutes(app, db, { authRequis, ventes, gestionCatalogue });

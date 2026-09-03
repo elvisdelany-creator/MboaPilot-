@@ -112,6 +112,17 @@ export async function fusionnerAbonnesRequete(
   return lireJson(reponse);
 }
 
+// 11.3 : anonymisation (droit de suppression) — outil technique, réservé à
+// l'Administrateur ; voir l'avertissement dans AnonymiserAbonneDialog.tsx
+export async function anonymiserAbonneRequete(token: string, idAbonne: number, userId: number): Promise<Abonne> {
+  const reponse = await fetch(`${BASE}/abonnes/${idAbonne}/anonymiser`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headersAuth(token) },
+    body: JSON.stringify({ userId }),
+  });
+  return lireJson<Abonne>(reponse);
+}
+
 export async function chargerCatalogue(token: string): Promise<CatalogueFamille[]> {
   const reponse = await fetch(`${BASE}/catalogue`, { headers: headersAuth(token) });
   return lireJson<CatalogueFamille[]>(reponse);

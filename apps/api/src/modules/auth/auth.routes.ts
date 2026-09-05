@@ -13,8 +13,10 @@ export function registerAuthRoutes(app: FastifyInstance, db: Db) {
         idApporteur: utilisateur.idApporteur,
       });
       reply.code(200).send({ token, utilisateur });
-    } catch {
-      reply.code(401).send({ erreur: "Identifiants invalides" });
+    } catch (erreur) {
+      // 11.2 : propage le message réel (générique pour un échec, distinct pour un
+      // compte verrouillé) — l'API ne masque plus systématiquement la raison.
+      reply.code(401).send({ erreur: erreur instanceof Error ? erreur.message : "Identifiants invalides" });
     }
   });
 }

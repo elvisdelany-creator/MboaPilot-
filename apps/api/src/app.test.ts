@@ -70,6 +70,23 @@ describe("POST /api/v1/auth/login (2.5.1)", () => {
 
     expect(reponse.statusCode).toBe(401);
   });
+
+  it("11.2 : verrouille le compte après 5 mots de passe incorrects, avec un message dédié", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+
+    for (let i = 0; i < 5; i++) {
+      await app.inject({ method: "POST", url: "/api/v1/auth/login", payload: { identifiant: "caissier1", motDePasse: "faux" } });
+    }
+
+    const reponse = await app.inject({
+      method: "POST",
+      url: "/api/v1/auth/login",
+      payload: { identifiant: "caissier1", motDePasse: "motdepasse-secret" },
+    });
+
+    expect(reponse.statusCode).toBe(401);
+    expect(reponse.json().erreur).toMatch(/verrouill/i);
+  });
 });
 
 describe("Garde d'authentification (11.2 : RBAC de bout en bout, jamais uniquement côté interface)", () => {

@@ -55,4 +55,34 @@ describe("authentifier (2.5.1, 11.2)", () => {
 
     expect(() => authentifier(db, "vnga", "motdepasse-secret")).toThrow(/identifiants/i);
   });
+
+  it("11.2 : verrouille le compte après 5 échecs consécutifs, même avec le bon mot de passe ensuite", () => {
+    for (let i = 0; i < 5; i++) {
+      expect(() => authentifier(db, "vnga", "mauvais-mot-de-passe")).toThrow(/identifiants/i);
+    }
+
+    expect(() => authentifier(db, "vnga", "motdepasse-secret")).toThrow(/verrouill/i);
+  });
+
+  it("11.2 : réinitialise le compteur d'échecs après une connexion réussie", () => {
+    expect(() => authentifier(db, "vnga", "mauvais-mot-de-passe")).toThrow(/identifiants/i);
+    expect(() => authentifier(db, "vnga", "mauvais-mot-de-passe")).toThrow(/identifiants/i);
+    authentifier(db, "vnga", "motdepasse-secret"); // succès -> remise à zéro
+
+    for (let i = 0; i < 4; i++) {
+      expect(() => authentifier(db, "vnga", "mauvais-mot-de-passe")).toThrow(/identifiants/i);
+    }
+    // 4 échecs seulement depuis la remise à zéro : pas encore verrouillé
+    expect(authentifier(db, "vnga", "motdepasse-secret").identifiant).toBe("vnga");
+  });
+
+  it("11.2 : déverrouille automatiquement une fois le délai de verrouillage écoulé", () => {
+    for (let i = 0; i < 5; i++) {
+      expect(() => authentifier(db, "vnga", "mauvais-mot-de-passe", "2026-01-01T10:00:00.000Z")).toThrow(/identifiants/i);
+    }
+    expect(() => authentifier(db, "vnga", "motdepasse-secret", "2026-01-01T10:05:00.000Z")).toThrow(/verrouill/i);
+
+    const utilisateur = authentifier(db, "vnga", "motdepasse-secret", "2026-01-01T10:20:00.000Z");
+    expect(utilisateur.identifiant).toBe("vnga");
+  });
 });

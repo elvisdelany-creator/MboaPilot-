@@ -51,6 +51,9 @@ export const utilisateur = sqliteTable("utilisateur", {
   // l'accès en lecture restreinte (2.5.1) sache "quels sont ses propres abonnés"
   idApporteur: integer("id_apporteur").references((): AnySQLiteColumn => sousDistributeur.idApporteur),
   actif: integer("actif").notNull().default(1),
+  // 11.2 : verrouillage après tentatives infructueuses répétées
+  tentativesEchouees: integer("tentatives_echouees").notNull().default(0),
+  verrouilleJusqua: text("verrouille_jusqua"),
   dateCreation: text("date_creation").notNull().default(now),
 }, (t) => ({
   identifiantUnique: uniqueIndex("idx_utilisateur_identifiant").on(t.identifiant),

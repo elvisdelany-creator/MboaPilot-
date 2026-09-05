@@ -1,11 +1,13 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { AlertTriangle, Package, Pencil, Plus } from "lucide-react";
+import { AlertTriangle, Download, Package, Pencil, Plus, Upload } from "lucide-react";
 import {
   chargerAlertesStock,
   chargerHistoriquePrixProduit,
   chargerMouvementsProduit,
   chargerProduits,
+  exporterCatalogueCsvRequete,
+  importerCatalogueCsvRequete,
   ErreurAuthentification,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
@@ -49,7 +51,8 @@ const formateurDateCourte = new Intl.DateTimeFormat("fr-FR", { dateStyle: "short
 export function StockPage({ onNaviguer }: Props) {
   const { session, deconnecter } = useAuth();
   const token = session!.token;
-  const siteId = session!.utilisateur.siteId;
+  const utilisateur = session!.utilisateur;
+  const siteId = utilisateur.siteId;
 
   const [produits, setProduits] = useState<Produit[] | null>(null);
   const [alertes, setAlertes] = useState<Produit[]>([]);
@@ -58,6 +61,8 @@ export function StockPage({ onNaviguer }: Props) {
   const [historiquePrix, setHistoriquePrix] = useState<HistoriquePrixProduit[]>([]);
   const [dialogueOuvert, setDialogueOuvert] = useState<"achat" | "casse" | "inventaire" | null>(null);
   const [articleDialogueOuvert, setArticleDialogueOuvert] = useState<"creation" | "edition" | null>(null);
+  const [importEnCours, setImportEnCours] = useState(false);
+  const inputFichierRef = useRef<HTMLInputElement>(null);
 
   function gererErreur(erreur: unknown, messageParDefaut: string) {
     if (erreur instanceof ErreurAuthentification) {
@@ -112,6 +117,42 @@ export function StockPage({ onNaviguer }: Props) {
     if (idSelectionne !== null) rechargerDetail(idSelectionne);
   }
 
+  // 8.2 : export du catalogue en CSV — pour édition tarifaire en masse dans un tableur, puis réimport
+  async function exporterCsv() {
+    try {
+      const contenuCsv = await exporterCatalogueCsvRequete(token, siteId);
+      const url = URL.createObjectURL(new Blob([contenuCsv], { type: "text/csv;charset=utf-8" }));
+      const lien = document.createElement("a");
+      lien.href = url;
+      lien.download = "catalogue.csv";
+      lien.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      gererErreur(e, "Impossible d'exporter le catalogue.");
+    }
+  }
+
+  async function importerCsv(fichier: File) {
+    setImportEnCours(true);
+    try {
+      const contenuCsv = await fichier.text();
+      const resultat = await importerCatalogueCsvRequete(token, { siteId, userId: utilisateur.idUser, contenuCsv });
+      if (resultat.erreurs.length === 0) {
+        toast.success(`Import réussi : ${resultat.crees} créé(s), ${resultat.misAJour} mis à jour.`);
+      } else {
+        toast.warning(
+          `Import partiel : ${resultat.crees} créé(s), ${resultat.misAJour} mis à jour, ${resultat.erreurs.length} ligne(s) ignorée(s).`,
+          { description: resultat.erreurs.slice(0, 5).map((e) => `Ligne ${e.ligne} : ${e.message}`).join("\n") }
+        );
+      }
+      rechargerListe();
+    } catch (e) {
+      gererErreur(e, "Échec de l'import du catalogue.");
+    } finally {
+      setImportEnCours(false);
+    }
+  }
+
   return (
     <div className="flex h-dvh flex-col bg-background">
       <AppHeader vueActive="stock" onNaviguer={onNaviguer} />
@@ -124,6 +165,35 @@ export function StockPage({ onNaviguer }: Props) {
               <Plus className="size-4" />
               Nouvel article
             </Button>
+          </div>
+
+          {/* 8.2 : import/export CSV — initialisation et mises à jour tarifaires en masse */}
+          <div className="flex items-center gap-2 border-b border-border p-3">
+            <Button variant="outline" size="sm" className="cursor-pointer gap-1" onClick={exporterCsv}>
+              <Download className="size-3.5" />
+              Exporter CSV
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="cursor-pointer gap-1"
+              disabled={importEnCours}
+              onClick={() => inputFichierRef.current?.click()}
+            >
+              <Upload className="size-3.5" />
+              {importEnCours ? "Import…" : "Importer CSV"}
+            </Button>
+            <input
+              ref={inputFichierRef}
+              type="file"
+              accept=".csv,text/csv"
+              className="hidden"
+              onChange={(e) => {
+                const fichier = e.target.files?.[0];
+                e.target.value = "";
+                if (fichier) importerCsv(fichier);
+              }}
+            />
           </div>
           <ul className="flex-1 overflow-y-auto">
             {produits?.length === 0 && <li className="p-4 text-sm text-muted-foreground">Aucun article dans le catalogue.</li>}

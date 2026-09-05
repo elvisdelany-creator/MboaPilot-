@@ -236,6 +236,39 @@ export async function modifierProduitRequete(token: string, idProduit: number, p
   return lireJson<Produit>(reponse);
 }
 
+// 8.2 : export de catalogue (CSV) — initialisation ou mise à jour tarifaire en masse
+export async function exporterCatalogueCsvRequete(token: string, siteId: number): Promise<string> {
+  const reponse = await fetch(`${BASE}/produits/export-csv?siteId=${siteId}`, { headers: headersAuth(token) });
+  if (!reponse.ok) {
+    const corps = await reponse.json().catch(() => null);
+    const message = corps?.erreur ?? "Erreur inattendue";
+    if (reponse.status === 401) throw new ErreurAuthentification(message);
+    throw new Error(message);
+  }
+  return reponse.text();
+}
+
+export interface ImporterCatalogueCsvPayload {
+  siteId: number;
+  userId: number;
+  contenuCsv: string;
+}
+
+export interface ResultatImportCsv {
+  crees: number;
+  misAJour: number;
+  erreurs: { ligne: number; message: string }[];
+}
+
+export async function importerCatalogueCsvRequete(token: string, payload: ImporterCatalogueCsvPayload): Promise<ResultatImportCsv> {
+  const reponse = await fetch(`${BASE}/produits/import-csv`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headersAuth(token) },
+    body: JSON.stringify(payload),
+  });
+  return lireJson<ResultatImportCsv>(reponse);
+}
+
 export async function chargerHistoriquePrixProduit(token: string, idProduit: number): Promise<HistoriquePrixProduit[]> {
   const reponse = await fetch(`${BASE}/produits/${idProduit}/historique-prix`, { headers: headersAuth(token) });
   return lireJson<HistoriquePrixProduit[]>(reponse);

@@ -801,6 +801,45 @@ describe("Module gestion du catalogue (8.2)", () => {
     });
     expect(refusEdition.statusCode).toBe(403);
   });
+
+  it("8.2 : exporte le catalogue en CSV puis le réimporte pour mettre à jour un prix, réservé à l'encadrement", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    creerUtilisateur(db, { siteId, nom: "Admin", prenom: "D", identifiant: "admin1", motDePasse: "motdepasse-secret", role: "ADMINISTRATEUR" });
+    const tokenAdmin = await connecter(app, "admin1");
+
+    await app.inject({
+      method: "POST",
+      url: "/api/v1/produits",
+      headers: authHeader(tokenAdmin),
+      payload: { siteId, type: "BIEN", libelle: "Câble HDMI", prixVente: 2500 },
+    });
+
+    const export1 = await app.inject({ method: "GET", url: `/api/v1/produits/export-csv?siteId=${siteId}`, headers: authHeader(tokenAdmin) });
+    expect(export1.statusCode).toBe(200);
+    expect(export1.headers["content-type"]).toContain("text/csv");
+    expect(export1.body).toContain("Câble HDMI");
+
+    const contenuCsv = export1.body.replace("2500", "3200");
+    const import1 = await app.inject({
+      method: "POST",
+      url: "/api/v1/produits/import-csv",
+      headers: authHeader(tokenAdmin),
+      payload: { siteId, userId, contenuCsv },
+    });
+    expect(import1.statusCode).toBe(200);
+    expect(import1.json()).toMatchObject({ crees: 0, misAJour: 1, erreurs: [] });
+
+    const tokenCaissier = await connecter(app);
+    const refusExport = await app.inject({ method: "GET", url: `/api/v1/produits/export-csv?siteId=${siteId}`, headers: authHeader(tokenCaissier) });
+    expect(refusExport.statusCode).toBe(403);
+    const refusImport = await app.inject({
+      method: "POST",
+      url: "/api/v1/produits/import-csv",
+      headers: authHeader(tokenCaissier),
+      payload: { siteId, userId, contenuCsv },
+    });
+    expect(refusImport.statusCode).toBe(403);
+  });
 });
 
 // fournisseur entièrement pilotable pour les tests HTTP — indépendant du

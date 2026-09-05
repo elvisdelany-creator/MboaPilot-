@@ -18,3 +18,4 @@ export { validerMigrationFormule, type FormuleMigration, type ResultatValidation
 export { genererPlageJours } from "./plage-jours.js";
 export { peutAffecterEcran } from "./compte-partage-streaming.js";
 export { calculerMontantTaxe } from "./taxe.js";
+export { analyserCsv, construireCsv } from "./csv.js";

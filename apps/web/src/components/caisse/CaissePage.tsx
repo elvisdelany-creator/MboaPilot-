@@ -6,6 +6,8 @@ import {
   chargerCatalogue,
   chargerComptesPartages,
   chargerInfosEntreprise,
+  chargerProduits,
+  creerVenteRequete,
   ErreurAuthentification,
   reabonnerRequete,
   recruter,
@@ -21,12 +23,15 @@ import type {
   InfosEntreprise,
   NouvelAbonne,
   ParcoursPaiementMobile,
+  Produit,
 } from "@/lib/types";
 import { AppHeader, type Vue } from "@/components/layout/AppHeader";
 import { RechercheAbonne } from "./RechercheAbonne";
 import { CategoriesPanel } from "./CategoriesPanel";
 import { GrilleArticles } from "./GrilleArticles";
+import { GrilleProduits } from "./GrilleProduits";
 import { TicketPanel, type PaiementSaisi } from "./TicketPanel";
+import { TicketProduitsPanel, type LignePanier } from "./TicketProduitsPanel";
 import { EchangeMaterielDialog } from "./EchangeMaterielDialog";
 import { PaiementMobileMoneyDialog } from "./PaiementMobileMoneyDialog";
 import { ChangerFormuleDialog } from "./ChangerFormuleDialog";
@@ -70,6 +75,12 @@ export function CaissePage({ onNaviguer, abonneInitial, idFamilleInitiale }: Pro
   const [recu, setRecu] = useState<RecuVente | null>(null);
   const [proFormaVisible, setProFormaVisible] = useState(false);
 
+  // 5.2, 5.3, 8.5 : vente de produits/services hors abonnement — panier
+  // indépendant du ticket formule/kit, activé depuis la catégorie dédiée
+  const [modeProduits, setModeProduits] = useState(false);
+  const [produits, setProduits] = useState<Produit[]>([]);
+  const [panierProduits, setPanierProduits] = useState<LignePanier[]>([]);
+
   function gererErreur(erreur: unknown, messageParDefaut: string) {
     if (erreur instanceof ErreurAuthentification) {
       toast.error("Session expirée — veuillez vous reconnecter.");
@@ -102,6 +113,14 @@ export function CaissePage({ onNaviguer, abonneInitial, idFamilleInitiale }: Pro
     chargerComptesPartages(token, utilisateur.siteId)
       .then(setComptesPartages)
       .catch(() => setComptesPartages([]));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token, utilisateur.siteId]);
+
+  // 5.2, 5.3 : catalogue produits/services du site, pour la vente rapide hors abonnement
+  useEffect(() => {
+    chargerProduits(token, utilisateur.siteId)
+      .then((data) => setProduits(data.filter((p) => p.type === "BIEN" || p.type === "SERVICE")))
+      .catch((e) => gererErreur(e, "Impossible de charger le catalogue de produits/services."));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, utilisateur.siteId]);
 
@@ -195,6 +214,94 @@ export function CaissePage({ onNaviguer, abonneInitial, idFamilleInitiale }: Pro
       .catch(() => {});
   }
 
+  // 5.2, 5.3 : panier de produits/services — un clic ajoute une unité,
+  // tolérant aux erreurs de saisie (persona Caissier, 2.5.1) via +/- et retrait
+  function ajouterProduitAuPanier(produit: Produit) {
+    setPanierProduits((panier) => {
+      const existant = panier.find((l) => l.produit.idProduit === produit.idProduit);
+      if (existant) return panier.map((l) => (l.produit.idProduit === produit.idProduit ? { ...l, quantite: l.quantite + 1 } : l));
+      return [...panier, { produit, quantite: 1 }];
+    });
+  }
+
+  function incrementerProduit(idProduit: number) {
+    setPanierProduits((panier) => panier.map((l) => (l.produit.idProduit === idProduit ? { ...l, quantite: l.quantite + 1 } : l)));
+  }
+
+  function decrementerProduit(idProduit: number) {
+    setPanierProduits((panier) =>
+      panier.flatMap((l) => (l.produit.idProduit === idProduit ? (l.quantite > 1 ? [{ ...l, quantite: l.quantite - 1 }] : []) : [l]))
+    );
+  }
+
+  function retirerProduit(idProduit: number) {
+    setPanierProduits((panier) => panier.filter((l) => l.produit.idProduit !== idProduit));
+  }
+
+  function reinitialiserTicketProduits() {
+    setPanierProduits([]);
+    setAbonneSelectionne(null);
+  }
+
+  const lignesTicketProduits: LigneRecu[] = panierProduits.map((l) => ({
+    libelle: l.quantite > 1 ? `${l.produit.libelle} × ${l.quantite}` : l.produit.libelle,
+    montant: l.produit.prixVente * l.quantite,
+  }));
+  const totalTicketProduits = panierProduits.reduce((somme, l) => somme + l.produit.prixVente * l.quantite, 0);
+
+  async function validerVenteProduits(paiement: PaiementSaisi) {
+    if (panierProduits.length === 0) return;
+    setEnCours(true);
+    try {
+      const montantEncaisse = paiement.mode === "CASH" ? paiement.montant : 0;
+      const resultat = await creerVenteRequete(token, {
+        siteId: utilisateur.siteId,
+        userId: utilisateur.idUser,
+        idAbonne: abonneSelectionne && "idAbonne" in abonneSelectionne ? abonneSelectionne.idAbonne : undefined,
+        lignes: panierProduits.map((l) => ({ idProduit: l.produit.idProduit, quantite: l.quantite })),
+        montantEncaisse,
+      });
+
+      if (paiement.mode === "MOBILE_MONEY") {
+        setPaiementMobile({
+          idFacture: resultat.idFacture,
+          montant: paiement.montant,
+          numeroTelephone: paiement.numeroTelephone,
+          parcours: paiement.parcours,
+          recuBase: {
+            operation: "Vente",
+            numeroAbonnement: null,
+            lignes: lignesTicketProduits,
+            total: totalTicketProduits,
+            modePaiement: "MOBILE_MONEY",
+            dateHeure: new Date().toISOString(),
+          },
+        });
+        return;
+      }
+
+      toast.success(resultat.statutFacture === "VALIDEE" ? "Vente encaissée." : "Vente enregistrée — en attente d'encaissement.");
+      setRecu({
+        operation: "Vente",
+        numeroAbonnement: null,
+        lignes: lignesTicketProduits,
+        total: totalTicketProduits,
+        modePaiement: "CASH",
+        montantEncaisse: paiement.montant,
+        dateHeure: new Date().toISOString(),
+      });
+      reinitialiserTicketProduits();
+      // 5.2 : le stock vient peut-être d'être décrémenté — rafraîchit les quantités affichées
+      chargerProduits(token, utilisateur.siteId)
+        .then((data) => setProduits(data.filter((p) => p.type === "BIEN" || p.type === "SERVICE")))
+        .catch(() => {});
+    } catch (erreur) {
+      gererErreur(erreur, "Échec de la vente.");
+    } finally {
+      setEnCours(false);
+    }
+  }
+
   async function valider(paiement: PaiementSaisi) {
     if (!abonneSelectionne || !formuleSelectionnee) return;
     setEnCours(true);
@@ -284,8 +391,8 @@ export function CaissePage({ onNaviguer, abonneInitial, idFamilleInitiale }: Pro
         <FactureProFormaPrintable
           infosEntreprise={infosEntreprise}
           nomClient={nomClientTicket}
-          lignes={lignesTicket}
-          total={totalTicket}
+          lignes={modeProduits ? lignesTicketProduits : lignesTicket}
+          total={modeProduits ? totalTicketProduits : totalTicket}
           onRetour={() => setProFormaVisible(false)}
         />
       ) : (
@@ -293,36 +400,60 @@ export function CaissePage({ onNaviguer, abonneInitial, idFamilleInitiale }: Pro
           <CategoriesPanel
             familles={familles}
             familleSelectionnee={familleSelectionneeId}
+            modeProduits={modeProduits}
             onSelectionner={(id) => {
+              setModeProduits(false);
               setFamilleSelectionneeId(id);
               setFormuleSelectionnee(null);
               setKitSelectionne(null);
             }}
+            onSelectionnerProduits={() => {
+              setModeProduits(true);
+              setFormuleSelectionnee(null);
+              setKitSelectionne(null);
+            }}
           />
-          <GrilleArticles
-            famille={familleSelectionnee}
-            formuleSelectionnee={formuleSelectionnee}
-            idKitSelectionne={kitSelectionne?.idKit ?? null}
-            idFormuleActuelle={abonnementARenouveler?.idFormule ?? null}
-            masquerKits={Boolean(abonnementARenouveler)}
-            onSelectionnerFormule={setFormuleSelectionnee}
-            onSelectionnerKit={(idKit) => setKitSelectionne(familleSelectionnee?.kits.find((k) => k.idKit === idKit) ?? null)}
-          />
-          <TicketPanel
-            abonneSelectionne={abonneSelectionne}
-            formuleSelectionnee={formuleSelectionnee}
-            kitSelectionne={kitSelectionne}
-            numeroAbonnementARenouveler={abonnementARenouveler?.numeroAbonnement ?? null}
-            peutMigrerFormule={peutMigrerFormule}
-            comptesPartagesDisponibles={comptesPartagesFamille}
-            comptePartageSelectionne={comptePartageSelectionne}
-            onSelectionnerComptePartage={setComptePartageSelectionne}
-            enCours={enCours}
-            onValider={valider}
-            onEchangerMateriel={() => setEchangeMaterielOuvert(true)}
-            onChangerFormule={() => setChangerFormuleOuvert(true)}
-            onImprimerProForma={() => setProFormaVisible(true)}
-          />
+          {modeProduits ? (
+            <>
+              <GrilleProduits produits={produits} onAjouter={ajouterProduitAuPanier} />
+              <TicketProduitsPanel
+                panier={panierProduits}
+                onIncrementer={incrementerProduit}
+                onDecrementer={decrementerProduit}
+                onRetirer={retirerProduit}
+                enCours={enCours}
+                onValider={validerVenteProduits}
+                onImprimerProForma={() => setProFormaVisible(true)}
+              />
+            </>
+          ) : (
+            <>
+              <GrilleArticles
+                famille={familleSelectionnee}
+                formuleSelectionnee={formuleSelectionnee}
+                idKitSelectionne={kitSelectionne?.idKit ?? null}
+                idFormuleActuelle={abonnementARenouveler?.idFormule ?? null}
+                masquerKits={Boolean(abonnementARenouveler)}
+                onSelectionnerFormule={setFormuleSelectionnee}
+                onSelectionnerKit={(idKit) => setKitSelectionne(familleSelectionnee?.kits.find((k) => k.idKit === idKit) ?? null)}
+              />
+              <TicketPanel
+                abonneSelectionne={abonneSelectionne}
+                formuleSelectionnee={formuleSelectionnee}
+                kitSelectionne={kitSelectionne}
+                numeroAbonnementARenouveler={abonnementARenouveler?.numeroAbonnement ?? null}
+                peutMigrerFormule={peutMigrerFormule}
+                comptesPartagesDisponibles={comptesPartagesFamille}
+                comptePartageSelectionne={comptePartageSelectionne}
+                onSelectionnerComptePartage={setComptePartageSelectionne}
+                enCours={enCours}
+                onValider={valider}
+                onEchangerMateriel={() => setEchangeMaterielOuvert(true)}
+                onChangerFormule={() => setChangerFormuleOuvert(true)}
+                onImprimerProForma={() => setProFormaVisible(true)}
+              />
+            </>
+          )}
         </div>
       )}
 
@@ -353,8 +484,16 @@ export function CaissePage({ onNaviguer, abonneInitial, idFamilleInitiale }: Pro
         onSucces={() => {
           toast.success("Paiement Mobile Money confirmé — facture encaissée.");
           if (paiementMobile) setRecu({ ...paiementMobile.recuBase, montantEncaisse: paiementMobile.montant });
+          const venteProduits = paiementMobile?.recuBase.operation === "Vente";
           setPaiementMobile(null);
-          reinitialiserTicket();
+          if (venteProduits) {
+            reinitialiserTicketProduits();
+            chargerProduits(token, utilisateur.siteId)
+              .then((data) => setProduits(data.filter((p) => p.type === "BIEN" || p.type === "SERVICE")))
+              .catch(() => {});
+          } else {
+            reinitialiserTicket();
+          }
         }}
       />
     </div>

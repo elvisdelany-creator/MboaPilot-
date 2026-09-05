@@ -9,8 +9,8 @@ export interface LigneRecu {
 }
 
 export interface RecuVente {
-  operation: "Recrutement" | "Réabonnement";
-  numeroAbonnement: number;
+  operation: "Recrutement" | "Réabonnement" | "Vente";
+  numeroAbonnement: number | null;
   lignes: LigneRecu[];
   total: number;
   modePaiement: "CASH" | "MOBILE_MONEY";
@@ -56,9 +56,7 @@ export function RecuVentePrintable({ infosEntreprise, recu, onNouvelleVente }: P
         <Separator />
 
         <p className="text-xs">{formateurDateHeure.format(new Date(recu.dateHeure))}</p>
-        <p className="text-xs">
-          {recu.operation} — abonnement n° {recu.numeroAbonnement}
-        </p>
+        <p className="text-xs">{recu.numeroAbonnement !== null ? `${recu.operation} — abonnement n° ${recu.numeroAbonnement}` : recu.operation}</p>
 
         <Separator />
 

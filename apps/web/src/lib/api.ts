@@ -168,6 +168,30 @@ export async function chargerProduits(token: string, siteId: number): Promise<Pr
   return lireJson<Produit[]>(reponse);
 }
 
+export interface CreerVentePayload {
+  siteId: number;
+  userId: number;
+  idAbonne?: number;
+  lignes: { idProduit: number; quantite: number }[];
+  montantEncaisse: number;
+}
+
+export interface VenteResultat {
+  idFacture: number;
+  statutFacture: "BROUILLON" | "VALIDEE";
+  montantTotal: number;
+}
+
+// 5.2, 5.3, 8.5 : vente rapide de produits physiques et services hors abonnement
+export async function creerVenteRequete(token: string, payload: CreerVentePayload): Promise<VenteResultat> {
+  const reponse = await fetch(`${BASE}/ventes`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headersAuth(token) },
+    body: JSON.stringify(payload),
+  });
+  return lireJson<VenteResultat>(reponse);
+}
+
 export interface CreerProduitPayload {
   siteId: number;
   type: TypeProduit;

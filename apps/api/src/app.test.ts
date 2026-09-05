@@ -669,6 +669,51 @@ describe("Module suivi de stock (5.2)", () => {
   });
 });
 
+describe("Vente rapide de produits/services hors abonnement (5.2, 5.3, 8.5)", () => {
+  async function creerBien(db: Db) {
+    return db
+      .insert(schema.produit)
+      .values({ siteId, type: "BIEN", libelle: "Télécommande universelle", prixVente: 2500, suiviStock: 1, quantiteStock: 10 })
+      .returning()
+      .get().idProduit;
+  }
+
+  it("un caissier vend un produit au comptant : facture VALIDEE, stock décrémenté", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const token = await connecter(app);
+    const idProduit = await creerBien(db);
+
+    const vente = await app.inject({
+      method: "POST",
+      url: "/api/v1/ventes",
+      headers: authHeader(token),
+      payload: { siteId, userId, lignes: [{ idProduit, quantite: 2 }], montantEncaisse: 5000 },
+    });
+
+    expect(vente.statusCode).toBe(201);
+    expect(vente.json()).toMatchObject({ statutFacture: "VALIDEE", montantTotal: 5000 });
+
+    const produit = await app.inject({ method: "GET", url: `/api/v1/produits?siteId=${siteId}`, headers: authHeader(token) });
+    expect(produit.json().find((p: { idProduit: number }) => p.idProduit === idProduit).quantiteStock).toBe(8);
+  });
+
+  it("un apporteur d'affaires ne peut pas réaliser de vente (403)", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    creerUtilisateur(db, { siteId, nom: "A", prenom: "P", identifiant: "apporteur1", motDePasse: "motdepasse-secret", role: "APPORTEUR" });
+    const token = await connecter(app, "apporteur1");
+    const idProduit = await creerBien(db);
+
+    const vente = await app.inject({
+      method: "POST",
+      url: "/api/v1/ventes",
+      headers: authHeader(token),
+      payload: { siteId, userId, lignes: [{ idProduit, quantite: 1 }], montantEncaisse: 2500 },
+    });
+
+    expect(vente.statusCode).toBe(403);
+  });
+});
+
 describe("Module gestion du catalogue (8.2)", () => {
   it("un administrateur crée un article, un caissier peut le consulter mais pas le créer", async () => {
     const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });

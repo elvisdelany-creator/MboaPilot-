@@ -16,6 +16,7 @@ import { registerTableauBordRoutes } from "./modules/tableau-bord/tableau-bord.r
 import { registerUtilisateursRoutes } from "./modules/utilisateurs/utilisateurs.routes.js";
 import { registerEntrepriseRoutes } from "./modules/entreprise/entreprise.routes.js";
 import { registerComptesPartagesRoutes } from "./modules/comptes-partages/comptes-partages.routes.js";
+import { registerVentesRoutes } from "./modules/ventes/ventes.routes.js";
 
 export interface BuildAppOptions {
   jwtSecret: string;
@@ -68,6 +69,8 @@ export function buildApp(db: Db, options: BuildAppOptions) {
   registerUtilisateursRoutes(app, db, { authRequis, admin });
   registerEntrepriseRoutes(app, db, { authRequis, admin });
   registerComptesPartagesRoutes(app, db, { authRequis, ventes, gestionComptesPartages });
+  // 5.2, 5.3, 8.5 : vente rapide de produits/services hors abonnement
+  registerVentesRoutes(app, db, { authRequis, ventes });
 
   return app;
 }

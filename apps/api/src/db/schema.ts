@@ -210,8 +210,6 @@ export const suiviCommissionCanalplus = sqliteTable("suivi_commission_canalplus"
 });
 
 // journal des alertes d'échéance envoyées par le job quotidien (4.4, 8.3).
-// Le canal de diffusion effectif (SMS/e-mail, 13.2) est un point d'extension
-// futur, non câblé pour l'instant — ceci enregistre uniquement le jalon atteint.
 export const alerteEcheance = sqliteTable("alerte_echeance", {
   idAlerte: integer("id_alerte").primaryKey({ autoIncrement: true }),
   numeroAbonnement: integer("numero_abonnement").notNull().references(() => abonnement.numeroAbonnement),
@@ -224,6 +222,22 @@ export const alerteEcheance = sqliteTable("alerte_echeance", {
   // idempotence : le job peut tourner plusieurs fois le même jour sans dupliquer l'alerte
   uniqueParJalon: uniqueIndex("idx_alerte_unique").on(t.numeroAbonnement, t.jalonJours, t.dateDeclenchement),
 }));
+
+// 4.4, 8.3, 8.4 : journal des notifications client (SMS/e-mail) — alertes
+// d'échéance (rattachées à alerte_echeance) et notification SAV « Prêt »
+// (rattachée à sav_dossier), avec statut d'envoi par canal.
+export const notification = sqliteTable("notification", {
+  idNotification: integer("id_notification").primaryKey({ autoIncrement: true }),
+  idAbonne: integer("id_abonne").notNull().references(() => abonne.idAbonne),
+  canal: text("canal", { enum: ["SMS", "EMAIL"] }).notNull(),
+  evenement: text("evenement", { enum: ["ALERTE_ECHEANCE", "SAV_PRET"] }).notNull(),
+  destinataire: text("destinataire").notNull(), // numéro ou e-mail au moment de l'envoi
+  message: text("message").notNull(),
+  statutEnvoi: text("statut_envoi", { enum: ["ENVOYEE", "ECHOUEE"] }).notNull(),
+  idAlerte: integer("id_alerte").references(() => alerteEcheance.idAlerte),
+  idDossierSav: integer("id_dossier_sav").references((): AnySQLiteColumn => savDossier.idDossierSav),
+  dateEnvoi: text("date_envoi").notNull().default(now),
+});
 
 // --- 3.2.3 Catalogue commercial, ventes et finance ---
 

@@ -2,6 +2,7 @@ import { desc, eq, inArray } from "drizzle-orm";
 import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
 import { trouverAbonne } from "./abonne.repository.js";
+import { listerNotificationsAbonne } from "../notifications/notification.service.js";
 
 export interface AbonnementAvecFormule {
   numeroAbonnement: number;
@@ -23,12 +24,14 @@ export interface Fiche360 {
   paiements: (typeof schema.paiement.$inferSelect)[];
   dossiersSav: (typeof schema.savDossier.$inferSelect)[];
   commissionsCanalplus: (typeof schema.suiviCommissionCanalplus.$inferSelect)[];
+  notifications: (typeof schema.notification.$inferSelect)[];
 }
 
 // 8.1, 9.4 : fiche « 360° » — coordonnées, historique complet des
 // abonnements (toutes familles confondues), matériel installé, factures et
-// leurs paiements (solde éventuel), dossiers SAV, suivi commission CANAL+ et
-// apporteur d'affaires éventuel, consolidés en une seule vue.
+// leurs paiements (solde éventuel), dossiers SAV, suivi commission CANAL+,
+// notifications envoyées (4.4, 8.3, 8.4) et apporteur d'affaires éventuel,
+// consolidés en une seule vue.
 export function construireFiche360(db: Db, idAbonne: number): Fiche360 {
   const abonne = trouverAbonne(db, idAbonne);
   if (!abonne) throw new Error(`Abonné ${idAbonne} introuvable`);
@@ -72,5 +75,7 @@ export function construireFiche360(db: Db, idAbonne: number): Fiche360 {
       ? db.select().from(schema.suiviCommissionCanalplus).where(inArray(schema.suiviCommissionCanalplus.numeroAbonnement, numerosAbonnement)).all()
       : [];
 
-  return { abonne, apporteur, abonnements, materiels, factures, paiements, dossiersSav, commissionsCanalplus };
+  const notifications = listerNotificationsAbonne(db, idAbonne);
+
+  return { abonne, apporteur, abonnements, materiels, factures, paiements, dossiersSav, commissionsCanalplus, notifications };
 }

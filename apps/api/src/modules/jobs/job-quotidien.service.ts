@@ -3,22 +3,32 @@ import { detecterJalonAlerte, evaluerExpiration, evaluerSuiviCommission } from "
 import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
 import { trouverJalonsAlerteEntreprise } from "../entreprise/entreprise.repository.js";
+import { envoyerNotificationAbonne } from "../notifications/notification.service.js";
+import { SimulateurNotification } from "../notifications/simulateur-notification.js";
+import type { FournisseurNotification } from "../notifications/fournisseur.js";
 
 export interface JobQuotidienResultat {
   abonnementsExpires: number;
   alertesCreees: number;
+  notificationsTentees: number;
   commissionsConfirmees: number;
   commissionsAnnulees: number;
 }
 
 // 4.3, 4.4, 6.2 : job quotidien — fait transitionner les abonnements expirés,
-// journalise les alertes J-7/J-3/J-1, évalue le suivi de commission CANAL+.
+// journalise les alertes J-7/J-3/J-1 et notifie le client par SMS/e-mail si un
+// canal de contact existe (4.4, 8.3), évalue le suivi de commission CANAL+.
 // Exécuté sans utilisateur humain : les traces d'historique portent
 // utilisateur_id = NULL pour distinguer une action système d'une action manuelle.
-export function executerJobQuotidien(db: Db, aujourdHui: string): JobQuotidienResultat {
+export function executerJobQuotidien(
+  db: Db,
+  aujourdHui: string,
+  fournisseurNotification: FournisseurNotification = new SimulateurNotification()
+): JobQuotidienResultat {
   const resultat: JobQuotidienResultat = {
     abonnementsExpires: 0,
     alertesCreees: 0,
+    notificationsTentees: 0,
     commissionsConfirmees: 0,
     commissionsAnnulees: 0,
   };
@@ -58,10 +68,23 @@ export function executerJobQuotidien(db: Db, aujourdHui: string): JobQuotidienRe
         .all()
         .some((a) => a.jalonJours === jalon.jours && a.dateDeclenchement === aujourdHui);
       if (!dejaEnvoyee) {
-        db.insert(schema.alerteEcheance)
+        const alerte = db
+          .insert(schema.alerteEcheance)
           .values({ numeroAbonnement: abonnement.numeroAbonnement, jalonJours: jalon.jours, dateDeclenchement: aujourdHui })
-          .run();
+          .returning()
+          .get();
         resultat.alertesCreees += 1;
+
+        // 4.4 : J-7 courtoisie optionnelle, J-3/J-1 systématique — dans tous
+        // les cas conditionné à l'existence d'un canal de contact (géré par
+        // envoyerNotificationAbonne, qui n'envoie que sur les coordonnées renseignées)
+        const notifications = envoyerNotificationAbonne(db, fournisseurNotification, {
+          idAbonne: abonnement.idAbonne,
+          evenement: "ALERTE_ECHEANCE",
+          message: `Votre abonnement n°${abonnement.numeroAbonnement} arrive à échéance le ${abonnement.dateFin}. Pensez à vous réabonner.`,
+          idAlerte: alerte.idAlerte,
+        });
+        resultat.notificationsTentees += notifications.length;
       }
     }
   }

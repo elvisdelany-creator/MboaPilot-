@@ -3,6 +3,9 @@ import { peutTransitionnerSav, type StatutSav } from "@mboapilot/shared";
 import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
 import { enregistrerMouvement } from "../stock/stock.repository.js";
+import { envoyerNotificationAbonne } from "../notifications/notification.service.js";
+import { SimulateurNotification } from "../notifications/simulateur-notification.js";
+import type { FournisseurNotification } from "../notifications/fournisseur.js";
 
 export interface AffecterPieceParams {
   idDossierSav: number;
@@ -52,8 +55,13 @@ const MOTIFS_OBLIGATOIRES: StatutSav[] = ["IRREPARABLE", "ABANDONNE"];
 
 // 5.10, 8.4 : cycle de vie du dossier SAV. La facturation est générée
 // automatiquement au passage en PRET (brouillon, garantie = gratuit et
-// auto-validée) et encaissée au passage en LIVRE.
-export function changerStatutSav(db: Db, params: ChangerStatutSavParams): ChangerStatutSavResultat {
+// auto-validée) et encaissée au passage en LIVRE. Le client est notifié
+// (SMS/e-mail, 8.4) au passage en PRET, s'il est rattaché à un abonné.
+export function changerStatutSav(
+  db: Db,
+  params: ChangerStatutSavParams,
+  fournisseurNotification: FournisseurNotification = new SimulateurNotification()
+): ChangerStatutSavResultat {
   const dossier = db.select().from(schema.savDossier).where(eq(schema.savDossier.idDossierSav, params.idDossierSav)).get();
   if (!dossier) throw new Error(`Dossier SAV ${params.idDossierSav} introuvable`);
 
@@ -108,6 +116,17 @@ export function changerStatutSav(db: Db, params: ChangerStatutSavParams): Change
       .set({ montantMainOeuvre })
       .where(eq(schema.savDossier.idDossierSav, dossier.idDossierSav))
       .run();
+
+    // 8.4 : notification au client lorsque l'appareil passe au statut « Prêt »
+    // — uniquement possible pour un dossier rattaché à un abonné (nullable, client non-abonné)
+    if (dossier.idAbonne !== null) {
+      envoyerNotificationAbonne(db, fournisseurNotification, {
+        idAbonne: dossier.idAbonne,
+        evenement: "SAV_PRET",
+        message: "Votre appareil est prêt à être récupéré.",
+        idDossierSav: dossier.idDossierSav,
+      });
+    }
   }
 
   if (params.nouveauStatut === "LIVRE") {

@@ -57,6 +57,13 @@
       "when": 1788618923920,
       "tag": "0007_fat_human_robot",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1788622228628,
+      "tag": "0008_brave_mojo",
+      "breakpoints": true
     }
   ]
 }

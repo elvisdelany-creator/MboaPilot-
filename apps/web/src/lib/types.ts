@@ -372,6 +372,21 @@ export interface Paiement {
   datePaiement: string;
 }
 
+// 4.4, 8.3, 8.4 : notification client (SMS/e-mail) envoyée pour une alerte
+// d'échéance ou un dossier SAV passé au statut « Prêt »
+export interface Notification {
+  idNotification: number;
+  idAbonne: number;
+  canal: "SMS" | "EMAIL";
+  evenement: "ALERTE_ECHEANCE" | "SAV_PRET";
+  destinataire: string;
+  message: string;
+  statutEnvoi: "ENVOYEE" | "ECHOUEE";
+  idAlerte: number | null;
+  idDossierSav: number | null;
+  dateEnvoi: string;
+}
+
 export interface Fiche360 {
   abonne: Abonne;
   apporteur: Apporteur | null;
@@ -381,6 +396,7 @@ export interface Fiche360 {
   paiements: Paiement[];
   dossiersSav: DossierSav[];
   commissionsCanalplus: SuiviCommissionCanalplus[];
+  notifications: Notification[];
 }
 
 // 8.6, 9.3 : tableau de bord de pilotage

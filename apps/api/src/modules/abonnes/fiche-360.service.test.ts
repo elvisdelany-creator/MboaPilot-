@@ -5,7 +5,11 @@ import { recruterAbonne } from "../abonnements/recrutement.service.js";
 import { creerApporteur } from "../apporteurs/apporteur.repository.js";
 import { creerDossierSav } from "../sav/sav.repository.js";
 import { construireFiche360 } from "./fiche-360.service.js";
+import { envoyerNotificationAbonne } from "../notifications/notification.service.js";
+import type { FournisseurNotification } from "../notifications/fournisseur.js";
 import * as schema from "../../db/schema.js";
+
+const fournisseurFactice: FournisseurNotification = { envoyer: () => ({ reussi: true }) };
 
 let db: Db;
 let siteId: number;
@@ -97,5 +101,15 @@ describe("construireFiche360 (8.1)", () => {
 
   it("rejette un abonné inconnu", () => {
     expect(() => construireFiche360(db, 999999)).toThrow(/introuvable/);
+  });
+
+  it("4.4, 8.3 : inclut le journal des notifications envoyées à l'abonné", () => {
+    const idAbonne = creerAbonne(db, { siteId, nom: "Nga", prenom: "Paul", telephone: "690000000" }).idAbonne;
+    envoyerNotificationAbonne(db, fournisseurFactice, { idAbonne, evenement: "SAV_PRET", message: "Votre appareil est prêt." });
+
+    const fiche = construireFiche360(db, idAbonne);
+
+    expect(fiche.notifications).toHaveLength(1);
+    expect(fiche.notifications[0]).toMatchObject({ canal: "SMS", evenement: "SAV_PRET", statutEnvoi: "ENVOYEE" });
   });
 });

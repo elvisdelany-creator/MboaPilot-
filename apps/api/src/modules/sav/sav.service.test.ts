@@ -4,6 +4,7 @@ import { creerDbTest, type Db } from "../../test-utils/db.js";
 import { creerDossierSav, trouverDossierSav, listerHistoriqueSav } from "./sav.repository.js";
 import { affecterPieceSav, changerStatutSav } from "./sav.service.js";
 import * as schema from "../../db/schema.js";
+import type { FournisseurNotification } from "../notifications/fournisseur.js";
 
 let db: Db;
 let siteId: number;
@@ -111,5 +112,42 @@ describe("changerStatutSav — cycle de vie (5.10)", () => {
 
   it("rejette un dossier inconnu", () => {
     expect(() => changerStatutSav(db, { idDossierSav: 999999, nouveauStatut: "DIAGNOSTIC", userId })).toThrow(/introuvable/);
+  });
+
+  it("8.4 : notifie le client au passage en PRET quand le dossier est rattaché à un abonné", () => {
+    const abonne = db.insert(schema.abonne).values({ siteId, nom: "Ngo", prenom: "Alice", telephone: "690000001" }).returning().get();
+    const idDossierAvecAbonne = creerDossierSav(db, { siteId, idAbonne: abonne.idAbonne, descriptionPanne: "Écran cassé", sousGarantie: false, userId }).idDossierSav;
+    changerStatutSav(db, { idDossierSav: idDossierAvecAbonne, nouveauStatut: "DIAGNOSTIC", userId });
+    changerStatutSav(db, { idDossierSav: idDossierAvecAbonne, nouveauStatut: "REPARATION", userId });
+
+    changerStatutSav(db, { idDossierSav: idDossierAvecAbonne, nouveauStatut: "PRET", userId });
+
+    const notifications = db.select().from(schema.notification).where(eq(schema.notification.idAbonne, abonne.idAbonne)).all();
+    expect(notifications).toHaveLength(1);
+    expect(notifications[0]).toMatchObject({ canal: "SMS", evenement: "SAV_PRET", statutEnvoi: "ENVOYEE", idDossierSav: idDossierAvecAbonne });
+  });
+
+  it("8.4 : n'envoie aucune notification pour un dossier sans abonné rattaché (client non-abonné)", () => {
+    // idDossierSav (fixture par défaut) n'a pas d'abonné rattaché
+    changerStatutSav(db, { idDossierSav, nouveauStatut: "DIAGNOSTIC", userId });
+    changerStatutSav(db, { idDossierSav, nouveauStatut: "REPARATION", userId });
+
+    changerStatutSav(db, { idDossierSav, nouveauStatut: "PRET", userId });
+
+    const notifications = db.select().from(schema.notification).all();
+    expect(notifications).toHaveLength(0);
+  });
+
+  it("8.4 : accepte un fournisseur de notification injecté (testabilité)", () => {
+    const abonne = db.insert(schema.abonne).values({ siteId, nom: "Ngo", prenom: "Alice", telephone: "690000001" }).returning().get();
+    const idDossierAvecAbonne = creerDossierSav(db, { siteId, idAbonne: abonne.idAbonne, descriptionPanne: "Écran cassé", sousGarantie: false, userId }).idDossierSav;
+    changerStatutSav(db, { idDossierSav: idDossierAvecAbonne, nouveauStatut: "DIAGNOSTIC", userId });
+    changerStatutSav(db, { idDossierSav: idDossierAvecAbonne, nouveauStatut: "REPARATION", userId });
+    const fournisseurEnPanne: FournisseurNotification = { envoyer: () => ({ reussi: false }) };
+
+    changerStatutSav(db, { idDossierSav: idDossierAvecAbonne, nouveauStatut: "PRET", userId }, fournisseurEnPanne);
+
+    const notifications = db.select().from(schema.notification).where(eq(schema.notification.idAbonne, abonne.idAbonne)).all();
+    expect(notifications[0].statutEnvoi).toBe("ECHOUEE");
   });
 });

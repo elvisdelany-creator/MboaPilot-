@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { ArrowUpCircle, ChevronDown, ChevronUp, GitMerge, Pencil, Printer, RefreshCw, ShieldAlert, Users, UserSquare2, Wrench } from "lucide-react";
+import { ArrowUpCircle, ChevronDown, ChevronUp, GitMerge, Mail, MessageSquare, Pencil, Printer, RefreshCw, ShieldAlert, Users, UserSquare2, Wrench } from "lucide-react";
 import { peutTransitionnerSav, validerMigrationFormule, type StatutSav } from "@mboapilot/shared";
 import { chargerCatalogue, chargerDossierSav, chargerFiche360, rechercherAbonnes, ErreurAuthentification } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
@@ -37,6 +37,7 @@ const VARIANTE_STATUT_ABONNEMENT: Record<string, "default" | "secondary" | "outl
 const LIBELLE_MODE_PAIEMENT: Record<string, string> = { CASH: "Comptant", CHEQUE: "Chèque", VIREMENT: "Virement", MOBILE_MONEY: "Mobile Money" };
 const LIBELLE_STATUT_COMMISSION: Record<string, string> = { EN_COURS: "En cours (probatoire)", CONFIRMEE: "Confirmée", ANNULEE: "Annulée" };
 const VARIANTE_STATUT_COMMISSION: Record<string, "secondary" | "default" | "destructive"> = { EN_COURS: "secondary", CONFIRMEE: "default", ANNULEE: "destructive" };
+const LIBELLE_EVENEMENT_NOTIFICATION: Record<string, string> = { ALERTE_ECHEANCE: "Alerte d'échéance", SAV_PRET: "Appareil prêt (SAV)" };
 
 const LIBELLE_STATUT_SAV: Record<StatutSav, string> = {
   RECU: "Reçu",
@@ -292,6 +293,7 @@ export function ClientsPage({ onNaviguer, onReabonnerDepuisFiche }: Props) {
                   <TabsTrigger value="facturation">Facturation</TabsTrigger>
                   <TabsTrigger value="sav">SAV</TabsTrigger>
                   {fiche.commissionsCanalplus.length > 0 && <TabsTrigger value="commission">Suivi commission</TabsTrigger>}
+                  <TabsTrigger value="notifications">Notifications</TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="abonnements" forceMount className="space-y-3 print:mb-6">
@@ -510,6 +512,36 @@ export function ClientsPage({ onNaviguer, onReabonnerDepuisFiche }: Props) {
                     </ul>
                   </TabsContent>
                 )}
+
+                {/* 4.4, 8.3, 8.4 : journal des notifications (SMS/e-mail) — alertes d'échéance et notification SAV « Prêt » */}
+                <TabsContent value="notifications" forceMount className="space-y-2 print:mb-6">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Notifications envoyées ({fiche.notifications.length})</p>
+                  {fiche.notifications.length === 0 && <p className="text-sm text-muted-foreground">Aucune notification envoyée.</p>}
+                  <ul className="space-y-2">
+                    {fiche.notifications.map((n) => (
+                      <li key={n.idNotification}>
+                        <Card className="flex-row items-center justify-between gap-3 p-3">
+                          <div className="flex items-center gap-2">
+                            {n.canal === "SMS" ? (
+                              <MessageSquare className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                            ) : (
+                              <Mail className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                            )}
+                            <div>
+                              <p className="text-sm font-medium text-card-foreground">{LIBELLE_EVENEMENT_NOTIFICATION[n.evenement]}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {n.destinataire} · {formateurDateHeure.format(new Date(n.dateEnvoi))}
+                              </p>
+                            </div>
+                          </div>
+                          <Badge variant={n.statutEnvoi === "ENVOYEE" ? "secondary" : "destructive"} className="shrink-0">
+                            {n.statutEnvoi === "ENVOYEE" ? "Envoyée" : "Échouée"}
+                          </Badge>
+                        </Card>
+                      </li>
+                    ))}
+                  </ul>
+                </TabsContent>
               </Tabs>
             </div>
           )}

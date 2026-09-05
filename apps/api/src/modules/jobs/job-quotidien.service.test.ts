@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { creerDbTest, type Db } from "../../test-utils/db.js";
 import { executerJobQuotidien } from "./job-quotidien.service.js";
 import * as schema from "../../db/schema.js";
+import type { FournisseurNotification } from "../notifications/fournisseur.js";
 
 let db: Db;
 let siteId: number;
@@ -126,6 +127,32 @@ describe("executerJobQuotidien — alertes J-7/J-3/J-1 (4.4)", () => {
     expect(resultatJ10.alertesCreees).toBe(1);
     const alertes = db.select().from(schema.alerteEcheance).where(eq(schema.alerteEcheance.numeroAbonnement, sub.numeroAbonnement)).all();
     expect(alertes[0].jalonJours).toBe(10);
+  });
+
+  it("4.4, 8.3 : notifie le client (SMS) à la création d'une alerte, et journalise l'envoi rattaché à l'alerte", () => {
+    const abonne = creerAbonne("690000010");
+    const sub = creerAbonnement(abonne.idAbonne, "2025-10-01", "2025-10-30");
+
+    const resultat = executerJobQuotidien(db, "2025-10-29"); // J-1
+
+    expect(resultat.notificationsTentees).toBe(1);
+    const alerte = db.select().from(schema.alerteEcheance).where(eq(schema.alerteEcheance.numeroAbonnement, sub.numeroAbonnement)).get();
+    const notifications = db.select().from(schema.notification).where(eq(schema.notification.idAbonne, abonne.idAbonne)).all();
+    expect(notifications).toHaveLength(1);
+    expect(notifications[0]).toMatchObject({ canal: "SMS", evenement: "ALERTE_ECHEANCE", statutEnvoi: "ENVOYEE", idAlerte: alerte?.idAlerte });
+  });
+
+  it("4.4 : journalise un échec d'envoi sans faire échouer le job quand le fournisseur est en panne", () => {
+    const abonne = creerAbonne("690000011");
+    creerAbonnement(abonne.idAbonne, "2025-10-01", "2025-10-30");
+    const fournisseurEnPanne: FournisseurNotification = { envoyer: () => ({ reussi: false }) };
+
+    const resultat = executerJobQuotidien(db, "2025-10-29", fournisseurEnPanne);
+
+    expect(resultat.alertesCreees).toBe(1);
+    expect(resultat.notificationsTentees).toBe(1);
+    const notifications = db.select().from(schema.notification).where(eq(schema.notification.idAbonne, abonne.idAbonne)).all();
+    expect(notifications[0].statutEnvoi).toBe("ECHOUEE");
   });
 });
 

@@ -836,6 +836,33 @@ export async function modifierEntrepriseRequete(
   return lireJson<InfosEntreprise["entreprise"]>(reponse);
 }
 
+// 2.6 : sauvegardes automatiques et export manuel des données
+export interface Sauvegarde {
+  nomFichier: string;
+  dateCreation: string;
+  tailleOctets: number;
+}
+
+export async function chargerSauvegardes(token: string): Promise<Sauvegarde[]> {
+  const reponse = await fetch(`${BASE}/sauvegarde`, { headers: headersAuth(token) });
+  return lireJson<Sauvegarde[]>(reponse);
+}
+
+// « Exporter mes données » (2.6) : déclenche une sauvegarde à la demande et
+// renvoie le fichier à télécharger (nom de fichier lu depuis Content-Disposition).
+export async function exporterDonneesRequete(token: string): Promise<{ blob: Blob; nomFichier: string }> {
+  const reponse = await fetch(`${BASE}/sauvegarde/export`, { method: "POST", headers: headersAuth(token) });
+  if (!reponse.ok) {
+    const corps = await reponse.json().catch(() => null);
+    const message = corps?.erreur ?? "Erreur inattendue";
+    if (reponse.status === 401) throw new ErreurAuthentification(message);
+    throw new Error(message);
+  }
+  const entete = reponse.headers.get("content-disposition") ?? "";
+  const nomFichier = /filename=([^;]+)/.exec(entete)?.[1]?.trim() ?? "sauvegarde.db";
+  return { blob: await reponse.blob(), nomFichier };
+}
+
 // 5.9 : comptes partagés streaming (Netflix, Prime Vidéo, IPTV…)
 export async function chargerComptesPartages(token: string, siteId: number): Promise<ComptePartage[]> {
   const reponse = await fetch(`${BASE}/comptes-partages?siteId=${siteId}`, { headers: headersAuth(token) });

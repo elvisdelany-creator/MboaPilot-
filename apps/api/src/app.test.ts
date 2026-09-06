@@ -1,6 +1,9 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import type { FastifyInstance } from "fastify";
 import { eq } from "drizzle-orm";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { creerDbTest, type Db } from "./test-utils/db.js";
 import { buildApp } from "./app.js";
 import { creerUtilisateur } from "./modules/utilisateurs/utilisateur.repository.js";
@@ -1786,5 +1789,42 @@ describe("Comptes partagés streaming (5.9)", () => {
       payload: { siteId, idFamille: famille.idFamille, libelle: "Compte Netflix #1", nombreEcransMax: 4 },
     });
     expect(creation.statusCode).toBe(403);
+  });
+});
+
+describe("Sauvegarde et export des données (2.6)", () => {
+  let dossierSauvegardes: string;
+
+  beforeEach(() => {
+    dossierSauvegardes = mkdtempSync(join(tmpdir(), "mboapilot-test-sauvegarde-"));
+  });
+
+  afterEach(() => {
+    rmSync(dossierSauvegardes, { recursive: true, force: true });
+  });
+
+  it("un administrateur exporte les données (téléchargement) puis retrouve la sauvegarde dans la liste", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST, dossierSauvegardes });
+    creerUtilisateur(db, { siteId, nom: "Admin", prenom: "D", identifiant: "admin1", motDePasse: "motdepasse-secret", role: "ADMINISTRATEUR" });
+    const tokenAdmin = await connecter(app, "admin1");
+
+    const export1 = await app.inject({ method: "POST", url: "/api/v1/sauvegarde/export", headers: authHeader(tokenAdmin) });
+    expect(export1.statusCode).toBe(200);
+    expect(export1.headers["content-disposition"]).toContain("attachment");
+    expect(export1.rawPayload.length).toBeGreaterThan(0);
+
+    const liste = await app.inject({ method: "GET", url: "/api/v1/sauvegarde", headers: authHeader(tokenAdmin) });
+    expect(liste.statusCode).toBe(200);
+    expect(liste.json()).toHaveLength(1);
+  });
+
+  it("un caissier ne peut ni exporter ni lister les sauvegardes (403)", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST, dossierSauvegardes });
+    const token = await connecter(app);
+
+    const export1 = await app.inject({ method: "POST", url: "/api/v1/sauvegarde/export", headers: authHeader(token) });
+    expect(export1.statusCode).toBe(403);
+    const liste = await app.inject({ method: "GET", url: "/api/v1/sauvegarde", headers: authHeader(token) });
+    expect(liste.statusCode).toBe(403);
   });
 });

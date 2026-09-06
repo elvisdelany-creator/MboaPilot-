@@ -1,12 +1,23 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { chargerInfosEntreprise, ErreurAuthentification, modifierEntrepriseRequete } from "@/lib/api";
+import { Download } from "lucide-react";
+import {
+  chargerInfosEntreprise,
+  chargerSauvegardes,
+  exporterDonneesRequete,
+  ErreurAuthentification,
+  modifierEntrepriseRequete,
+  type Sauvegarde,
+} from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { InfosEntreprise } from "@/lib/types";
+
+const formateurDateHeure = new Intl.DateTimeFormat("fr-FR", { dateStyle: "short", timeStyle: "short" });
+const formateurTaille = (octets: number) => `${(octets / 1024).toFixed(0)} Ko`;
 
 // 6.1, 6.2, 4.4, 8.8 : paramétrage des taxes applicables (le cas échéant),
 // des mentions légales figurant sur les documents commerciaux (6.7), du
@@ -25,6 +36,8 @@ export function ParametresTab() {
   const [jalonAnticipe, setJalonAnticipe] = useState("7");
   const [enCours, setEnCours] = useState(false);
   const [enCoursJalons, setEnCoursJalons] = useState(false);
+  const [sauvegardes, setSauvegardes] = useState<Sauvegarde[]>([]);
+  const [exportEnCours, setExportEnCours] = useState(false);
 
   function gererErreur(erreur: unknown, messageParDefaut: string) {
     if (erreur instanceof ErreurAuthentification) {
@@ -50,6 +63,34 @@ export function ParametresTab() {
   }
 
   useEffect(rechargerEntreprise, [token]);
+
+  function rechargerSauvegardes() {
+    chargerSauvegardes(token)
+      .then(setSauvegardes)
+      .catch(() => setSauvegardes([]));
+  }
+
+  useEffect(rechargerSauvegardes, [token]);
+
+  // 2.6 : « Exporter mes données » — sauvegarde à la demande, téléchargée immédiatement
+  async function exporterDonnees() {
+    setExportEnCours(true);
+    try {
+      const { blob, nomFichier } = await exporterDonneesRequete(token);
+      const url = URL.createObjectURL(blob);
+      const lien = document.createElement("a");
+      lien.href = url;
+      lien.download = nomFichier;
+      lien.click();
+      URL.revokeObjectURL(url);
+      toast.success("Export généré et téléchargé.");
+      rechargerSauvegardes();
+    } catch (erreur) {
+      gererErreur(erreur, "Échec de l'export des données.");
+    } finally {
+      setExportEnCours(false);
+    }
+  }
 
   async function enregistrer() {
     setEnCours(true);
@@ -166,6 +207,32 @@ export function ParametresTab() {
         <Button className="w-fit cursor-pointer" disabled={enCoursJalons} onClick={enregistrerJalons}>
           {enCoursJalons ? "Enregistrement…" : "Enregistrer"}
         </Button>
+      </Card>
+
+      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Sauvegarde et export des données</p>
+      <Card className="max-w-xl gap-4 p-4">
+        <p className="text-sm text-muted-foreground">
+          Une sauvegarde automatique du fichier de données est effectuée chaque jour (conservation glissante sur 30 jours). Le bouton
+          ci-dessous déclenche une sauvegarde immédiate et la télécharge.
+        </p>
+        <Button variant="outline" className="w-fit cursor-pointer gap-2" disabled={exportEnCours} onClick={exporterDonnees}>
+          <Download className="size-4" />
+          {exportEnCours ? "Export en cours…" : "Exporter mes données"}
+        </Button>
+
+        {sauvegardes.length > 0 && (
+          <div>
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Sauvegardes récentes</p>
+            <ul className="space-y-1 text-sm text-muted-foreground">
+              {sauvegardes.slice(0, 5).map((s) => (
+                <li key={s.nomFichier} className="flex items-center justify-between gap-3">
+                  <span>{formateurDateHeure.format(new Date(s.dateCreation))}</span>
+                  <span className="tabular-nums">{formateurTaille(s.tailleOctets)}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </Card>
     </div>
   );

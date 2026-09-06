@@ -17,6 +17,7 @@ import { registerUtilisateursRoutes } from "./modules/utilisateurs/utilisateurs.
 import { registerEntrepriseRoutes } from "./modules/entreprise/entreprise.routes.js";
 import { registerComptesPartagesRoutes } from "./modules/comptes-partages/comptes-partages.routes.js";
 import { registerVentesRoutes } from "./modules/ventes/ventes.routes.js";
+import { registerSauvegardeRoutes } from "./modules/sauvegarde/sauvegarde.routes.js";
 
 export interface BuildAppOptions {
   jwtSecret: string;
@@ -24,6 +25,8 @@ export interface BuildAppOptions {
   // production, ou un fournisseur factice déterministe dans les tests —
   // par défaut le simulateur local (aucun accès réseau réel).
   fournisseurPaiementMobile?: FournisseurPaiementMobile;
+  // 2.6 : dossier de destination des sauvegardes (VACUUM INTO)
+  dossierSauvegardes?: string;
 }
 
 export function buildApp(db: Db, options: BuildAppOptions) {
@@ -71,6 +74,8 @@ export function buildApp(db: Db, options: BuildAppOptions) {
   registerComptesPartagesRoutes(app, db, { authRequis, ventes, gestionComptesPartages });
   // 5.2, 5.3, 8.5 : vente rapide de produits/services hors abonnement
   registerVentesRoutes(app, db, { authRequis, ventes });
+  // 2.6 : sauvegardes et export manuel des données
+  registerSauvegardeRoutes(app, db, options.dossierSauvegardes ?? "./data/backups", { authRequis, admin });
 
   return app;
 }

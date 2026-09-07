@@ -304,7 +304,7 @@ export interface FicheApporteur {
   commissionsCanalplus: SuiviCommissionCanalplus[];
 }
 
-export type TypeMouvementStock = "ACHAT" | "VENTE" | "CASSE" | "TRANSFERT_ENTREE" | "TRANSFERT_SORTIE" | "INVENTAIRE";
+export type TypeMouvementStock = "ACHAT" | "VENTE" | "CASSE" | "TRANSFERT_ENTREE" | "TRANSFERT_SORTIE" | "INVENTAIRE" | "RETOUR_CLIENT";
 
 export interface StockMouvement {
   idMouvement: number;

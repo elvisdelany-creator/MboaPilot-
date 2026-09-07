@@ -11,6 +11,7 @@ import {
   type EnregistrerCasseParams,
   type ReceptionnerAchatParams,
 } from "./stock.service.js";
+import { transfererStock, type TransfererStockParams } from "./transfert.service.js";
 
 function envoyerErreur(reply: import("fastify").FastifyReply, erreur: unknown) {
   const message = erreur instanceof Error ? erreur.message : "Erreur inconnue";
@@ -68,6 +69,18 @@ export function registerStockRoutes(app: FastifyInstance, db: Db, guards: RouteG
     async (request, reply) => {
       try {
         reply.code(201).send(ajusterInventaire(db, request.body));
+      } catch (erreur) {
+        envoyerErreur(reply, erreur);
+      }
+    }
+  );
+
+  app.post<{ Body: TransfererStockParams }>(
+    "/api/v1/stock/transferts",
+    { preHandler: [guards.authRequis, guards.gestionStock] },
+    async (request, reply) => {
+      try {
+        reply.code(201).send(transfererStock(db, request.body));
       } catch (erreur) {
         envoyerErreur(reply, erreur);
       }

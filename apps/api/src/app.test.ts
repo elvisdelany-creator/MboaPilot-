@@ -687,6 +687,43 @@ describe("Module suivi de stock (5.2)", () => {
     const alertes = await app.inject({ method: "GET", url: `/api/v1/stock/alertes?siteId=${siteId}`, headers: authHeader(tokenAdmin) });
     expect(alertes.json()).toHaveLength(1); // 10 - 6 = 4 <= seuil 5
   });
+
+  it("un administrateur transfère du stock vers un autre site, créant l'article là-bas s'il n'existe pas", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    creerUtilisateur(db, { siteId, nom: "Admin", prenom: "D", identifiant: "admin1", motDePasse: "motdepasse-secret", role: "ADMINISTRATEUR" });
+    const tokenAdmin = await connecter(app, "admin1");
+    const idProduit = await creerProduitSuivi(db, siteId, 5); // stock 10
+    const idEntreprise = db.select().from(schema.site).where(eq(schema.site.idSite, siteId)).get()!.idEntreprise;
+    const autreSite = db.insert(schema.site).values({ idEntreprise, nom: "Site B" }).returning().get().idSite;
+
+    const transfert = await app.inject({
+      method: "POST",
+      url: "/api/v1/stock/transferts",
+      headers: authHeader(tokenAdmin),
+      payload: { idProduitSource: idProduit, siteDestinationId: autreSite, quantite: 4, userId },
+    });
+
+    expect(transfert.statusCode).toBe(201);
+    expect(transfert.json().produitSource.quantiteStock).toBe(6);
+    expect(transfert.json().produitDestination).toMatchObject({ siteId: autreSite, libelle: "Décodeur", quantiteStock: 4 });
+  });
+
+  it("un caissier ne peut pas transférer de stock (403)", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const token = await connecter(app);
+    const idProduit = await creerProduitSuivi(db, siteId, 5);
+    const idEntreprise = db.select().from(schema.site).where(eq(schema.site.idSite, siteId)).get()!.idEntreprise;
+    const autreSite = db.insert(schema.site).values({ idEntreprise, nom: "Site B" }).returning().get().idSite;
+
+    const transfert = await app.inject({
+      method: "POST",
+      url: "/api/v1/stock/transferts",
+      headers: authHeader(token),
+      payload: { idProduitSource: idProduit, siteDestinationId: autreSite, quantite: 1, userId },
+    });
+
+    expect(transfert.statusCode).toBe(403);
+  });
 });
 
 describe("Vente rapide de produits/services hors abonnement (5.2, 5.3, 8.5)", () => {

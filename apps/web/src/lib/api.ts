@@ -545,6 +545,29 @@ export async function ajusterInventaireRequete(token: string, payload: AjusterIn
   return lireJson<Produit>(reponse);
 }
 
+export interface TransfererStockPayload {
+  idProduitSource: number;
+  siteDestinationId: number;
+  quantite: number;
+  motif?: string;
+  userId: number;
+}
+
+export interface TransfertResultat {
+  produitSource: Produit;
+  produitDestination: Produit;
+}
+
+// 5.2, 8.2 : transfert inter-site — mouvement double, article de destination créé si besoin
+export async function transfererStockRequete(token: string, payload: TransfererStockPayload): Promise<TransfertResultat> {
+  const reponse = await fetch(`${BASE}/stock/transferts`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headersAuth(token) },
+    body: JSON.stringify(payload),
+  });
+  return lireJson<TransfertResultat>(reponse);
+}
+
 // 6.6 : paiement mobile (Orange Money et extensible)
 export interface InitierPaiementMobilePayload {
   idFacture: number;

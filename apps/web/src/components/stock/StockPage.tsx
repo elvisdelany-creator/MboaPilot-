@@ -19,6 +19,7 @@ import { Separator } from "@/components/ui/separator";
 import { ReceptionAchatDialog } from "./ReceptionAchatDialog";
 import { CasseDialog } from "./CasseDialog";
 import { AjusterInventaireDialog } from "./AjusterInventaireDialog";
+import { TransfererStockDialog } from "./TransfererStockDialog";
 import { ArticleDialog } from "./ArticleDialog";
 import type { HistoriquePrixProduit, Produit, StockMouvement, TypeMouvementStock, TypeProduit } from "@/lib/types";
 
@@ -33,6 +34,7 @@ const LIBELLE_MOUVEMENT: Record<TypeMouvementStock, string> = {
   TRANSFERT_ENTREE: "Transfert entrant",
   TRANSFERT_SORTIE: "Transfert sortant",
   INVENTAIRE: "Ajustement d'inventaire",
+  RETOUR_CLIENT: "Retour client (avoir)",
 };
 
 const LIBELLE_TYPE: Record<TypeProduit, string> = {
@@ -59,7 +61,7 @@ export function StockPage({ onNaviguer }: Props) {
   const [idSelectionne, setIdSelectionne] = useState<number | null>(null);
   const [mouvements, setMouvements] = useState<StockMouvement[]>([]);
   const [historiquePrix, setHistoriquePrix] = useState<HistoriquePrixProduit[]>([]);
-  const [dialogueOuvert, setDialogueOuvert] = useState<"achat" | "casse" | "inventaire" | null>(null);
+  const [dialogueOuvert, setDialogueOuvert] = useState<"achat" | "casse" | "inventaire" | "transfert" | null>(null);
   const [articleDialogueOuvert, setArticleDialogueOuvert] = useState<"creation" | "edition" | null>(null);
   const [importEnCours, setImportEnCours] = useState(false);
   const inputFichierRef = useRef<HTMLInputElement>(null);
@@ -301,6 +303,9 @@ export function StockPage({ onNaviguer }: Props) {
                   <Button variant="outline" className="cursor-pointer" onClick={() => setDialogueOuvert("inventaire")}>
                     Ajuster l'inventaire
                   </Button>
+                  <Button variant="outline" className="cursor-pointer" onClick={() => setDialogueOuvert("transfert")}>
+                    Transférer vers un autre site
+                  </Button>
                 </div>
               )}
 
@@ -347,6 +352,7 @@ export function StockPage({ onNaviguer }: Props) {
       <ReceptionAchatDialog produit={dialogueOuvert === "achat" ? produitSelectionne : null} onFerme={() => setDialogueOuvert(null)} onSucces={onActionReussie} />
       <CasseDialog produit={dialogueOuvert === "casse" ? produitSelectionne : null} onFerme={() => setDialogueOuvert(null)} onSucces={onActionReussie} />
       <AjusterInventaireDialog produit={dialogueOuvert === "inventaire" ? produitSelectionne : null} onFerme={() => setDialogueOuvert(null)} onSucces={onActionReussie} />
+      <TransfererStockDialog produit={dialogueOuvert === "transfert" ? produitSelectionne : null} onFerme={() => setDialogueOuvert(null)} onSucces={onActionReussie} />
       <ArticleDialog
         ouvert={articleDialogueOuvert !== null}
         produit={articleDialogueOuvert === "edition" ? produitSelectionne : null}

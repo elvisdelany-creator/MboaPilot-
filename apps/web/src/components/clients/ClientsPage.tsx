@@ -1,6 +1,21 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { ArrowUpCircle, ChevronDown, ChevronUp, GitMerge, Mail, MessageSquare, Pencil, Printer, RefreshCw, ShieldAlert, Users, UserSquare2, Wrench } from "lucide-react";
+import {
+  ArrowUpCircle,
+  ChevronDown,
+  ChevronUp,
+  GitMerge,
+  Mail,
+  MessageSquare,
+  Pencil,
+  Printer,
+  ReceiptText,
+  RefreshCw,
+  ShieldAlert,
+  Users,
+  UserSquare2,
+  Wrench,
+} from "lucide-react";
 import { peutTransitionnerSav, validerMigrationFormule, type StatutSav } from "@mboapilot/shared";
 import { chargerCatalogue, chargerDossierSav, chargerFiche360, rechercherAbonnes, ErreurAuthentification } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
@@ -18,6 +33,7 @@ import { AjouterPieceDialog } from "@/components/sav/AjouterPieceDialog";
 import { ModifierAbonneDialog } from "./ModifierAbonneDialog";
 import { FusionDoublonsDialog } from "./FusionDoublonsDialog";
 import { AnonymiserAbonneDialog } from "./AnonymiserAbonneDialog";
+import { EmettreAvoirDialog } from "./EmettreAvoirDialog";
 import type { Abonne, AbonnementAvecFormule, CatalogueFamille, DossierSavDetaille, Facture, Fiche360 } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -84,6 +100,8 @@ export function ClientsPage({ onNaviguer, onReabonnerDepuisFiche }: Props) {
   const [echangeMaterielCible, setEchangeMaterielCible] = useState<number | null>(null);
   const [changerFormuleCible, setChangerFormuleCible] = useState<AbonnementAvecFormule | null>(null);
   const [filtreFacture, setFiltreFacture] = useState<"toutes" | "impayees">("toutes");
+  // 6.4 : facture à créditer par avoir — depuis l'onglet Facturation
+  const [avoirCible, setAvoirCible] = useState<Facture | null>(null);
   // 9.4 : actions contextuelles SAV — le dossier déplié récupère son détail
   // complet (pièces, historique, facture) via l'API SAV existante, la fiche
   // 360° elle-même n'exposant que la forme « plate » des dossiers
@@ -157,6 +175,8 @@ export function ClientsPage({ onNaviguer, onReabonnerDepuisFiche }: Props) {
   const peutFusionner = utilisateur.role === "ADMINISTRATEUR" || utilisateur.role === "GERANT";
   // 11.3 : droit de suppression — sensibilité plus élevée que la fusion, réservé à l'Administrateur seul
   const peutAnonymiser = utilisateur.role === "ADMINISTRATEUR";
+  // 6.4 : émission d'un avoir — correction financière, réservée à l'encadrement
+  const peutEmettreAvoir = utilisateur.role === "ADMINISTRATEUR" || utilisateur.role === "GERANT";
 
   function trouverFormule(idFamille: number, idFormule: number) {
     return catalogue.find((f) => f.idFamille === idFamille)?.formules.find((fo) => fo.idFormule === idFormule) ?? null;
@@ -404,13 +424,18 @@ export function ClientsPage({ onNaviguer, onReabonnerDepuisFiche }: Props) {
                               <Card className={cn("gap-1.5 p-3", impayee && "border-alert-j1-fg/30 bg-alert-j1-bg/25")}>
                                 <div className="flex items-center justify-between text-sm">
                                   <span className="text-muted-foreground">
-                                    Facture n° {f.idFacture} — {formateurDate.format(new Date(f.dateCreation))}
+                                    {f.type === "AVOIR" ? `Avoir n° ${f.idFacture} sur facture n° ${f.factureOrigineId}` : `Facture n° ${f.idFacture}`} —{" "}
+                                    {formateurDate.format(new Date(f.dateCreation))}
                                   </span>
                                   <span className="flex items-center gap-2">
                                     <span className="tabular-nums font-medium text-card-foreground">{formateurFcfa.format(f.montantTotal)} FCFA</span>
-                                    <Badge variant={f.statut === "VALIDEE" ? "default" : impayee ? "destructive" : "secondary"}>
-                                      {f.statut === "VALIDEE" ? "Validée" : impayee ? "Brouillon — en attente" : "Brouillon"}
-                                    </Badge>
+                                    {f.type === "AVOIR" ? (
+                                      <Badge variant="outline">Avoir</Badge>
+                                    ) : (
+                                      <Badge variant={f.statut === "VALIDEE" ? "default" : impayee ? "destructive" : "secondary"}>
+                                        {f.statut === "VALIDEE" ? "Validée" : impayee ? "Brouillon — en attente" : "Brouillon"}
+                                      </Badge>
+                                    )}
                                   </span>
                                 </div>
                                 {paiementsFacture.map((p) => (
@@ -422,6 +447,17 @@ export function ClientsPage({ onNaviguer, onReabonnerDepuisFiche }: Props) {
                                   <p className={cn("pl-3 text-xs font-medium", impayee ? "text-alert-j1-fg" : "text-alert-j3-fg")}>
                                     Solde dû : {formateurFcfa.format(solde)} FCFA
                                   </p>
+                                )}
+                                {peutEmettreAvoir && f.type === "VENTE" && f.statut === "VALIDEE" && (
+                                  <Button
+                                    variant="link"
+                                    size="sm"
+                                    className="no-print h-auto w-fit cursor-pointer gap-1 self-start p-0 text-xs text-muted-foreground"
+                                    onClick={() => setAvoirCible(f)}
+                                  >
+                                    <ReceiptText className="size-3" />
+                                    Émettre un avoir
+                                  </Button>
                                 )}
                               </Card>
                             </li>
@@ -576,6 +612,15 @@ export function ClientsPage({ onNaviguer, onReabonnerDepuisFiche }: Props) {
         onSucces={() => {
           setAnonymiserCible(null);
           rechargerRecherche();
+          if (idSelectionne !== null) rechargerFiche(idSelectionne);
+        }}
+      />
+
+      <EmettreAvoirDialog
+        facture={avoirCible}
+        onFerme={() => setAvoirCible(null)}
+        onSucces={() => {
+          setAvoirCible(null);
           if (idSelectionne !== null) rechargerFiche(idSelectionne);
         }}
       />

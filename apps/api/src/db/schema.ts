@@ -274,7 +274,7 @@ export const stockMouvement = sqliteTable("stock_mouvement", {
   idProduit: integer("id_produit").notNull().references(() => produit.idProduit),
   siteId: integer("site_id").notNull().references(() => site.idSite),
   typeMouvement: text("type_mouvement", {
-    enum: ["ACHAT", "VENTE", "CASSE", "TRANSFERT_ENTREE", "TRANSFERT_SORTIE", "INVENTAIRE"],
+    enum: ["ACHAT", "VENTE", "CASSE", "TRANSFERT_ENTREE", "TRANSFERT_SORTIE", "INVENTAIRE", "RETOUR_CLIENT"],
   }).notNull(),
   quantite: integer("quantite").notNull(),
   motif: text("motif"), // obligatoire côté API pour CASSE/INVENTAIRE (5.2)
@@ -287,6 +287,11 @@ export const facture = sqliteTable("facture", {
   siteId: integer("site_id").notNull().references(() => site.idSite),
   idAbonne: integer("id_abonne").references(() => abonne.idAbonne),
   statut: text("statut", { enum: ["BROUILLON", "VALIDEE"] }).notNull().default("BROUILLON"), // jamais imprimable en BROUILLON (6.4)
+  // 6.4, 💡 Conseil d'architecte : une facture VALIDEE ne se modifie jamais
+  // directement — sa correction passe par un AVOIR tracé (facture_origine_id),
+  // aux lignes et au montant négatifs, jamais par une réécriture sur place.
+  type: text("type", { enum: ["VENTE", "AVOIR"] }).notNull().default("VENTE"),
+  factureOrigineId: integer("facture_origine_id").references((): AnySQLiteColumn => facture.idFacture),
   montantTotal: integer("montant_total").notNull().default(0),
   creePar: integer("cree_par").notNull().references(() => utilisateur.idUser),
   dateCreation: text("date_creation").notNull().default(now),
@@ -300,6 +305,9 @@ export const ligneVente = sqliteTable("ligne_vente", {
   numeroAbonnement: integer("numero_abonnement").references(() => abonnement.numeroAbonnement),
   quantite: integer("quantite").notNull().default(1),
   prixApplique: integer("prix_applique").notNull(),
+  // 6.4 : sur une ligne d'AVOIR, pointe vers la ligne de la facture d'origine
+  // corrigée — permet d'empêcher de créditer plus que ce qui a été facturé
+  ligneOrigineId: integer("ligne_origine_id").references((): AnySQLiteColumn => ligneVente.idLigne),
 });
 
 export const paiement = sqliteTable("paiement", {

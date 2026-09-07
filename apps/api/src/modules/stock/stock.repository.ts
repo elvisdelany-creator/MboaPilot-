@@ -2,7 +2,7 @@ import { desc, eq } from "drizzle-orm";
 import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
 
-export type TypeMouvementStock = "ACHAT" | "VENTE" | "CASSE" | "TRANSFERT_ENTREE" | "TRANSFERT_SORTIE" | "INVENTAIRE";
+export type TypeMouvementStock = "ACHAT" | "VENTE" | "CASSE" | "TRANSFERT_ENTREE" | "TRANSFERT_SORTIE" | "INVENTAIRE" | "RETOUR_CLIENT";
 
 const SIGNE_PAR_TYPE: Record<TypeMouvementStock, 1 | -1> = {
   ACHAT: 1,
@@ -11,6 +11,7 @@ const SIGNE_PAR_TYPE: Record<TypeMouvementStock, 1 | -1> = {
   TRANSFERT_ENTREE: 1,
   TRANSFERT_SORTIE: -1,
   INVENTAIRE: 1, // non utilisé : la quantité d'un mouvement INVENTAIRE est déjà l'écart signé
+  RETOUR_CLIENT: 1, // 6.4 : restitution au stock lors d'un avoir, si demandée
 };
 
 export interface EnregistrerMouvementParams {

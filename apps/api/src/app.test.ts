@@ -734,6 +734,87 @@ describe("Vente rapide de produits/services hors abonnement (5.2, 5.3, 8.5)", ()
   });
 });
 
+describe("Émission d'un avoir (6.4)", () => {
+  async function creerFactureValidee(db: Db) {
+    const produit = db
+      .insert(schema.produit)
+      .values({ siteId, type: "BIEN", libelle: "Télécommande", prixVente: 2500, suiviStock: 1, quantiteStock: 5 })
+      .returning()
+      .get();
+    const facture = db.insert(schema.facture).values({ siteId, statut: "VALIDEE", montantTotal: 2 * 2500, creePar: userId }).returning().get();
+    const ligne = db
+      .insert(schema.ligneVente)
+      .values({ idFacture: facture.idFacture, idProduit: produit.idProduit, quantite: 2, prixApplique: 2 * 2500 })
+      .returning()
+      .get();
+    return { idFacture: facture.idFacture, idLigne: ligne.idLigne, idProduit: produit.idProduit };
+  }
+
+  it("un gérant émet un avoir avec restitution au stock", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    creerUtilisateur(db, { siteId, nom: "Gerant", prenom: "G", identifiant: "gerant1", motDePasse: "motdepasse-secret", role: "GERANT" });
+    const token = await connecter(app, "gerant1");
+    const { idFacture, idLigne, idProduit } = await creerFactureValidee(db);
+
+    const avoir = await app.inject({
+      method: "POST",
+      url: `/api/v1/factures/${idFacture}/avoir`,
+      headers: authHeader(token),
+      payload: { lignes: [{ idLigneOrigine: idLigne, quantite: 2 }], restituerStock: true, userId },
+    });
+
+    expect(avoir.statusCode).toBe(201);
+    expect(avoir.json().montantTotal).toBe(-5000);
+
+    const produit = await app.inject({ method: "GET", url: `/api/v1/produits?siteId=${siteId}`, headers: authHeader(token) });
+    expect(produit.json().find((p: { idProduit: number }) => p.idProduit === idProduit).quantiteStock).toBe(7);
+  });
+
+  it("liste les lignes d'une facture avec le libellé de l'article, accessible à un rôle de vente", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const token = await connecter(app);
+    const { idFacture } = await creerFactureValidee(db);
+
+    const lignes = await app.inject({ method: "GET", url: `/api/v1/factures/${idFacture}/lignes`, headers: authHeader(token) });
+
+    expect(lignes.statusCode).toBe(200);
+    expect(lignes.json()).toMatchObject([{ libelleProduit: "Télécommande", quantite: 2, prixApplique: 5000 }]);
+  });
+
+  it("un caissier ne peut pas émettre d'avoir (403)", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const token = await connecter(app);
+    const { idFacture, idLigne } = await creerFactureValidee(db);
+
+    const avoir = await app.inject({
+      method: "POST",
+      url: `/api/v1/factures/${idFacture}/avoir`,
+      headers: authHeader(token),
+      payload: { lignes: [{ idLigneOrigine: idLigne, quantite: 1 }], restituerStock: false, userId },
+    });
+
+    expect(avoir.statusCode).toBe(403);
+  });
+
+  it("rejette un avoir sur une facture BROUILLON (400)", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    creerUtilisateur(db, { siteId, nom: "Gerant", prenom: "G", identifiant: "gerant1", motDePasse: "motdepasse-secret", role: "GERANT" });
+    const token = await connecter(app, "gerant1");
+    const produit = db.insert(schema.produit).values({ siteId, type: "BIEN", libelle: "Câble", prixVente: 1000 }).returning().get();
+    const facture = db.insert(schema.facture).values({ siteId, statut: "BROUILLON", montantTotal: 1000, creePar: userId }).returning().get();
+    const ligne = db.insert(schema.ligneVente).values({ idFacture: facture.idFacture, idProduit: produit.idProduit, quantite: 1, prixApplique: 1000 }).returning().get();
+
+    const avoir = await app.inject({
+      method: "POST",
+      url: `/api/v1/factures/${facture.idFacture}/avoir`,
+      headers: authHeader(token),
+      payload: { lignes: [{ idLigneOrigine: ligne.idLigne, quantite: 1 }], restituerStock: false, userId },
+    });
+
+    expect(avoir.statusCode).toBe(400);
+  });
+});
+
 describe("Module gestion du catalogue (8.2)", () => {
   it("un administrateur crée un article, un caissier peut le consulter mais pas le créer", async () => {
     const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });

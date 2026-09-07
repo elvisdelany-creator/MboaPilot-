@@ -338,6 +338,9 @@ export interface Facture {
   siteId: number;
   idAbonne: number | null;
   statut: "BROUILLON" | "VALIDEE";
+  // 6.4 : une facture de type AVOIR corrige une facture VENTE (factureOrigineId), montant négatif
+  type: "VENTE" | "AVOIR";
+  factureOrigineId: number | null;
   montantTotal: number;
   creePar: number;
   dateCreation: string;

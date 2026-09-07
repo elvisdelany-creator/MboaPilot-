@@ -18,6 +18,7 @@ import { registerEntrepriseRoutes } from "./modules/entreprise/entreprise.routes
 import { registerComptesPartagesRoutes } from "./modules/comptes-partages/comptes-partages.routes.js";
 import { registerVentesRoutes } from "./modules/ventes/ventes.routes.js";
 import { registerSauvegardeRoutes } from "./modules/sauvegarde/sauvegarde.routes.js";
+import { registerAvoirRoutes } from "./modules/factures/avoir.routes.js";
 
 export interface BuildAppOptions {
   jwtSecret: string;
@@ -57,6 +58,8 @@ export function buildApp(db: Db, options: BuildAppOptions) {
   const pilotage = exigerRole("ADMINISTRATEUR", "GERANT", "COMPTABLE");
   // 5.9 : création/édition des comptes partagés streaming réservée à l'encadrement
   const gestionComptesPartages = exigerRole("ADMINISTRATEUR", "GERANT");
+  // 6.4 : émission d'un avoir — correction financière, réservée à l'encadrement
+  const gestionAvoirs = exigerRole("ADMINISTRATEUR", "GERANT");
 
   registerAbonnementsRoutes(app, db, { authRequis, ventes });
   // 11.3 : anonymisation (droit de suppression) réservée à l'Administrateur seul
@@ -76,6 +79,8 @@ export function buildApp(db: Db, options: BuildAppOptions) {
   registerVentesRoutes(app, db, { authRequis, ventes });
   // 2.6 : sauvegardes et export manuel des données
   registerSauvegardeRoutes(app, db, options.dossierSauvegardes ?? "./data/backups", { authRequis, admin });
+  // 6.4 : correction d'une facture VALIDEE par avoir
+  registerAvoirRoutes(app, db, { authRequis, ventes, gestionAvoirs });
 
   return app;
 }

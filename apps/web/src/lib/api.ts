@@ -81,6 +81,44 @@ export async function chargerFiche360(token: string, idAbonne: number): Promise<
   return lireJson<Fiche360>(reponse);
 }
 
+// 6.4 : lignes d'une facture, pour choisir quoi créditer lors d'un avoir
+export interface LigneFacture {
+  idLigne: number;
+  idProduit: number | null;
+  idKit: number | null;
+  numeroAbonnement: number | null;
+  quantite: number;
+  prixApplique: number;
+  ligneOrigineId: number | null;
+  libelleProduit: string | null;
+  libelleKit: string | null;
+}
+
+export async function chargerLignesFacture(token: string, idFacture: number): Promise<LigneFacture[]> {
+  const reponse = await fetch(`${BASE}/factures/${idFacture}/lignes`, { headers: headersAuth(token) });
+  return lireJson<LigneFacture[]>(reponse);
+}
+
+export interface EmettreAvoirPayload {
+  lignes: { idLigneOrigine: number; quantite: number }[];
+  restituerStock: boolean;
+  userId: number;
+}
+
+export interface AvoirResultat {
+  idFactureAvoir: number;
+  montantTotal: number;
+}
+
+export async function emettreAvoirRequete(token: string, idFacture: number, payload: EmettreAvoirPayload): Promise<AvoirResultat> {
+  const reponse = await fetch(`${BASE}/factures/${idFacture}/avoir`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headersAuth(token) },
+    body: JSON.stringify(payload),
+  });
+  return lireJson<AvoirResultat>(reponse);
+}
+
 export interface ModifierAbonnePayload {
   nom?: string;
   prenom?: string;

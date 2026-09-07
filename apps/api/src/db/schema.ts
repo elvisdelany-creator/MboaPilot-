@@ -257,6 +257,18 @@ export const produit = sqliteTable("produit", {
   seuilAlerte: integer("seuil_alerte"),
 });
 
+// 5.1, 5.2 : composants physiques d'un kit ("produit composé") — décrémentés
+// automatiquement du stock, chacun pour la quantité indiquée, à la vente du
+// kit (recrutement). Distinct de kit_prix_decodeur (5.1.1, moteur de prix) :
+// cette table ne concerne que l'inventaire, jamais la tarification.
+export const kitComposant = sqliteTable("kit_composant", {
+  idKit: integer("id_kit").notNull().references(() => kit.idKit),
+  idProduit: integer("id_produit").notNull().references(() => produit.idProduit),
+  quantite: integer("quantite").notNull().default(1),
+}, (t) => ({
+  pk: primaryKey({ columns: [t.idKit, t.idProduit] }),
+}));
+
 // 8.2 : historique des variations de prix de vente / coût de revient par article
 export const historiquePrixProduit = sqliteTable("historique_prix_produit", {
   idHistoPrix: integer("id_histo_prix").primaryKey({ autoIncrement: true }),

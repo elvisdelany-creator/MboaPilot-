@@ -229,6 +229,28 @@ describe("recruterAbonne (7.1)", () => {
     const tousLesAbonnes = db.select().from(schema.abonne).all();
     expect(tousLesAbonnes).toHaveLength(1);
   });
+
+  it("5.1, 5.2 : la vente d'un kit décrémente le stock de ses composants suivis", () => {
+    const idDecodeur = db
+      .insert(schema.produit)
+      .values({ siteId, type: "BIEN", libelle: "Décodeur GLOBALZ", prixVente: 15000, suiviStock: 1, quantiteStock: 5 })
+      .returning()
+      .get().idProduit;
+    db.insert(schema.kitComposant).values({ idKit: kitGlobalZ, idProduit: idDecodeur, quantite: 1 }).run();
+
+    recruterAbonne(db, {
+      siteId,
+      userId,
+      aujourdHui: "2025-11-16",
+      abonne: { nom: "Nga Ndongo", prenom: "Valentin", telephone: "690000000" },
+      idFormule: formuleToutCanalPlus,
+      idKit: kitGlobalZ,
+      montantEncaisse: 0,
+    });
+
+    const decodeur = db.select().from(schema.produit).where(eq(schema.produit.idProduit, idDecodeur)).get();
+    expect(decodeur?.quantiteStock).toBe(4);
+  });
 });
 
 describe("recruterAbonne — apporteur d'affaires (6.3 : lien permanent abonné ↔ apporteur)", () => {

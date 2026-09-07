@@ -872,6 +872,39 @@ export async function supprimerPrixDecodeurKitRequete(token: string, idKit: numb
   }
 }
 
+// 5.1, 5.2 : composition physique d'un kit ("produit composé") — décrémentée
+// du stock à la vente
+export interface ComposantKit {
+  idKit: number;
+  idProduit: number;
+  quantite: number;
+}
+
+export async function chargerComposantsKit(token: string, idKit: number): Promise<ComposantKit[]> {
+  const reponse = await fetch(`${BASE}/catalogue/kits/${idKit}/composants`, { headers: headersAuth(token) });
+  return lireJson<ComposantKit[]>(reponse);
+}
+
+export async function definirComposantKitRequete(token: string, payload: ComposantKit): Promise<ComposantKit> {
+  const reponse = await fetch(`${BASE}/catalogue/kits/composants`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headersAuth(token) },
+    body: JSON.stringify(payload),
+  });
+  return lireJson<ComposantKit>(reponse);
+}
+
+export async function supprimerComposantKitRequete(token: string, idKit: number, idProduit: number): Promise<void> {
+  const reponse = await fetch(`${BASE}/catalogue/kits/${idKit}/composants/${idProduit}`, {
+    method: "DELETE",
+    headers: headersAuth(token),
+  });
+  if (!reponse.ok) {
+    const corps = await reponse.json().catch(() => ({}));
+    throw new Error(corps?.erreur ?? "Erreur inattendue");
+  }
+}
+
 // 6.7 : en-tête entreprise/site pour le ticket de caisse et la facture pro-forma
 export async function chargerInfosEntreprise(token: string): Promise<InfosEntreprise> {
   const reponse = await fetch(`${BASE}/entreprise`, { headers: headersAuth(token) });

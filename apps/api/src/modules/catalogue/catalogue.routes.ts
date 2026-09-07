@@ -6,10 +6,12 @@ import {
   creerFormule,
   creerKit,
   creerOption,
+  definirComposantKit,
   definirPrixDecodeurKit,
   delierOptionFormule,
   lierOptionFormule,
   listerCatalogue,
+  listerComposantsKit,
   listerFamilles,
   listerFormules,
   listerKits,
@@ -17,7 +19,9 @@ import {
   modifierFormule,
   modifierKit,
   modifierOption,
+  supprimerComposantKit,
   supprimerPrixDecodeurKit,
+  type ComposantKitInput,
   type CreerFamilleInput,
   type CreerFormuleInput,
   type CreerKitInput,
@@ -201,6 +205,38 @@ export function registerCatalogueRoutes(app: FastifyInstance, db: Db, guards: { 
     { preHandler: [guards.authRequis, guards.gestionCatalogue] },
     async (request, reply) => {
       supprimerPrixDecodeurKit(db, Number(request.params.idKit), Number(request.params.idFormule));
+      reply.code(204).send();
+    }
+  );
+
+  // 5.1, 5.2 : composition physique d'un kit ("produit composé") — décrémentée
+  // du stock à la vente (recrutement) ; consultation ouverte, édition réservée
+  // à l'encadrement, comme le reste du back-office catalogue.
+  app.get<{ Params: { idKit: string } }>(
+    "/api/v1/catalogue/kits/:idKit/composants",
+    { preHandler: [guards.authRequis] },
+    async (request, reply) => {
+      reply.code(200).send(listerComposantsKit(db, Number(request.params.idKit)));
+    }
+  );
+
+  app.post<{ Body: ComposantKitInput }>(
+    "/api/v1/catalogue/kits/composants",
+    { preHandler: [guards.authRequis, guards.gestionCatalogue] },
+    async (request, reply) => {
+      try {
+        reply.code(200).send(definirComposantKit(db, request.body));
+      } catch (erreur) {
+        envoyerErreur(reply, erreur);
+      }
+    }
+  );
+
+  app.delete<{ Params: { idKit: string; idProduit: string } }>(
+    "/api/v1/catalogue/kits/:idKit/composants/:idProduit",
+    { preHandler: [guards.authRequis, guards.gestionCatalogue] },
+    async (request, reply) => {
+      supprimerComposantKit(db, Number(request.params.idKit), Number(request.params.idProduit));
       reply.code(204).send();
     }
   );

@@ -6,9 +6,11 @@ import {
   creerKit,
   creerOption,
   delierOptionFormule,
+  definirComposantKit,
   definirPrixDecodeurKit,
   lierOptionFormule,
   listerCatalogue,
+  listerComposantsKit,
   listerFamilles,
   listerFormules,
   listerKits,
@@ -16,6 +18,7 @@ import {
   modifierFormule,
   modifierKit,
   modifierOption,
+  supprimerComposantKit,
   supprimerPrixDecodeurKit,
 } from "./catalogue.repository.js";
 import * as schema from "../../db/schema.js";
@@ -259,6 +262,30 @@ describe("Back-office catalogue (8.8) : familles, formules, options — sans int
       if (kitApres.reglePrix === "PRIX_DECODEUR_VARIABLE_SELON_FORMULE") {
         expect(kitApres.prixDecodeurParFormule[evasion.idFormule]).toBeUndefined();
       }
+    });
+  });
+
+  describe("definirComposantKit / supprimerComposantKit / listerComposantsKit (5.1, 5.2 : kit \"produit composé\")", () => {
+    it("définit puis retire un composant d'un kit, idempotent sur redéfinition", () => {
+      const fam = db.insert(schema.familleAbonnement).values({ libelle: "CANAL+" }).returning().get();
+      const kit = creerKit(db, { idFamille: fam.idFamille, libelle: "KIT CANAL+ GLOBALZ", reglePrix: "PRIX_FIXE", prixFixe: 15000 });
+      const ent = db.insert(schema.entreprise).values({ nom: "Boutique Test" }).returning().get();
+      const siteId = db.insert(schema.site).values({ idEntreprise: ent.idEntreprise, nom: "Site A" }).returning().get().idSite;
+      const decodeur = db
+        .insert(schema.produit)
+        .values({ siteId, type: "BIEN", libelle: "Décodeur GLOBALZ", prixVente: 15000, suiviStock: 1 })
+        .returning()
+        .get();
+
+      definirComposantKit(db, { idKit: kit.idKit, idProduit: decodeur.idProduit, quantite: 1 });
+      expect(listerComposantsKit(db, kit.idKit)).toEqual([{ idKit: kit.idKit, idProduit: decodeur.idProduit, quantite: 1 }]);
+
+      // idempotent : redéfinir la même paire met à jour la quantité, ne duplique pas
+      definirComposantKit(db, { idKit: kit.idKit, idProduit: decodeur.idProduit, quantite: 2 });
+      expect(listerComposantsKit(db, kit.idKit)).toEqual([{ idKit: kit.idKit, idProduit: decodeur.idProduit, quantite: 2 }]);
+
+      supprimerComposantKit(db, kit.idKit, decodeur.idProduit);
+      expect(listerComposantsKit(db, kit.idKit)).toEqual([]);
     });
   });
 });

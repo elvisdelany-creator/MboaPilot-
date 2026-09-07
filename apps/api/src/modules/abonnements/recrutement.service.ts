@@ -7,6 +7,7 @@ import { construireKitCalcul } from "../catalogue/kit-mapper.js";
 import { compterEcransOccupes, trouverComptePartage } from "../comptes-partages/compte-partage.repository.js";
 import { trouverApporteur } from "../apporteurs/apporteur.repository.js";
 import { trouverTauxCommissionVendeurParSite } from "../entreprise/entreprise.repository.js";
+import { decrementerComposantsKit } from "../stock/stock.service.js";
 
 export interface RecruterAbonneParams {
   siteId: number;
@@ -116,6 +117,8 @@ export function recruterAbonne(db: Db, params: RecruterAbonneParams): Recrutemen
 
   if (kitRow) {
     db.insert(schema.ligneVente).values({ idFacture: facture.idFacture, idKit: kitRow.idKit, prixApplique: prixKit }).run();
+    // 5.1, 5.2 : le kit est un "produit composé" — décrémente le stock de chacun de ses composants
+    decrementerComposantsKit(db, { idKit: kitRow.idKit, siteId: params.siteId, userId: params.userId });
   }
 
   let statutFacture: "BROUILLON" | "VALIDEE" = "BROUILLON";

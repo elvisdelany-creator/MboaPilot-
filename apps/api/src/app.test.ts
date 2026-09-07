@@ -1717,6 +1717,72 @@ describe("Back-office catalogue : règles de prix dynamique des kits (5.1.1, 8.8
 
     expect(reponse.statusCode).toBe(404);
   });
+
+  it("5.1, 5.2 : définit puis retire un composant physique d'un kit, et la vente du kit décrémente son stock", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    creerUtilisateur(db, { siteId, nom: "Admin", prenom: "D", identifiant: "admin1", motDePasse: "motdepasse-secret", role: "ADMINISTRATEUR" });
+    const tokenAdmin = await connecter(app, "admin1");
+    const famille = db.insert(schema.familleAbonnement).values({ libelle: "CANAL+" }).returning().get();
+    const formule = db.insert(schema.formule).values({ idFamille: famille.idFamille, libelle: "EVASION", prix: 10500, rang: 2 }).returning().get();
+    const kit = (
+      await app.inject({
+        method: "POST",
+        url: "/api/v1/catalogue/kits",
+        headers: authHeader(tokenAdmin),
+        payload: { idFamille: famille.idFamille, libelle: "KIT CANAL+ GLOBALZ", reglePrix: "PRIX_FIXE", prixFixe: 15000 },
+      })
+    ).json();
+    const decodeur = db
+      .insert(schema.produit)
+      .values({ siteId, type: "BIEN", libelle: "Décodeur GLOBALZ", prixVente: 15000, suiviStock: 1, quantiteStock: 5 })
+      .returning()
+      .get();
+
+    const definition = await app.inject({
+      method: "POST",
+      url: "/api/v1/catalogue/kits/composants",
+      headers: authHeader(tokenAdmin),
+      payload: { idKit: kit.idKit, idProduit: decodeur.idProduit, quantite: 1 },
+    });
+    expect(definition.statusCode).toBe(200);
+
+    const composants = await app.inject({ method: "GET", url: `/api/v1/catalogue/kits/${kit.idKit}/composants`, headers: authHeader(tokenAdmin) });
+    expect(composants.json()).toEqual([{ idKit: kit.idKit, idProduit: decodeur.idProduit, quantite: 1 }]);
+
+    await app.inject({
+      method: "POST",
+      url: "/api/v1/recrutements",
+      headers: authHeader(tokenAdmin),
+      payload: { siteId, userId, aujourdHui: "2025-11-16", abonne: { nom: "Nga", prenom: "Paul", telephone: "690000000" }, idFormule: formule.idFormule, idKit: kit.idKit, montantEncaisse: 0 },
+    });
+    const produitApresVente = await app.inject({ method: "GET", url: `/api/v1/produits?siteId=${siteId}`, headers: authHeader(tokenAdmin) });
+    expect(produitApresVente.json().find((p: { idProduit: number }) => p.idProduit === decodeur.idProduit).quantiteStock).toBe(4);
+
+    const suppression = await app.inject({
+      method: "DELETE",
+      url: `/api/v1/catalogue/kits/${kit.idKit}/composants/${decodeur.idProduit}`,
+      headers: authHeader(tokenAdmin),
+    });
+    expect(suppression.statusCode).toBe(204);
+    const composantsApres = await app.inject({ method: "GET", url: `/api/v1/catalogue/kits/${kit.idKit}/composants`, headers: authHeader(tokenAdmin) });
+    expect(composantsApres.json()).toEqual([]);
+  });
+
+  it("un caissier ne peut pas définir de composant de kit (403)", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const token = await connecter(app);
+    const famille = db.insert(schema.familleAbonnement).values({ libelle: "CANAL+" }).returning().get();
+    const kit = db.insert(schema.kit).values({ idFamille: famille.idFamille, libelle: "KIT X", reglePrix: "PRIX_FIXE", prixFixe: 1000 }).returning().get();
+    const produit = db.insert(schema.produit).values({ siteId, type: "BIEN", libelle: "Décodeur", prixVente: 1000 }).returning().get();
+
+    const definition = await app.inject({
+      method: "POST",
+      url: "/api/v1/catalogue/kits/composants",
+      headers: authHeader(token),
+      payload: { idKit: kit.idKit, idProduit: produit.idProduit, quantite: 1 },
+    });
+    expect(definition.statusCode).toBe(403);
+  });
 });
 
 describe("GET /api/v1/entreprise (6.7)", () => {

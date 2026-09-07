@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { eq } from "drizzle-orm";
 import { creerDbTest, type Db } from "../../test-utils/db.js";
-import { ajusterInventaire, enregistrerCasse, listerAlertesStock, receptionnerAchat } from "./stock.service.js";
+import { ajusterInventaire, decrementerComposantsKit, enregistrerCasse, listerAlertesStock, receptionnerAchat } from "./stock.service.js";
 import * as schema from "../../db/schema.js";
 
 let db: Db;
@@ -85,5 +85,67 @@ describe("listerAlertesStock (8.6, 9.3)", () => {
     db.insert(schema.produit).values({ siteId, type: "BIEN", libelle: "Câble", prixVente: 500, suiviStock: 1, quantiteStock: 0 }).run(); // pas de seuil
 
     expect(listerAlertesStock(db, siteId)).toHaveLength(0);
+  });
+});
+
+describe("decrementerComposantsKit (5.1, 5.2 : kit \"produit composé\")", () => {
+  let idKit: number;
+  let idParabole: number;
+  let idAccessoireSansSuivi: number;
+
+  beforeEach(() => {
+    const famille = db.insert(schema.familleAbonnement).values({ libelle: "CANAL+" }).returning().get();
+    idKit = db
+      .insert(schema.kit)
+      .values({ idFamille: famille.idFamille, libelle: "KIT CANAL+ GLOBALZ", reglePrix: "PRIX_FIXE", prixFixe: 15000 })
+      .returning()
+      .get().idKit;
+    idParabole = db
+      .insert(schema.produit)
+      .values({ siteId, type: "BIEN", libelle: "Parabole", prixVente: 3000, suiviStock: 1, quantiteStock: 20 })
+      .returning()
+      .get().idProduit;
+    idAccessoireSansSuivi = db
+      .insert(schema.produit)
+      .values({ siteId, type: "BIEN", libelle: "Câbles et fixations", prixVente: 500, suiviStock: 0 })
+      .returning()
+      .get().idProduit;
+
+    db.insert(schema.kitComposant).values({ idKit, idProduit, quantite: 1 }).run(); // le décodeur du beforeEach parent
+    db.insert(schema.kitComposant).values({ idKit, idProduit: idParabole, quantite: 1 }).run();
+    db.insert(schema.kitComposant).values({ idKit, idProduit: idAccessoireSansSuivi, quantite: 2 }).run();
+  });
+
+  it("décrémente chaque composant suivi, ignore les composants sans suivi de stock", () => {
+    decrementerComposantsKit(db, { idKit, siteId, userId });
+
+    const decodeur = db.select().from(schema.produit).where(eq(schema.produit.idProduit, idProduit)).get();
+    expect(decodeur?.quantiteStock).toBe(9); // 10 - 1
+
+    const parabole = db.select().from(schema.produit).where(eq(schema.produit.idProduit, idParabole)).get();
+    expect(parabole?.quantiteStock).toBe(19); // 20 - 1
+
+    const mouvementsAccessoire = db.select().from(schema.stockMouvement).where(eq(schema.stockMouvement.idProduit, idAccessoireSansSuivi)).all();
+    expect(mouvementsAccessoire).toHaveLength(0);
+  });
+
+  it("journalise un mouvement VENTE par composant décrémenté", () => {
+    decrementerComposantsKit(db, { idKit, siteId, userId });
+
+    const mouvements = db.select().from(schema.stockMouvement).where(eq(schema.stockMouvement.idProduit, idProduit)).all();
+    expect(mouvements).toHaveLength(1);
+    expect(mouvements[0]).toMatchObject({ typeMouvement: "VENTE", quantite: 1 });
+  });
+
+  it("ne fait rien pour un kit sans composant déclaré", () => {
+    const idKitSansComposant = db
+      .insert(schema.kit)
+      .values({ idFamille: db.select().from(schema.familleAbonnement).get()!.idFamille, libelle: "KIT SANS COMPOSANT", reglePrix: "PRIX_FIXE", prixFixe: 1000 })
+      .returning()
+      .get().idKit;
+
+    expect(() => decrementerComposantsKit(db, { idKit: idKitSansComposant, siteId, userId })).not.toThrow();
+    const decodeur = db.select().from(schema.produit).where(eq(schema.produit.idProduit, idProduit)).get();
+    expect(decodeur?.quantiteStock).toBe(10); // inchangé
   });
 });

@@ -3,17 +3,22 @@ import { toast } from "sonner";
 import { Plus } from "lucide-react";
 import {
   chargerCatalogue,
+  chargerComposantsKit,
   chargerFamilles,
   chargerFormulesFamille,
   chargerKits,
   chargerOptions,
+  chargerProduits,
   creerFamilleRequete,
+  definirComposantKitRequete,
   definirPrixDecodeurKitRequete,
   delierOptionFormuleRequete,
   ErreurAuthentification,
   lierOptionFormuleRequete,
   modifierFormuleRequete,
+  supprimerComposantKitRequete,
   supprimerPrixDecodeurKitRequete,
+  type ComposantKit,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
@@ -25,7 +30,7 @@ import { Separator } from "@/components/ui/separator";
 import { NouvelleFormuleDialog } from "./NouvelleFormuleDialog";
 import { NouvelleOptionDialog } from "./NouvelleOptionDialog";
 import { NouveauKitDialog } from "./NouveauKitDialog";
-import type { CatalogueFamille, Famille, Formule, KitBrut, OptionCatalogue } from "@/lib/types";
+import type { CatalogueFamille, Famille, Formule, KitBrut, OptionCatalogue, Produit } from "@/lib/types";
 
 const formateurFcfa = new Intl.NumberFormat("fr-FR");
 const LIBELLES_MODE_DUREE: Record<"STRICT_30J" | "MOIS_CIVIL", string> = { STRICT_30J: "30 jours stricts", MOIS_CIVIL: "Mois civil" };
@@ -41,6 +46,7 @@ const LIBELLES_REGLE_PRIX: Record<KitBrut["reglePrix"], string> = {
 export function CatalogueTab() {
   const { session, deconnecter } = useAuth();
   const token = session!.token;
+  const siteId = session!.utilisateur.siteId;
 
   const [familles, setFamilles] = useState<Famille[]>([]);
   const [formulesParFamille, setFormulesParFamille] = useState<Record<number, Formule[]>>({});
@@ -59,6 +65,12 @@ export function CatalogueTab() {
   const [liaisonPrixSurcharge, setLiaisonPrixSurcharge] = useState<Record<number, string>>({});
   const [grilleFormuleId, setGrilleFormuleId] = useState<Record<number, string>>({});
   const [grillePrix, setGrillePrix] = useState<Record<number, string>>({});
+  // 5.1, 5.2 : composition physique des kits ("produit composé") — pour
+  // le décrément automatique du stock à la vente
+  const [produits, setProduits] = useState<Produit[]>([]);
+  const [composantsParKit, setComposantsParKit] = useState<Record<number, ComposantKit[]>>({});
+  const [composantProduitId, setComposantProduitId] = useState<Record<number, string>>({});
+  const [composantQuantite, setComposantQuantite] = useState<Record<number, string>>({});
 
   function gererErreur(erreur: unknown, messageParDefaut: string) {
     if (erreur instanceof ErreurAuthentification) {
@@ -77,10 +89,22 @@ export function CatalogueTab() {
           .then((paires) => setFormulesParFamille(Object.fromEntries(paires)))
           .catch(() => {});
         Promise.all(liste.map((f) => chargerKits(token, f.idFamille).then((kits) => [f.idFamille, kits] as const)))
-          .then((paires) => setKitsParFamille(Object.fromEntries(paires)))
+          .then((paires) => {
+            setKitsParFamille(Object.fromEntries(paires));
+            const kits = paires.flatMap(([, kits]) => kits);
+            Promise.all(kits.map((k) => chargerComposantsKit(token, k.idKit).then((composants) => [k.idKit, composants] as const)))
+              .then((paires) => setComposantsParKit(Object.fromEntries(paires)))
+              .catch(() => {});
+          })
           .catch(() => {});
       })
       .catch((e) => gererErreur(e, "Impossible de charger les familles."));
+  }
+
+  function rechargerProduits() {
+    chargerProduits(token, siteId)
+      .then(setProduits)
+      .catch(() => {});
   }
 
   function rechargerCatalogueVente() {
@@ -98,6 +122,7 @@ export function CatalogueTab() {
   useEffect(rechargerFamilles, [token]);
   useEffect(rechargerCatalogueVente, [token]);
   useEffect(rechargerOptions, [token]);
+  useEffect(rechargerProduits, [token, siteId]);
 
   async function creerFamille() {
     if (!nouvelleFamille.trim()) return;
@@ -152,6 +177,33 @@ export function CatalogueTab() {
     } catch (erreur) {
       gererErreur(erreur, "Échec de la suppression du prix décodeur.");
     }
+  }
+
+  async function definirComposant(idKit: number) {
+    const idProduit = composantProduitId[idKit];
+    const quantite = composantQuantite[idKit];
+    if (!idProduit || !quantite) return;
+    try {
+      await definirComposantKitRequete(token, { idKit, idProduit: Number(idProduit), quantite: Number(quantite) });
+      setComposantProduitId((v) => ({ ...v, [idKit]: "" }));
+      setComposantQuantite((v) => ({ ...v, [idKit]: "" }));
+      rechargerFamilles();
+    } catch (erreur) {
+      gererErreur(erreur, "Échec de l'enregistrement du composant.");
+    }
+  }
+
+  async function supprimerComposant(idKit: number, idProduit: number) {
+    try {
+      await supprimerComposantKitRequete(token, idKit, idProduit);
+      rechargerFamilles();
+    } catch (erreur) {
+      gererErreur(erreur, "Échec de la suppression du composant.");
+    }
+  }
+
+  function libelleProduit(idProduit: number) {
+    return produits.find((p) => p.idProduit === idProduit)?.libelle ?? `Produit n° ${idProduit}`;
   }
 
   const toutesLesFormules = familles.flatMap((f) => (formulesParFamille[f.idFamille] ?? []).map((fo) => ({ ...fo, familleLibelle: f.libelle })));
@@ -352,6 +404,64 @@ export function CatalogueTab() {
                             </div>
                           </div>
                         )}
+
+                        <div className="space-y-1.5 border-t border-border pt-2">
+                          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                            Composition (produits décrémentés à la vente)
+                          </p>
+                          {(composantsParKit[k.idKit] ?? []).length === 0 && (
+                            <p className="text-xs text-muted-foreground">Aucun composant.</p>
+                          )}
+                          {(composantsParKit[k.idKit] ?? []).map((c) => (
+                            <div key={c.idProduit} className="flex items-center justify-between text-xs text-muted-foreground">
+                              <span>
+                                {libelleProduit(c.idProduit)} — qté {c.quantite}
+                              </span>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-6 cursor-pointer px-2"
+                                onClick={() => supprimerComposant(k.idKit, c.idProduit)}
+                              >
+                                Retirer
+                              </Button>
+                            </div>
+                          ))}
+                          <div className="flex items-center gap-2">
+                            <Select
+                              value={composantProduitId[k.idKit] ?? ""}
+                              onValueChange={(v) => setComposantProduitId((s) => ({ ...s, [k.idKit]: v }))}
+                            >
+                              <SelectTrigger className="h-8 flex-1 text-xs" aria-label={`Produit composant pour ${k.libelle}`}>
+                                <SelectValue placeholder="Produit…" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {produits.map((p) => (
+                                  <SelectItem key={p.idProduit} value={String(p.idProduit)}>
+                                    {p.libelle}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <Input
+                              type="number"
+                              min={1}
+                              value={composantQuantite[k.idKit] ?? ""}
+                              onChange={(e) => setComposantQuantite((s) => ({ ...s, [k.idKit]: e.target.value }))}
+                              placeholder="Qté"
+                              className="h-8 w-20 text-xs"
+                            />
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-8 cursor-pointer px-2 text-xs"
+                              disabled={!composantProduitId[k.idKit] || !composantQuantite[k.idKit]}
+                              onClick={() => definirComposant(k.idKit)}
+                            >
+                              Enregistrer
+                            </Button>
+                          </div>
+                        </div>
                       </li>
                     );
                   })}

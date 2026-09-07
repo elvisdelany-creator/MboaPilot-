@@ -294,3 +294,38 @@ export function supprimerPrixDecodeurKit(db: Db, idKit: number, idFormule: numbe
     .where(and(eq(schema.kitPrixDecodeur.idKit, idKit), eq(schema.kitPrixDecodeur.idFormule, idFormule)))
     .run();
 }
+
+export interface ComposantKitInput {
+  idKit: number;
+  idProduit: number;
+  quantite: number;
+}
+
+// 5.1, 5.2 : composition physique d'un kit ("produit composé") — idempotent,
+// comme definirPrixDecodeurKit, mais concerne l'inventaire, jamais le prix.
+export function definirComposantKit(db: Db, input: ComposantKitInput) {
+  const existant = db
+    .select()
+    .from(schema.kitComposant)
+    .where(and(eq(schema.kitComposant.idKit, input.idKit), eq(schema.kitComposant.idProduit, input.idProduit)))
+    .get();
+
+  if (existant) {
+    return db
+      .update(schema.kitComposant)
+      .set({ quantite: input.quantite })
+      .where(and(eq(schema.kitComposant.idKit, input.idKit), eq(schema.kitComposant.idProduit, input.idProduit)))
+      .returning()
+      .get();
+  }
+
+  return db.insert(schema.kitComposant).values(input).returning().get();
+}
+
+export function supprimerComposantKit(db: Db, idKit: number, idProduit: number) {
+  db.delete(schema.kitComposant).where(and(eq(schema.kitComposant.idKit, idKit), eq(schema.kitComposant.idProduit, idProduit))).run();
+}
+
+export function listerComposantsKit(db: Db, idKit: number) {
+  return db.select().from(schema.kitComposant).where(eq(schema.kitComposant.idKit, idKit)).all();
+}

@@ -90,6 +90,32 @@ export function ajusterInventaire(db: Db, params: AjusterInventaireParams) {
   });
 }
 
+export interface DecrementerComposantsKitParams {
+  idKit: number;
+  siteId: number;
+  userId: number;
+}
+
+// 5.1, 5.2 : un kit "produit composé" décrémente automatiquement le stock de
+// chacun de ses composants à la vente — un composant sans suivi de stock
+// (accessoire non tracé) est simplement ignoré, comme pour une vente directe.
+export function decrementerComposantsKit(db: Db, params: DecrementerComposantsKitParams) {
+  const composants = db.select().from(schema.kitComposant).where(eq(schema.kitComposant.idKit, params.idKit)).all();
+
+  for (const composant of composants) {
+    const produit = db.select().from(schema.produit).where(eq(schema.produit.idProduit, composant.idProduit)).get();
+    if (produit?.suiviStock === 1) {
+      enregistrerMouvement(db, {
+        idProduit: composant.idProduit,
+        siteId: params.siteId,
+        typeMouvement: "VENTE",
+        quantite: composant.quantite,
+        utilisateurId: params.userId,
+      });
+    }
+  }
+}
+
 // 8.6, 9.3 : état des stocks du tableau de bord — produits suivis dont le
 // stock est descendu au niveau ou en dessous de leur seuil d'alerte.
 export function listerAlertesStock(db: Db, siteId: number) {

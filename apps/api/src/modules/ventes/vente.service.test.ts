@@ -114,4 +114,29 @@ describe("creerVenteProduits (5.2, 5.3, 8.5)", () => {
       /introuvable/
     );
   });
+
+  it("6.4 : applique une remise ponctuelle sur une ligne, conservée pour transparence", () => {
+    const resultat = creerVenteProduits(db, {
+      siteId,
+      userId,
+      lignes: [{ idProduit: idBien, quantite: 2, remise: 500 }],
+      montantEncaisse: 0,
+    });
+
+    expect(resultat.montantTotal).toBe(2500 * 2 - 500);
+    const ligne = db.select().from(schema.ligneVente).where(eq(schema.ligneVente.idFacture, resultat.idFacture)).all()[0];
+    expect(ligne).toMatchObject({ prixApplique: 4500, remise: 500 });
+  });
+
+  it("6.4 : rejette une remise dépassant le prix catalogue de la ligne", () => {
+    expect(() =>
+      creerVenteProduits(db, { siteId, userId, lignes: [{ idProduit: idBien, quantite: 1, remise: 3000 }], montantEncaisse: 0 })
+    ).toThrow(/remise/i);
+  });
+
+  it("6.4 : rejette une remise négative", () => {
+    expect(() =>
+      creerVenteProduits(db, { siteId, userId, lignes: [{ idProduit: idBien, quantite: 1, remise: -100 }], montantEncaisse: 0 })
+    ).toThrow(/remise/i);
+  });
 });

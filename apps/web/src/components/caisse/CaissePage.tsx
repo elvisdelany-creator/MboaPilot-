@@ -56,6 +56,8 @@ export function CaissePage({ onNaviguer, abonneInitial, idFamilleInitiale }: Pro
   const [abonnementsAbonne, setAbonnementsAbonne] = useState<Abonnement[]>([]);
   const [formuleSelectionnee, setFormuleSelectionnee] = useState<Formule | null>(null);
   const [kitSelectionne, setKitSelectionne] = useState<CatalogueKit | null>(null);
+  // 6.4, 7.1 : "remise ponctuelle" sur le prix de la formule
+  const [remise, setRemise] = useState(0);
   const [comptesPartages, setComptesPartages] = useState<ComptePartage[]>([]);
   const [comptePartageSelectionne, setComptePartageSelectionne] = useState<number | null>(null);
   const [enCours, setEnCours] = useState(false);
@@ -179,15 +181,22 @@ export function CaissePage({ onNaviguer, abonneInitial, idFamilleInitiale }: Pro
     if (abonnementARenouveler) setKitSelectionne(null);
   }, [abonnementARenouveler]);
 
+  // 6.4 : la remise porte sur une formule précise — repart de zéro dès qu'on
+  // change de formule ou d'opération, pour ne jamais la reporter par erreur
+  useEffect(() => {
+    setRemise(0);
+  }, [formuleSelectionnee?.idFormule, abonnementARenouveler]);
+
   // 6.7 : base du ticket / pro-forma — même calcul que TicketPanel, dupliqué
   // ici pour que CaissePage puisse construire le récapitulatif imprimable
   const prixKit =
     kitSelectionne && formuleSelectionnee
       ? calculerPrixKit(kitSelectionne, { idFormule: formuleSelectionnee.idFormule, prix: formuleSelectionnee.prix })
       : 0;
-  const totalTicket = (formuleSelectionnee?.prix ?? 0) + prixKit;
+  const remiseEffective = formuleSelectionnee ? Math.min(remise, formuleSelectionnee.prix) : 0;
+  const totalTicket = (formuleSelectionnee?.prix ?? 0) - remiseEffective + prixKit;
   const lignesTicket: LigneRecu[] = [
-    ...(formuleSelectionnee ? [{ libelle: formuleSelectionnee.libelle, montant: formuleSelectionnee.prix }] : []),
+    ...(formuleSelectionnee ? [{ libelle: formuleSelectionnee.libelle, montant: formuleSelectionnee.prix - remiseEffective }] : []),
     ...(kitSelectionne ? [{ libelle: kitSelectionne.libelle, montant: prixKit }] : []),
   ];
 
@@ -205,6 +214,7 @@ export function CaissePage({ onNaviguer, abonneInitial, idFamilleInitiale }: Pro
   function reinitialiserTicket() {
     setFormuleSelectionnee(null);
     setKitSelectionne(null);
+    setRemise(0);
     setAbonneSelectionne(null);
     setAbonnementsAbonne([]);
     setComptePartageSelectionne(null);
@@ -220,8 +230,15 @@ export function CaissePage({ onNaviguer, abonneInitial, idFamilleInitiale }: Pro
     setPanierProduits((panier) => {
       const existant = panier.find((l) => l.produit.idProduit === produit.idProduit);
       if (existant) return panier.map((l) => (l.produit.idProduit === produit.idProduit ? { ...l, quantite: l.quantite + 1 } : l));
-      return [...panier, { produit, quantite: 1 }];
+      return [...panier, { produit, quantite: 1, remise: 0 }];
     });
+  }
+
+  // 6.4 : "remise ponctuelle" par ligne, plafonnée au prix catalogue de la ligne
+  function modifierRemiseProduit(idProduit: number, remise: number) {
+    setPanierProduits((panier) =>
+      panier.map((l) => (l.produit.idProduit === idProduit ? { ...l, remise: Math.max(0, Math.min(remise, l.produit.prixVente * l.quantite)) } : l))
+    );
   }
 
   function incrementerProduit(idProduit: number) {
@@ -245,9 +262,9 @@ export function CaissePage({ onNaviguer, abonneInitial, idFamilleInitiale }: Pro
 
   const lignesTicketProduits: LigneRecu[] = panierProduits.map((l) => ({
     libelle: l.quantite > 1 ? `${l.produit.libelle} × ${l.quantite}` : l.produit.libelle,
-    montant: l.produit.prixVente * l.quantite,
+    montant: l.produit.prixVente * l.quantite - l.remise,
   }));
-  const totalTicketProduits = panierProduits.reduce((somme, l) => somme + l.produit.prixVente * l.quantite, 0);
+  const totalTicketProduits = panierProduits.reduce((somme, l) => somme + l.produit.prixVente * l.quantite - l.remise, 0);
 
   async function validerVenteProduits(paiement: PaiementSaisi) {
     if (panierProduits.length === 0) return;
@@ -258,7 +275,7 @@ export function CaissePage({ onNaviguer, abonneInitial, idFamilleInitiale }: Pro
         siteId: utilisateur.siteId,
         userId: utilisateur.idUser,
         idAbonne: abonneSelectionne && "idAbonne" in abonneSelectionne ? abonneSelectionne.idAbonne : undefined,
-        lignes: panierProduits.map((l) => ({ idProduit: l.produit.idProduit, quantite: l.quantite })),
+        lignes: panierProduits.map((l) => ({ idProduit: l.produit.idProduit, quantite: l.quantite, remise: l.remise || undefined })),
         montantEncaisse,
       });
 
@@ -318,6 +335,7 @@ export function CaissePage({ onNaviguer, abonneInitial, idFamilleInitiale }: Pro
             aujourdHui,
             idFormule: formuleSelectionnee.idFormule,
             montantEncaisse,
+            remise: remiseEffective || undefined,
           })
         : await recruter(token, {
             siteId: utilisateur.siteId,
@@ -331,6 +349,7 @@ export function CaissePage({ onNaviguer, abonneInitial, idFamilleInitiale }: Pro
             // un abonné existant hérite déjà de son apporteur côté serveur
             apporteurId: "idAbonne" in abonneSelectionne ? undefined : abonneSelectionne.apporteurId,
             idComptePartage: comptePartageSelectionne ?? undefined,
+            remise: remiseEffective || undefined,
           });
 
       const operation = abonnementARenouveler ? "Réabonnement" : "Recrutement";
@@ -421,6 +440,7 @@ export function CaissePage({ onNaviguer, abonneInitial, idFamilleInitiale }: Pro
                 onIncrementer={incrementerProduit}
                 onDecrementer={decrementerProduit}
                 onRetirer={retirerProduit}
+                onModifierRemise={modifierRemiseProduit}
                 enCours={enCours}
                 onValider={validerVenteProduits}
                 onImprimerProForma={() => setProFormaVisible(true)}
@@ -446,6 +466,8 @@ export function CaissePage({ onNaviguer, abonneInitial, idFamilleInitiale }: Pro
                 comptesPartagesDisponibles={comptesPartagesFamille}
                 comptePartageSelectionne={comptePartageSelectionne}
                 onSelectionnerComptePartage={setComptePartageSelectionne}
+                remise={remiseEffective}
+                onChangerRemise={setRemise}
                 enCours={enCours}
                 onValider={valider}
                 onEchangerMateriel={() => setEchangeMaterielOuvert(true)}

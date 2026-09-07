@@ -1,0 +1,1 @@
+ALTER TABLE `ligne_vente` ADD `remise` integer DEFAULT 0 NOT NULL;

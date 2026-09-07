@@ -364,4 +364,57 @@ describe("recruterAbonne — compte partagé streaming (5.9)", () => {
       })
     ).toThrow(/introuvable/i);
   });
+
+  it("6.4, 7.1 : applique une remise ponctuelle sur le prix de la formule", () => {
+    const resultat = recruterAbonne(db, {
+      siteId,
+      userId,
+      aujourdHui: "2025-11-16",
+      abonne: { nom: "Nga", prenom: "Paul", telephone: "690000000" },
+      idFormule: formuleDstvCompaq,
+      montantEncaisse: 12000,
+      remise: 1000,
+    });
+
+    const facture = db.select().from(schema.facture).where(eq(schema.facture.idFacture, resultat.idFacture)).get();
+    expect(facture?.montantTotal).toBe(12000);
+    const ligne = db.select().from(schema.ligneVente).where(eq(schema.ligneVente.idFacture, resultat.idFacture)).all()[0];
+    expect(ligne).toMatchObject({ prixApplique: 12000, remise: 1000 });
+  });
+
+  it("6.4 : rejette une remise dépassant le prix de la formule", () => {
+    expect(() =>
+      recruterAbonne(db, {
+        siteId,
+        userId,
+        aujourdHui: "2025-11-16",
+        abonne: { nom: "Nga", prenom: "Paul", telephone: "690000000" },
+        idFormule: formuleDstvCompaq,
+        montantEncaisse: 0,
+        remise: 20000,
+      })
+    ).toThrow(/remise/i);
+  });
+
+  it("6.2 : la commission CANAL+ se calcule sur le montant réellement facturé (après remise)", () => {
+    const tauxPourMille = 100; // 10 %
+    db.update(schema.entreprise).set({ tauxCommissionVendeurDefaut: tauxPourMille }).run();
+
+    const resultat = recruterAbonne(db, {
+      siteId,
+      userId,
+      aujourdHui: "2025-11-16",
+      abonne: { nom: "Nga", prenom: "Paul", telephone: "690000000" },
+      idFormule: formuleToutCanalPlus,
+      montantEncaisse: 25000,
+      remise: 3000, // 28000 -> 25000
+    });
+
+    const suivi = db
+      .select()
+      .from(schema.suiviCommissionCanalplus)
+      .where(eq(schema.suiviCommissionCanalplus.numeroAbonnement, resultat.numeroAbonnement))
+      .get();
+    expect(suivi?.montantCommission).toBe(2500); // 10 % de 25000, pas de 28000
+  });
 });

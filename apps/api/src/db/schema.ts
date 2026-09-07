@@ -305,6 +305,12 @@ export const ligneVente = sqliteTable("ligne_vente", {
   numeroAbonnement: integer("numero_abonnement").references(() => abonnement.numeroAbonnement),
   quantite: integer("quantite").notNull().default(1),
   prixApplique: integer("prix_applique").notNull(),
+  // 6.4, 7.1 : "le tarif appliqué sur chaque ligne tient compte d'une
+  // éventuelle promotion active (remise ponctuelle, tarif préférentiel
+  // apporteur, etc.)" — montant en FCFA déduit du prix catalogue,
+  // conservé pour la transparence du ticket ; prix_applique reste le
+  // montant net facturé (catalogue − remise).
+  remise: integer("remise").notNull().default(0),
   // 6.4 : sur une ligne d'AVOIR, pointe vers la ligne de la facture d'origine
   // corrigée — permet d'empêcher de créditer plus que ce qui a été facturé
   ligneOrigineId: integer("ligne_origine_id").references((): AnySQLiteColumn => ligneVente.idLigne),

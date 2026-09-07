@@ -1,0 +1,2703 @@
+{
+  "version": "6",
+  "dialect": "sqlite",
+  "id": "08c9bd77-d2fa-4379-b4b9-bf3d59a9f867",
+  "prevId": "a86fdaa5-41f6-49aa-a40a-5f9ef0056ef3",
+  "tables": {
+    "abonne": {
+      "name": "abonne",
+      "columns": {
+        "id_abonne": {
+          "name": "id_abonne",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "site_id": {
+          "name": "site_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "nom": {
+          "name": "nom",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "prenom": {
+          "name": "prenom",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "email": {
+          "name": "email",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "numero_cni": {
+          "name": "numero_cni",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "adresse": {
+          "name": "adresse",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "telephone": {
+          "name": "telephone",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "apporteur_id": {
+          "name": "apporteur_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "date_creation": {
+          "name": "date_creation",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(datetime('now'))"
+        }
+      },
+      "indexes": {
+        "idx_abonne_telephone": {
+          "name": "idx_abonne_telephone",
+          "columns": [
+            "telephone"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "abonne_site_id_site_id_site_fk": {
+          "name": "abonne_site_id_site_id_site_fk",
+          "tableFrom": "abonne",
+          "tableTo": "site",
+          "columnsFrom": [
+            "site_id"
+          ],
+          "columnsTo": [
+            "id_site"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "abonne_apporteur_id_sous_distributeur_id_apporteur_fk": {
+          "name": "abonne_apporteur_id_sous_distributeur_id_apporteur_fk",
+          "tableFrom": "abonne",
+          "tableTo": "sous_distributeur",
+          "columnsFrom": [
+            "apporteur_id"
+          ],
+          "columnsTo": [
+            "id_apporteur"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "abonnement": {
+      "name": "abonnement",
+      "columns": {
+        "numero_abonnement": {
+          "name": "numero_abonnement",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "id_abonne": {
+          "name": "id_abonne",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "id_formule": {
+          "name": "id_formule",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "site_id": {
+          "name": "site_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "date_debut": {
+          "name": "date_debut",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "date_fin": {
+          "name": "date_fin",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "statut": {
+          "name": "statut",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'ACTIF'"
+        },
+        "apporteur_id": {
+          "name": "apporteur_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "cree_par": {
+          "name": "cree_par",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "date_creation": {
+          "name": "date_creation",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(datetime('now'))"
+        },
+        "id_compte_partage": {
+          "name": "id_compte_partage",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "idx_abonnement_echeance": {
+          "name": "idx_abonnement_echeance",
+          "columns": [
+            "date_fin",
+            "statut"
+          ],
+          "isUnique": false
+        },
+        "idx_abonnement_abonne": {
+          "name": "idx_abonnement_abonne",
+          "columns": [
+            "id_abonne"
+          ],
+          "isUnique": false
+        },
+        "idx_abonnement_compte_partage": {
+          "name": "idx_abonnement_compte_partage",
+          "columns": [
+            "id_compte_partage"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "abonnement_id_abonne_abonne_id_abonne_fk": {
+          "name": "abonnement_id_abonne_abonne_id_abonne_fk",
+          "tableFrom": "abonnement",
+          "tableTo": "abonne",
+          "columnsFrom": [
+            "id_abonne"
+          ],
+          "columnsTo": [
+            "id_abonne"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "abonnement_id_formule_formule_id_formule_fk": {
+          "name": "abonnement_id_formule_formule_id_formule_fk",
+          "tableFrom": "abonnement",
+          "tableTo": "formule",
+          "columnsFrom": [
+            "id_formule"
+          ],
+          "columnsTo": [
+            "id_formule"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "abonnement_site_id_site_id_site_fk": {
+          "name": "abonnement_site_id_site_id_site_fk",
+          "tableFrom": "abonnement",
+          "tableTo": "site",
+          "columnsFrom": [
+            "site_id"
+          ],
+          "columnsTo": [
+            "id_site"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "abonnement_apporteur_id_sous_distributeur_id_apporteur_fk": {
+          "name": "abonnement_apporteur_id_sous_distributeur_id_apporteur_fk",
+          "tableFrom": "abonnement",
+          "tableTo": "sous_distributeur",
+          "columnsFrom": [
+            "apporteur_id"
+          ],
+          "columnsTo": [
+            "id_apporteur"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "abonnement_cree_par_utilisateur_id_user_fk": {
+          "name": "abonnement_cree_par_utilisateur_id_user_fk",
+          "tableFrom": "abonnement",
+          "tableTo": "utilisateur",
+          "columnsFrom": [
+            "cree_par"
+          ],
+          "columnsTo": [
+            "id_user"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "abonnement_id_compte_partage_compte_partage_streaming_id_compte_partage_fk": {
+          "name": "abonnement_id_compte_partage_compte_partage_streaming_id_compte_partage_fk",
+          "tableFrom": "abonnement",
+          "tableTo": "compte_partage_streaming",
+          "columnsFrom": [
+            "id_compte_partage"
+          ],
+          "columnsTo": [
+            "id_compte_partage"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "alerte_echeance": {
+      "name": "alerte_echeance",
+      "columns": {
+        "id_alerte": {
+          "name": "id_alerte",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "numero_abonnement": {
+          "name": "numero_abonnement",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "jalon": {
+          "name": "jalon",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "date_declenchement": {
+          "name": "date_declenchement",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "date_creation": {
+          "name": "date_creation",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(datetime('now'))"
+        }
+      },
+      "indexes": {
+        "idx_alerte_unique": {
+          "name": "idx_alerte_unique",
+          "columns": [
+            "numero_abonnement",
+            "jalon",
+            "date_declenchement"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {
+        "alerte_echeance_numero_abonnement_abonnement_numero_abonnement_fk": {
+          "name": "alerte_echeance_numero_abonnement_abonnement_numero_abonnement_fk",
+          "tableFrom": "alerte_echeance",
+          "tableTo": "abonnement",
+          "columnsFrom": [
+            "numero_abonnement"
+          ],
+          "columnsTo": [
+            "numero_abonnement"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "compte_partage_streaming": {
+      "name": "compte_partage_streaming",
+      "columns": {
+        "id_compte_partage": {
+          "name": "id_compte_partage",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "site_id": {
+          "name": "site_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "id_famille": {
+          "name": "id_famille",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "libelle": {
+          "name": "libelle",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "identifiant": {
+          "name": "identifiant",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "mot_de_passe": {
+          "name": "mot_de_passe",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "nombre_ecrans_max": {
+          "name": "nombre_ecrans_max",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "actif": {
+          "name": "actif",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 1
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "compte_partage_streaming_site_id_site_id_site_fk": {
+          "name": "compte_partage_streaming_site_id_site_id_site_fk",
+          "tableFrom": "compte_partage_streaming",
+          "tableTo": "site",
+          "columnsFrom": [
+            "site_id"
+          ],
+          "columnsTo": [
+            "id_site"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "compte_partage_streaming_id_famille_famille_abonnement_id_famille_fk": {
+          "name": "compte_partage_streaming_id_famille_famille_abonnement_id_famille_fk",
+          "tableFrom": "compte_partage_streaming",
+          "tableTo": "famille_abonnement",
+          "columnsFrom": [
+            "id_famille"
+          ],
+          "columnsTo": [
+            "id_famille"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "entreprise": {
+      "name": "entreprise",
+      "columns": {
+        "id_entreprise": {
+          "name": "id_entreprise",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "nom": {
+          "name": "nom",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "devise": {
+          "name": "devise",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'XAF'"
+        },
+        "logo_url": {
+          "name": "logo_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "taux_tva_centiemes_pourcent": {
+          "name": "taux_tva_centiemes_pourcent",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "mentions_legales": {
+          "name": "mentions_legales",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "taux_commission_vendeur_defaut_pourmille": {
+          "name": "taux_commission_vendeur_defaut_pourmille",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "jalon_alerte_urgent_jours": {
+          "name": "jalon_alerte_urgent_jours",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 1
+        },
+        "jalon_alerte_modere_jours": {
+          "name": "jalon_alerte_modere_jours",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 3
+        },
+        "jalon_alerte_anticipe_jours": {
+          "name": "jalon_alerte_anticipe_jours",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 7
+        },
+        "date_creation": {
+          "name": "date_creation",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(datetime('now'))"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "facture": {
+      "name": "facture",
+      "columns": {
+        "id_facture": {
+          "name": "id_facture",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "site_id": {
+          "name": "site_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "id_abonne": {
+          "name": "id_abonne",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "statut": {
+          "name": "statut",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'BROUILLON'"
+        },
+        "type": {
+          "name": "type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'VENTE'"
+        },
+        "facture_origine_id": {
+          "name": "facture_origine_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "montant_total": {
+          "name": "montant_total",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "cree_par": {
+          "name": "cree_par",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "date_creation": {
+          "name": "date_creation",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(datetime('now'))"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "facture_site_id_site_id_site_fk": {
+          "name": "facture_site_id_site_id_site_fk",
+          "tableFrom": "facture",
+          "tableTo": "site",
+          "columnsFrom": [
+            "site_id"
+          ],
+          "columnsTo": [
+            "id_site"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "facture_id_abonne_abonne_id_abonne_fk": {
+          "name": "facture_id_abonne_abonne_id_abonne_fk",
+          "tableFrom": "facture",
+          "tableTo": "abonne",
+          "columnsFrom": [
+            "id_abonne"
+          ],
+          "columnsTo": [
+            "id_abonne"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "facture_facture_origine_id_facture_id_facture_fk": {
+          "name": "facture_facture_origine_id_facture_id_facture_fk",
+          "tableFrom": "facture",
+          "tableTo": "facture",
+          "columnsFrom": [
+            "facture_origine_id"
+          ],
+          "columnsTo": [
+            "id_facture"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "facture_cree_par_utilisateur_id_user_fk": {
+          "name": "facture_cree_par_utilisateur_id_user_fk",
+          "tableFrom": "facture",
+          "tableTo": "utilisateur",
+          "columnsFrom": [
+            "cree_par"
+          ],
+          "columnsTo": [
+            "id_user"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "famille_abonnement": {
+      "name": "famille_abonnement",
+      "columns": {
+        "id_famille": {
+          "name": "id_famille",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "libelle": {
+          "name": "libelle",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "famille_abonnement_libelle_unique": {
+          "name": "famille_abonnement_libelle_unique",
+          "columns": [
+            "libelle"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "formule": {
+      "name": "formule",
+      "columns": {
+        "id_formule": {
+          "name": "id_formule",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "id_famille": {
+          "name": "id_famille",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "libelle": {
+          "name": "libelle",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "prix": {
+          "name": "prix",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "rang": {
+          "name": "rang",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "mode_duree": {
+          "name": "mode_duree",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'STRICT_30J'"
+        },
+        "duree_cycles": {
+          "name": "duree_cycles",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 1
+        },
+        "actif": {
+          "name": "actif",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 1
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "formule_id_famille_famille_abonnement_id_famille_fk": {
+          "name": "formule_id_famille_famille_abonnement_id_famille_fk",
+          "tableFrom": "formule",
+          "tableTo": "famille_abonnement",
+          "columnsFrom": [
+            "id_famille"
+          ],
+          "columnsTo": [
+            "id_famille"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "formule_option_compat": {
+      "name": "formule_option_compat",
+      "columns": {
+        "id_formule": {
+          "name": "id_formule",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "id_option": {
+          "name": "id_option",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "prix_surcharge": {
+          "name": "prix_surcharge",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "formule_option_compat_id_formule_formule_id_formule_fk": {
+          "name": "formule_option_compat_id_formule_formule_id_formule_fk",
+          "tableFrom": "formule_option_compat",
+          "tableTo": "formule",
+          "columnsFrom": [
+            "id_formule"
+          ],
+          "columnsTo": [
+            "id_formule"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "formule_option_compat_id_option_option_complement_id_option_fk": {
+          "name": "formule_option_compat_id_option_option_complement_id_option_fk",
+          "tableFrom": "formule_option_compat",
+          "tableTo": "option_complement",
+          "columnsFrom": [
+            "id_option"
+          ],
+          "columnsTo": [
+            "id_option"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "formule_option_compat_id_formule_id_option_pk": {
+          "columns": [
+            "id_formule",
+            "id_option"
+          ],
+          "name": "formule_option_compat_id_formule_id_option_pk"
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "historique_abonnement": {
+      "name": "historique_abonnement",
+      "columns": {
+        "id_histo": {
+          "name": "id_histo",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "numero_abonnement": {
+          "name": "numero_abonnement",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "type_changement": {
+          "name": "type_changement",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "valeur_avant": {
+          "name": "valeur_avant",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "valeur_apres": {
+          "name": "valeur_apres",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "motif": {
+          "name": "motif",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "utilisateur_id": {
+          "name": "utilisateur_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "date_changement": {
+          "name": "date_changement",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(datetime('now'))"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "historique_abonnement_numero_abonnement_abonnement_numero_abonnement_fk": {
+          "name": "historique_abonnement_numero_abonnement_abonnement_numero_abonnement_fk",
+          "tableFrom": "historique_abonnement",
+          "tableTo": "abonnement",
+          "columnsFrom": [
+            "numero_abonnement"
+          ],
+          "columnsTo": [
+            "numero_abonnement"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "historique_abonnement_utilisateur_id_utilisateur_id_user_fk": {
+          "name": "historique_abonnement_utilisateur_id_utilisateur_id_user_fk",
+          "tableFrom": "historique_abonnement",
+          "tableTo": "utilisateur",
+          "columnsFrom": [
+            "utilisateur_id"
+          ],
+          "columnsTo": [
+            "id_user"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "historique_prix_produit": {
+      "name": "historique_prix_produit",
+      "columns": {
+        "id_histo_prix": {
+          "name": "id_histo_prix",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "id_produit": {
+          "name": "id_produit",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "prix_vente_avant": {
+          "name": "prix_vente_avant",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "prix_vente_apres": {
+          "name": "prix_vente_apres",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "cout_revient_avant": {
+          "name": "cout_revient_avant",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "cout_revient_apres": {
+          "name": "cout_revient_apres",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "utilisateur_id": {
+          "name": "utilisateur_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "date_changement": {
+          "name": "date_changement",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(datetime('now'))"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "historique_prix_produit_id_produit_produit_id_produit_fk": {
+          "name": "historique_prix_produit_id_produit_produit_id_produit_fk",
+          "tableFrom": "historique_prix_produit",
+          "tableTo": "produit",
+          "columnsFrom": [
+            "id_produit"
+          ],
+          "columnsTo": [
+            "id_produit"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "historique_prix_produit_utilisateur_id_utilisateur_id_user_fk": {
+          "name": "historique_prix_produit_utilisateur_id_utilisateur_id_user_fk",
+          "tableFrom": "historique_prix_produit",
+          "tableTo": "utilisateur",
+          "columnsFrom": [
+            "utilisateur_id"
+          ],
+          "columnsTo": [
+            "id_user"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "journal_audit": {
+      "name": "journal_audit",
+      "columns": {
+        "id_audit": {
+          "name": "id_audit",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "utilisateur_id": {
+          "name": "utilisateur_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "action": {
+          "name": "action",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "table_cible": {
+          "name": "table_cible",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "id_cible": {
+          "name": "id_cible",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "valeur_avant": {
+          "name": "valeur_avant",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "valeur_apres": {
+          "name": "valeur_apres",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "date_action": {
+          "name": "date_action",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(datetime('now'))"
+        }
+      },
+      "indexes": {
+        "idx_audit_cible": {
+          "name": "idx_audit_cible",
+          "columns": [
+            "table_cible",
+            "id_cible"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "journal_audit_utilisateur_id_utilisateur_id_user_fk": {
+          "name": "journal_audit_utilisateur_id_utilisateur_id_user_fk",
+          "tableFrom": "journal_audit",
+          "tableTo": "utilisateur",
+          "columnsFrom": [
+            "utilisateur_id"
+          ],
+          "columnsTo": [
+            "id_user"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "kit": {
+      "name": "kit",
+      "columns": {
+        "id_kit": {
+          "name": "id_kit",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "id_famille": {
+          "name": "id_famille",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "libelle": {
+          "name": "libelle",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "regle_prix": {
+          "name": "regle_prix",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "prix_fixe": {
+          "name": "prix_fixe",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "prix_parabole_accessoires": {
+          "name": "prix_parabole_accessoires",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "id_formule_reference": {
+          "name": "id_formule_reference",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "prix_kit_reference": {
+          "name": "prix_kit_reference",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "kit_id_famille_famille_abonnement_id_famille_fk": {
+          "name": "kit_id_famille_famille_abonnement_id_famille_fk",
+          "tableFrom": "kit",
+          "tableTo": "famille_abonnement",
+          "columnsFrom": [
+            "id_famille"
+          ],
+          "columnsTo": [
+            "id_famille"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "kit_id_formule_reference_formule_id_formule_fk": {
+          "name": "kit_id_formule_reference_formule_id_formule_fk",
+          "tableFrom": "kit",
+          "tableTo": "formule",
+          "columnsFrom": [
+            "id_formule_reference"
+          ],
+          "columnsTo": [
+            "id_formule"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "kit_prix_decodeur": {
+      "name": "kit_prix_decodeur",
+      "columns": {
+        "id_kit": {
+          "name": "id_kit",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "id_formule": {
+          "name": "id_formule",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "prix_decodeur": {
+          "name": "prix_decodeur",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "kit_prix_decodeur_id_kit_kit_id_kit_fk": {
+          "name": "kit_prix_decodeur_id_kit_kit_id_kit_fk",
+          "tableFrom": "kit_prix_decodeur",
+          "tableTo": "kit",
+          "columnsFrom": [
+            "id_kit"
+          ],
+          "columnsTo": [
+            "id_kit"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "kit_prix_decodeur_id_formule_formule_id_formule_fk": {
+          "name": "kit_prix_decodeur_id_formule_formule_id_formule_fk",
+          "tableFrom": "kit_prix_decodeur",
+          "tableTo": "formule",
+          "columnsFrom": [
+            "id_formule"
+          ],
+          "columnsTo": [
+            "id_formule"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "kit_prix_decodeur_id_kit_id_formule_pk": {
+          "columns": [
+            "id_kit",
+            "id_formule"
+          ],
+          "name": "kit_prix_decodeur_id_kit_id_formule_pk"
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "ligne_vente": {
+      "name": "ligne_vente",
+      "columns": {
+        "id_ligne": {
+          "name": "id_ligne",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "id_facture": {
+          "name": "id_facture",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "id_produit": {
+          "name": "id_produit",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "id_kit": {
+          "name": "id_kit",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "numero_abonnement": {
+          "name": "numero_abonnement",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "quantite": {
+          "name": "quantite",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 1
+        },
+        "prix_applique": {
+          "name": "prix_applique",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "remise": {
+          "name": "remise",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "ligne_origine_id": {
+          "name": "ligne_origine_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "ligne_vente_id_facture_facture_id_facture_fk": {
+          "name": "ligne_vente_id_facture_facture_id_facture_fk",
+          "tableFrom": "ligne_vente",
+          "tableTo": "facture",
+          "columnsFrom": [
+            "id_facture"
+          ],
+          "columnsTo": [
+            "id_facture"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "ligne_vente_id_produit_produit_id_produit_fk": {
+          "name": "ligne_vente_id_produit_produit_id_produit_fk",
+          "tableFrom": "ligne_vente",
+          "tableTo": "produit",
+          "columnsFrom": [
+            "id_produit"
+          ],
+          "columnsTo": [
+            "id_produit"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "ligne_vente_id_kit_kit_id_kit_fk": {
+          "name": "ligne_vente_id_kit_kit_id_kit_fk",
+          "tableFrom": "ligne_vente",
+          "tableTo": "kit",
+          "columnsFrom": [
+            "id_kit"
+          ],
+          "columnsTo": [
+            "id_kit"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "ligne_vente_numero_abonnement_abonnement_numero_abonnement_fk": {
+          "name": "ligne_vente_numero_abonnement_abonnement_numero_abonnement_fk",
+          "tableFrom": "ligne_vente",
+          "tableTo": "abonnement",
+          "columnsFrom": [
+            "numero_abonnement"
+          ],
+          "columnsTo": [
+            "numero_abonnement"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "ligne_vente_ligne_origine_id_ligne_vente_id_ligne_fk": {
+          "name": "ligne_vente_ligne_origine_id_ligne_vente_id_ligne_fk",
+          "tableFrom": "ligne_vente",
+          "tableTo": "ligne_vente",
+          "columnsFrom": [
+            "ligne_origine_id"
+          ],
+          "columnsTo": [
+            "id_ligne"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "materiel_abonne": {
+      "name": "materiel_abonne",
+      "columns": {
+        "id_materiel": {
+          "name": "id_materiel",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "numero_abonnement": {
+          "name": "numero_abonnement",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "type_materiel": {
+          "name": "type_materiel",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "numero_serie": {
+          "name": "numero_serie",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "statut": {
+          "name": "statut",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'ACTIF'"
+        },
+        "date_installation": {
+          "name": "date_installation",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(datetime('now'))"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "materiel_abonne_numero_abonnement_abonnement_numero_abonnement_fk": {
+          "name": "materiel_abonne_numero_abonnement_abonnement_numero_abonnement_fk",
+          "tableFrom": "materiel_abonne",
+          "tableTo": "abonnement",
+          "columnsFrom": [
+            "numero_abonnement"
+          ],
+          "columnsTo": [
+            "numero_abonnement"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "notification": {
+      "name": "notification",
+      "columns": {
+        "id_notification": {
+          "name": "id_notification",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "id_abonne": {
+          "name": "id_abonne",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "canal": {
+          "name": "canal",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "evenement": {
+          "name": "evenement",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "destinataire": {
+          "name": "destinataire",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "message": {
+          "name": "message",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "statut_envoi": {
+          "name": "statut_envoi",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "id_alerte": {
+          "name": "id_alerte",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "id_dossier_sav": {
+          "name": "id_dossier_sav",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "date_envoi": {
+          "name": "date_envoi",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(datetime('now'))"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "notification_id_abonne_abonne_id_abonne_fk": {
+          "name": "notification_id_abonne_abonne_id_abonne_fk",
+          "tableFrom": "notification",
+          "tableTo": "abonne",
+          "columnsFrom": [
+            "id_abonne"
+          ],
+          "columnsTo": [
+            "id_abonne"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "notification_id_alerte_alerte_echeance_id_alerte_fk": {
+          "name": "notification_id_alerte_alerte_echeance_id_alerte_fk",
+          "tableFrom": "notification",
+          "tableTo": "alerte_echeance",
+          "columnsFrom": [
+            "id_alerte"
+          ],
+          "columnsTo": [
+            "id_alerte"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "notification_id_dossier_sav_sav_dossier_id_dossier_sav_fk": {
+          "name": "notification_id_dossier_sav_sav_dossier_id_dossier_sav_fk",
+          "tableFrom": "notification",
+          "tableTo": "sav_dossier",
+          "columnsFrom": [
+            "id_dossier_sav"
+          ],
+          "columnsTo": [
+            "id_dossier_sav"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "option_complement": {
+      "name": "option_complement",
+      "columns": {
+        "id_option": {
+          "name": "id_option",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "libelle": {
+          "name": "libelle",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "prix": {
+          "name": "prix",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "paiement": {
+      "name": "paiement",
+      "columns": {
+        "id_paiement": {
+          "name": "id_paiement",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "id_facture": {
+          "name": "id_facture",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "mode": {
+          "name": "mode",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "montant": {
+          "name": "montant",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "reference_transaction": {
+          "name": "reference_transaction",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "date_paiement": {
+          "name": "date_paiement",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(datetime('now'))"
+        }
+      },
+      "indexes": {
+        "idx_paiement_reference": {
+          "name": "idx_paiement_reference",
+          "columns": [
+            "reference_transaction"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {
+        "paiement_id_facture_facture_id_facture_fk": {
+          "name": "paiement_id_facture_facture_id_facture_fk",
+          "tableFrom": "paiement",
+          "tableTo": "facture",
+          "columnsFrom": [
+            "id_facture"
+          ],
+          "columnsTo": [
+            "id_facture"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "produit": {
+      "name": "produit",
+      "columns": {
+        "id_produit": {
+          "name": "id_produit",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "site_id": {
+          "name": "site_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "type": {
+          "name": "type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "libelle": {
+          "name": "libelle",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "categorie": {
+          "name": "categorie",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "prix_vente": {
+          "name": "prix_vente",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "cout_revient": {
+          "name": "cout_revient",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "marge_type": {
+          "name": "marge_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'VALEUR'"
+        },
+        "marge_valeur": {
+          "name": "marge_valeur",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "marge_pourcentage": {
+          "name": "marge_pourcentage",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "suivi_stock": {
+          "name": "suivi_stock",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "quantite_stock": {
+          "name": "quantite_stock",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "seuil_alerte": {
+          "name": "seuil_alerte",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "produit_site_id_site_id_site_fk": {
+          "name": "produit_site_id_site_id_site_fk",
+          "tableFrom": "produit",
+          "tableTo": "site",
+          "columnsFrom": [
+            "site_id"
+          ],
+          "columnsTo": [
+            "id_site"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "sav_dossier": {
+      "name": "sav_dossier",
+      "columns": {
+        "id_dossier_sav": {
+          "name": "id_dossier_sav",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "site_id": {
+          "name": "site_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "id_abonne": {
+          "name": "id_abonne",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "description_panne": {
+          "name": "description_panne",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "etat_reception": {
+          "name": "etat_reception",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "diagnostic": {
+          "name": "diagnostic",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "statut": {
+          "name": "statut",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'RECU'"
+        },
+        "sous_garantie": {
+          "name": "sous_garantie",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "montant_main_oeuvre": {
+          "name": "montant_main_oeuvre",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "id_facture": {
+          "name": "id_facture",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "date_reception": {
+          "name": "date_reception",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(datetime('now'))"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "sav_dossier_site_id_site_id_site_fk": {
+          "name": "sav_dossier_site_id_site_id_site_fk",
+          "tableFrom": "sav_dossier",
+          "tableTo": "site",
+          "columnsFrom": [
+            "site_id"
+          ],
+          "columnsTo": [
+            "id_site"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "sav_dossier_id_abonne_abonne_id_abonne_fk": {
+          "name": "sav_dossier_id_abonne_abonne_id_abonne_fk",
+          "tableFrom": "sav_dossier",
+          "tableTo": "abonne",
+          "columnsFrom": [
+            "id_abonne"
+          ],
+          "columnsTo": [
+            "id_abonne"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "sav_dossier_id_facture_facture_id_facture_fk": {
+          "name": "sav_dossier_id_facture_facture_id_facture_fk",
+          "tableFrom": "sav_dossier",
+          "tableTo": "facture",
+          "columnsFrom": [
+            "id_facture"
+          ],
+          "columnsTo": [
+            "id_facture"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "sav_historique": {
+      "name": "sav_historique",
+      "columns": {
+        "id_histo_sav": {
+          "name": "id_histo_sav",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "id_dossier_sav": {
+          "name": "id_dossier_sav",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "statut_avant": {
+          "name": "statut_avant",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "statut_apres": {
+          "name": "statut_apres",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "motif": {
+          "name": "motif",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "utilisateur_id": {
+          "name": "utilisateur_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "date_changement": {
+          "name": "date_changement",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(datetime('now'))"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "sav_historique_id_dossier_sav_sav_dossier_id_dossier_sav_fk": {
+          "name": "sav_historique_id_dossier_sav_sav_dossier_id_dossier_sav_fk",
+          "tableFrom": "sav_historique",
+          "tableTo": "sav_dossier",
+          "columnsFrom": [
+            "id_dossier_sav"
+          ],
+          "columnsTo": [
+            "id_dossier_sav"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "sav_historique_utilisateur_id_utilisateur_id_user_fk": {
+          "name": "sav_historique_utilisateur_id_utilisateur_id_user_fk",
+          "tableFrom": "sav_historique",
+          "tableTo": "utilisateur",
+          "columnsFrom": [
+            "utilisateur_id"
+          ],
+          "columnsTo": [
+            "id_user"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "sav_piece_utilisee": {
+      "name": "sav_piece_utilisee",
+      "columns": {
+        "id_piece_utilisee": {
+          "name": "id_piece_utilisee",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "id_dossier_sav": {
+          "name": "id_dossier_sav",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "id_produit": {
+          "name": "id_produit",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "quantite": {
+          "name": "quantite",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 1
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "sav_piece_utilisee_id_dossier_sav_sav_dossier_id_dossier_sav_fk": {
+          "name": "sav_piece_utilisee_id_dossier_sav_sav_dossier_id_dossier_sav_fk",
+          "tableFrom": "sav_piece_utilisee",
+          "tableTo": "sav_dossier",
+          "columnsFrom": [
+            "id_dossier_sav"
+          ],
+          "columnsTo": [
+            "id_dossier_sav"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "sav_piece_utilisee_id_produit_produit_id_produit_fk": {
+          "name": "sav_piece_utilisee_id_produit_produit_id_produit_fk",
+          "tableFrom": "sav_piece_utilisee",
+          "tableTo": "produit",
+          "columnsFrom": [
+            "id_produit"
+          ],
+          "columnsTo": [
+            "id_produit"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "site": {
+      "name": "site",
+      "columns": {
+        "id_site": {
+          "name": "id_site",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "id_entreprise": {
+          "name": "id_entreprise",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "nom": {
+          "name": "nom",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "adresse": {
+          "name": "adresse",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "actif": {
+          "name": "actif",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 1
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "site_id_entreprise_entreprise_id_entreprise_fk": {
+          "name": "site_id_entreprise_entreprise_id_entreprise_fk",
+          "tableFrom": "site",
+          "tableTo": "entreprise",
+          "columnsFrom": [
+            "id_entreprise"
+          ],
+          "columnsTo": [
+            "id_entreprise"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "sous_distributeur": {
+      "name": "sous_distributeur",
+      "columns": {
+        "id_apporteur": {
+          "name": "id_apporteur",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "nom": {
+          "name": "nom",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "telephone": {
+          "name": "telephone",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "taux_commission_defaut_pourmille": {
+          "name": "taux_commission_defaut_pourmille",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "actif": {
+          "name": "actif",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 1
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "stock_mouvement": {
+      "name": "stock_mouvement",
+      "columns": {
+        "id_mouvement": {
+          "name": "id_mouvement",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "id_produit": {
+          "name": "id_produit",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "site_id": {
+          "name": "site_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "type_mouvement": {
+          "name": "type_mouvement",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "quantite": {
+          "name": "quantite",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "motif": {
+          "name": "motif",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "date_mouvement": {
+          "name": "date_mouvement",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(datetime('now'))"
+        },
+        "utilisateur_id": {
+          "name": "utilisateur_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "stock_mouvement_id_produit_produit_id_produit_fk": {
+          "name": "stock_mouvement_id_produit_produit_id_produit_fk",
+          "tableFrom": "stock_mouvement",
+          "tableTo": "produit",
+          "columnsFrom": [
+            "id_produit"
+          ],
+          "columnsTo": [
+            "id_produit"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "stock_mouvement_site_id_site_id_site_fk": {
+          "name": "stock_mouvement_site_id_site_id_site_fk",
+          "tableFrom": "stock_mouvement",
+          "tableTo": "site",
+          "columnsFrom": [
+            "site_id"
+          ],
+          "columnsTo": [
+            "id_site"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "stock_mouvement_utilisateur_id_utilisateur_id_user_fk": {
+          "name": "stock_mouvement_utilisateur_id_utilisateur_id_user_fk",
+          "tableFrom": "stock_mouvement",
+          "tableTo": "utilisateur",
+          "columnsFrom": [
+            "utilisateur_id"
+          ],
+          "columnsTo": [
+            "id_user"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "suivi_commission_canalplus": {
+      "name": "suivi_commission_canalplus",
+      "columns": {
+        "id_suivi": {
+          "name": "id_suivi",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "numero_abonnement": {
+          "name": "numero_abonnement",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "vendeur_id": {
+          "name": "vendeur_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "apporteur_id": {
+          "name": "apporteur_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "montant_commission": {
+          "name": "montant_commission",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "date_fin_probatoire": {
+          "name": "date_fin_probatoire",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "statut": {
+          "name": "statut",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'EN_COURS'"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "suivi_commission_canalplus_numero_abonnement_abonnement_numero_abonnement_fk": {
+          "name": "suivi_commission_canalplus_numero_abonnement_abonnement_numero_abonnement_fk",
+          "tableFrom": "suivi_commission_canalplus",
+          "tableTo": "abonnement",
+          "columnsFrom": [
+            "numero_abonnement"
+          ],
+          "columnsTo": [
+            "numero_abonnement"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "suivi_commission_canalplus_vendeur_id_utilisateur_id_user_fk": {
+          "name": "suivi_commission_canalplus_vendeur_id_utilisateur_id_user_fk",
+          "tableFrom": "suivi_commission_canalplus",
+          "tableTo": "utilisateur",
+          "columnsFrom": [
+            "vendeur_id"
+          ],
+          "columnsTo": [
+            "id_user"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "suivi_commission_canalplus_apporteur_id_sous_distributeur_id_apporteur_fk": {
+          "name": "suivi_commission_canalplus_apporteur_id_sous_distributeur_id_apporteur_fk",
+          "tableFrom": "suivi_commission_canalplus",
+          "tableTo": "sous_distributeur",
+          "columnsFrom": [
+            "apporteur_id"
+          ],
+          "columnsTo": [
+            "id_apporteur"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "transaction_mobile_money": {
+      "name": "transaction_mobile_money",
+      "columns": {
+        "id_transaction": {
+          "name": "id_transaction",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "id_facture": {
+          "name": "id_facture",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "parcours": {
+          "name": "parcours",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "numero_telephone": {
+          "name": "numero_telephone",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "montant": {
+          "name": "montant",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "statut": {
+          "name": "statut",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'INITIEE'"
+        },
+        "reference_transaction": {
+          "name": "reference_transaction",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "date_creation": {
+          "name": "date_creation",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(datetime('now'))"
+        },
+        "date_expiration": {
+          "name": "date_expiration",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "transaction_mobile_money_id_facture_facture_id_facture_fk": {
+          "name": "transaction_mobile_money_id_facture_facture_id_facture_fk",
+          "tableFrom": "transaction_mobile_money",
+          "tableTo": "facture",
+          "columnsFrom": [
+            "id_facture"
+          ],
+          "columnsTo": [
+            "id_facture"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "utilisateur": {
+      "name": "utilisateur",
+      "columns": {
+        "id_user": {
+          "name": "id_user",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "site_id": {
+          "name": "site_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "nom": {
+          "name": "nom",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "prenom": {
+          "name": "prenom",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "identifiant": {
+          "name": "identifiant",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "mot_de_passe_hash": {
+          "name": "mot_de_passe_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "role": {
+          "name": "role",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "id_apporteur": {
+          "name": "id_apporteur",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "actif": {
+          "name": "actif",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 1
+        },
+        "tentatives_echouees": {
+          "name": "tentatives_echouees",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "verrouille_jusqua": {
+          "name": "verrouille_jusqua",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "date_creation": {
+          "name": "date_creation",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(datetime('now'))"
+        }
+      },
+      "indexes": {
+        "idx_utilisateur_identifiant": {
+          "name": "idx_utilisateur_identifiant",
+          "columns": [
+            "identifiant"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {
+        "utilisateur_site_id_site_id_site_fk": {
+          "name": "utilisateur_site_id_site_id_site_fk",
+          "tableFrom": "utilisateur",
+          "tableTo": "site",
+          "columnsFrom": [
+            "site_id"
+          ],
+          "columnsTo": [
+            "id_site"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "utilisateur_id_apporteur_sous_distributeur_id_apporteur_fk": {
+          "name": "utilisateur_id_apporteur_sous_distributeur_id_apporteur_fk",
+          "tableFrom": "utilisateur",
+          "tableTo": "sous_distributeur",
+          "columnsFrom": [
+            "id_apporteur"
+          ],
+          "columnsTo": [
+            "id_apporteur"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    }
+  },
+  "views": {},
+  "enums": {},
+  "_meta": {
+    "schemas": {},
+    "tables": {},
+    "columns": {}
+  },
+  "internal": {
+    "indexes": {}
+  }
+}

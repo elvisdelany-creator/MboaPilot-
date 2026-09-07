@@ -19,6 +19,10 @@ export interface RecruterAbonneParams {
   montantEncaisse: number;
   apporteurId?: number;
   idComptePartage?: number; // 5.9 : écran/profil affecté sur un compte streaming mutualisé
+  // 6.4, 7.1 : "remise ponctuelle" ou "tarif préférentiel apporteur" — montant
+  // en FCFA déduit du prix de la formule (jamais du kit, qui a sa propre
+  // règle de prix dynamique, 5.1.1)
+  remise?: number;
 }
 
 export interface RecrutementResultat {
@@ -49,6 +53,10 @@ export function recruterAbonne(db: Db, params: RecruterAbonneParams): Recrutemen
 
   const formule = db.select().from(schema.formule).where(eq(schema.formule.idFormule, params.idFormule)).get();
   if (!formule) throw new Error(`Formule ${params.idFormule} introuvable`);
+
+  const remise = params.remise ?? 0;
+  if (remise < 0) throw new Error("La remise ne peut pas être négative");
+  if (remise > formule.prix) throw new Error(`La remise (${remise}) dépasse le prix de la formule (${formule.prix})`);
 
   const famille = db
     .select()
@@ -93,7 +101,8 @@ export function recruterAbonne(db: Db, params: RecruterAbonneParams): Recrutemen
     prixKit = calculerPrixKit(construireKitCalcul(db, kitRow), { idFormule: formule.idFormule, prix: formule.prix });
   }
 
-  const montantTotal = formule.prix + prixKit;
+  const prixFormuleApplique = formule.prix - remise;
+  const montantTotal = prixFormuleApplique + prixKit;
 
   const facture = db
     .insert(schema.facture)
@@ -102,7 +111,7 @@ export function recruterAbonne(db: Db, params: RecruterAbonneParams): Recrutemen
     .get();
 
   db.insert(schema.ligneVente)
-    .values({ idFacture: facture.idFacture, numeroAbonnement: abonnement.numeroAbonnement, prixApplique: formule.prix })
+    .values({ idFacture: facture.idFacture, numeroAbonnement: abonnement.numeroAbonnement, prixApplique: prixFormuleApplique, remise })
     .run();
 
   if (kitRow) {

@@ -6,6 +6,8 @@ import { enregistrerMouvement } from "../stock/stock.repository.js";
 export interface LigneVenteProduitInput {
   idProduit: number;
   quantite: number;
+  // 6.4 : "remise ponctuelle" — montant en FCFA déduit du prix catalogue de la ligne
+  remise?: number;
 }
 
 export interface CreerVenteProduitsParams {
@@ -32,7 +34,13 @@ export function creerVenteProduits(db: Db, params: CreerVenteProduitsParams): Ve
     if (ligne.quantite <= 0) throw new Error("La quantité doit être positive");
     const produit = db.select().from(schema.produit).where(eq(schema.produit.idProduit, ligne.idProduit)).get();
     if (!produit) throw new Error(`Produit ${ligne.idProduit} introuvable`);
-    return { produit, quantite: ligne.quantite, prixApplique: produit.prixVente * ligne.quantite };
+
+    const prixCatalogue = produit.prixVente * ligne.quantite;
+    const remise = ligne.remise ?? 0;
+    if (remise < 0) throw new Error("La remise ne peut pas être négative");
+    if (remise > prixCatalogue) throw new Error(`La remise (${remise}) dépasse le prix catalogue de la ligne (${prixCatalogue})`);
+
+    return { produit, quantite: ligne.quantite, remise, prixApplique: prixCatalogue - remise };
   });
 
   const montantTotal = lignesResolues.reduce((somme, l) => somme + l.prixApplique, 0);
@@ -45,7 +53,13 @@ export function creerVenteProduits(db: Db, params: CreerVenteProduitsParams): Ve
 
   for (const ligne of lignesResolues) {
     db.insert(schema.ligneVente)
-      .values({ idFacture: facture.idFacture, idProduit: ligne.produit.idProduit, quantite: ligne.quantite, prixApplique: ligne.prixApplique })
+      .values({
+        idFacture: facture.idFacture,
+        idProduit: ligne.produit.idProduit,
+        quantite: ligne.quantite,
+        prixApplique: ligne.prixApplique,
+        remise: ligne.remise,
+      })
       .run();
 
     if (ligne.produit.suiviStock === 1) {

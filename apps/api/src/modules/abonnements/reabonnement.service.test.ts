@@ -110,4 +110,19 @@ describe("reabonner (7.2)", () => {
       reabonner(db, { siteId, userId, aujourdHui: "2025-12-20", numeroAbonnement: 999999, montantEncaisse: 13000 })
     ).toThrow(/introuvable/);
   });
+
+  it("6.4, 7.2 : applique une remise ponctuelle sur le prix de la formule", () => {
+    const resultat = reabonner(db, { siteId, userId, aujourdHui: "2025-12-20", numeroAbonnement, montantEncaisse: 12000, remise: 1000 });
+
+    const facture = db.select().from(schema.facture).where(eq(schema.facture.idFacture, resultat.idFacture)).get();
+    expect(facture?.montantTotal).toBe(12000);
+    const ligne = db.select().from(schema.ligneVente).where(eq(schema.ligneVente.idFacture, resultat.idFacture)).all()[0];
+    expect(ligne).toMatchObject({ prixApplique: 12000, remise: 1000 });
+  });
+
+  it("6.4 : rejette une remise dépassant le prix de la formule", () => {
+    expect(() =>
+      reabonner(db, { siteId, userId, aujourdHui: "2025-12-20", numeroAbonnement, montantEncaisse: 0, remise: 20000 })
+    ).toThrow(/remise/i);
+  });
 });

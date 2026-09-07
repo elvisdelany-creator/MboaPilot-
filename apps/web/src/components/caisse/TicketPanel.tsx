@@ -26,6 +26,10 @@ interface Props {
   comptesPartagesDisponibles: ComptePartage[];
   comptePartageSelectionne: number | null;
   onSelectionnerComptePartage: (idComptePartage: number | null) => void;
+  // 6.4, 7.1 : "remise ponctuelle" sur le prix de la formule — remontée à
+  // CaissePage pour que le pro-forma imprimable la reflète aussi
+  remise: number;
+  onChangerRemise: (remise: number) => void;
   enCours: boolean;
   onValider: (paiement: PaiementSaisi) => void;
   onEchangerMateriel: () => void;
@@ -47,6 +51,8 @@ export function TicketPanel({
   comptesPartagesDisponibles,
   comptePartageSelectionne,
   onSelectionnerComptePartage,
+  remise,
+  onChangerRemise,
   enCours,
   onValider,
   onEchangerMateriel,
@@ -57,7 +63,7 @@ export function TicketPanel({
     kitSelectionne && formuleSelectionnee
       ? calculerPrixKit(kitSelectionne, { idFormule: formuleSelectionnee.idFormule, prix: formuleSelectionnee.prix })
       : 0;
-  const total = (formuleSelectionnee?.prix ?? 0) + prixKit;
+  const total = (formuleSelectionnee?.prix ?? 0) - remise + prixKit;
 
   const [modePaiement, setModePaiement] = useState<"CASH" | "MOBILE_MONEY">("CASH");
   const [montant, setMontant] = useState(total);
@@ -131,6 +137,26 @@ export function TicketPanel({
             </li>
           )}
         </ul>
+
+        {/* 6.4 : "remise ponctuelle" ou "tarif préférentiel apporteur" — montant en FCFA déduit du prix de la formule */}
+        {formuleSelectionnee && (
+          <div className="mt-3 flex items-center gap-2">
+            <Label htmlFor="ticket-remise" className="text-sm font-normal text-muted-foreground">
+              Remise
+            </Label>
+            <Input
+              id="ticket-remise"
+              type="number"
+              min={0}
+              max={formuleSelectionnee.prix}
+              value={remise || ""}
+              placeholder="0"
+              onChange={(e) => onChangerRemise(Math.max(0, Math.min(Number(e.target.value), formuleSelectionnee.prix)))}
+              className="h-9 flex-1 tabular-nums"
+            />
+            <span className="text-sm text-muted-foreground">FCFA</span>
+          </div>
+        )}
 
         {/* 5.9 : affectation à un écran d'un compte streaming mutualisé — uniquement
             au recrutement (un réabonnement reconduit l'écran déjà occupé) */}

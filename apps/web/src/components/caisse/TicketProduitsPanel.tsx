@@ -11,6 +11,7 @@ import type { PaiementSaisi } from "./TicketPanel";
 export interface LignePanier {
   produit: Produit;
   quantite: number;
+  remise: number; // 6.4 : remise ponctuelle en FCFA sur cette ligne
 }
 
 interface Props {
@@ -18,6 +19,7 @@ interface Props {
   onIncrementer: (idProduit: number) => void;
   onDecrementer: (idProduit: number) => void;
   onRetirer: (idProduit: number) => void;
+  onModifierRemise: (idProduit: number, remise: number) => void;
   enCours: boolean;
   onValider: (paiement: PaiementSaisi) => void;
   onImprimerProForma: () => void;
@@ -25,11 +27,15 @@ interface Props {
 
 const formateurFcfa = new Intl.NumberFormat("fr-FR");
 
+function montantLigne(ligne: LignePanier): number {
+  return Math.max(0, ligne.produit.prixVente * ligne.quantite - ligne.remise);
+}
+
 // 9.2 : ticket en cours pour une vente de produits/services hors abonnement —
 // même logique d'encaissement (comptant/Mobile Money) que TicketPanel, mais
 // panier multi-lignes avec quantités au lieu d'une formule + un kit unique.
-export function TicketProduitsPanel({ panier, onIncrementer, onDecrementer, onRetirer, enCours, onValider, onImprimerProForma }: Props) {
-  const total = panier.reduce((somme, l) => somme + l.produit.prixVente * l.quantite, 0);
+export function TicketProduitsPanel({ panier, onIncrementer, onDecrementer, onRetirer, onModifierRemise, enCours, onValider, onImprimerProForma }: Props) {
+  const total = panier.reduce((somme, l) => somme + montantLigne(l), 0);
 
   const [modePaiement, setModePaiement] = useState<"CASH" | "MOBILE_MONEY">("CASH");
   const [montant, setMontant] = useState(total);
@@ -89,9 +95,24 @@ export function TicketProduitsPanel({ panier, onIncrementer, onDecrementer, onRe
                     <Plus className="size-3" />
                   </Button>
                 </div>
-                <span className="tabular-nums font-medium text-card-foreground">
-                  {formateurFcfa.format(ligne.produit.prixVente * ligne.quantite)} FCFA
-                </span>
+                <span className="tabular-nums font-medium text-card-foreground">{formateurFcfa.format(montantLigne(ligne))} FCFA</span>
+              </div>
+              {/* 6.4 : "remise ponctuelle" — montant en FCFA déduit du prix catalogue de la ligne */}
+              <div className="mt-1 flex items-center gap-2">
+                <Label htmlFor={`remise-${ligne.produit.idProduit}`} className="text-xs font-normal text-muted-foreground">
+                  Remise
+                </Label>
+                <Input
+                  id={`remise-${ligne.produit.idProduit}`}
+                  type="number"
+                  min={0}
+                  max={ligne.produit.prixVente * ligne.quantite}
+                  value={ligne.remise || ""}
+                  placeholder="0"
+                  onChange={(e) => onModifierRemise(ligne.produit.idProduit, Number(e.target.value))}
+                  className="h-7 flex-1 tabular-nums"
+                />
+                <span className="text-xs text-muted-foreground">FCFA</span>
               </div>
             </li>
           ))}

@@ -189,6 +189,7 @@ export interface RecruterPayload {
   montantEncaisse: number;
   apporteurId?: number;
   idComptePartage?: number; // 5.9 : écran affecté sur un compte streaming mutualisé
+  remise?: number; // 6.4 : remise ponctuelle sur le prix de la formule
 }
 
 export async function recruter(token: string, payload: RecruterPayload): Promise<RecrutementResultat> {
@@ -210,7 +211,7 @@ export interface CreerVentePayload {
   siteId: number;
   userId: number;
   idAbonne?: number;
-  lignes: { idProduit: number; quantite: number }[];
+  lignes: { idProduit: number; quantite: number; remise?: number }[];
   montantEncaisse: number;
 }
 
@@ -342,6 +343,7 @@ export interface ReabonnerPayload {
   aujourdHui: string;
   idFormule?: number;
   montantEncaisse: number;
+  remise?: number; // 6.4 : remise ponctuelle sur le prix de la formule
 }
 
 export async function reabonnerRequete(

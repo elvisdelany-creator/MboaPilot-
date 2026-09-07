@@ -10,6 +10,8 @@ export interface ReabonnerParams {
   numeroAbonnement: number;
   idFormule?: number; // absent = reconduction de la formule actuelle
   montantEncaisse: number;
+  // 6.4, 7.2 : "remise ponctuelle" — montant en FCFA déduit du prix de la formule
+  remise?: number;
 }
 
 export interface ReabonnementResultat {
@@ -32,6 +34,10 @@ export function reabonner(db: Db, params: ReabonnerParams): ReabonnementResultat
   const formule = db.select().from(schema.formule).where(eq(schema.formule.idFormule, idFormule)).get();
   if (!formule) throw new Error(`Formule ${idFormule} introuvable`);
 
+  const remise = params.remise ?? 0;
+  if (remise < 0) throw new Error("La remise ne peut pas être négative");
+  if (remise > formule.prix) throw new Error(`La remise (${remise}) dépasse le prix de la formule (${formule.prix})`);
+
   const dateDebut = params.aujourdHui;
   const dateFin = calculerDateFin(dateDebut, formule.dureeCycles, formule.modeDuree);
 
@@ -53,14 +59,16 @@ export function reabonner(db: Db, params: ReabonnerParams): ReabonnementResultat
     .where(eq(schema.abonnement.numeroAbonnement, params.numeroAbonnement))
     .run();
 
+  const prixApplique = formule.prix - remise;
+
   const facture = db
     .insert(schema.facture)
-    .values({ siteId: params.siteId, idAbonne: abonnementActuel.idAbonne, creePar: params.userId, montantTotal: formule.prix })
+    .values({ siteId: params.siteId, idAbonne: abonnementActuel.idAbonne, creePar: params.userId, montantTotal: prixApplique })
     .returning()
     .get();
 
   db.insert(schema.ligneVente)
-    .values({ idFacture: facture.idFacture, numeroAbonnement: params.numeroAbonnement, prixApplique: formule.prix })
+    .values({ idFacture: facture.idFacture, numeroAbonnement: params.numeroAbonnement, prixApplique, remise })
     .run();
 
   let statutFacture: "BROUILLON" | "VALIDEE" = "BROUILLON";

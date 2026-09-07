@@ -59,6 +59,30 @@ describe("changerFormule (7.4)", () => {
     expect(facture?.montantTotal).toBe(5500);
   });
 
+  // 6.5 : "Chèque — Banque, numéro de chèque, titulaire, date"
+  it("migration payée par chèque -> le paiement enregistre le mode et les champs propres au chèque", () => {
+    const resultat = changerFormule(db, {
+      siteId,
+      userId,
+      numeroAbonnement,
+      idNouvelleFormule: idEvasion,
+      montantEncaisse: 5500,
+      modePaiement: "CHEQUE",
+      banque: "BICEC",
+      numeroCheque: "0456789",
+      titulaireCheque: "Client Migration",
+      dateCheque: "2025-12-01",
+    });
+
+    const paiements = db.select().from(schema.paiement).where(eq(schema.paiement.idFacture, resultat.idFacture)).all();
+    expect(paiements).toHaveLength(1);
+    expect(paiements[0].mode).toBe("CHEQUE");
+    expect(paiements[0].banque).toBe("BICEC");
+    expect(paiements[0].numeroCheque).toBe("0456789");
+    expect(paiements[0].titulaireCheque).toBe("Client Migration");
+    expect(paiements[0].dateCheque).toBe("2025-12-01");
+  });
+
   it("sans encaissement, la facture reste BROUILLON mais la formule change immédiatement", () => {
     const resultat = changerFormule(db, { siteId, userId, numeroAbonnement, idNouvelleFormule: idEvasion, montantEncaisse: 0 });
 

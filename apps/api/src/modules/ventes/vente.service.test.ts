@@ -81,6 +81,25 @@ describe("creerVenteProduits (5.2, 5.3, 8.5)", () => {
     expect(paiements[0].montant).toBe(2500);
   });
 
+  // 6.5 : "Virement bancaire — Banque émettrice, référence de virement"
+  it("vente payée par virement -> le paiement enregistre le mode et la référence de virement", () => {
+    const resultat = creerVenteProduits(db, {
+      siteId,
+      userId,
+      lignes: [{ idProduit: idBien, quantite: 1 }],
+      montantEncaisse: 2500,
+      modePaiement: "VIREMENT",
+      banque: "CBC",
+      referenceVirement: "VIR-2025-000900",
+    });
+
+    const paiements = db.select().from(schema.paiement).where(eq(schema.paiement.idFacture, resultat.idFacture)).all();
+    expect(paiements).toHaveLength(1);
+    expect(paiements[0].mode).toBe("VIREMENT");
+    expect(paiements[0].banque).toBe("CBC");
+    expect(paiements[0].referenceVirement).toBe("VIR-2025-000900");
+  });
+
   it("rattache la facture à un abonné quand idAbonne est fourni, sans abonné sinon", () => {
     const abonne = db.insert(schema.abonne).values({ siteId, nom: "Ngo", prenom: "Alice", telephone: "690000001" }).returning().get();
 

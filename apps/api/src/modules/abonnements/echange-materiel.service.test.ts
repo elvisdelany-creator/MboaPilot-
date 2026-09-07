@@ -142,6 +142,33 @@ describe("echangerMateriel (7.3)", () => {
     expect(resultat.statutFacture).toBe("BROUILLON");
   });
 
+  // 6.5 : "Chèque — Banque, numéro de chèque, titulaire, date"
+  it("vol hors garantie, payé par chèque -> le paiement enregistre le mode et les champs propres au chèque", () => {
+    const resultat = echangerMateriel(db, {
+      siteId,
+      userId,
+      numeroAbonnement,
+      idProduit: idProduitDecodeur,
+      typeMateriel: "DECODEUR",
+      sousGarantie: false,
+      motif: "vol",
+      montantEncaisse: 15000,
+      modePaiement: "CHEQUE",
+      banque: "UBA",
+      numeroCheque: "9988776",
+      titulaireCheque: "Client Test",
+      dateCheque: "2025-11-16",
+    });
+
+    const paiements = db.select().from(schema.paiement).where(eq(schema.paiement.idFacture, resultat.idFacture)).all();
+    expect(paiements).toHaveLength(1);
+    expect(paiements[0].mode).toBe("CHEQUE");
+    expect(paiements[0].banque).toBe("UBA");
+    expect(paiements[0].numeroCheque).toBe("9988776");
+    expect(paiements[0].titulaireCheque).toBe("Client Test");
+    expect(paiements[0].dateCheque).toBe("2025-11-16");
+  });
+
   it("rejette un abonnement inconnu", () => {
     expect(() =>
       echangerMateriel(db, {

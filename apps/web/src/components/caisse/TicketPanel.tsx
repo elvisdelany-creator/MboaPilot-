@@ -11,6 +11,8 @@ import type { Abonne, CatalogueKit, ComptePartage, Formule, NouvelAbonne, Parcou
 
 export type PaiementSaisi =
   | { mode: "CASH"; montant: number }
+  | { mode: "CHEQUE"; montant: number; banque: string; numeroCheque: string; titulaireCheque: string; dateCheque: string }
+  | { mode: "VIREMENT"; montant: number; banque: string; referenceVirement: string }
   | { mode: "MOBILE_MONEY"; montant: number; numeroTelephone: string; parcours: ParcoursPaiementMobile };
 
 interface Props {
@@ -65,19 +67,40 @@ export function TicketPanel({
       : 0;
   const total = (formuleSelectionnee?.prix ?? 0) - remise + prixKit;
 
-  const [modePaiement, setModePaiement] = useState<"CASH" | "MOBILE_MONEY">("CASH");
+  const [modePaiement, setModePaiement] = useState<"CASH" | "CHEQUE" | "VIREMENT" | "MOBILE_MONEY">("CASH");
   const [montant, setMontant] = useState(total);
   const [numeroTelephone, setNumeroTelephone] = useState("");
   const [parcours, setParcours] = useState<ParcoursPaiementMobile>("USSD_CLIENT");
+  // 6.5 : "Chèque — Banque, numéro de chèque, titulaire, date"
+  const [banque, setBanque] = useState("");
+  const [numeroCheque, setNumeroCheque] = useState("");
+  const [titulaireCheque, setTitulaireCheque] = useState("");
+  const [dateCheque, setDateCheque] = useState("");
+  // 6.5 : "Virement bancaire — Banque émettrice, référence de virement"
+  const [referenceVirement, setReferenceVirement] = useState("");
   useEffect(() => setMontant(total), [total]);
 
   const pretAValider =
     Boolean(abonneSelectionne && formuleSelectionnee) &&
     !enCours &&
-    (modePaiement === "CASH" || numeroTelephone.trim().length > 0);
+    (modePaiement === "CASH" ||
+      (modePaiement === "CHEQUE" && banque.trim() && numeroCheque.trim() && titulaireCheque.trim() && dateCheque) ||
+      (modePaiement === "VIREMENT" && banque.trim() && referenceVirement.trim()) ||
+      (modePaiement === "MOBILE_MONEY" && numeroTelephone.trim().length > 0));
 
   function valider() {
     if (modePaiement === "CASH") onValider({ mode: "CASH", montant });
+    else if (modePaiement === "CHEQUE")
+      onValider({
+        mode: "CHEQUE",
+        montant: total,
+        banque: banque.trim(),
+        numeroCheque: numeroCheque.trim(),
+        titulaireCheque: titulaireCheque.trim(),
+        dateCheque,
+      });
+    else if (modePaiement === "VIREMENT")
+      onValider({ mode: "VIREMENT", montant: total, banque: banque.trim(), referenceVirement: referenceVirement.trim() });
     else onValider({ mode: "MOBILE_MONEY", montant: total, numeroTelephone: numeroTelephone.trim(), parcours });
   }
 
@@ -191,12 +214,14 @@ export function TicketPanel({
 
         <div className="mt-4">
           <Label htmlFor="mode-paiement">Mode de paiement</Label>
-          <Select value={modePaiement} onValueChange={(v) => setModePaiement(v as "CASH" | "MOBILE_MONEY")}>
+          <Select value={modePaiement} onValueChange={(v) => setModePaiement(v as "CASH" | "CHEQUE" | "VIREMENT" | "MOBILE_MONEY")}>
             <SelectTrigger id="mode-paiement" className="mt-1 w-full">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="CASH">Comptant (cash)</SelectItem>
+              <SelectItem value="CHEQUE">Chèque</SelectItem>
+              <SelectItem value="VIREMENT">Virement bancaire</SelectItem>
               <SelectItem value="MOBILE_MONEY">Mobile Money (Orange Money)</SelectItem>
             </SelectContent>
           </Select>
@@ -218,6 +243,52 @@ export function TicketPanel({
                 Encaissement partiel — solde de {formateurFcfa.format(total - montant)} FCFA restant dû.
               </p>
             )}
+          </div>
+        )}
+
+        {/* 6.5 : "Chèque — Banque, numéro de chèque, titulaire, date" — validation immédiate, montant total */}
+        {modePaiement === "CHEQUE" && (
+          <div className="mt-4 space-y-3">
+            <div>
+              <Label htmlFor="cheque-banque">Banque</Label>
+              <Input id="cheque-banque" value={banque} onChange={(e) => setBanque(e.target.value)} className="mt-1 h-11 text-base" />
+            </div>
+            <div>
+              <Label htmlFor="cheque-numero">Numéro de chèque</Label>
+              <Input id="cheque-numero" value={numeroCheque} onChange={(e) => setNumeroCheque(e.target.value)} className="mt-1 h-11 text-base" />
+            </div>
+            <div>
+              <Label htmlFor="cheque-titulaire">Titulaire</Label>
+              <Input
+                id="cheque-titulaire"
+                value={titulaireCheque}
+                onChange={(e) => setTitulaireCheque(e.target.value)}
+                className="mt-1 h-11 text-base"
+              />
+            </div>
+            <div>
+              <Label htmlFor="cheque-date">Date</Label>
+              <Input id="cheque-date" type="date" value={dateCheque} onChange={(e) => setDateCheque(e.target.value)} className="mt-1 h-11 text-base" />
+            </div>
+          </div>
+        )}
+
+        {/* 6.5 : "Virement bancaire — Banque émettrice, référence de virement" — rapprochement différé */}
+        {modePaiement === "VIREMENT" && (
+          <div className="mt-4 space-y-3">
+            <div>
+              <Label htmlFor="virement-banque">Banque émettrice</Label>
+              <Input id="virement-banque" value={banque} onChange={(e) => setBanque(e.target.value)} className="mt-1 h-11 text-base" />
+            </div>
+            <div>
+              <Label htmlFor="virement-reference">Référence de virement</Label>
+              <Input
+                id="virement-reference"
+                value={referenceVirement}
+                onChange={(e) => setReferenceVirement(e.target.value)}
+                className="mt-1 h-11 text-base"
+              />
+            </div>
           </div>
         )}
 
@@ -270,7 +341,7 @@ export function TicketPanel({
           disabled={!pretAValider}
           onClick={valider}
         >
-          {enCours ? "Encaissement…" : modePaiement === "CASH" ? "Valider et encaisser" : "Initier le paiement Mobile Money"}
+          {enCours ? "Encaissement…" : modePaiement === "MOBILE_MONEY" ? "Initier le paiement Mobile Money" : "Valider et encaisser"}
         </Button>
       </div>
     </aside>

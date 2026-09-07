@@ -270,13 +270,21 @@ export function CaissePage({ onNaviguer, abonneInitial, idFamilleInitiale }: Pro
     if (panierProduits.length === 0) return;
     setEnCours(true);
     try {
-      const montantEncaisse = paiement.mode === "CASH" ? paiement.montant : 0;
+      // 6.5 : chèque et virement s'encaissent immédiatement, comme le comptant
+      // (seul Mobile Money n'encaisse rien à cet appel, voir plus bas)
+      const montantEncaisse = paiement.mode === "MOBILE_MONEY" ? 0 : paiement.montant;
       const resultat = await creerVenteRequete(token, {
         siteId: utilisateur.siteId,
         userId: utilisateur.idUser,
         idAbonne: abonneSelectionne && "idAbonne" in abonneSelectionne ? abonneSelectionne.idAbonne : undefined,
         lignes: panierProduits.map((l) => ({ idProduit: l.produit.idProduit, quantite: l.quantite, remise: l.remise || undefined })),
         montantEncaisse,
+        modePaiement: paiement.mode === "MOBILE_MONEY" ? undefined : paiement.mode,
+        banque: paiement.mode === "CHEQUE" || paiement.mode === "VIREMENT" ? paiement.banque : undefined,
+        numeroCheque: paiement.mode === "CHEQUE" ? paiement.numeroCheque : undefined,
+        titulaireCheque: paiement.mode === "CHEQUE" ? paiement.titulaireCheque : undefined,
+        dateCheque: paiement.mode === "CHEQUE" ? paiement.dateCheque : undefined,
+        referenceVirement: paiement.mode === "VIREMENT" ? paiement.referenceVirement : undefined,
       });
 
       if (paiement.mode === "MOBILE_MONEY") {
@@ -303,7 +311,7 @@ export function CaissePage({ onNaviguer, abonneInitial, idFamilleInitiale }: Pro
         numeroAbonnement: null,
         lignes: lignesTicketProduits,
         total: totalTicketProduits,
-        modePaiement: "CASH",
+        modePaiement: paiement.mode,
         montantEncaisse: paiement.montant,
         dateHeure: new Date().toISOString(),
       });
@@ -327,7 +335,16 @@ export function CaissePage({ onNaviguer, abonneInitial, idFamilleInitiale }: Pro
       // 6.6 : Mobile Money n'encaisse jamais dans cet appel — la facture est
       // créée BROUILLON (montantEncaisse=0), puis le paiement est initié à
       // part sur cette facture, sans toucher au cœur du recrutement/réabonnement.
-      const montantEncaisse = paiement.mode === "CASH" ? paiement.montant : 0;
+      // 6.5 : chèque et virement s'encaissent immédiatement, comme le comptant.
+      const montantEncaisse = paiement.mode === "MOBILE_MONEY" ? 0 : paiement.montant;
+      const detailsPaiement = {
+        modePaiement: paiement.mode === "MOBILE_MONEY" ? undefined : paiement.mode,
+        banque: paiement.mode === "CHEQUE" || paiement.mode === "VIREMENT" ? paiement.banque : undefined,
+        numeroCheque: paiement.mode === "CHEQUE" ? paiement.numeroCheque : undefined,
+        titulaireCheque: paiement.mode === "CHEQUE" ? paiement.titulaireCheque : undefined,
+        dateCheque: paiement.mode === "CHEQUE" ? paiement.dateCheque : undefined,
+        referenceVirement: paiement.mode === "VIREMENT" ? paiement.referenceVirement : undefined,
+      };
       const resultat = abonnementARenouveler
         ? await reabonnerRequete(token, abonnementARenouveler.numeroAbonnement, {
             siteId: utilisateur.siteId,
@@ -336,6 +353,7 @@ export function CaissePage({ onNaviguer, abonneInitial, idFamilleInitiale }: Pro
             idFormule: formuleSelectionnee.idFormule,
             montantEncaisse,
             remise: remiseEffective || undefined,
+            ...detailsPaiement,
           })
         : await recruter(token, {
             siteId: utilisateur.siteId,
@@ -350,6 +368,7 @@ export function CaissePage({ onNaviguer, abonneInitial, idFamilleInitiale }: Pro
             apporteurId: "idAbonne" in abonneSelectionne ? undefined : abonneSelectionne.apporteurId,
             idComptePartage: comptePartageSelectionne ?? undefined,
             remise: remiseEffective || undefined,
+            ...detailsPaiement,
           });
 
       const operation = abonnementARenouveler ? "Réabonnement" : "Recrutement";
@@ -382,7 +401,7 @@ export function CaissePage({ onNaviguer, abonneInitial, idFamilleInitiale }: Pro
         numeroAbonnement: resultat.numeroAbonnement,
         lignes: lignesTicket,
         total: totalTicket,
-        modePaiement: "CASH",
+        modePaiement: paiement.mode,
         montantEncaisse: paiement.montant,
         dateHeure: new Date().toISOString(),
       });

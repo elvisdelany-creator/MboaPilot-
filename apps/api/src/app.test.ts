@@ -769,6 +769,45 @@ describe("Vente rapide de produits/services hors abonnement (5.2, 5.3, 8.5)", ()
 
     expect(vente.statusCode).toBe(403);
   });
+
+  // 6.5 : "Chèque — Banque, numéro de chèque, titulaire, date" — round-trip
+  // HTTP complet, et ventilation du tableau de bord (8.6) mise à jour
+  it("un caissier vend un produit payé par chèque : la facture, le paiement et la ventilation du jour reflètent le chèque", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const token = await connecter(app);
+    const idProduit = await creerBien(db);
+    const aujourdHui = new Date().toISOString().slice(0, 10);
+
+    const vente = await app.inject({
+      method: "POST",
+      url: "/api/v1/ventes",
+      headers: authHeader(token),
+      payload: {
+        siteId,
+        userId,
+        lignes: [{ idProduit, quantite: 1 }],
+        montantEncaisse: 2500,
+        modePaiement: "CHEQUE",
+        banque: "Afriland First Bank",
+        numeroCheque: "0012345",
+        titulaireCheque: "Client Comptoir",
+        dateCheque: aujourdHui,
+      },
+    });
+
+    expect(vente.statusCode).toBe(201);
+    expect(vente.json()).toMatchObject({ statutFacture: "VALIDEE" });
+
+    creerUtilisateur(db, { siteId, nom: "Admin", prenom: "D", identifiant: "admin-cheque", motDePasse: "motdepasse-secret", role: "ADMINISTRATEUR" });
+    const tokenAdmin = await connecter(app, "admin-cheque");
+    const encaissements = await app.inject({
+      method: "GET",
+      url: `/api/v1/tableau-bord/encaissements-jour?siteId=${siteId}&aujourdHui=${aujourdHui}`,
+      headers: authHeader(tokenAdmin),
+    });
+    expect(encaissements.statusCode).toBe(200);
+    expect(encaissements.json().find((v: { mode: string }) => v.mode === "CHEQUE").total).toBe(2500);
+  });
 });
 
 describe("Émission d'un avoir (6.4)", () => {

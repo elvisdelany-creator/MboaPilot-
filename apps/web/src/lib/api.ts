@@ -179,6 +179,10 @@ export async function chargerAlertesEcheance(token: string, siteId: number): Pro
   return lireJson<AlerteEcheance[]>(reponse);
 }
 
+// 6.5 : moyen de paiement de l'encaissement — comptant par défaut ; le
+// Mobile Money suit son propre parcours dédié (initierPaiementMobile), jamais ici
+export type ModePaiementEncaissement = "CASH" | "CHEQUE" | "VIREMENT";
+
 export interface RecruterPayload {
   siteId: number;
   userId: number;
@@ -190,6 +194,12 @@ export interface RecruterPayload {
   apporteurId?: number;
   idComptePartage?: number; // 5.9 : écran affecté sur un compte streaming mutualisé
   remise?: number; // 6.4 : remise ponctuelle sur le prix de la formule
+  modePaiement?: ModePaiementEncaissement;
+  banque?: string;
+  numeroCheque?: string;
+  titulaireCheque?: string;
+  dateCheque?: string;
+  referenceVirement?: string;
 }
 
 export async function recruter(token: string, payload: RecruterPayload): Promise<RecrutementResultat> {
@@ -213,6 +223,12 @@ export interface CreerVentePayload {
   idAbonne?: number;
   lignes: { idProduit: number; quantite: number; remise?: number }[];
   montantEncaisse: number;
+  modePaiement?: ModePaiementEncaissement;
+  banque?: string;
+  numeroCheque?: string;
+  titulaireCheque?: string;
+  dateCheque?: string;
+  referenceVirement?: string;
 }
 
 export interface VenteResultat {
@@ -322,6 +338,12 @@ export interface EchangerMaterielPayload {
   sousGarantie: boolean;
   motif: string;
   montantEncaisse: number;
+  modePaiement?: ModePaiementEncaissement;
+  banque?: string;
+  numeroCheque?: string;
+  titulaireCheque?: string;
+  dateCheque?: string;
+  referenceVirement?: string;
 }
 
 export async function echangerMaterielRequete(
@@ -344,6 +366,12 @@ export interface ReabonnerPayload {
   idFormule?: number;
   montantEncaisse: number;
   remise?: number; // 6.4 : remise ponctuelle sur le prix de la formule
+  modePaiement?: ModePaiementEncaissement;
+  banque?: string;
+  numeroCheque?: string;
+  titulaireCheque?: string;
+  dateCheque?: string;
+  referenceVirement?: string;
 }
 
 export async function reabonnerRequete(
@@ -366,6 +394,12 @@ export interface ChangerFormulePayload {
   userId: number;
   idNouvelleFormule: number;
   montantEncaisse: number;
+  modePaiement?: ModePaiementEncaissement;
+  banque?: string;
+  numeroCheque?: string;
+  titulaireCheque?: string;
+  dateCheque?: string;
+  referenceVirement?: string;
 }
 
 export async function changerFormuleRequete(
@@ -430,6 +464,12 @@ export interface ChangerStatutSavPayload {
   motif?: string;
   montantMainOeuvre?: number;
   montantEncaisse?: number;
+  modePaiement?: ModePaiementEncaissement;
+  banque?: string;
+  numeroCheque?: string;
+  titulaireCheque?: string;
+  dateCheque?: string;
+  referenceVirement?: string;
 }
 
 export async function changerStatutSavRequete(

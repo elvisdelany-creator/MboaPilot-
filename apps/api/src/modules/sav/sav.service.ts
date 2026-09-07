@@ -41,6 +41,14 @@ export interface ChangerStatutSavParams {
   motif?: string; // obligatoire pour IRREPARABLE / ABANDONNE
   montantMainOeuvre?: number; // saisi au passage en PRET
   montantEncaisse?: number; // saisi au passage en LIVRE si la facture n'est pas déjà validée
+  // 6.5 : moyen de paiement de l'encaissement — comptant par défaut ; le
+  // Mobile Money suit son propre parcours dédié (paiement-mobile), jamais ici
+  modePaiement?: "CASH" | "CHEQUE" | "VIREMENT";
+  banque?: string; // chèque : "Banque" ; virement : "Banque émettrice"
+  numeroCheque?: string;
+  titulaireCheque?: string;
+  dateCheque?: string;
+  referenceVirement?: string;
 }
 
 export interface ChangerStatutSavResultat {
@@ -135,7 +143,18 @@ export function changerStatutSav(
       if (!params.montantEncaisse || params.montantEncaisse <= 0) {
         throw new Error("Un encaissement est requis pour restituer l'appareil (6.4)");
       }
-      db.insert(schema.paiement).values({ idFacture: facture.idFacture, mode: "CASH", montant: params.montantEncaisse }).run();
+      db.insert(schema.paiement)
+        .values({
+          idFacture: facture.idFacture,
+          mode: params.modePaiement ?? "CASH",
+          montant: params.montantEncaisse,
+          banque: params.banque,
+          numeroCheque: params.numeroCheque,
+          titulaireCheque: params.titulaireCheque,
+          dateCheque: params.dateCheque,
+          referenceVirement: params.referenceVirement,
+        })
+        .run();
       db.update(schema.facture).set({ statut: "VALIDEE" }).where(eq(schema.facture.idFacture, facture.idFacture)).run();
     }
     statutFacture = "VALIDEE";

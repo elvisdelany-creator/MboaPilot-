@@ -334,6 +334,17 @@ export const paiement = sqliteTable("paiement", {
   mode: text("mode", { enum: ["CASH", "CHEQUE", "VIREMENT", "MOBILE_MONEY"] }).notNull(),
   montant: integer("montant").notNull(),
   referenceTransaction: text("reference_transaction"), // clé d'idempotence MOBILE_MONEY (13.2)
+  // 6.5 : champs à saisir propres au chèque ("Banque, numéro de chèque,
+  // titulaire, date") — renseignés uniquement lorsque mode = CHEQUE
+  banque: text("banque"),
+  numeroCheque: text("numero_cheque"),
+  titulaireCheque: text("titulaire_cheque"),
+  dateCheque: text("date_cheque"),
+  // 6.5 : "Banque émettrice, référence de virement" — renseignés uniquement
+  // lorsque mode = VIREMENT ; distinct de reference_transaction (MOBILE_MONEY,
+  // contrainte d'unicité pour l'idempotence des callbacks) et de banque
+  // ci-dessus (réutilisée comme "banque émettrice" pour un virement)
+  referenceVirement: text("reference_virement"),
   datePaiement: text("date_paiement").notNull().default(now),
 }, (t) => ({
   // idempotence des callbacks Orange Money : un même événement ne doit jamais créer deux paiements

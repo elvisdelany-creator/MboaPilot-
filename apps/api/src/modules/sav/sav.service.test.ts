@@ -110,6 +110,33 @@ describe("changerStatutSav — cycle de vie (5.10)", () => {
     expect(dossier?.statut).toBe("LIVRE");
   });
 
+  // 6.5 : "Chèque — Banque, numéro de chèque, titulaire, date"
+  it("PRET -> LIVRE payé par chèque -> le paiement enregistre le mode et les champs propres au chèque", () => {
+    changerStatutSav(db, { idDossierSav, nouveauStatut: "DIAGNOSTIC", userId });
+    changerStatutSav(db, { idDossierSav, nouveauStatut: "REPARATION", userId });
+    changerStatutSav(db, { idDossierSav, nouveauStatut: "PRET", montantMainOeuvre: 4000, userId });
+
+    const resultat = changerStatutSav(db, {
+      idDossierSav,
+      nouveauStatut: "LIVRE",
+      montantEncaisse: 4000,
+      userId,
+      modePaiement: "CHEQUE",
+      banque: "SCB",
+      numeroCheque: "1122334",
+      titulaireCheque: "Client SAV",
+      dateCheque: "2025-12-05",
+    });
+
+    const paiements = db.select().from(schema.paiement).where(eq(schema.paiement.idFacture, resultat.idFacture!)).all();
+    expect(paiements).toHaveLength(1);
+    expect(paiements[0].mode).toBe("CHEQUE");
+    expect(paiements[0].banque).toBe("SCB");
+    expect(paiements[0].numeroCheque).toBe("1122334");
+    expect(paiements[0].titulaireCheque).toBe("Client SAV");
+    expect(paiements[0].dateCheque).toBe("2025-12-05");
+  });
+
   it("rejette un dossier inconnu", () => {
     expect(() => changerStatutSav(db, { idDossierSav: 999999, nouveauStatut: "DIAGNOSTIC", userId })).toThrow(/introuvable/);
   });

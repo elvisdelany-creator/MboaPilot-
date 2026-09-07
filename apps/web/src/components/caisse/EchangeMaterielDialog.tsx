@@ -13,7 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { chargerProduits, echangerMaterielRequete, ErreurAuthentification } from "@/lib/api";
+import { chargerProduits, echangerMaterielRequete, ErreurAuthentification, type ModePaiementEncaissement } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import type { Produit } from "@/lib/types";
 
@@ -58,11 +58,25 @@ export function EchangeMaterielDialog({ numeroAbonnement, onFerme, onSucces }: P
   const [montantEncaisse, setMontantEncaisse] = useState(montantFacture);
   useEffect(() => setMontantEncaisse(montantFacture), [montantFacture]);
 
+  // 6.5 : moyen de paiement de l'encaissement
+  const [modePaiement, setModePaiement] = useState<ModePaiementEncaissement>("CASH");
+  const [banque, setBanque] = useState("");
+  const [numeroCheque, setNumeroCheque] = useState("");
+  const [titulaireCheque, setTitulaireCheque] = useState("");
+  const [dateCheque, setDateCheque] = useState("");
+  const [referenceVirement, setReferenceVirement] = useState("");
+
   function reinitialiser() {
     setIdProduit("");
     setNumeroSerie("");
     setMotif("panne");
     setSousGarantie(false);
+    setModePaiement("CASH");
+    setBanque("");
+    setNumeroCheque("");
+    setTitulaireCheque("");
+    setDateCheque("");
+    setReferenceVirement("");
   }
 
   async function valider() {
@@ -78,6 +92,12 @@ export function EchangeMaterielDialog({ numeroAbonnement, onFerme, onSucces }: P
         sousGarantie,
         motif,
         montantEncaisse,
+        modePaiement,
+        banque: modePaiement === "CHEQUE" || modePaiement === "VIREMENT" ? banque : undefined,
+        numeroCheque: modePaiement === "CHEQUE" ? numeroCheque : undefined,
+        titulaireCheque: modePaiement === "CHEQUE" ? titulaireCheque : undefined,
+        dateCheque: modePaiement === "CHEQUE" ? dateCheque : undefined,
+        referenceVirement: modePaiement === "VIREMENT" ? referenceVirement : undefined,
       });
       toast.success(
         resultat.statutFacture === "VALIDEE"
@@ -151,8 +171,24 @@ export function EchangeMaterielDialog({ numeroAbonnement, onFerme, onSucces }: P
             <span className="tabular-nums text-primary">{formateurFcfa.format(montantFacture)} FCFA</span>
           </div>
 
+          {montantFacture > 0 && (
+            <div>
+              <Label htmlFor="mode-paiement-echange">Mode de paiement</Label>
+              <Select value={modePaiement} onValueChange={(v) => setModePaiement(v as ModePaiementEncaissement)}>
+                <SelectTrigger id="mode-paiement-echange" className="mt-1 w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="CASH">Comptant (cash)</SelectItem>
+                  <SelectItem value="CHEQUE">Chèque</SelectItem>
+                  <SelectItem value="VIREMENT">Virement bancaire</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
           <div>
-            <Label htmlFor="montant-encaisse-echange">Montant encaissé (comptant)</Label>
+            <Label htmlFor="montant-encaisse-echange">Montant encaissé</Label>
             <Input
               id="montant-encaisse-echange"
               type="number"
@@ -169,13 +205,64 @@ export function EchangeMaterielDialog({ numeroAbonnement, onFerme, onSucces }: P
               </p>
             )}
           </div>
+
+          {/* 6.5 : "Chèque — Banque, numéro de chèque, titulaire, date" */}
+          {montantFacture > 0 && modePaiement === "CHEQUE" && (
+            <div className="space-y-3">
+              <div>
+                <Label htmlFor="cheque-banque-echange">Banque</Label>
+                <Input id="cheque-banque-echange" value={banque} onChange={(e) => setBanque(e.target.value)} className="mt-1" />
+              </div>
+              <div>
+                <Label htmlFor="cheque-numero-echange">Numéro de chèque</Label>
+                <Input id="cheque-numero-echange" value={numeroCheque} onChange={(e) => setNumeroCheque(e.target.value)} className="mt-1" />
+              </div>
+              <div>
+                <Label htmlFor="cheque-titulaire-echange">Titulaire</Label>
+                <Input id="cheque-titulaire-echange" value={titulaireCheque} onChange={(e) => setTitulaireCheque(e.target.value)} className="mt-1" />
+              </div>
+              <div>
+                <Label htmlFor="cheque-date-echange">Date</Label>
+                <Input id="cheque-date-echange" type="date" value={dateCheque} onChange={(e) => setDateCheque(e.target.value)} className="mt-1" />
+              </div>
+            </div>
+          )}
+
+          {/* 6.5 : "Virement bancaire — Banque émettrice, référence de virement" */}
+          {montantFacture > 0 && modePaiement === "VIREMENT" && (
+            <div className="space-y-3">
+              <div>
+                <Label htmlFor="virement-banque-echange">Banque émettrice</Label>
+                <Input id="virement-banque-echange" value={banque} onChange={(e) => setBanque(e.target.value)} className="mt-1" />
+              </div>
+              <div>
+                <Label htmlFor="virement-reference-echange">Référence de virement</Label>
+                <Input
+                  id="virement-reference-echange"
+                  value={referenceVirement}
+                  onChange={(e) => setReferenceVirement(e.target.value)}
+                  className="mt-1"
+                />
+              </div>
+            </div>
+          )}
         </div>
 
         <DialogFooter>
           <Button variant="outline" className="cursor-pointer" onClick={onFerme}>
             Annuler
           </Button>
-          <Button className="cursor-pointer" disabled={!idProduit || enCours} onClick={valider}>
+          <Button
+            className="cursor-pointer"
+            disabled={
+              !idProduit ||
+              enCours ||
+              (montantFacture > 0 &&
+                ((modePaiement === "CHEQUE" && !(banque.trim() && numeroCheque.trim() && titulaireCheque.trim() && dateCheque)) ||
+                  (modePaiement === "VIREMENT" && !(banque.trim() && referenceVirement.trim()))))
+            }
+            onClick={valider}
+          >
             {enCours ? "Échange…" : "Confirmer l'échange"}
           </Button>
         </DialogFooter>

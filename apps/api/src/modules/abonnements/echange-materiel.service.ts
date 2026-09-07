@@ -13,6 +13,14 @@ export interface EchangerMaterielParams {
   sousGarantie: boolean;
   motif: string; // ex. "panne", "vol"
   montantEncaisse: number;
+  // 6.5 : moyen de paiement de l'encaissement — comptant par défaut ; le
+  // Mobile Money suit son propre parcours dédié (paiement-mobile), jamais ici
+  modePaiement?: "CASH" | "CHEQUE" | "VIREMENT";
+  banque?: string; // chèque : "Banque" ; virement : "Banque émettrice"
+  numeroCheque?: string;
+  titulaireCheque?: string;
+  dateCheque?: string;
+  referenceVirement?: string;
 }
 
 export interface EchangeMaterielResultat {
@@ -106,7 +114,18 @@ export function echangerMateriel(db: Db, params: EchangerMaterielParams): Echang
     db.update(schema.facture).set({ statut: "VALIDEE" }).where(eq(schema.facture.idFacture, facture.idFacture)).run();
     statutFacture = "VALIDEE";
   } else if (params.montantEncaisse > 0) {
-    db.insert(schema.paiement).values({ idFacture: facture.idFacture, mode: "CASH", montant: params.montantEncaisse }).run();
+    db.insert(schema.paiement)
+      .values({
+        idFacture: facture.idFacture,
+        mode: params.modePaiement ?? "CASH",
+        montant: params.montantEncaisse,
+        banque: params.banque,
+        numeroCheque: params.numeroCheque,
+        titulaireCheque: params.titulaireCheque,
+        dateCheque: params.dateCheque,
+        referenceVirement: params.referenceVirement,
+      })
+      .run();
     db.update(schema.facture).set({ statut: "VALIDEE" }).where(eq(schema.facture.idFacture, facture.idFacture)).run();
     statutFacture = "VALIDEE";
   }

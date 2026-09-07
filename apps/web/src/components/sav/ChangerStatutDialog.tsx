@@ -4,7 +4,8 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { changerStatutSavRequete, ErreurAuthentification } from "@/lib/api";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { changerStatutSavRequete, ErreurAuthentification, type ModePaiementEncaissement } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import type { DossierSavDetaille, StatutSav } from "@/lib/types";
 
@@ -40,18 +41,38 @@ export function ChangerStatutDialog({ dossier, statutCible, onFerme, onSucces }:
   const [montantEncaisse, setMontantEncaisse] = useState(0);
   const [enCours, setEnCours] = useState(false);
 
+  // 6.5 : moyen de paiement de l'encaissement, au passage en LIVRE
+  const [modePaiement, setModePaiement] = useState<ModePaiementEncaissement>("CASH");
+  const [banque, setBanque] = useState("");
+  const [numeroCheque, setNumeroCheque] = useState("");
+  const [titulaireCheque, setTitulaireCheque] = useState("");
+  const [dateCheque, setDateCheque] = useState("");
+  const [referenceVirement, setReferenceVirement] = useState("");
+
   useEffect(() => {
     if (statutCible === "LIVRE") setMontantEncaisse(dossier.facture?.statut === "BROUILLON" ? dossier.facture.montantTotal : 0);
     if (statutCible !== "LIVRE") setMontantEncaisse(0);
     setDiagnostic("");
     setMotif("");
     setMontantMainOeuvre(0);
+    setModePaiement("CASH");
+    setBanque("");
+    setNumeroCheque("");
+    setTitulaireCheque("");
+    setDateCheque("");
+    setReferenceVirement("");
   }, [statutCible, dossier.facture]);
 
   if (!statutCible) return null;
 
   const motifRequis = statutCible === "IRREPARABLE" || statutCible === "ABANDONNE";
-  const pretAValider = !motifRequis || motif.trim().length > 0;
+  const encaissementEnCours = statutCible === "LIVRE" && dossier.facture?.statut === "BROUILLON";
+  const pretAValider =
+    (!motifRequis || motif.trim().length > 0) &&
+    (!encaissementEnCours ||
+      modePaiement === "CASH" ||
+      (modePaiement === "CHEQUE" && banque.trim() && numeroCheque.trim() && titulaireCheque.trim() && dateCheque) ||
+      (modePaiement === "VIREMENT" && banque.trim() && referenceVirement.trim()));
 
   async function valider() {
     if (!statutCible) return;
@@ -64,6 +85,12 @@ export function ChangerStatutDialog({ dossier, statutCible, onFerme, onSucces }:
         motif: motif || undefined,
         montantMainOeuvre: statutCible === "PRET" ? montantMainOeuvre : undefined,
         montantEncaisse: statutCible === "LIVRE" ? montantEncaisse : undefined,
+        modePaiement: encaissementEnCours ? modePaiement : undefined,
+        banque: encaissementEnCours && (modePaiement === "CHEQUE" || modePaiement === "VIREMENT") ? banque : undefined,
+        numeroCheque: encaissementEnCours && modePaiement === "CHEQUE" ? numeroCheque : undefined,
+        titulaireCheque: encaissementEnCours && modePaiement === "CHEQUE" ? titulaireCheque : undefined,
+        dateCheque: encaissementEnCours && modePaiement === "CHEQUE" ? dateCheque : undefined,
+        referenceVirement: encaissementEnCours && modePaiement === "VIREMENT" ? referenceVirement : undefined,
       });
       toast.success(
         statutCible === "PRET"
@@ -123,18 +150,80 @@ export function ChangerStatutDialog({ dossier, statutCible, onFerme, onSucces }:
             </div>
           )}
 
-          {statutCible === "LIVRE" && dossier.facture?.statut === "BROUILLON" && (
-            <div>
-              <Label htmlFor="statut-encaisse">Montant encaissé (comptant)</Label>
-              <Input
-                id="statut-encaisse"
-                type="number"
-                min={0}
-                value={montantEncaisse}
-                onChange={(e) => setMontantEncaisse(Number(e.target.value))}
-                className="mt-1"
-              />
-            </div>
+          {encaissementEnCours && (
+            <>
+              <div>
+                <Label htmlFor="statut-mode-paiement">Mode de paiement</Label>
+                <Select value={modePaiement} onValueChange={(v) => setModePaiement(v as ModePaiementEncaissement)}>
+                  <SelectTrigger id="statut-mode-paiement" className="mt-1 w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="CASH">Comptant (cash)</SelectItem>
+                    <SelectItem value="CHEQUE">Chèque</SelectItem>
+                    <SelectItem value="VIREMENT">Virement bancaire</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label htmlFor="statut-encaisse">Montant encaissé</Label>
+                <Input
+                  id="statut-encaisse"
+                  type="number"
+                  min={0}
+                  value={montantEncaisse}
+                  onChange={(e) => setMontantEncaisse(Number(e.target.value))}
+                  className="mt-1"
+                />
+              </div>
+
+              {/* 6.5 : "Chèque — Banque, numéro de chèque, titulaire, date" */}
+              {modePaiement === "CHEQUE" && (
+                <div className="space-y-3">
+                  <div>
+                    <Label htmlFor="statut-cheque-banque">Banque</Label>
+                    <Input id="statut-cheque-banque" value={banque} onChange={(e) => setBanque(e.target.value)} className="mt-1" />
+                  </div>
+                  <div>
+                    <Label htmlFor="statut-cheque-numero">Numéro de chèque</Label>
+                    <Input id="statut-cheque-numero" value={numeroCheque} onChange={(e) => setNumeroCheque(e.target.value)} className="mt-1" />
+                  </div>
+                  <div>
+                    <Label htmlFor="statut-cheque-titulaire">Titulaire</Label>
+                    <Input
+                      id="statut-cheque-titulaire"
+                      value={titulaireCheque}
+                      onChange={(e) => setTitulaireCheque(e.target.value)}
+                      className="mt-1"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="statut-cheque-date">Date</Label>
+                    <Input id="statut-cheque-date" type="date" value={dateCheque} onChange={(e) => setDateCheque(e.target.value)} className="mt-1" />
+                  </div>
+                </div>
+              )}
+
+              {/* 6.5 : "Virement bancaire — Banque émettrice, référence de virement" */}
+              {modePaiement === "VIREMENT" && (
+                <div className="space-y-3">
+                  <div>
+                    <Label htmlFor="statut-virement-banque">Banque émettrice</Label>
+                    <Input id="statut-virement-banque" value={banque} onChange={(e) => setBanque(e.target.value)} className="mt-1" />
+                  </div>
+                  <div>
+                    <Label htmlFor="statut-virement-reference">Référence de virement</Label>
+                    <Input
+                      id="statut-virement-reference"
+                      value={referenceVirement}
+                      onChange={(e) => setReferenceVirement(e.target.value)}
+                      className="mt-1"
+                    />
+                  </div>
+                </div>
+              )}
+            </>
           )}
           {statutCible === "LIVRE" && dossier.facture?.statut === "VALIDEE" && (
             <p className="text-sm text-muted-foreground">Facture déjà encaissée.</p>

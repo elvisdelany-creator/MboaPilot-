@@ -13,7 +13,7 @@ export interface RecuVente {
   numeroAbonnement: number | null;
   lignes: LigneRecu[];
   total: number;
-  modePaiement: "CASH" | "MOBILE_MONEY";
+  modePaiement: "CASH" | "CHEQUE" | "VIREMENT" | "MOBILE_MONEY";
   montantEncaisse: number;
   dateHeure: string;
 }
@@ -26,7 +26,12 @@ interface Props {
 
 const formateurFcfa = new Intl.NumberFormat("fr-FR");
 const formateurDateHeure = new Intl.DateTimeFormat("fr-FR", { dateStyle: "short", timeStyle: "short" });
-const LIBELLE_MODE_PAIEMENT: Record<"CASH" | "MOBILE_MONEY", string> = { CASH: "Comptant", MOBILE_MONEY: "Mobile Money" };
+const LIBELLE_MODE_PAIEMENT: Record<"CASH" | "CHEQUE" | "VIREMENT" | "MOBILE_MONEY", string> = {
+  CASH: "Comptant",
+  CHEQUE: "Chèque",
+  VIREMENT: "Virement bancaire",
+  MOBILE_MONEY: "Mobile Money",
+};
 
 // 6.7, 9.2 : ticket de caisse — édité immédiatement au comptoir après
 // encaissement. Mise en page pensée pour une imprimante thermique 80mm

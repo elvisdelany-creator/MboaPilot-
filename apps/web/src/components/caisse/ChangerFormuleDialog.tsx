@@ -12,7 +12,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { changerFormuleRequete, ErreurAuthentification } from "@/lib/api";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { changerFormuleRequete, ErreurAuthentification, type ModePaiementEncaissement } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import type { Formule } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -40,6 +41,14 @@ export function ChangerFormuleDialog({ numeroAbonnement, formuleActuelle, formul
   const [montantEncaisse, setMontantEncaisse] = useState(0);
   const [enCours, setEnCours] = useState(false);
 
+  // 6.5 : moyen de paiement de l'encaissement
+  const [modePaiement, setModePaiement] = useState<ModePaiementEncaissement>("CASH");
+  const [banque, setBanque] = useState("");
+  const [numeroCheque, setNumeroCheque] = useState("");
+  const [titulaireCheque, setTitulaireCheque] = useState("");
+  const [dateCheque, setDateCheque] = useState("");
+  const [referenceVirement, setReferenceVirement] = useState("");
+
   const ouvert = numeroAbonnement !== null;
 
   const candidats = formuleActuelle
@@ -54,6 +63,12 @@ export function ChangerFormuleDialog({ numeroAbonnement, formuleActuelle, formul
     if (!ouvert) {
       setIdFormuleChoisie(null);
       setMontantEncaisse(0);
+      setModePaiement("CASH");
+      setBanque("");
+      setNumeroCheque("");
+      setTitulaireCheque("");
+      setDateCheque("");
+      setReferenceVirement("");
     }
   }, [ouvert]);
 
@@ -70,6 +85,12 @@ export function ChangerFormuleDialog({ numeroAbonnement, formuleActuelle, formul
         userId: utilisateur.idUser,
         idNouvelleFormule: choix.formule.idFormule,
         montantEncaisse,
+        modePaiement,
+        banque: modePaiement === "CHEQUE" || modePaiement === "VIREMENT" ? banque : undefined,
+        numeroCheque: modePaiement === "CHEQUE" ? numeroCheque : undefined,
+        titulaireCheque: modePaiement === "CHEQUE" ? titulaireCheque : undefined,
+        dateCheque: modePaiement === "CHEQUE" ? dateCheque : undefined,
+        referenceVirement: modePaiement === "VIREMENT" ? referenceVirement : undefined,
       });
       toast.success(
         resultat.statutFacture === "VALIDEE"
@@ -125,7 +146,23 @@ export function ChangerFormuleDialog({ numeroAbonnement, formuleActuelle, formul
 
           {choix && (
             <div>
-              <Label htmlFor="migration-encaisse">Montant encaissé (comptant)</Label>
+              <Label htmlFor="mode-paiement-migration">Mode de paiement</Label>
+              <Select value={modePaiement} onValueChange={(v) => setModePaiement(v as ModePaiementEncaissement)}>
+                <SelectTrigger id="mode-paiement-migration" className="mt-1 w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="CASH">Comptant (cash)</SelectItem>
+                  <SelectItem value="CHEQUE">Chèque</SelectItem>
+                  <SelectItem value="VIREMENT">Virement bancaire</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          {choix && (
+            <div>
+              <Label htmlFor="migration-encaisse">Montant encaissé</Label>
               <Input
                 id="migration-encaisse"
                 type="number"
@@ -141,13 +178,68 @@ export function ChangerFormuleDialog({ numeroAbonnement, formuleActuelle, formul
               )}
             </div>
           )}
+
+          {/* 6.5 : "Chèque — Banque, numéro de chèque, titulaire, date" */}
+          {choix && modePaiement === "CHEQUE" && (
+            <div className="space-y-3">
+              <div>
+                <Label htmlFor="cheque-banque-migration">Banque</Label>
+                <Input id="cheque-banque-migration" value={banque} onChange={(e) => setBanque(e.target.value)} className="mt-1" />
+              </div>
+              <div>
+                <Label htmlFor="cheque-numero-migration">Numéro de chèque</Label>
+                <Input id="cheque-numero-migration" value={numeroCheque} onChange={(e) => setNumeroCheque(e.target.value)} className="mt-1" />
+              </div>
+              <div>
+                <Label htmlFor="cheque-titulaire-migration">Titulaire</Label>
+                <Input
+                  id="cheque-titulaire-migration"
+                  value={titulaireCheque}
+                  onChange={(e) => setTitulaireCheque(e.target.value)}
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <Label htmlFor="cheque-date-migration">Date</Label>
+                <Input id="cheque-date-migration" type="date" value={dateCheque} onChange={(e) => setDateCheque(e.target.value)} className="mt-1" />
+              </div>
+            </div>
+          )}
+
+          {/* 6.5 : "Virement bancaire — Banque émettrice, référence de virement" */}
+          {choix && modePaiement === "VIREMENT" && (
+            <div className="space-y-3">
+              <div>
+                <Label htmlFor="virement-banque-migration">Banque émettrice</Label>
+                <Input id="virement-banque-migration" value={banque} onChange={(e) => setBanque(e.target.value)} className="mt-1" />
+              </div>
+              <div>
+                <Label htmlFor="virement-reference-migration">Référence de virement</Label>
+                <Input
+                  id="virement-reference-migration"
+                  value={referenceVirement}
+                  onChange={(e) => setReferenceVirement(e.target.value)}
+                  className="mt-1"
+                />
+              </div>
+            </div>
+          )}
         </div>
 
         <DialogFooter>
           <Button variant="outline" className="cursor-pointer" onClick={onFerme}>
             Annuler
           </Button>
-          <Button className="cursor-pointer" disabled={!choix || enCours} onClick={valider}>
+          <Button
+            className="cursor-pointer"
+            disabled={
+              !choix ||
+              enCours ||
+              (modePaiement === "CHEQUE" && !(banque.trim() && numeroCheque.trim() && titulaireCheque.trim() && dateCheque)) ||
+              (modePaiement === "VIREMENT" && !(banque.trim() && referenceVirement.trim()))
+            }
+            onClick={valider}
+          >
             {enCours ? "Migration…" : "Confirmer la migration"}
           </Button>
         </DialogFooter>

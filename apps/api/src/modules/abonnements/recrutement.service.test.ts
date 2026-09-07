@@ -122,6 +122,52 @@ describe("recruterAbonne (7.1)", () => {
     expect(suivis[0].dateFinProbatoire).toBe("2026-03-15");
   });
 
+  // 6.5 : "Chèque — Banque, numéro de chèque, titulaire, date"
+  it("recrutement payé par chèque -> le paiement enregistre le mode et les champs propres au chèque", () => {
+    const resultat = recruterAbonne(db, {
+      siteId,
+      userId,
+      aujourdHui: "2025-11-16",
+      abonne: { nom: "Nga Ndongo", prenom: "Valentin", telephone: "690000000" },
+      idFormule: formuleToutCanalPlus,
+      montantEncaisse: 28000,
+      modePaiement: "CHEQUE",
+      banque: "Afriland First Bank",
+      numeroCheque: "0012345",
+      titulaireCheque: "Valentin Nga Ndongo",
+      dateCheque: "2025-11-16",
+    });
+
+    const paiements = db.select().from(schema.paiement).where(eq(schema.paiement.idFacture, resultat.idFacture)).all();
+    expect(paiements).toHaveLength(1);
+    expect(paiements[0].mode).toBe("CHEQUE");
+    expect(paiements[0].banque).toBe("Afriland First Bank");
+    expect(paiements[0].numeroCheque).toBe("0012345");
+    expect(paiements[0].titulaireCheque).toBe("Valentin Nga Ndongo");
+    expect(paiements[0].dateCheque).toBe("2025-11-16");
+  });
+
+  // 6.5 : "Virement bancaire — Banque émettrice, référence de virement"
+  it("recrutement payé par virement -> le paiement enregistre le mode et la référence de virement", () => {
+    const resultat = recruterAbonne(db, {
+      siteId,
+      userId,
+      aujourdHui: "2025-11-16",
+      abonne: { nom: "Nga Ndongo", prenom: "Valentin", telephone: "690000000" },
+      idFormule: formuleToutCanalPlus,
+      montantEncaisse: 28000,
+      modePaiement: "VIREMENT",
+      banque: "Ecobank",
+      referenceVirement: "VIR-2025-000512",
+    });
+
+    const paiements = db.select().from(schema.paiement).where(eq(schema.paiement.idFacture, resultat.idFacture)).all();
+    expect(paiements).toHaveLength(1);
+    expect(paiements[0].mode).toBe("VIREMENT");
+    expect(paiements[0].banque).toBe("Ecobank");
+    expect(paiements[0].referenceVirement).toBe("VIR-2025-000512");
+  });
+
   it("applique le taux de l'apporteur référent plutôt que le taux vendeur par défaut, quand les deux sont configurés", () => {
     db.update(schema.entreprise).set({ tauxCommissionVendeurDefaut: 100 }).run(); // 10 %
     const apporteur = creerApporteur(db, { nom: "Jean Apporteur", tauxCommissionDefaut: 200 }); // 20 %

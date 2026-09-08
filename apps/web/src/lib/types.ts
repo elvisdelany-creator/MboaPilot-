@@ -78,6 +78,9 @@ export interface InfosEntreprise {
     jalonAlerteUrgent: number;
     jalonAlerteModere: number;
     jalonAlerteAnticipe: number;
+    // 4.4, 8.8 : durée (jours) de rétention des abonnements EXPIRE dans la
+    // liste dédiée du tableau de bord (défaut 90)
+    dureeRetentionExpiresJours: number;
   };
   site: { idSite: number; nom: string; adresse: string | null };
 }
@@ -123,6 +126,16 @@ export interface AlerteEcheance {
   rang: 1 | 2 | 3;
   joursRestants: number;
   dateFin: string;
+  abonne: Abonne;
+  formule: Formule;
+}
+
+// 4.4, 8.8 : liste dédiée « Abonnements expirés » du tableau de bord, pour
+// les campagnes de reconquête — bornée par une durée de rétention paramétrable
+export interface AbonnementExpire {
+  numeroAbonnement: number;
+  dateFin: string;
+  joursDepuisExpiration: number;
   abonne: Abonne;
   formule: Formule;
 }

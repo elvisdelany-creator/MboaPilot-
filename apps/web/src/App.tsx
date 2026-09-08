@@ -11,7 +11,7 @@ import { StockPage } from "@/components/stock/StockPage";
 import { ClientsPage } from "@/components/clients/ClientsPage";
 import { AdministrationPage } from "@/components/administration/AdministrationPage";
 import type { Vue } from "@/components/layout/AppHeader";
-import type { Abonne, AlerteEcheance } from "@/lib/types";
+import type { Abonne, AbonnementExpire, AlerteEcheance } from "@/lib/types";
 
 type EtatVue =
   | { nom: "dashboard" }
@@ -42,6 +42,12 @@ function Contenu() {
     setVue({ nom: "caisse", abonneInitial: alerte.abonne, idFamilleInitiale: alerte.formule.idFamille });
   }
 
+  // 4.4 : « réabonner » depuis la liste des abonnements expirés — même
+  // parcours que le réabonnement en un clic sur une alerte à échéance
+  function reabonnerDepuisExpire(abonnement: AbonnementExpire) {
+    setVue({ nom: "caisse", abonneInitial: abonnement.abonne, idFamilleInitiale: abonnement.formule.idFamille });
+  }
+
   // 9.4 : réabonner depuis l'onglet Abonnements de la fiche 360° — même
   // parcours que le réabonnement en un clic du tableau de bord (4.4, 7.2)
   function reabonnerDepuisFiche(abonne: Abonne, idFamille: number) {
@@ -49,7 +55,7 @@ function Contenu() {
   }
 
   if (vue.nom === "dashboard") {
-    return <DashboardPage onNaviguer={naviguer} onReabonnerDepuisAlerte={reabonnerDepuisAlerte} />;
+    return <DashboardPage onNaviguer={naviguer} onReabonnerDepuisAlerte={reabonnerDepuisAlerte} onReabonnerDepuisExpire={reabonnerDepuisExpire} />;
   }
 
   if (vue.nom === "sav") {

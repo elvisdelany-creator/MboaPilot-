@@ -34,6 +34,7 @@ export function ParametresTab() {
   const [jalonUrgent, setJalonUrgent] = useState("1");
   const [jalonModere, setJalonModere] = useState("3");
   const [jalonAnticipe, setJalonAnticipe] = useState("7");
+  const [dureeRetentionExpires, setDureeRetentionExpires] = useState("90");
   const [enCours, setEnCours] = useState(false);
   const [enCoursJalons, setEnCoursJalons] = useState(false);
   const [sauvegardes, setSauvegardes] = useState<Sauvegarde[]>([]);
@@ -58,6 +59,7 @@ export function ParametresTab() {
         setJalonUrgent(String(infos.entreprise.jalonAlerteUrgent));
         setJalonModere(String(infos.entreprise.jalonAlerteModere));
         setJalonAnticipe(String(infos.entreprise.jalonAlerteAnticipe));
+        setDureeRetentionExpires(String(infos.entreprise.dureeRetentionExpiresJours));
       })
       .catch((e) => gererErreur(e, "Impossible de charger les paramètres de l'entreprise."));
   }
@@ -119,6 +121,7 @@ export function ParametresTab() {
         jalonAlerteUrgent: Number(jalonUrgent),
         jalonAlerteModere: Number(jalonModere),
         jalonAlerteAnticipe: Number(jalonAnticipe),
+        dureeRetentionExpiresJours: Number(dureeRetentionExpires),
       });
       toast.success("Jalons d'alerte enregistrés.");
       rechargerEntreprise();
@@ -203,6 +206,21 @@ export function ParametresTab() {
             <Label htmlFor="parametres-jalon-anticipe">Anticipé (ambre)</Label>
             <Input id="parametres-jalon-anticipe" type="number" min={1} value={jalonAnticipe} onChange={(e) => setJalonAnticipe(e.target.value)} className="mt-1" />
           </div>
+        </div>
+        <div>
+          <Label htmlFor="parametres-duree-retention">Durée de rétention des abonnements expirés (jours)</Label>
+          <Input
+            id="parametres-duree-retention"
+            type="number"
+            min={1}
+            value={dureeRetentionExpires}
+            onChange={(e) => setDureeRetentionExpires(e.target.value)}
+            className="mt-1 max-w-32"
+          />
+          <p className="mt-1 text-xs text-muted-foreground">
+            Durée pendant laquelle un abonnement expiré reste visible dans la liste « Abonnements expirés » du tableau de bord, pour les
+            campagnes de reconquête — 90 jours par défaut.
+          </p>
         </div>
         <Button className="w-fit cursor-pointer" disabled={enCoursJalons} onClick={enregistrerJalons}>
           {enCoursJalons ? "Enregistrement…" : "Enregistrer"}

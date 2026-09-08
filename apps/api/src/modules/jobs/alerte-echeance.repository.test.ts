@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { eq } from "drizzle-orm";
 import { creerDbTest, type Db } from "../../test-utils/db.js";
-import { listerAlertesEcheance } from "./alerte-echeance.repository.js";
+import { listerAbonnementsExpires, listerAlertesEcheance } from "./alerte-echeance.repository.js";
 import * as schema from "../../db/schema.js";
 
 let db: Db;
@@ -104,5 +104,67 @@ describe("listerAlertesEcheance — liste vivante des abonnements à échéance 
     expect(alertes).toHaveLength(1);
     expect(alertes[0].jalon).toBe(10);
     expect(alertes[0].rang).toBe(3);
+  });
+});
+
+// 4.4 : liste dédiée « Abonnements expirés » du tableau de bord, pour les
+// campagnes de reconquête — bornée par la durée de rétention paramétrable (8.8)
+describe("listerAbonnementsExpires (4.4, 8.8)", () => {
+  it("liste un abonnement EXPIRE avec le nombre de jours depuis l'expiration, cloisonné par site", () => {
+    creerAbonnement(siteId, "2025-10-01", "EXPIRE"); // expiré depuis 15 jours au 2025-10-16
+    creerAbonnement(autreSiteId, "2025-10-01", "EXPIRE"); // autre site, ne doit pas apparaître
+
+    const expires = listerAbonnementsExpires(db, siteId, "2025-10-16");
+
+    expect(expires).toHaveLength(1);
+    expect(expires[0].joursDepuisExpiration).toBe(15);
+    expect(expires[0].abonne.nom).toBe("Nga Ndongo");
+    expect(expires[0].formule.idFamille).toBe(idFamille);
+  });
+
+  it("exclut les abonnements ACTIF ou RESILIE", () => {
+    creerAbonnement(siteId, "2025-10-01", "ACTIF");
+    creerAbonnement(siteId, "2025-10-01", "RESILIE");
+
+    const expires = listerAbonnementsExpires(db, siteId, "2025-10-16");
+
+    expect(expires).toHaveLength(0);
+  });
+
+  it("8.8 : exclut un abonnement expiré au-delà de la durée de rétention configurée", () => {
+    db.update(schema.entreprise).set({ dureeRetentionExpiresJours: 10 }).run();
+    creerAbonnement(siteId, "2025-10-01", "EXPIRE"); // 15 jours d'ancienneté au 2025-10-16 > 10
+
+    const expires = listerAbonnementsExpires(db, siteId, "2025-10-16");
+
+    expect(expires).toHaveLength(0);
+  });
+
+  it("filtre par famille quand idFamille est fourni", () => {
+    const idAutreFamille = db.insert(schema.familleAbonnement).values({ libelle: "DSTV" }).returning().get().idFamille;
+    const idAutreFormule = db
+      .insert(schema.formule)
+      .values({ idFamille: idAutreFamille, libelle: "COMPAQ", prix: 13000, rang: 1 })
+      .returning()
+      .get().idFormule;
+    creerAbonnement(siteId, "2025-10-01", "EXPIRE");
+    const abonneAutreFamille = db.insert(schema.abonne).values({ siteId, nom: "Ekwalla", prenom: "Sarah", telephone: "690000001" }).returning().get();
+    db.insert(schema.abonnement)
+      .values({ idAbonne: abonneAutreFamille.idAbonne, idFormule: idAutreFormule, siteId, dateDebut: "2025-09-01", dateFin: "2025-10-01", statut: "EXPIRE", creePar: userId })
+      .run();
+
+    const expires = listerAbonnementsExpires(db, siteId, "2025-10-16", idAutreFamille);
+
+    expect(expires).toHaveLength(1);
+    expect(expires[0].abonne.nom).toBe("Ekwalla");
+  });
+
+  it("trie par ancienneté d'expiration, la plus récente en premier", () => {
+    creerAbonnement(siteId, "2025-10-10", "EXPIRE"); // 6 jours
+    creerAbonnement(siteId, "2025-09-20", "EXPIRE"); // 26 jours
+
+    const expires = listerAbonnementsExpires(db, siteId, "2025-10-16");
+
+    expect(expires.map((e) => e.joursDepuisExpiration)).toEqual([6, 26]);
   });
 });

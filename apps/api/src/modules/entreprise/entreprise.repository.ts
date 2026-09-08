@@ -15,6 +15,7 @@ export interface InfosEntreprise {
     jalonAlerteUrgent: number;
     jalonAlerteModere: number;
     jalonAlerteAnticipe: number;
+    dureeRetentionExpiresJours: number;
   };
   site: { idSite: number; nom: string; adresse: string | null };
 }
@@ -39,6 +40,7 @@ export function trouverInfosEntrepriseParSite(db: Db, siteId: number): InfosEntr
       jalonAlerteUrgent: entreprise.jalonAlerteUrgent,
       jalonAlerteModere: entreprise.jalonAlerteModere,
       jalonAlerteAnticipe: entreprise.jalonAlerteAnticipe,
+      dureeRetentionExpiresJours: entreprise.dureeRetentionExpiresJours,
     },
     site: { idSite: site.idSite, nom: site.nom, adresse: site.adresse },
   };
@@ -76,6 +78,18 @@ export function trouverJalonsAlerteEntreprise(db: Db): JalonsAlerte {
   return { urgent: entreprise.jalonAlerteUrgent, modere: entreprise.jalonAlerteModere, anticipe: entreprise.jalonAlerteAnticipe };
 }
 
+const DUREE_RETENTION_EXPIRES_PAR_DEFAUT = 90;
+
+// 4.4, 8.8 : durée (jours) pendant laquelle un abonnement EXPIRE reste
+// visible dans la liste dédiée du tableau de bord — la valeur par défaut
+// (90 jours) si le site est inconnu, pour la même raison que les jalons d'alerte.
+export function trouverDureeRetentionExpiresParSite(db: Db, siteId: number): number {
+  const site = db.select().from(schema.site).where(eq(schema.site.idSite, siteId)).get();
+  if (!site) return DUREE_RETENTION_EXPIRES_PAR_DEFAUT;
+  const entreprise = db.select().from(schema.entreprise).where(eq(schema.entreprise.idEntreprise, site.idEntreprise)).get();
+  return entreprise?.dureeRetentionExpiresJours ?? DUREE_RETENTION_EXPIRES_PAR_DEFAUT;
+}
+
 export interface ModifierEntrepriseInput {
   tauxTva?: number | null;
   mentionsLegales?: string | null;
@@ -83,6 +97,7 @@ export interface ModifierEntrepriseInput {
   jalonAlerteUrgent?: number;
   jalonAlerteModere?: number;
   jalonAlerteAnticipe?: number;
+  dureeRetentionExpiresJours?: number;
 }
 
 // 6.1, 6.2, 4.4, 8.8 : paramétrage des taxes applicables (le cas échéant),
@@ -102,6 +117,10 @@ export function modifierEntreprise(db: Db, idEntreprise: number, input: Modifier
     }
   }
 
+  if (input.dureeRetentionExpiresJours !== undefined && input.dureeRetentionExpiresJours < 1) {
+    throw new Error("La durée de rétention des abonnements expirés doit être d'au moins 1 jour");
+  }
+
   return db
     .update(schema.entreprise)
     .set({
@@ -111,6 +130,7 @@ export function modifierEntreprise(db: Db, idEntreprise: number, input: Modifier
       ...(input.jalonAlerteUrgent !== undefined && { jalonAlerteUrgent }),
       ...(input.jalonAlerteModere !== undefined && { jalonAlerteModere }),
       ...(input.jalonAlerteAnticipe !== undefined && { jalonAlerteAnticipe }),
+      ...(input.dureeRetentionExpiresJours !== undefined && { dureeRetentionExpiresJours: input.dureeRetentionExpiresJours }),
     })
     .where(eq(schema.entreprise.idEntreprise, idEntreprise))
     .returning()

@@ -1,6 +1,12 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { creerDbTest, type Db } from "../../test-utils/db.js";
-import { modifierEntreprise, trouverInfosEntrepriseParSite, trouverJalonsAlerteParSite, trouverTauxCommissionVendeurParSite } from "./entreprise.repository.js";
+import {
+  modifierEntreprise,
+  trouverDureeRetentionExpiresParSite,
+  trouverInfosEntrepriseParSite,
+  trouverJalonsAlerteParSite,
+  trouverTauxCommissionVendeurParSite,
+} from "./entreprise.repository.js";
 import * as schema from "../../db/schema.js";
 
 let db: Db;
@@ -57,6 +63,51 @@ describe("modifierEntreprise (6.1, 8.8)", () => {
     const modifiee = modifierEntreprise(db, ent.idEntreprise, { tauxCommissionVendeurDefaut: 100 });
 
     expect(modifiee?.tauxCommissionVendeurDefaut).toBe(100);
+  });
+});
+
+// 4.4, 8.8 : durée de rétention des abonnements EXPIRE dans la liste dédiée
+// du tableau de bord (campagnes de reconquête), paramétrable, 90 jours par défaut
+describe("modifierEntreprise — durée de rétention des abonnements expirés (4.4, 8.8)", () => {
+  it("la durée par défaut est de 90 jours", () => {
+    const ent = db.insert(schema.entreprise).values({ nom: "Boutique Test" }).returning().get();
+    const infos = trouverInfosEntrepriseParSite(db, db.insert(schema.site).values({ idEntreprise: ent.idEntreprise, nom: "Site A" }).returning().get().idSite);
+    expect(infos?.entreprise.dureeRetentionExpiresJours).toBe(90);
+  });
+
+  it("définit une durée personnalisée", () => {
+    const ent = db.insert(schema.entreprise).values({ nom: "Boutique Test" }).returning().get();
+
+    const modifiee = modifierEntreprise(db, ent.idEntreprise, { dureeRetentionExpiresJours: 120 });
+
+    expect(modifiee?.dureeRetentionExpiresJours).toBe(120);
+  });
+
+  it("rejette une durée inférieure à 1 jour", () => {
+    const ent = db.insert(schema.entreprise).values({ nom: "Boutique Test" }).returning().get();
+
+    expect(() => modifierEntreprise(db, ent.idEntreprise, { dureeRetentionExpiresJours: 0 })).toThrow(/au moins 1 jour/);
+  });
+});
+
+describe("trouverDureeRetentionExpiresParSite (4.4, 8.8)", () => {
+  it("renvoie 90 jours par défaut quand rien n'est configuré", () => {
+    const ent = db.insert(schema.entreprise).values({ nom: "Boutique Test" }).returning().get();
+    const site = db.insert(schema.site).values({ idEntreprise: ent.idEntreprise, nom: "Site A" }).returning().get();
+
+    expect(trouverDureeRetentionExpiresParSite(db, site.idSite)).toBe(90);
+  });
+
+  it("renvoie la durée personnalisée configurée pour l'entreprise du site", () => {
+    const ent = db.insert(schema.entreprise).values({ nom: "Boutique Test" }).returning().get();
+    const site = db.insert(schema.site).values({ idEntreprise: ent.idEntreprise, nom: "Site A" }).returning().get();
+    modifierEntreprise(db, ent.idEntreprise, { dureeRetentionExpiresJours: 30 });
+
+    expect(trouverDureeRetentionExpiresParSite(db, site.idSite)).toBe(30);
+  });
+
+  it("renvoie 90 jours par défaut pour un site inconnu", () => {
+    expect(trouverDureeRetentionExpiresParSite(db, 999999)).toBe(90);
   });
 });
 

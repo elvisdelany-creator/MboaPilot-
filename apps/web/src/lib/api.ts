@@ -1,4 +1,5 @@
 import type {
+  AbonnementExpire,
   AlerteEcheance,
   Abonne,
   Abonnement,
@@ -177,6 +178,15 @@ export async function chargerAbonnementsAbonne(token: string, idAbonne: number):
 export async function chargerAlertesEcheance(token: string, siteId: number): Promise<AlerteEcheance[]> {
   const reponse = await fetch(`${BASE}/alertes-echeance?siteId=${siteId}`, { headers: headersAuth(token) });
   return lireJson<AlerteEcheance[]>(reponse);
+}
+
+// 4.4, 8.8 : liste dédiée « Abonnements expirés » du tableau de bord,
+// filtrable par famille — bornée par la durée de rétention paramétrable
+export async function chargerAbonnementsExpires(token: string, siteId: number, idFamille?: number): Promise<AbonnementExpire[]> {
+  const params = new URLSearchParams({ siteId: String(siteId) });
+  if (idFamille !== undefined) params.set("idFamille", String(idFamille));
+  const reponse = await fetch(`${BASE}/abonnements-expires?${params}`, { headers: headersAuth(token) });
+  return lireJson<AbonnementExpire[]>(reponse);
 }
 
 // 6.5 : moyen de paiement de l'encaissement — comptant par défaut ; le
@@ -962,6 +972,7 @@ export async function modifierEntrepriseRequete(
     jalonAlerteUrgent?: number;
     jalonAlerteModere?: number;
     jalonAlerteAnticipe?: number;
+    dureeRetentionExpiresJours?: number;
   }
 ): Promise<InfosEntreprise["entreprise"]> {
   const reponse = await fetch(`${BASE}/entreprise`, {

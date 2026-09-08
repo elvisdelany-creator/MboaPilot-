@@ -374,6 +374,68 @@ describe("GET /api/v1/alertes-echeance", () => {
   });
 });
 
+describe("GET /api/v1/abonnements-expires (4.4, 8.8)", () => {
+  it("liste un abonnement EXPIRE dans la fenêtre de rétention, avec le nombre de jours écoulés", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const token = await connecter(app);
+
+    const abonne = db.insert(schema.abonne).values({ siteId, nom: "Nga", prenom: "Paul", telephone: "690000000" }).returning().get();
+    const dateFin = new Date();
+    dateFin.setDate(dateFin.getDate() - 10);
+    db.insert(schema.abonnement)
+      .values({
+        idAbonne: abonne.idAbonne,
+        idFormule,
+        siteId,
+        dateDebut: "2025-01-01",
+        dateFin: dateFin.toISOString().slice(0, 10),
+        statut: "EXPIRE",
+        creePar: userId,
+      })
+      .run();
+
+    const reponse = await app.inject({ method: "GET", url: `/api/v1/abonnements-expires?siteId=${siteId}`, headers: authHeader(token) });
+
+    expect(reponse.statusCode).toBe(200);
+    expect(reponse.json()).toHaveLength(1);
+    expect(reponse.json()[0].joursDepuisExpiration).toBe(10);
+  });
+
+  it("8.8 : un administrateur réduit la durée de rétention, un abonnement expiré trop ancien disparaît de la liste", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    creerUtilisateur(db, { siteId, nom: "Admin", prenom: "D", identifiant: "admin1", motDePasse: "motdepasse-secret", role: "ADMINISTRATEUR" });
+    const tokenAdmin = await connecter(app, "admin1");
+
+    const abonne = db.insert(schema.abonne).values({ siteId, nom: "Nga", prenom: "Paul", telephone: "690000000" }).returning().get();
+    const dateFin = new Date();
+    dateFin.setDate(dateFin.getDate() - 10);
+    db.insert(schema.abonnement)
+      .values({
+        idAbonne: abonne.idAbonne,
+        idFormule,
+        siteId,
+        dateDebut: "2025-01-01",
+        dateFin: dateFin.toISOString().slice(0, 10),
+        statut: "EXPIRE",
+        creePar: userId,
+      })
+      .run();
+
+    const modification = await app.inject({
+      method: "PATCH",
+      url: "/api/v1/entreprise",
+      headers: authHeader(tokenAdmin),
+      payload: { dureeRetentionExpiresJours: 5 },
+    });
+    expect(modification.statusCode).toBe(200);
+    expect(modification.json().dureeRetentionExpiresJours).toBe(5);
+
+    const reponse = await app.inject({ method: "GET", url: `/api/v1/abonnements-expires?siteId=${siteId}`, headers: authHeader(tokenAdmin) });
+    expect(reponse.statusCode).toBe(200);
+    expect(reponse.json()).toHaveLength(0);
+  });
+});
+
 describe("POST /api/v1/abonnements/:numeroAbonnement/echange-materiel (7.3)", () => {
   it("échange le matériel et renvoie 201", async () => {
     const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });

@@ -2,7 +2,7 @@ import { eq } from "drizzle-orm";
 import { classerUrgenceEcheance, joursAvantEcheance } from "@mboapilot/shared";
 import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
-import { trouverJalonsAlerteParSite } from "../entreprise/entreprise.repository.js";
+import { trouverDureeRetentionExpiresParSite, trouverJalonsAlerteParSite } from "../entreprise/entreprise.repository.js";
 
 export interface AlerteEcheanceDetaillee {
   numeroAbonnement: number;
@@ -45,4 +45,43 @@ export function listerAlertesEcheance(db: Db, siteId: number, aujourdHui: string
     .filter((l): l is typeof l & { classement: NonNullable<typeof l.classement> } => l.classement !== null)
     .map((l) => ({ ...l, jalon: l.classement.jours, rang: l.classement.rang }))
     .sort((a, b) => a.joursRestants - b.joursRestants);
+}
+
+export interface AbonnementExpireDetaille {
+  numeroAbonnement: number;
+  dateFin: string;
+  joursDepuisExpiration: number;
+  abonne: typeof schema.abonne.$inferSelect;
+  formule: typeof schema.formule.$inferSelect;
+}
+
+// 4.4, 8.8 : liste dédiée « Abonnements expirés » du tableau de bord — pour
+// les campagnes de reconquête, bornée par la durée de rétention paramétrable
+// (90 jours par défaut) et filtrable par famille (en plus du site, toujours
+// cloisonnant). Contrairement à listerAlertesEcheance (liste vivante des
+// ACTIF), ne considère que les abonnements déjà passés au statut EXPIRE
+// par le job quotidien (4.3).
+export function listerAbonnementsExpires(db: Db, siteId: number, aujourdHui: string, idFamille?: number): AbonnementExpireDetaille[] {
+  const dureeRetention = trouverDureeRetentionExpiresParSite(db, siteId);
+
+  const lignes = db
+    .select({ abonnement: schema.abonnement, abonne: schema.abonne, formule: schema.formule })
+    .from(schema.abonnement)
+    .innerJoin(schema.abonne, eq(schema.abonnement.idAbonne, schema.abonne.idAbonne))
+    .innerJoin(schema.formule, eq(schema.abonnement.idFormule, schema.formule.idFormule))
+    .where(eq(schema.abonnement.siteId, siteId))
+    .all()
+    .filter((l) => l.abonnement.statut === "EXPIRE")
+    .filter((l) => idFamille === undefined || l.formule.idFamille === idFamille);
+
+  return lignes
+    .map((l) => ({
+      numeroAbonnement: l.abonnement.numeroAbonnement,
+      dateFin: l.abonnement.dateFin,
+      joursDepuisExpiration: -joursAvantEcheance(l.abonnement.dateFin, aujourdHui),
+      abonne: l.abonne,
+      formule: l.formule,
+    }))
+    .filter((l) => l.joursDepuisExpiration <= dureeRetention)
+    .sort((a, b) => a.joursDepuisExpiration - b.joursDepuisExpiration);
 }

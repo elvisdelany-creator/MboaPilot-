@@ -1,0 +1,1 @@
+ALTER TABLE `entreprise` ADD `duree_retention_expires_jours` integer DEFAULT 90 NOT NULL;

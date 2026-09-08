@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { AlertTriangle, PackageX, RotateCw } from "lucide-react";
+import { AlertTriangle, History, PackageX, RotateCw } from "lucide-react";
 import {
+  chargerAbonnementsExpires,
   chargerAlertesEcheance,
   chargerAlertesStock,
   chargerCommissionsCanalplusEnCours,
   chargerEncaissementsJour,
   chargerEvolutionCA,
+  chargerFamilles,
   chargerIndicateursJour,
   chargerValorisationStock,
   ErreurAuthentification,
@@ -15,13 +17,25 @@ import { useAuth } from "@/lib/auth-context";
 import { AppHeader, type Vue } from "@/components/layout/AppHeader";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { EvolutionCaChart } from "./EvolutionCaChart";
-import type { AlerteEcheance, CommissionCanalplusEnCours, IndicateursJour, ModePaiement, PointEvolutionCA, Produit, VentilationPaiement } from "@/lib/types";
+import type {
+  AbonnementExpire,
+  AlerteEcheance,
+  CommissionCanalplusEnCours,
+  Famille,
+  IndicateursJour,
+  ModePaiement,
+  PointEvolutionCA,
+  Produit,
+  VentilationPaiement,
+} from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 interface Props {
   onNaviguer: (vue: Vue) => void;
   onReabonnerDepuisAlerte: (alerte: AlerteEcheance) => void;
+  onReabonnerDepuisExpire: (abonnement: AbonnementExpire) => void;
 }
 
 // 4.4, 8.8 : le rang (1 = le plus urgent) pilote la couleur, indépendamment
@@ -51,13 +65,17 @@ const formateurDateCourte = new Intl.DateTimeFormat("fr-FR", { dateStyle: "short
 // par urgence (J-1 en premier), avec accès direct au réabonnement en un clic.
 // Section de pilotage (8.6) réservée à Administrateur/Gérant/Comptable :
 // KPI du jour, courbe de CA, encaissements, commissions CANAL+ en cours.
-export function DashboardPage({ onNaviguer, onReabonnerDepuisAlerte }: Props) {
+export function DashboardPage({ onNaviguer, onReabonnerDepuisAlerte, onReabonnerDepuisExpire }: Props) {
   const { session, deconnecter } = useAuth();
   const token = session!.token;
   const siteId = session!.utilisateur.siteId;
   const peutPiloter = ["ADMINISTRATEUR", "GERANT", "COMPTABLE"].includes(session!.utilisateur.role);
 
   const [alertes, setAlertes] = useState<AlerteEcheance[] | null>(null);
+  // 4.4, 8.8 : liste dédiée « Abonnements expirés », filtrable par famille
+  const [abonnementsExpires, setAbonnementsExpires] = useState<AbonnementExpire[]>([]);
+  const [familles, setFamilles] = useState<Famille[]>([]);
+  const [idFamilleFiltre, setIdFamilleFiltre] = useState<number | null>(null);
   const [alertesStock, setAlertesStock] = useState<Produit[]>([]);
   const [indicateurs, setIndicateurs] = useState<IndicateursJour | null>(null);
   const [evolutionCA, setEvolutionCA] = useState<PointEvolutionCA[]>([]);
@@ -81,6 +99,10 @@ export function DashboardPage({ onNaviguer, onReabonnerDepuisAlerte }: Props) {
     chargerAlertesEcheance(token, siteId)
       .then(setAlertes)
       .catch((e) => gererErreur(e, "Impossible de charger les alertes."));
+    // 4.4, 8.8 : liste dédiée « Abonnements expirés », filtrable par famille
+    chargerAbonnementsExpires(token, siteId, idFamilleFiltre ?? undefined)
+      .then(setAbonnementsExpires)
+      .catch(() => setAbonnementsExpires([]));
     // 8.6, 9.3 : état des stocks — alertes de rupture
     chargerAlertesStock(token, siteId)
       .then(setAlertesStock)
@@ -106,7 +128,13 @@ export function DashboardPage({ onNaviguer, onReabonnerDepuisAlerte }: Props) {
   }
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(charger, [token, siteId, periodeCA]);
+  useEffect(charger, [token, siteId, periodeCA, idFamilleFiltre]);
+
+  useEffect(() => {
+    chargerFamilles(token)
+      .then(setFamilles)
+      .catch(() => setFamilles([]));
+  }, [token]);
 
   const alertesTriees = useMemo(() => [...(alertes ?? [])].sort((a, b) => a.rang - b.rang), [alertes]);
 
@@ -267,6 +295,60 @@ export function DashboardPage({ onNaviguer, onReabonnerDepuisAlerte }: Props) {
               </li>
             ))}
           </ul>
+
+          <div className="mt-8">
+            <div className="mb-4 flex items-center justify-between gap-2">
+              <h2 className="font-heading text-lg font-semibold text-foreground">Abonnements expirés</h2>
+              <Select
+                value={idFamilleFiltre !== null ? String(idFamilleFiltre) : "toutes"}
+                onValueChange={(v) => setIdFamilleFiltre(v === "toutes" ? null : Number(v))}
+              >
+                <SelectTrigger className="h-8 w-40 text-xs" aria-label="Filtrer par famille">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="toutes">Toutes les familles</SelectItem>
+                  {familles.map((f) => (
+                    <SelectItem key={f.idFamille} value={String(f.idFamille)}>
+                      {f.libelle}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {abonnementsExpires.length === 0 && (
+              <Card className="items-center gap-2 p-8 text-center">
+                <p className="font-medium text-card-foreground">Aucun abonnement expiré à reconquérir.</p>
+              </Card>
+            )}
+
+            <ul className="space-y-2">
+              {abonnementsExpires.map((a) => (
+                <li key={a.numeroAbonnement}>
+                  <Card className="flex-row items-center justify-between gap-4 p-4">
+                    <div className="flex items-center gap-3">
+                      <span className="flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-xs font-semibold text-muted-foreground">
+                        <History className="size-3.5" aria-hidden="true" />
+                        Expiré depuis {a.joursDepuisExpiration} j
+                      </span>
+                      <div>
+                        <p className="font-medium text-card-foreground">
+                          {a.abonne.prenom} {a.abonne.nom}
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          {a.formule.libelle} · {a.abonne.telephone}
+                        </p>
+                      </div>
+                    </div>
+                    <Button className="shrink-0 cursor-pointer" onClick={() => onReabonnerDepuisExpire(a)}>
+                      Réabonner
+                    </Button>
+                  </Card>
+                </li>
+              ))}
+            </ul>
+          </div>
 
           {alertesStock.length > 0 && (
             <div className="mt-8">

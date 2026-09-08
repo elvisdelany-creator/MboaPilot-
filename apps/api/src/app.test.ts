@@ -596,6 +596,72 @@ describe("Module apporteur d'affaires (6.3)", () => {
     expect(reponse.statusCode).toBe(403);
   });
 
+  it("6.3 : un administrateur enregistre un règlement de commission, reflété sur la fiche apporteur", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    creerUtilisateur(db, { siteId, nom: "Admin", prenom: "D", identifiant: "admin1", motDePasse: "motdepasse-secret", role: "ADMINISTRATEUR" });
+    const tokenAdmin = await connecter(app, "admin1");
+
+    const apporteur = (
+      await app.inject({ method: "POST", url: "/api/v1/apporteurs", headers: authHeader(tokenAdmin), payload: { nom: "Jean Apporteur", tauxCommissionDefaut: 500 } })
+    ).json();
+
+    const famille = db.insert(schema.familleAbonnement).values({ libelle: "CANAL+" }).returning().get();
+    const evasion = db.insert(schema.formule).values({ idFamille: famille.idFamille, libelle: "EVASION", prix: 10500, rang: 2 }).returning().get();
+    const recrutement = await app.inject({
+      method: "POST",
+      url: "/api/v1/recrutements",
+      headers: authHeader(tokenAdmin),
+      payload: {
+        siteId,
+        userId,
+        aujourdHui: "2025-11-16",
+        abonne: { nom: "Nga", prenom: "Paul", telephone: "690000000" },
+        idFormule: evasion.idFormule,
+        montantEncaisse: 10500,
+        apporteurId: apporteur.idApporteur,
+      },
+    });
+    expect(recrutement.statusCode).toBe(201);
+    // simule le passage à CONFIRMEE par le job quotidien (6.2), une fois la période probatoire écoulée
+    db.update(schema.suiviCommissionCanalplus)
+      .set({ statut: "CONFIRMEE" })
+      .where(eq(schema.suiviCommissionCanalplus.numeroAbonnement, recrutement.json().numeroAbonnement))
+      .run();
+
+    const reglement = await app.inject({
+      method: "POST",
+      url: `/api/v1/apporteurs/${apporteur.idApporteur}/reglements`,
+      headers: authHeader(tokenAdmin),
+      payload: { montant: 3000, modePaiement: "CASH", utilisateurId: userId },
+    });
+    expect(reglement.statusCode).toBe(201);
+
+    const fiche = await app.inject({ method: "GET", url: `/api/v1/apporteurs/${apporteur.idApporteur}/fiche`, headers: authHeader(tokenAdmin) });
+    expect(fiche.json().montantCommissionConfirmee).toBe(5250); // 50 % de 10500
+    expect(fiche.json().montantCommissionRegle).toBe(3000);
+    expect(fiche.json().soldeCommissionDu).toBe(2250);
+    expect(fiche.json().reglements).toHaveLength(1);
+  });
+
+  it("un caissier ne peut pas enregistrer de règlement de commission (403)", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    creerUtilisateur(db, { siteId, nom: "Admin", prenom: "D", identifiant: "admin1", motDePasse: "motdepasse-secret", role: "ADMINISTRATEUR" });
+    const tokenAdmin = await connecter(app, "admin1");
+    const tokenCaissier = await connecter(app);
+    const apporteur = (
+      await app.inject({ method: "POST", url: "/api/v1/apporteurs", headers: authHeader(tokenAdmin), payload: { nom: "Jean Apporteur" } })
+    ).json();
+
+    const reponse = await app.inject({
+      method: "POST",
+      url: `/api/v1/apporteurs/${apporteur.idApporteur}/reglements`,
+      headers: authHeader(tokenCaissier),
+      payload: { montant: 1000, modePaiement: "CASH", utilisateurId: userId },
+    });
+
+    expect(reponse.statusCode).toBe(403);
+  });
+
   it("un apporteur consulte sa propre fiche mais pas celle d'un autre apporteur", async () => {
     const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
     creerUtilisateur(db, { siteId, nom: "Admin", prenom: "D", identifiant: "admin1", motDePasse: "motdepasse-secret", role: "ADMINISTRATEUR" });

@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import type { Db } from "../../db/types.js";
 import type { Guard, RouteGuards } from "../auth/auth.plugin.js";
 import { creerApporteur, listerApporteurs, modifierApporteur, type CreerApporteurInput, type ModifierApporteurInput } from "./apporteur.repository.js";
-import { construireFicheApporteur } from "./apporteur.service.js";
+import { construireFicheApporteur, enregistrerReglement } from "./apporteur.service.js";
 
 function envoyerErreur(reply: import("fastify").FastifyReply, erreur: unknown) {
   const message = erreur instanceof Error ? erreur.message : "Erreur inconnue";
@@ -63,4 +63,19 @@ export function registerApporteursRoutes(
       }
     }
   );
+
+  // 6.3 : "historique de règlement de ses commissions" — réservé à
+  // l'encadrement, comme la création/édition de l'apporteur lui-même
+  // (jamais l'apporteur lui-même, qui ne fait que consulter sa fiche)
+  app.post<{
+    Params: { idApporteur: string };
+    Body: { montant: number; modePaiement: "CASH" | "CHEQUE" | "VIREMENT" | "MOBILE_MONEY"; reference?: string; utilisateurId: number };
+  }>("/api/v1/apporteurs/:idApporteur/reglements", { preHandler: [guards.authRequis, guards.gestionApporteurs] }, async (request, reply) => {
+    try {
+      const reglement = enregistrerReglement(db, { apporteurId: Number(request.params.idApporteur), ...request.body });
+      reply.code(201).send(reglement);
+    } catch (erreur) {
+      envoyerErreur(reply, erreur);
+    }
+  });
 }

@@ -213,6 +213,20 @@ export const suiviCommissionCanalplus = sqliteTable("suivi_commission_canalplus"
   statut: text("statut", { enum: ["EN_COURS", "CONFIRMEE", "ANNULEE"] }).notNull().default("EN_COURS"),
 });
 
+// 6.3 : "historique de règlement de ses commissions" — trace les paiements
+// effectivement versés à l'apporteur, distincts du suivi CONFIRMEE/ANNULEE
+// (6.2) qui ne fait que constater qu'une commission est due. Le solde restant
+// dû se déduit par différence (confirmé − réglé), jamais stocké directement.
+export const reglementCommission = sqliteTable("reglement_commission", {
+  idReglement: integer("id_reglement").primaryKey({ autoIncrement: true }),
+  apporteurId: integer("apporteur_id").notNull().references(() => sousDistributeur.idApporteur),
+  montant: integer("montant").notNull(),
+  modePaiement: text("mode_paiement", { enum: ["CASH", "CHEQUE", "VIREMENT", "MOBILE_MONEY"] }).notNull(),
+  reference: text("reference"), // n° de chèque/virement/transaction, le cas échéant
+  utilisateurId: integer("utilisateur_id").notNull().references(() => utilisateur.idUser),
+  dateReglement: text("date_reglement").notNull().default(now),
+});
+
 // journal des alertes d'échéance envoyées par le job quotidien (4.4, 8.3).
 export const alerteEcheance = sqliteTable("alerte_echeance", {
   idAlerte: integer("id_alerte").primaryKey({ autoIncrement: true }),

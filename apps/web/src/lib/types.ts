@@ -310,11 +310,27 @@ export interface SuiviCommissionCanalplus {
   statut: StatutCommission;
 }
 
+// 6.3 : "historique de règlement de ses commissions" — paiement effectivement
+// versé à l'apporteur, distinct du simple constat CONFIRMEE/ANNULEE (6.2)
+export interface ReglementCommission {
+  idReglement: number;
+  apporteurId: number;
+  montant: number;
+  modePaiement: ModePaiement;
+  reference: string | null;
+  utilisateurId: number;
+  dateReglement: string;
+}
+
 export interface FicheApporteur {
   apporteur: Apporteur;
   abonnes: Abonne[];
   chiffreAffaires: number;
   commissionsCanalplus: SuiviCommissionCanalplus[];
+  reglements: ReglementCommission[];
+  montantCommissionConfirmee: number;
+  montantCommissionRegle: number;
+  soldeCommissionDu: number;
 }
 
 export type TypeMouvementStock = "ACHAT" | "VENTE" | "CASSE" | "TRANSFERT_ENTREE" | "TRANSFERT_SORTIE" | "INVENTAIRE" | "RETOUR_CLIENT";

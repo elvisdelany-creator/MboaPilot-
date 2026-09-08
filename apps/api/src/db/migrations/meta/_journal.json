@@ -99,6 +99,13 @@
       "when": 1788824128826,
       "tag": "0013_black_pixie",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "6",
+      "when": 1788875830034,
+      "tag": "0014_bitter_squadron_supreme",
+      "breakpoints": true
     }
   ]
 }

@@ -30,6 +30,7 @@ import type {
   PointEvolutionCA,
   Produit,
   RecrutementResultat,
+  ReglementCommission,
   Role,
   Site,
   StatutSav,
@@ -532,6 +533,27 @@ export async function modifierApporteurRequete(
 export async function chargerFicheApporteur(token: string, idApporteur: number): Promise<FicheApporteur> {
   const reponse = await fetch(`${BASE}/apporteurs/${idApporteur}/fiche`, { headers: headersAuth(token) });
   return lireJson<FicheApporteur>(reponse);
+}
+
+// 6.3 : enregistre un règlement de commission versé à l'apporteur
+export interface EnregistrerReglementPayload {
+  montant: number;
+  modePaiement: ModePaiementEncaissement;
+  reference?: string;
+  utilisateurId: number;
+}
+
+export async function enregistrerReglementRequete(
+  token: string,
+  idApporteur: number,
+  payload: EnregistrerReglementPayload
+): Promise<ReglementCommission> {
+  const reponse = await fetch(`${BASE}/apporteurs/${idApporteur}/reglements`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headersAuth(token) },
+    body: JSON.stringify(payload),
+  });
+  return lireJson<ReglementCommission>(reponse);
 }
 
 // 5.2 : suivi de stock — alertes de rupture, historique des mouvements, et

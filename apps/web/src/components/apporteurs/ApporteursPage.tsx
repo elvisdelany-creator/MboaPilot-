@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Plus, Users } from "lucide-react";
-import { chargerApporteurs, chargerFicheApporteur, ErreurAuthentification, modifierApporteurRequete } from "@/lib/api";
+import { chargerApporteurs, chargerFicheApporteur, enregistrerReglementRequete, ErreurAuthentification, modifierApporteurRequete } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { AppHeader, type Vue } from "@/components/layout/AppHeader";
 import { Button } from "@/components/ui/button";
@@ -64,6 +64,19 @@ export function ApporteursPage({ onNaviguer }: Props) {
     }
   }
 
+  // 6.3 : "historique de règlement de ses commissions" — enregistrement d'un
+  // paiement versé à l'apporteur, réservé à la gestion (Administrateur/Gérant)
+  async function enregistrerReglement(payload: { montant: number; modePaiement: "CASH" | "CHEQUE" | "VIREMENT"; reference?: string }) {
+    if (idSelectionne === null) return;
+    try {
+      await enregistrerReglementRequete(token, idSelectionne, { ...payload, utilisateurId: session!.utilisateur.idUser });
+      toast.success("Règlement enregistré.");
+      rechargerFiche(idSelectionne);
+    } catch (erreur) {
+      gererErreur(erreur, "Échec de l'enregistrement du règlement.");
+    }
+  }
+
   return (
     <div className="flex h-dvh flex-col bg-background">
       <AppHeader vueActive="apporteurs" onNaviguer={onNaviguer} />
@@ -106,7 +119,7 @@ export function ApporteursPage({ onNaviguer }: Props) {
 
           {fiche && (
             <div className="mx-auto max-w-2xl space-y-6">
-              <FicheApporteurPanel fiche={fiche} />
+              <FicheApporteurPanel fiche={fiche} onEnregistrerReglement={enregistrerReglement} />
               <Button variant="outline" className="cursor-pointer" onClick={() => basculerActif(fiche.apporteur)}>
                 {fiche.apporteur.actif === 1 ? "Désactiver cet apporteur" : "Réactiver cet apporteur"}
               </Button>

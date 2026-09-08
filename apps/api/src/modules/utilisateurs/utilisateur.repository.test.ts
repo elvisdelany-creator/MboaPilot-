@@ -26,6 +26,24 @@ describe("creerUtilisateur (2.5.1)", () => {
     expect(u.motDePasseHash).not.toBe("motdepasse-secret");
     expect(u.motDePasseHash.length).toBeGreaterThan(20);
   });
+
+  // 11.2, 8.8 : "politique de complexité minimale configurable"
+  it("rejette un mot de passe plus court que la politique par défaut (8 caractères)", () => {
+    expect(() =>
+      creerUtilisateur(db, { siteId, nom: "Nga", prenom: "Valentin", identifiant: "vnga", motDePasse: "court1", role: "CAISSIER" })
+    ).toThrow(/8 caractères/);
+  });
+
+  it("applique une politique personnalisée configurée sur le site", () => {
+    db.update(schema.entreprise).set({ politiqueMdpExigerMajuscule: 1, politiqueMdpExigerChiffre: 1 }).run();
+
+    expect(() =>
+      creerUtilisateur(db, { siteId, nom: "Nga", prenom: "Valentin", identifiant: "vnga", motDePasse: "minusculesansaucunchiffre", role: "CAISSIER" })
+    ).toThrow(/majuscule/);
+
+    const u = creerUtilisateur(db, { siteId, nom: "Nga", prenom: "Valentin", identifiant: "vnga2", motDePasse: "Motdepasse1", role: "CAISSIER" });
+    expect(u.identifiant).toBe("vnga2");
+  });
 });
 
 describe("trouverUtilisateurParIdentifiant", () => {

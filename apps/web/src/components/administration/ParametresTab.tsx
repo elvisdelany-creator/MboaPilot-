@@ -12,6 +12,7 @@ import {
 import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { InfosEntreprise } from "@/lib/types";
@@ -35,8 +36,13 @@ export function ParametresTab() {
   const [jalonModere, setJalonModere] = useState("3");
   const [jalonAnticipe, setJalonAnticipe] = useState("7");
   const [dureeRetentionExpires, setDureeRetentionExpires] = useState("90");
+  const [mdpLongueurMin, setMdpLongueurMin] = useState("8");
+  const [mdpExigerMajuscule, setMdpExigerMajuscule] = useState(false);
+  const [mdpExigerChiffre, setMdpExigerChiffre] = useState(false);
+  const [mdpExigerCaractereSpecial, setMdpExigerCaractereSpecial] = useState(false);
   const [enCours, setEnCours] = useState(false);
   const [enCoursJalons, setEnCoursJalons] = useState(false);
+  const [enCoursMdp, setEnCoursMdp] = useState(false);
   const [sauvegardes, setSauvegardes] = useState<Sauvegarde[]>([]);
   const [exportEnCours, setExportEnCours] = useState(false);
 
@@ -60,6 +66,10 @@ export function ParametresTab() {
         setJalonModere(String(infos.entreprise.jalonAlerteModere));
         setJalonAnticipe(String(infos.entreprise.jalonAlerteAnticipe));
         setDureeRetentionExpires(String(infos.entreprise.dureeRetentionExpiresJours));
+        setMdpLongueurMin(String(infos.entreprise.politiqueMdpLongueurMin));
+        setMdpExigerMajuscule(infos.entreprise.politiqueMdpExigerMajuscule);
+        setMdpExigerChiffre(infos.entreprise.politiqueMdpExigerChiffre);
+        setMdpExigerCaractereSpecial(infos.entreprise.politiqueMdpExigerCaractereSpecial);
       })
       .catch((e) => gererErreur(e, "Impossible de charger les paramètres de l'entreprise."));
   }
@@ -129,6 +139,25 @@ export function ParametresTab() {
       gererErreur(erreur, "Échec de l'enregistrement des jalons.");
     } finally {
       setEnCoursJalons(false);
+    }
+  }
+
+  // 11.2, 8.8 : "politique de complexité minimale configurable" du mot de passe
+  async function enregistrerPolitiqueMdp() {
+    setEnCoursMdp(true);
+    try {
+      await modifierEntrepriseRequete(token, {
+        politiqueMdpLongueurMin: Number(mdpLongueurMin),
+        politiqueMdpExigerMajuscule: mdpExigerMajuscule,
+        politiqueMdpExigerChiffre: mdpExigerChiffre,
+        politiqueMdpExigerCaractereSpecial: mdpExigerCaractereSpecial,
+      });
+      toast.success("Politique de mot de passe enregistrée.");
+      rechargerEntreprise();
+    } catch (erreur) {
+      gererErreur(erreur, "Échec de l'enregistrement de la politique de mot de passe.");
+    } finally {
+      setEnCoursMdp(false);
     }
   }
 
@@ -224,6 +253,41 @@ export function ParametresTab() {
         </div>
         <Button className="w-fit cursor-pointer" disabled={enCoursJalons} onClick={enregistrerJalons}>
           {enCoursJalons ? "Enregistrement…" : "Enregistrer"}
+        </Button>
+      </Card>
+
+      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Politique de mot de passe</p>
+      <Card className="max-w-xl gap-4 p-4">
+        <p className="text-sm text-muted-foreground">
+          Complexité minimale exigée à la création d'un compte utilisateur (11.2) — appliquée par le serveur, pas seulement suggérée à l'écran.
+        </p>
+        <div>
+          <Label htmlFor="parametres-mdp-longueur">Longueur minimale</Label>
+          <Input
+            id="parametres-mdp-longueur"
+            type="number"
+            min={1}
+            value={mdpLongueurMin}
+            onChange={(e) => setMdpLongueurMin(e.target.value)}
+            className="mt-1 max-w-32"
+          />
+        </div>
+        <div className="space-y-2">
+          <label className="flex items-center gap-2 text-sm text-foreground">
+            <Checkbox checked={mdpExigerMajuscule} onCheckedChange={(v) => setMdpExigerMajuscule(v === true)} />
+            Exiger au moins une majuscule
+          </label>
+          <label className="flex items-center gap-2 text-sm text-foreground">
+            <Checkbox checked={mdpExigerChiffre} onCheckedChange={(v) => setMdpExigerChiffre(v === true)} />
+            Exiger au moins un chiffre
+          </label>
+          <label className="flex items-center gap-2 text-sm text-foreground">
+            <Checkbox checked={mdpExigerCaractereSpecial} onCheckedChange={(v) => setMdpExigerCaractereSpecial(v === true)} />
+            Exiger au moins un caractère spécial
+          </label>
+        </div>
+        <Button className="w-fit cursor-pointer" disabled={enCoursMdp} onClick={enregistrerPolitiqueMdp}>
+          {enCoursMdp ? "Enregistrement…" : "Enregistrer"}
         </Button>
       </Card>
 

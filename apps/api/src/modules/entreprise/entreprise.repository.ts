@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm";
-import { JALONS_PAR_DEFAUT, type JalonsAlerte } from "@mboapilot/shared";
+import { JALONS_PAR_DEFAUT, POLITIQUE_MDP_PAR_DEFAUT, type JalonsAlerte, type PolitiqueMotDePasse } from "@mboapilot/shared";
 import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
 
@@ -16,6 +16,10 @@ export interface InfosEntreprise {
     jalonAlerteModere: number;
     jalonAlerteAnticipe: number;
     dureeRetentionExpiresJours: number;
+    politiqueMdpLongueurMin: number;
+    politiqueMdpExigerMajuscule: boolean;
+    politiqueMdpExigerChiffre: boolean;
+    politiqueMdpExigerCaractereSpecial: boolean;
   };
   site: { idSite: number; nom: string; adresse: string | null };
 }
@@ -41,6 +45,10 @@ export function trouverInfosEntrepriseParSite(db: Db, siteId: number): InfosEntr
       jalonAlerteModere: entreprise.jalonAlerteModere,
       jalonAlerteAnticipe: entreprise.jalonAlerteAnticipe,
       dureeRetentionExpiresJours: entreprise.dureeRetentionExpiresJours,
+      politiqueMdpLongueurMin: entreprise.politiqueMdpLongueurMin,
+      politiqueMdpExigerMajuscule: entreprise.politiqueMdpExigerMajuscule === 1,
+      politiqueMdpExigerChiffre: entreprise.politiqueMdpExigerChiffre === 1,
+      politiqueMdpExigerCaractereSpecial: entreprise.politiqueMdpExigerCaractereSpecial === 1,
     },
     site: { idSite: site.idSite, nom: site.nom, adresse: site.adresse },
   };
@@ -90,6 +98,22 @@ export function trouverDureeRetentionExpiresParSite(db: Db, siteId: number): num
   return entreprise?.dureeRetentionExpiresJours ?? DUREE_RETENTION_EXPIRES_PAR_DEFAUT;
 }
 
+// 11.2, 8.8 : politique de complexité minimale du mot de passe configurée
+// pour le site — la politique par défaut (8 caractères, rien d'autre exigé)
+// si le site est inconnu, pour la même raison que les jalons d'alerte.
+export function trouverPolitiqueMotDePasseParSite(db: Db, siteId: number): PolitiqueMotDePasse {
+  const site = db.select().from(schema.site).where(eq(schema.site.idSite, siteId)).get();
+  if (!site) return POLITIQUE_MDP_PAR_DEFAUT;
+  const entreprise = db.select().from(schema.entreprise).where(eq(schema.entreprise.idEntreprise, site.idEntreprise)).get();
+  if (!entreprise) return POLITIQUE_MDP_PAR_DEFAUT;
+  return {
+    longueurMin: entreprise.politiqueMdpLongueurMin,
+    exigerMajuscule: entreprise.politiqueMdpExigerMajuscule === 1,
+    exigerChiffre: entreprise.politiqueMdpExigerChiffre === 1,
+    exigerCaractereSpecial: entreprise.politiqueMdpExigerCaractereSpecial === 1,
+  };
+}
+
 export interface ModifierEntrepriseInput {
   tauxTva?: number | null;
   mentionsLegales?: string | null;
@@ -98,6 +122,10 @@ export interface ModifierEntrepriseInput {
   jalonAlerteModere?: number;
   jalonAlerteAnticipe?: number;
   dureeRetentionExpiresJours?: number;
+  politiqueMdpLongueurMin?: number;
+  politiqueMdpExigerMajuscule?: boolean;
+  politiqueMdpExigerChiffre?: boolean;
+  politiqueMdpExigerCaractereSpecial?: boolean;
 }
 
 // 6.1, 6.2, 4.4, 8.8 : paramétrage des taxes applicables (le cas échéant),
@@ -121,6 +149,10 @@ export function modifierEntreprise(db: Db, idEntreprise: number, input: Modifier
     throw new Error("La durée de rétention des abonnements expirés doit être d'au moins 1 jour");
   }
 
+  if (input.politiqueMdpLongueurMin !== undefined && input.politiqueMdpLongueurMin < 1) {
+    throw new Error("La longueur minimale du mot de passe doit être d'au moins 1 caractère");
+  }
+
   return db
     .update(schema.entreprise)
     .set({
@@ -131,6 +163,12 @@ export function modifierEntreprise(db: Db, idEntreprise: number, input: Modifier
       ...(input.jalonAlerteModere !== undefined && { jalonAlerteModere }),
       ...(input.jalonAlerteAnticipe !== undefined && { jalonAlerteAnticipe }),
       ...(input.dureeRetentionExpiresJours !== undefined && { dureeRetentionExpiresJours: input.dureeRetentionExpiresJours }),
+      ...(input.politiqueMdpLongueurMin !== undefined && { politiqueMdpLongueurMin: input.politiqueMdpLongueurMin }),
+      ...(input.politiqueMdpExigerMajuscule !== undefined && { politiqueMdpExigerMajuscule: input.politiqueMdpExigerMajuscule ? 1 : 0 }),
+      ...(input.politiqueMdpExigerChiffre !== undefined && { politiqueMdpExigerChiffre: input.politiqueMdpExigerChiffre ? 1 : 0 }),
+      ...(input.politiqueMdpExigerCaractereSpecial !== undefined && {
+        politiqueMdpExigerCaractereSpecial: input.politiqueMdpExigerCaractereSpecial ? 1 : 0,
+      }),
     })
     .where(eq(schema.entreprise.idEntreprise, idEntreprise))
     .returning()

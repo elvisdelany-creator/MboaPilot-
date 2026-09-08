@@ -81,6 +81,11 @@ export interface InfosEntreprise {
     // 4.4, 8.8 : durée (jours) de rétention des abonnements EXPIRE dans la
     // liste dédiée du tableau de bord (défaut 90)
     dureeRetentionExpiresJours: number;
+    // 11.2, 8.8 : politique de complexité minimale du mot de passe, configurable
+    politiqueMdpLongueurMin: number;
+    politiqueMdpExigerMajuscule: boolean;
+    politiqueMdpExigerChiffre: boolean;
+    politiqueMdpExigerCaractereSpecial: boolean;
   };
   site: { idSite: number; nom: string; adresse: string | null };
 }

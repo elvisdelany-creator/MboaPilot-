@@ -19,3 +19,4 @@ export { genererPlageJours } from "./plage-jours.js";
 export { peutAffecterEcran } from "./compte-partage-streaming.js";
 export { calculerMontantTaxe } from "./taxe.js";
 export { analyserCsv, construireCsv } from "./csv.js";
+export { validerMotDePasse, POLITIQUE_MDP_PAR_DEFAUT, type PolitiqueMotDePasse } from "./politique-mot-de-passe.js";

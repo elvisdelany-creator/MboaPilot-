@@ -1,7 +1,9 @@
 import { eq } from "drizzle-orm";
 import bcrypt from "bcryptjs";
+import { validerMotDePasse } from "@mboapilot/shared";
 import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
+import { trouverPolitiqueMotDePasseParSite } from "../entreprise/entreprise.repository.js";
 
 const TOURS_HACHAGE = 12;
 
@@ -17,8 +19,14 @@ export interface CreerUtilisateurInput {
   idApporteur?: number; // requis en pratique pour un compte de rôle APPORTEUR (2.5.1, 6.3)
 }
 
-// 2.5.1, 11.2 : mot de passe haché (bcrypt), jamais stocké ni journalisé en clair
+// 2.5.1, 11.2 : mot de passe haché (bcrypt), jamais stocké ni journalisé en
+// clair — validé contre la politique de complexité minimale configurée sur
+// le site (8.8) avant tout hachage.
 export function creerUtilisateur(db: Db, input: CreerUtilisateurInput) {
+  const politique = trouverPolitiqueMotDePasseParSite(db, input.siteId);
+  const erreurs = validerMotDePasse(input.motDePasse, politique);
+  if (erreurs.length > 0) throw new Error(erreurs.join(" — "));
+
   const motDePasseHash = bcrypt.hashSync(input.motDePasse, TOURS_HACHAGE);
   return db
     .insert(schema.utilisateur)

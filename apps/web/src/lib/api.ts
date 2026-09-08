@@ -995,6 +995,10 @@ export async function modifierEntrepriseRequete(
     jalonAlerteModere?: number;
     jalonAlerteAnticipe?: number;
     dureeRetentionExpiresJours?: number;
+    politiqueMdpLongueurMin?: number;
+    politiqueMdpExigerMajuscule?: boolean;
+    politiqueMdpExigerChiffre?: boolean;
+    politiqueMdpExigerCaractereSpecial?: boolean;
   }
 ): Promise<InfosEntreprise["entreprise"]> {
   const reponse = await fetch(`${BASE}/entreprise`, {

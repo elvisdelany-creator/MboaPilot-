@@ -5,6 +5,7 @@ import {
   trouverDureeRetentionExpiresParSite,
   trouverInfosEntrepriseParSite,
   trouverJalonsAlerteParSite,
+  trouverPolitiqueMotDePasseParSite,
   trouverTauxCommissionVendeurParSite,
 } from "./entreprise.repository.js";
 import * as schema from "../../db/schema.js";
@@ -186,5 +187,54 @@ describe("trouverTauxCommissionVendeurParSite (6.2, 8.8)", () => {
 
   it("renvoie null pour un site inconnu", () => {
     expect(trouverTauxCommissionVendeurParSite(db, 999999)).toBeNull();
+  });
+});
+
+// 11.2 : "politique de complexité minimale configurable" du mot de passe
+describe("modifierEntreprise — politique de complexité du mot de passe (11.2, 8.8)", () => {
+  it("la politique par défaut n'exige que 8 caractères", () => {
+    const ent = db.insert(schema.entreprise).values({ nom: "Boutique Test" }).returning().get();
+    const site = db.insert(schema.site).values({ idEntreprise: ent.idEntreprise, nom: "Site A" }).returning().get();
+
+    expect(trouverPolitiqueMotDePasseParSite(db, site.idSite)).toEqual({
+      longueurMin: 8,
+      exigerMajuscule: false,
+      exigerChiffre: false,
+      exigerCaractereSpecial: false,
+    });
+  });
+
+  it("définit une politique personnalisée", () => {
+    const ent = db.insert(schema.entreprise).values({ nom: "Boutique Test" }).returning().get();
+    const site = db.insert(schema.site).values({ idEntreprise: ent.idEntreprise, nom: "Site A" }).returning().get();
+
+    modifierEntreprise(db, ent.idEntreprise, {
+      politiqueMdpLongueurMin: 12,
+      politiqueMdpExigerMajuscule: true,
+      politiqueMdpExigerChiffre: true,
+      politiqueMdpExigerCaractereSpecial: true,
+    });
+
+    expect(trouverPolitiqueMotDePasseParSite(db, site.idSite)).toEqual({
+      longueurMin: 12,
+      exigerMajuscule: true,
+      exigerChiffre: true,
+      exigerCaractereSpecial: true,
+    });
+  });
+
+  it("rejette une longueur minimale inférieure à 1 caractère", () => {
+    const ent = db.insert(schema.entreprise).values({ nom: "Boutique Test" }).returning().get();
+
+    expect(() => modifierEntreprise(db, ent.idEntreprise, { politiqueMdpLongueurMin: 0 })).toThrow(/au moins 1 caractère/);
+  });
+
+  it("renvoie la politique par défaut pour un site inconnu", () => {
+    expect(trouverPolitiqueMotDePasseParSite(db, 999999)).toEqual({
+      longueurMin: 8,
+      exigerMajuscule: false,
+      exigerChiffre: false,
+      exigerCaractereSpecial: false,
+    });
   });
 });

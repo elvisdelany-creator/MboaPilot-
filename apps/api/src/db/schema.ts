@@ -29,6 +29,13 @@ export const entreprise = sqliteTable("entreprise", {
   // visible dans la liste dédiée « Abonnements expirés » du tableau de bord,
   // pour les campagnes de reconquête — paramétrable, 90 jours par défaut
   dureeRetentionExpiresJours: integer("duree_retention_expires_jours").notNull().default(90),
+  // 11.2 : "politique de complexité minimale configurable" du mot de passe —
+  // chaque règle indépendamment activable, désactivée par défaut sauf la
+  // longueur minimale (packages/shared/politique-mot-de-passe.ts)
+  politiqueMdpLongueurMin: integer("politique_mdp_longueur_min").notNull().default(8),
+  politiqueMdpExigerMajuscule: integer("politique_mdp_exiger_majuscule").notNull().default(0),
+  politiqueMdpExigerChiffre: integer("politique_mdp_exiger_chiffre").notNull().default(0),
+  politiqueMdpExigerCaractereSpecial: integer("politique_mdp_exiger_caractere_special").notNull().default(0),
   dateCreation: text("date_creation").notNull().default(now),
 });
 

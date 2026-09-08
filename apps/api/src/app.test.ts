@@ -1540,6 +1540,37 @@ describe("Module gestion des utilisateurs, rôles et sites (8.7)", () => {
     expect(modification.json().role).toBe("GERANT");
   });
 
+  it("11.2, 8.8 : un administrateur configure une politique de mot de passe stricte, appliquée aux créations de compte suivantes", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const tokenAdmin = await connecterAdmin(app);
+
+    const politique = await app.inject({
+      method: "PATCH",
+      url: "/api/v1/entreprise",
+      headers: authHeader(tokenAdmin),
+      payload: { politiqueMdpLongueurMin: 12, politiqueMdpExigerMajuscule: true, politiqueMdpExigerChiffre: true },
+    });
+    expect(politique.statusCode).toBe(200);
+    expect(politique.json().politiqueMdpLongueurMin).toBe(12);
+
+    const refusee = await app.inject({
+      method: "POST",
+      url: "/api/v1/utilisateurs",
+      headers: authHeader(tokenAdmin),
+      payload: { nom: "Nga", prenom: "Valentin", identifiant: "vnga", motDePasse: "tropcourt", role: "CAISSIER" },
+    });
+    expect(refusee.statusCode).toBe(400);
+    expect(refusee.json().erreur).toMatch(/12 caractères/);
+
+    const acceptee = await app.inject({
+      method: "POST",
+      url: "/api/v1/utilisateurs",
+      headers: authHeader(tokenAdmin),
+      payload: { nom: "Nga", prenom: "Valentin", identifiant: "vnga", motDePasse: "Motdepasse123", role: "CAISSIER" },
+    });
+    expect(acceptee.statusCode).toBe(201);
+  });
+
   it("un caissier ne peut ni lister ni créer de compte (403)", async () => {
     const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
     const tokenCaissier = await connecter(app);

@@ -1,6 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
+import { chiffrer, dechiffrer } from "../../config/chiffrement.js";
 
 export interface CreerComptePartageInput {
   siteId: number;
@@ -11,26 +12,39 @@ export interface CreerComptePartageInput {
   nombreEcransMax: number;
 }
 
-// 5.9 : compte fournisseur mutualisé (Netflix, Prime Vidéo, IPTV…) — identifiants
-// stockés en clair (pas de coffre-fort de secrets en mode local, 2.2), la
-// visibilité est restreinte au niveau des routes (11.2) aux rôles de vente.
+// 11.2 : déchiffre à la lecture un compte tel que stocké en base (identifiant
+// et mot de passe chiffrés au repos, 5.9) — la visibilité de la valeur en
+// clair reste par ailleurs restreinte au niveau des routes aux rôles de vente.
+function dechiffrerCompte<T extends { identifiant: string | null; motDePasse: string | null }>(compte: T): T {
+  return {
+    ...compte,
+    identifiant: compte.identifiant !== null ? dechiffrer(compte.identifiant) : null,
+    motDePasse: compte.motDePasse !== null ? dechiffrer(compte.motDePasse) : null,
+  };
+}
+
+// 5.9, 11.2 : compte fournisseur mutualisé (Netflix, Prime Vidéo, IPTV…) —
+// identifiant et mot de passe chiffrés au repos (chiffrement.ts) ; la
+// visibilité en clair reste restreinte au niveau des routes aux rôles de vente.
 export function creerComptePartage(db: Db, input: CreerComptePartageInput) {
-  return db
+  const compte = db
     .insert(schema.comptePartageStreaming)
     .values({
       siteId: input.siteId,
       idFamille: input.idFamille,
       libelle: input.libelle,
-      identifiant: input.identifiant,
-      motDePasse: input.motDePasse,
+      identifiant: input.identifiant !== undefined ? chiffrer(input.identifiant) : undefined,
+      motDePasse: input.motDePasse !== undefined ? chiffrer(input.motDePasse) : undefined,
       nombreEcransMax: input.nombreEcransMax,
     })
     .returning()
     .get();
+  return dechiffrerCompte(compte);
 }
 
 export function trouverComptePartage(db: Db, idComptePartage: number) {
-  return db.select().from(schema.comptePartageStreaming).where(eq(schema.comptePartageStreaming.idComptePartage, idComptePartage)).get();
+  const compte = db.select().from(schema.comptePartageStreaming).where(eq(schema.comptePartageStreaming.idComptePartage, idComptePartage)).get();
+  return compte ? dechiffrerCompte(compte) : undefined;
 }
 
 // un écran se libère dès que l'abonnement individuel qui l'occupait n'est
@@ -47,7 +61,7 @@ export type ComptePartageAvecOccupation = NonNullable<ReturnType<typeof trouverC
 
 export function listerComptesPartages(db: Db, siteId: number) {
   const comptes = db.select().from(schema.comptePartageStreaming).where(eq(schema.comptePartageStreaming.siteId, siteId)).all();
-  return comptes.map((compte) => ({ ...compte, ecransOccupes: compterEcransOccupes(db, compte.idComptePartage) }));
+  return comptes.map((compte) => ({ ...dechiffrerCompte(compte), ecransOccupes: compterEcransOccupes(db, compte.idComptePartage) }));
 }
 
 export interface ModifierComptePartageInput {
@@ -59,18 +73,19 @@ export interface ModifierComptePartageInput {
 }
 
 export function modifierComptePartage(db: Db, idComptePartage: number, input: ModifierComptePartageInput) {
-  return db
+  const compte = db
     .update(schema.comptePartageStreaming)
     .set({
       ...(input.libelle !== undefined && { libelle: input.libelle }),
-      ...(input.identifiant !== undefined && { identifiant: input.identifiant }),
-      ...(input.motDePasse !== undefined && { motDePasse: input.motDePasse }),
+      ...(input.identifiant !== undefined && { identifiant: chiffrer(input.identifiant) }),
+      ...(input.motDePasse !== undefined && { motDePasse: chiffrer(input.motDePasse) }),
       ...(input.nombreEcransMax !== undefined && { nombreEcransMax: input.nombreEcransMax }),
       ...(input.actif !== undefined && { actif: input.actif ? 1 : 0 }),
     })
     .where(eq(schema.comptePartageStreaming.idComptePartage, idComptePartage))
     .returning()
     .get();
+  return compte ? dechiffrerCompte(compte) : undefined;
 }
 
 // 5.9 : fiche du compte partagé — occupants actuels (tous statuts, pour

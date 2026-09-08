@@ -2009,6 +2009,11 @@ describe("Comptes partagés streaming (5.9)", () => {
     expect(liste.json()[0].ecransOccupes).toBe(0);
     expect(liste.json()[0].motDePasse).toBe("secret123");
 
+    // 11.2 : chiffré au repos — jamais en clair dans la base, même si l'API le renvoie déchiffré aux rôles habilités
+    const brut = db.select().from(schema.comptePartageStreaming).where(eq(schema.comptePartageStreaming.idComptePartage, idComptePartage)).get();
+    expect(brut?.motDePasse).not.toContain("secret123");
+    expect(brut?.identifiant).not.toContain("boutique@example.cm");
+
     const recrutement = await app.inject({
       method: "POST",
       url: "/api/v1/recrutements",

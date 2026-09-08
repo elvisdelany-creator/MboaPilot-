@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
+import { eq } from "drizzle-orm";
 import { creerDbTest, type Db } from "../../test-utils/db.js";
 import { creerUtilisateur } from "../utilisateurs/utilisateur.repository.js";
 import { creerAbonne } from "../abonnes/abonne.repository.js";
@@ -8,6 +9,7 @@ import {
   creerComptePartage,
   listerComptesPartages,
   modifierComptePartage,
+  trouverComptePartage,
 } from "./compte-partage.repository.js";
 import * as schema from "../../db/schema.js";
 
@@ -45,6 +47,43 @@ describe("creerComptePartage / listerComptesPartages (5.9)", () => {
     expect(comptes[0].libelle).toBe("Compte Netflix #1");
     expect(comptes[0].ecransOccupes).toBe(0);
     expect(comptes[0].nombreEcransMax).toBe(4);
+  });
+
+  // 11.2 : chiffrement des données sensibles au repos — l'identifiant et le
+  // mot de passe du compte partagé sont déchiffrés de façon transparente à
+  // la lecture, mais jamais stockés en clair dans la base.
+  it("11.2 : déchiffre l'identifiant et le mot de passe à la lecture, mais ne les stocke jamais en clair", () => {
+    const compte = creerComptePartage(db, {
+      siteId,
+      idFamille,
+      libelle: "Compte Netflix #1",
+      identifiant: "boutique@example.cm",
+      motDePasse: "mot-de-passe-secret",
+      nombreEcransMax: 4,
+    });
+
+    const brut = db.select().from(schema.comptePartageStreaming).where(eq(schema.comptePartageStreaming.idComptePartage, compte.idComptePartage)).get();
+    expect(brut?.identifiant).not.toBe("boutique@example.cm");
+    expect(brut?.identifiant).not.toContain("boutique@example.cm");
+    expect(brut?.motDePasse).not.toBe("mot-de-passe-secret");
+    expect(brut?.motDePasse).not.toContain("mot-de-passe-secret");
+
+    const comptes = listerComptesPartages(db, siteId);
+    expect(comptes[0].identifiant).toBe("boutique@example.cm");
+    expect(comptes[0].motDePasse).toBe("mot-de-passe-secret");
+
+    const trouve = trouverComptePartage(db, compte.idComptePartage);
+    expect(trouve?.identifiant).toBe("boutique@example.cm");
+    expect(trouve?.motDePasse).toBe("mot-de-passe-secret");
+  });
+
+  it("11.2 : un compte sans identifiant ni mot de passe (code d'accès IPTV externe) reste utilisable", () => {
+    const compte = creerComptePartage(db, { siteId, idFamille, libelle: "IPTV code externe", nombreEcransMax: 1 });
+
+    const comptes = listerComptesPartages(db, siteId);
+    expect(comptes[0].identifiant).toBeNull();
+    expect(comptes[0].motDePasse).toBeNull();
+    expect(trouverComptePartage(db, compte.idComptePartage)?.identifiant).toBeNull();
   });
 
   it("compte uniquement les abonnements ACTIF comme écrans occupés", () => {

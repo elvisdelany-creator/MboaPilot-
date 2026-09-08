@@ -372,6 +372,44 @@ describe("GET /api/v1/alertes-echeance", () => {
     expect(reponse.statusCode).toBe(200);
     expect(Array.isArray(reponse.json())).toBe(true);
   });
+
+  // 8.6 : "Abonnements à échéance — Listes J-7/J-3/J-1... filtrable par famille et par site"
+  it("8.6 : filtre par famille", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const token = await connecter(app);
+    const familleCanal = db.insert(schema.familleAbonnement).values({ libelle: "CANAL+" }).returning().get();
+    const formuleCanal = db.insert(schema.formule).values({ idFamille: familleCanal.idFamille, libelle: "ACCESS", prix: 5000, rang: 1 }).returning().get();
+
+    const aujourdHui = new Date();
+    const dateFin = new Date(aujourdHui);
+    dateFin.setDate(dateFin.getDate() + 3);
+    const abonneDstv = db.insert(schema.abonne).values({ siteId, nom: "Nga", prenom: "Paul", telephone: "690000000" }).returning().get();
+    db.insert(schema.abonnement)
+      .values({ idAbonne: abonneDstv.idAbonne, idFormule, siteId, dateDebut: aujourdHui.toISOString().slice(0, 10), dateFin: dateFin.toISOString().slice(0, 10), statut: "ACTIF", creePar: userId })
+      .run();
+    const abonneCanal = db.insert(schema.abonne).values({ siteId, nom: "Ekwalla", prenom: "Sarah", telephone: "690000001" }).returning().get();
+    db.insert(schema.abonnement)
+      .values({
+        idAbonne: abonneCanal.idAbonne,
+        idFormule: formuleCanal.idFormule,
+        siteId,
+        dateDebut: aujourdHui.toISOString().slice(0, 10),
+        dateFin: dateFin.toISOString().slice(0, 10),
+        statut: "ACTIF",
+        creePar: userId,
+      })
+      .run();
+
+    const reponse = await app.inject({
+      method: "GET",
+      url: `/api/v1/alertes-echeance?siteId=${siteId}&idFamille=${familleCanal.idFamille}`,
+      headers: authHeader(token),
+    });
+
+    expect(reponse.statusCode).toBe(200);
+    expect(reponse.json()).toHaveLength(1);
+    expect(reponse.json()[0].abonne.nom).toBe("Ekwalla");
+  });
 });
 
 describe("GET /api/v1/abonnements-expires (4.4, 8.8)", () => {

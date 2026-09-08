@@ -13,12 +13,14 @@ export function registerJobsRoutes(app: FastifyInstance, db: Db, guards: RouteGu
     reply.code(200).send(executerJobQuotidien(db, aujourdHui));
   });
 
-  app.get<{ Querystring: { siteId: string } }>(
+  // 8.6 : "Abonnements à échéance — Listes J-7/J-3/J-1... filtrable par famille et par site"
+  app.get<{ Querystring: { siteId: string; idFamille?: string } }>(
     "/api/v1/alertes-echeance",
     { preHandler: [guards.authRequis, guards.ventes] },
     async (request, reply) => {
       const aujourdHui = new Date().toISOString().slice(0, 10);
-      reply.code(200).send(listerAlertesEcheance(db, Number(request.query.siteId), aujourdHui));
+      const idFamille = request.query.idFamille !== undefined ? Number(request.query.idFamille) : undefined;
+      reply.code(200).send(listerAlertesEcheance(db, Number(request.query.siteId), aujourdHui, idFamille));
     }
   );
 

@@ -175,9 +175,12 @@ export async function chargerAbonnementsAbonne(token: string, idAbonne: number):
   return lireJson<Abonnement[]>(reponse);
 }
 
-// 8.6, 9.3 : abonnements à échéance (J-7/J-3/J-1) pour le tableau de bord
-export async function chargerAlertesEcheance(token: string, siteId: number): Promise<AlerteEcheance[]> {
-  const reponse = await fetch(`${BASE}/alertes-echeance?siteId=${siteId}`, { headers: headersAuth(token) });
+// 8.6, 9.3 : abonnements à échéance (J-7/J-3/J-1) pour le tableau de bord,
+// filtrable par famille
+export async function chargerAlertesEcheance(token: string, siteId: number, idFamille?: number): Promise<AlerteEcheance[]> {
+  const params = new URLSearchParams({ siteId: String(siteId) });
+  if (idFamille !== undefined) params.set("idFamille", String(idFamille));
+  const reponse = await fetch(`${BASE}/alertes-echeance?${params}`, { headers: headersAuth(token) });
   return lireJson<AlerteEcheance[]>(reponse);
 }
 

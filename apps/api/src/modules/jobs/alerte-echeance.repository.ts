@@ -20,7 +20,7 @@ export interface AlerteEcheanceDetaillee {
 // abonnements ACTIF à échéance sous le jalon le plus anticipé configuré,
 // cloisonnée par site, triée par urgence. Un abonnement réabonné (date_fin
 // repoussée) sort naturellement de la liste, sans purger le journal d'alertes.
-export function listerAlertesEcheance(db: Db, siteId: number, aujourdHui: string): AlerteEcheanceDetaillee[] {
+export function listerAlertesEcheance(db: Db, siteId: number, aujourdHui: string, idFamille?: number): AlerteEcheanceDetaillee[] {
   const jalonsConfigures = trouverJalonsAlerteParSite(db, siteId);
 
   const lignes = db
@@ -30,7 +30,8 @@ export function listerAlertesEcheance(db: Db, siteId: number, aujourdHui: string
     .innerJoin(schema.formule, eq(schema.abonnement.idFormule, schema.formule.idFormule))
     .where(eq(schema.abonnement.siteId, siteId))
     .all()
-    .filter((l) => l.abonnement.statut === "ACTIF");
+    .filter((l) => l.abonnement.statut === "ACTIF")
+    .filter((l) => idFamille === undefined || l.formule.idFamille === idFamille);
 
   return lignes
     .map((l) => ({

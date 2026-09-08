@@ -105,6 +105,26 @@ describe("listerAlertesEcheance — liste vivante des abonnements à échéance 
     expect(alertes[0].jalon).toBe(10);
     expect(alertes[0].rang).toBe(3);
   });
+
+  // 8.6 : "Abonnements à échéance — Listes J-7/J-3/J-1... filtrable par famille et par site"
+  it("8.6 : filtre par famille quand idFamille est fourni", () => {
+    const idAutreFamille = db.insert(schema.familleAbonnement).values({ libelle: "DSTV" }).returning().get().idFamille;
+    const idAutreFormule = db
+      .insert(schema.formule)
+      .values({ idFamille: idAutreFamille, libelle: "COMPAQ", prix: 13000, rang: 1 })
+      .returning()
+      .get().idFormule;
+    creerAbonnement(siteId, "2025-10-17"); // CANAL+, J-1
+    const abonneAutreFamille = db.insert(schema.abonne).values({ siteId, nom: "Ekwalla", prenom: "Sarah", telephone: "690000001" }).returning().get();
+    db.insert(schema.abonnement)
+      .values({ idAbonne: abonneAutreFamille.idAbonne, idFormule: idAutreFormule, siteId, dateDebut: "2025-10-01", dateFin: "2025-10-17", statut: "ACTIF", creePar: userId })
+      .run();
+
+    const alertes = listerAlertesEcheance(db, siteId, "2025-10-16", idAutreFamille);
+
+    expect(alertes).toHaveLength(1);
+    expect(alertes[0].abonne.nom).toBe("Ekwalla");
+  });
 });
 
 // 4.4 : liste dédiée « Abonnements expirés » du tableau de bord, pour les

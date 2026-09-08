@@ -100,7 +100,8 @@ export function DashboardPage({ onNaviguer, onReabonnerDepuisAlerte, onReabonner
   function charger() {
     const aujourdHui = new Date().toISOString().slice(0, 10);
 
-    chargerAlertesEcheance(token, siteId)
+    // 8.6 : filtrable par famille, comme la liste des abonnements expirés ci-dessous
+    chargerAlertesEcheance(token, siteId, idFamilleFiltre ?? undefined)
       .then(setAlertes)
       .catch((e) => gererErreur(e, "Impossible de charger les alertes."));
     // 4.4, 8.8 : liste dédiée « Abonnements expirés », filtrable par famille
@@ -262,7 +263,26 @@ export function DashboardPage({ onNaviguer, onReabonnerDepuisAlerte, onReabonner
             </div>
           )}
 
-          <h2 className="mb-4 font-heading text-lg font-semibold text-foreground">Abonnements à échéance</h2>
+          <div className="mb-4 flex items-center justify-between gap-2">
+            <h2 className="font-heading text-lg font-semibold text-foreground">Abonnements à échéance</h2>
+            {/* 8.6 : filtre par famille, partagé avec la liste « Abonnements expirés » ci-dessous */}
+            <Select
+              value={idFamilleFiltre !== null ? String(idFamilleFiltre) : "toutes"}
+              onValueChange={(v) => setIdFamilleFiltre(v === "toutes" ? null : Number(v))}
+            >
+              <SelectTrigger className="h-8 w-40 text-xs" aria-label="Filtrer par famille">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="toutes">Toutes les familles</SelectItem>
+                {familles.map((f) => (
+                  <SelectItem key={f.idFamille} value={String(f.idFamille)}>
+                    {f.libelle}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
 
           {alertes === null && <p className="text-sm text-muted-foreground">Chargement…</p>}
 
@@ -305,25 +325,7 @@ export function DashboardPage({ onNaviguer, onReabonnerDepuisAlerte, onReabonner
           </ul>
 
           <div className="mt-8">
-            <div className="mb-4 flex items-center justify-between gap-2">
-              <h2 className="font-heading text-lg font-semibold text-foreground">Abonnements expirés</h2>
-              <Select
-                value={idFamilleFiltre !== null ? String(idFamilleFiltre) : "toutes"}
-                onValueChange={(v) => setIdFamilleFiltre(v === "toutes" ? null : Number(v))}
-              >
-                <SelectTrigger className="h-8 w-40 text-xs" aria-label="Filtrer par famille">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="toutes">Toutes les familles</SelectItem>
-                  {familles.map((f) => (
-                    <SelectItem key={f.idFamille} value={String(f.idFamille)}>
-                      {f.libelle}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            <h2 className="mb-4 font-heading text-lg font-semibold text-foreground">Abonnements expirés</h2>
 
             {abonnementsExpires.length === 0 && (
               <Card className="items-center gap-2 p-8 text-center">

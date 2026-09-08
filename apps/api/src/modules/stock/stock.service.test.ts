@@ -1,7 +1,14 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { eq } from "drizzle-orm";
 import { creerDbTest, type Db } from "../../test-utils/db.js";
-import { ajusterInventaire, decrementerComposantsKit, enregistrerCasse, listerAlertesStock, receptionnerAchat } from "./stock.service.js";
+import {
+  ajusterInventaire,
+  decrementerComposantsKit,
+  enregistrerCasse,
+  listerAlertesStock,
+  listerProduitsRotationLente,
+  receptionnerAchat,
+} from "./stock.service.js";
 import * as schema from "../../db/schema.js";
 
 let db: Db;
@@ -85,6 +92,64 @@ describe("listerAlertesStock (8.6, 9.3)", () => {
     db.insert(schema.produit).values({ siteId, type: "BIEN", libelle: "Câble", prixVente: 500, suiviStock: 1, quantiteStock: 0 }).run(); // pas de seuil
 
     expect(listerAlertesStock(db, siteId)).toHaveLength(0);
+  });
+});
+
+// 8.6, 9.3 : "État des stocks — Alertes de rupture, valorisation du stock,
+// produits à rotation lente" — un produit suivi, avec du stock disponible,
+// mais sans vente récente (30 jours) est signalé pour éviter l'immobilisation de capital
+describe("listerProduitsRotationLente (8.6, 9.3)", () => {
+  it("signale un produit sans aucune vente enregistrée", () => {
+    const rotationLente = listerProduitsRotationLente(db, siteId, "2026-01-31");
+
+    expect(rotationLente).toHaveLength(1);
+    expect(rotationLente[0].produit.idProduit).toBe(idProduit);
+    expect(rotationLente[0].derniereVente).toBeNull();
+    expect(rotationLente[0].joursDepuisDerniereVente).toBeNull();
+  });
+
+  it("signale un produit dont la dernière vente remonte à plus de 30 jours", () => {
+    db.insert(schema.stockMouvement)
+      .values({ idProduit, siteId, typeMouvement: "VENTE", quantite: 1, utilisateurId: userId, dateMouvement: "2025-12-01 10:00:00" })
+      .run();
+
+    const rotationLente = listerProduitsRotationLente(db, siteId, "2026-01-31"); // 61 jours plus tard
+
+    expect(rotationLente).toHaveLength(1);
+    expect(rotationLente[0].derniereVente).toBe("2025-12-01 10:00:00");
+    expect(rotationLente[0].joursDepuisDerniereVente).toBe(61);
+  });
+
+  it("n'alerte pas un produit vendu récemment (moins de 30 jours)", () => {
+    db.insert(schema.stockMouvement)
+      .values({ idProduit, siteId, typeMouvement: "VENTE", quantite: 1, utilisateurId: userId, dateMouvement: "2026-01-15 10:00:00" })
+      .run();
+
+    expect(listerProduitsRotationLente(db, siteId, "2026-01-31")).toHaveLength(0); // 16 jours
+  });
+
+  it("ignore un produit sans suivi de stock ou sans stock disponible", () => {
+    db.insert(schema.produit).values({ siteId, type: "SERVICE", libelle: "Installation", prixVente: 5000, suiviStock: 0 }).run();
+    db.insert(schema.produit).values({ siteId, type: "BIEN", libelle: "Câble", prixVente: 500, suiviStock: 1, quantiteStock: 0 }).run();
+
+    const rotationLente = listerProduitsRotationLente(db, siteId, "2026-01-31");
+    expect(rotationLente.map((r) => r.produit.libelle)).toEqual(["Décodeur"]);
+  });
+
+  it("trie du produit le plus longtemps invendu au plus récent", () => {
+    const autreProduit = db
+      .insert(schema.produit)
+      .values({ siteId, type: "BIEN", libelle: "Câble HDMI", prixVente: 1500, suiviStock: 1, quantiteStock: 5 })
+      .returning()
+      .get().idProduit;
+    db.insert(schema.stockMouvement)
+      .values({ idProduit: autreProduit, siteId, typeMouvement: "VENTE", quantite: 1, utilisateurId: userId, dateMouvement: "2025-12-20 10:00:00" })
+      .run();
+    // idProduit (Décodeur) n'a jamais été vendu — doit passer en premier (le plus critique)
+
+    const rotationLente = listerProduitsRotationLente(db, siteId, "2026-01-31");
+
+    expect(rotationLente.map((r) => r.produit.libelle)).toEqual(["Décodeur", "Câble HDMI"]);
   });
 });
 

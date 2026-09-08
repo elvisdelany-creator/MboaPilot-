@@ -769,6 +769,19 @@ describe("Module suivi de stock (5.2)", () => {
     expect(alertes.json()).toHaveLength(0); // 20 > seuil 5
   });
 
+  // 8.6, 9.3 : "État des stocks — produits à rotation lente"
+  it("signale un produit en stock jamais vendu, accessible à un rôle de vente", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const token = await connecter(app);
+    await creerProduitSuivi(db, siteId, 5);
+
+    const reponse = await app.inject({ method: "GET", url: `/api/v1/stock/rotation-lente?siteId=${siteId}`, headers: authHeader(token) });
+
+    expect(reponse.statusCode).toBe(200);
+    expect(reponse.json()).toHaveLength(1);
+    expect(reponse.json()[0].derniereVente).toBeNull();
+  });
+
   it("un caissier ne peut pas réceptionner un achat, enregistrer une casse ni ajuster l'inventaire (403)", async () => {
     const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
     const token = await connecter(app);

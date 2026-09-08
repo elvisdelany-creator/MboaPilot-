@@ -563,6 +563,18 @@ export async function chargerAlertesStock(token: string, siteId: number): Promis
   return lireJson<Produit[]>(reponse);
 }
 
+// 8.6, 9.3 : "État des stocks — produits à rotation lente"
+export interface ProduitRotationLente {
+  produit: Produit;
+  derniereVente: string | null;
+  joursDepuisDerniereVente: number | null;
+}
+
+export async function chargerProduitsRotationLente(token: string, siteId: number): Promise<ProduitRotationLente[]> {
+  const reponse = await fetch(`${BASE}/stock/rotation-lente?siteId=${siteId}`, { headers: headersAuth(token) });
+  return lireJson<ProduitRotationLente[]>(reponse);
+}
+
 export async function chargerMouvementsProduit(token: string, idProduit: number): Promise<StockMouvement[]> {
   const reponse = await fetch(`${BASE}/produits/${idProduit}/mouvements`, { headers: headersAuth(token) });
   return lireJson<StockMouvement[]>(reponse);

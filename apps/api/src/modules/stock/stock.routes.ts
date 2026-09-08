@@ -6,6 +6,7 @@ import {
   ajusterInventaire,
   enregistrerCasse,
   listerAlertesStock,
+  listerProduitsRotationLente,
   receptionnerAchat,
   type AjusterInventaireParams,
   type EnregistrerCasseParams,
@@ -28,6 +29,16 @@ export function registerStockRoutes(app: FastifyInstance, db: Db, guards: RouteG
     { preHandler: [guards.authRequis] },
     async (request, reply) => {
       reply.code(200).send(listerAlertesStock(db, Number(request.query.siteId)));
+    }
+  );
+
+  // 8.6, 9.3 : "État des stocks — produits à rotation lente"
+  app.get<{ Querystring: { siteId: string } }>(
+    "/api/v1/stock/rotation-lente",
+    { preHandler: [guards.authRequis] },
+    async (request, reply) => {
+      const aujourdHui = new Date().toISOString().slice(0, 10);
+      reply.code(200).send(listerProduitsRotationLente(db, Number(request.query.siteId), aujourdHui));
     }
   );
 

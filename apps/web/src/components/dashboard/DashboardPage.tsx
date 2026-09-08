@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { AlertTriangle, History, PackageX, RotateCw } from "lucide-react";
+import { AlertTriangle, History, PackageX, RotateCw, TrendingDown } from "lucide-react";
 import {
   chargerAbonnementsExpires,
   chargerAlertesEcheance,
@@ -10,8 +10,10 @@ import {
   chargerEvolutionCA,
   chargerFamilles,
   chargerIndicateursJour,
+  chargerProduitsRotationLente,
   chargerValorisationStock,
   ErreurAuthentification,
+  type ProduitRotationLente,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { AppHeader, type Vue } from "@/components/layout/AppHeader";
@@ -77,6 +79,8 @@ export function DashboardPage({ onNaviguer, onReabonnerDepuisAlerte, onReabonner
   const [familles, setFamilles] = useState<Famille[]>([]);
   const [idFamilleFiltre, setIdFamilleFiltre] = useState<number | null>(null);
   const [alertesStock, setAlertesStock] = useState<Produit[]>([]);
+  // 8.6, 9.3 : "État des stocks — produits à rotation lente"
+  const [rotationLente, setRotationLente] = useState<ProduitRotationLente[]>([]);
   const [indicateurs, setIndicateurs] = useState<IndicateursJour | null>(null);
   const [evolutionCA, setEvolutionCA] = useState<PointEvolutionCA[]>([]);
   const [periodeCA, setPeriodeCA] = useState<7 | 30>(7);
@@ -107,6 +111,10 @@ export function DashboardPage({ onNaviguer, onReabonnerDepuisAlerte, onReabonner
     chargerAlertesStock(token, siteId)
       .then(setAlertesStock)
       .catch(() => setAlertesStock([]));
+    // 8.6, 9.3 : état des stocks — produits à rotation lente
+    chargerProduitsRotationLente(token, siteId)
+      .then(setRotationLente)
+      .catch(() => setRotationLente([]));
 
     if (!peutPiloter) return;
 
@@ -366,6 +374,28 @@ export function DashboardPage({ onNaviguer, onReabonnerDepuisAlerte, onReabonner
                         <p className="text-sm text-muted-foreground">
                           {p.quantiteStock} en stock · seuil {p.seuilAlerte}
                         </p>
+                      </div>
+                    </Card>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {rotationLente.length > 0 && (
+            <div className="mt-8">
+              <h2 className="mb-4 font-heading text-xl font-semibold text-foreground">Produits à rotation lente</h2>
+              <ul className="space-y-2">
+                {rotationLente.map((r) => (
+                  <li key={r.produit.idProduit}>
+                    <Card className="flex-row items-center gap-3 p-4">
+                      <span className="flex items-center gap-1.5 rounded-full bg-alert-j7-bg px-2.5 py-1 text-xs font-semibold text-alert-j7-fg">
+                        <TrendingDown className="size-3.5" aria-hidden="true" />
+                        {r.joursDepuisDerniereVente === null ? "Jamais vendu" : `Invendu depuis ${r.joursDepuisDerniereVente} j`}
+                      </span>
+                      <div>
+                        <p className="font-medium text-card-foreground">{r.produit.libelle}</p>
+                        <p className="text-sm text-muted-foreground">{r.produit.quantiteStock} en stock</p>
                       </div>
                     </Card>
                   </li>

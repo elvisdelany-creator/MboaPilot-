@@ -1839,6 +1839,33 @@ describe("Module gestion des utilisateurs, rôles et sites (8.7)", () => {
     expect(journalFiltre.json()).toHaveLength(0);
   });
 
+  // 11.5 : "création/désactivation d'utilisateur" — action sensible à journaliser
+  it("journalise la création puis la désactivation d'un compte utilisateur, avec l'administrateur auteur", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const tokenAdmin = await connecterAdmin(app);
+
+    const creation = await app.inject({
+      method: "POST",
+      url: "/api/v1/utilisateurs",
+      headers: authHeader(tokenAdmin),
+      payload: { siteId, nom: "Nga", prenom: "Valentin", identifiant: "vnga", motDePasse: "motdepasse-secret", role: "CAISSIER" },
+    });
+    expect(creation.statusCode).toBe(201);
+    const idNouveauCompte = creation.json().idUser as number;
+
+    await app.inject({
+      method: "PATCH",
+      url: `/api/v1/utilisateurs/${idNouveauCompte}`,
+      headers: authHeader(tokenAdmin),
+      payload: { actif: false },
+    });
+
+    const journal = await app.inject({ method: "GET", url: "/api/v1/audit?tableCible=utilisateur", headers: authHeader(tokenAdmin) });
+    expect(journal.statusCode).toBe(200);
+    const evenements = journal.json() as { action: string; idCible: string }[];
+    expect(evenements.filter((e) => e.idCible === String(idNouveauCompte)).map((e) => e.action).sort()).toEqual(["CREATION", "MODIFICATION"]);
+  });
+
   it("un caissier ne peut pas consulter le journal d'audit ni gérer les sites (403)", async () => {
     const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
     const tokenCaissier = await connecter(app);

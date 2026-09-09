@@ -31,7 +31,7 @@ export function registerUtilisateursRoutes(app: FastifyInstance, db: Db, guards:
       try {
         const siteId = request.body.siteId ?? request.user.siteId;
         if (!trouverSite(db, siteId)) throw new Error(`Site ${siteId} introuvable`);
-        const { motDePasseHash: _motDePasseHash, ...utilisateur } = creerUtilisateur(db, { ...request.body, siteId });
+        const { motDePasseHash: _motDePasseHash, ...utilisateur } = creerUtilisateur(db, { ...request.body, siteId }, request.user.idUser);
         reply.code(201).send(utilisateur);
       } catch (erreur) {
         envoyerErreur(reply, erreur);
@@ -51,7 +51,7 @@ export function registerUtilisateursRoutes(app: FastifyInstance, db: Db, guards:
         return;
       }
       try {
-        const utilisateur = modifierUtilisateur(db, idUser, request.body);
+        const utilisateur = modifierUtilisateur(db, idUser, request.body, request.user.idUser);
         if (!utilisateur) throw new Error(`Utilisateur ${idUser} introuvable`);
         reply.code(200).send(utilisateur);
       } catch (erreur) {

@@ -21,14 +21,16 @@ export interface CreerUtilisateurInput {
 
 // 2.5.1, 11.2 : mot de passe haché (bcrypt), jamais stocké ni journalisé en
 // clair — validé contre la politique de complexité minimale configurée sur
-// le site (8.8) avant tout hachage.
-export function creerUtilisateur(db: Db, input: CreerUtilisateurInput) {
+// le site (8.8) avant tout hachage. 11.5 : "création... d'utilisateur" est une
+// action sensible à journaliser (auteur nullable — fixtures de test, sans
+// acteur humain identifié, sur le même modèle que le job automatique 11.3).
+export function creerUtilisateur(db: Db, input: CreerUtilisateurInput, acteurId: number | null = null) {
   const politique = trouverPolitiqueMotDePasseParSite(db, input.siteId);
   const erreurs = validerMotDePasse(input.motDePasse, politique);
   if (erreurs.length > 0) throw new Error(erreurs.join(" — "));
 
   const motDePasseHash = bcrypt.hashSync(input.motDePasse, TOURS_HACHAGE);
-  return db
+  const utilisateur = db
     .insert(schema.utilisateur)
     .values({
       siteId: input.siteId,
@@ -41,6 +43,18 @@ export function creerUtilisateur(db: Db, input: CreerUtilisateurInput) {
     })
     .returning()
     .get();
+
+  db.insert(schema.journalAudit)
+    .values({
+      utilisateurId: acteurId,
+      action: "CREATION",
+      tableCible: "utilisateur",
+      idCible: String(utilisateur.idUser),
+      valeurApres: JSON.stringify({ siteId: utilisateur.siteId, identifiant: utilisateur.identifiant, role: utilisateur.role }),
+    })
+    .run();
+
+  return utilisateur;
 }
 
 export function trouverUtilisateurParIdentifiant(db: Db, identifiant: string) {
@@ -71,9 +85,14 @@ export interface ModifierUtilisateurInput {
 }
 
 // 8.7 : désactivation de compte et changement de rôle — jamais de suppression
-// (l'historique tracé par userId sur factures/abonnements/SAV doit rester valide)
-export function modifierUtilisateur(db: Db, idUser: number, input: ModifierUtilisateurInput) {
-  return db
+// (l'historique tracé par userId sur factures/abonnements/SAV doit rester valide).
+// 11.5 : "désactivation d'utilisateur" est une action sensible à journaliser,
+// avec la valeur avant/après (actif, rôle) et l'auteur du changement.
+export function modifierUtilisateur(db: Db, idUser: number, input: ModifierUtilisateurInput, acteurId: number | null = null) {
+  const avant = db.select(COLONNES_SANS_HASH).from(schema.utilisateur).where(eq(schema.utilisateur.idUser, idUser)).get();
+  if (!avant) return undefined;
+
+  const apres = db
     .update(schema.utilisateur)
     .set({
       ...(input.actif !== undefined && { actif: input.actif ? 1 : 0 }),
@@ -82,4 +101,17 @@ export function modifierUtilisateur(db: Db, idUser: number, input: ModifierUtili
     .where(eq(schema.utilisateur.idUser, idUser))
     .returning(COLONNES_SANS_HASH)
     .get();
+
+  db.insert(schema.journalAudit)
+    .values({
+      utilisateurId: acteurId,
+      action: "MODIFICATION",
+      tableCible: "utilisateur",
+      idCible: String(idUser),
+      valeurAvant: JSON.stringify({ actif: avant.actif, role: avant.role }),
+      valeurApres: JSON.stringify({ actif: apres?.actif, role: apres?.role }),
+    })
+    .run();
+
+  return apres;
 }

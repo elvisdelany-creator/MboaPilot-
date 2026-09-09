@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
+import { eq } from "drizzle-orm";
 import { creerDbTest, type Db } from "../../test-utils/db.js";
 import { creerUtilisateur, listerUtilisateurs, modifierUtilisateur, trouverUtilisateurParIdentifiant } from "./utilisateur.repository.js";
 import * as schema from "../../db/schema.js";
@@ -43,6 +44,24 @@ describe("creerUtilisateur (2.5.1)", () => {
 
     const u = creerUtilisateur(db, { siteId, nom: "Nga", prenom: "Valentin", identifiant: "vnga2", motDePasse: "Motdepasse1", role: "CAISSIER" });
     expect(u.identifiant).toBe("vnga2");
+  });
+
+  // 11.5 : "création d'utilisateur" — action sensible à journaliser, avec l'auteur
+  it("journalise la création d'un compte, avec l'auteur, mais jamais le mot de passe", () => {
+    const admin = creerUtilisateur(db, { siteId, nom: "Admin", prenom: "D", identifiant: "admin1", motDePasse: "motdepasse-secret", role: "ADMINISTRATEUR" });
+
+    const u = creerUtilisateur(
+      db,
+      { siteId, nom: "Nga", prenom: "Valentin", identifiant: "vnga", motDePasse: "motdepasse-secret", role: "CAISSIER" },
+      admin.idUser
+    );
+
+    const audit = db.select().from(schema.journalAudit).where(eq(schema.journalAudit.tableCible, "utilisateur")).all().find((a) => a.idCible === String(u.idUser));
+    expect(audit).toBeDefined();
+    expect(audit?.action).toBe("CREATION");
+    expect(audit?.utilisateurId).toBe(admin.idUser);
+    expect(audit?.valeurApres).not.toMatch(/motdepasse-secret/);
+    expect(JSON.parse(audit!.valeurApres!)).toMatchObject({ identifiant: "vnga", role: "CAISSIER" });
   });
 });
 
@@ -89,6 +108,22 @@ describe("modifierUtilisateur (8.7)", () => {
 
     expect(modifie?.actif).toBe(0);
     expect(modifie?.role).toBe("GERANT");
+  });
+
+  // 11.5 : "création/désactivation d'utilisateur" — action sensible à journaliser
+  it("journalise la désactivation et le changement de rôle, avec la valeur avant/après et l'auteur", () => {
+    const admin = creerUtilisateur(db, { siteId, nom: "Admin", prenom: "D", identifiant: "admin1", motDePasse: "motdepasse-secret", role: "ADMINISTRATEUR" });
+    const u = creerUtilisateur(db, { siteId, nom: "Nga", prenom: "Valentin", identifiant: "vnga", motDePasse: "motdepasse-secret", role: "CAISSIER" });
+
+    modifierUtilisateur(db, u.idUser, { actif: false, role: "GERANT" }, admin.idUser);
+
+    const audits = db.select().from(schema.journalAudit).where(eq(schema.journalAudit.tableCible, "utilisateur")).all();
+    const audit = audits.find((a) => a.idCible === String(u.idUser) && a.action === "MODIFICATION");
+    expect(audit).toBeDefined();
+    expect(audit?.action).toBe("MODIFICATION");
+    expect(audit?.utilisateurId).toBe(admin.idUser);
+    expect(JSON.parse(audit!.valeurAvant!)).toMatchObject({ actif: 1, role: "CAISSIER" });
+    expect(JSON.parse(audit!.valeurApres!)).toMatchObject({ actif: 0, role: "GERANT" });
   });
 
   it("un compte désactivé ne peut plus se connecter", () => {

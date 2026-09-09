@@ -288,10 +288,21 @@ export interface SavHistoriqueEntree {
   dateChangement: string;
 }
 
+// 5.10 : "photos optionnelles" du dossier SAV
+export interface SavPhoto {
+  idPhoto: number;
+  idDossierSav: number;
+  nomFichier: string;
+  nomFichierOriginal: string;
+  typeMime: string;
+  dateAjout: string;
+}
+
 export interface DossierSavDetaille extends DossierSav {
   pieces: SavPieceUtilisee[];
   historique: SavHistoriqueEntree[];
   facture: { idFacture: number; statut: "BROUILLON" | "VALIDEE"; montantTotal: number } | null;
+  photos: SavPhoto[];
 }
 
 export interface ChangerStatutSavResultat {

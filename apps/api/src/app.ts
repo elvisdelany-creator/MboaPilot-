@@ -1,4 +1,5 @@
 import Fastify from "fastify";
+import multipart from "@fastify/multipart";
 import type { Db } from "./db/types.js";
 import { registerAbonnementsRoutes } from "./modules/abonnements/abonnements.routes.js";
 import { registerAbonnesRoutes } from "./modules/abonnes/abonnes.routes.js";
@@ -30,6 +31,8 @@ export interface BuildAppOptions {
   fournisseurPaiementMobile?: FournisseurPaiementMobile;
   // 2.6 : dossier de destination des sauvegardes (VACUUM INTO)
   dossierSauvegardes?: string;
+  // 5.10 : dossier de stockage des photos jointes aux dossiers SAV
+  dossierPhotosSav?: string;
 }
 
 // 10.4 : préfixes toujours autorisés en écriture même en mode dégradé —
@@ -41,6 +44,8 @@ const PREFIXES_ECRITURE_TOUJOURS_AUTORISES = ["/api/v1/auth", "/api/v1/licence",
 export function buildApp(db: Db, options: BuildAppOptions) {
   const app = Fastify();
   registerAuthPlugin(app, options.jwtSecret);
+  // 5.10 : téléversement des photos optionnelles du dossier SAV (multipart/form-data)
+  app.register(multipart);
   registerAuthRoutes(app, db);
   const fournisseurPaiementMobile = options.fournisseurPaiementMobile ?? new SimulateurOrangeMoney();
 
@@ -91,7 +96,7 @@ export function buildApp(db: Db, options: BuildAppOptions) {
   registerCatalogueRoutes(app, db, { authRequis, gestionCatalogue });
   registerJobsRoutes(app, db, { authRequis, ventes, admin });
   registerProduitsRoutes(app, db, { authRequis, ventes, gestionCatalogue });
-  registerSavRoutes(app, db, { authRequis, ventes, sav });
+  registerSavRoutes(app, db, options.dossierPhotosSav ?? "./data/sav-photos", { authRequis, ventes, sav });
   registerApporteursRoutes(app, db, { authRequis, ventes, gestionApporteurs, consultationApporteurs });
   registerStockRoutes(app, db, { authRequis, ventes, gestionStock });
   registerPaiementMobileRoutes(app, db, fournisseurPaiementMobile, { authRequis, ventes });

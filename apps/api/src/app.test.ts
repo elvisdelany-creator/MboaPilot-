@@ -598,6 +598,50 @@ describe("Module SAV (5.10, 8.4)", () => {
 
     expect(reponse.statusCode).toBe(403);
   });
+
+  // 5.10 : "photos optionnelles" du dossier SAV
+  it("5.10 : téléverse une photo jointe au dossier SAV, puis la retrouve dans le détail et via son URL directe", async () => {
+    const dossierTemp = mkdtempSync(join(tmpdir(), "mboapilot-test-sav-photos-app-"));
+    try {
+      const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST, dossierPhotosSav: dossierTemp });
+      const token = await connecter(app);
+
+      const ouverture = await app.inject({
+        method: "POST",
+        url: "/api/v1/sav/dossiers",
+        headers: authHeader(token),
+        payload: { siteId, descriptionPanne: "Écran fissuré", sousGarantie: false, userId },
+      });
+      const { idDossierSav } = ouverture.json();
+
+      const frontiere = "----mboapilot-test-boundary";
+      const corpsMultipart = Buffer.concat([
+        Buffer.from(`--${frontiere}\r\nContent-Disposition: form-data; name="file"; filename="avant.jpg"\r\nContent-Type: image/jpeg\r\n\r\n`),
+        Buffer.from("contenu-image-factice"),
+        Buffer.from(`\r\n--${frontiere}--\r\n`),
+      ]);
+
+      const upload = await app.inject({
+        method: "POST",
+        url: `/api/v1/sav/dossiers/${idDossierSav}/photos`,
+        headers: { ...authHeader(token), "content-type": `multipart/form-data; boundary=${frontiere}` },
+        payload: corpsMultipart,
+      });
+      expect(upload.statusCode).toBe(201);
+      const { idPhoto } = upload.json();
+
+      const detail = await app.inject({ method: "GET", url: `/api/v1/sav/dossiers/${idDossierSav}`, headers: authHeader(token) });
+      expect(detail.json().photos).toHaveLength(1);
+      expect(detail.json().photos[0].nomFichierOriginal).toBe("avant.jpg");
+
+      const fichier = await app.inject({ method: "GET", url: `/api/v1/sav/photos/${idPhoto}`, headers: authHeader(token) });
+      expect(fichier.statusCode).toBe(200);
+      expect(fichier.headers["content-type"]).toBe("image/jpeg");
+      expect(fichier.rawPayload.toString()).toBe("contenu-image-factice");
+    } finally {
+      rmSync(dossierTemp, { recursive: true, force: true });
+    }
+  });
 });
 
 describe("Module apporteur d'affaires (6.3)", () => {

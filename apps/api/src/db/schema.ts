@@ -440,6 +440,18 @@ export const savPieceUtilisee = sqliteTable("sav_piece_utilisee", {
   quantite: integer("quantite").notNull().default(1),
 });
 
+// 5.10 : "photos optionnelles" du dossier SAV — fichiers stockés sur disque
+// (mode local, 2.2), même approche que les sauvegardes exportées
+// (sauvegarde.service.ts) : la base ne porte que les métadonnées.
+export const savPhoto = sqliteTable("sav_photo", {
+  idPhoto: integer("id_photo").primaryKey({ autoIncrement: true }),
+  idDossierSav: integer("id_dossier_sav").notNull().references(() => savDossier.idDossierSav),
+  nomFichier: text("nom_fichier").notNull(), // nom sur disque, unique et non devinable
+  nomFichierOriginal: text("nom_fichier_original").notNull(),
+  typeMime: text("type_mime").notNull(),
+  dateAjout: text("date_ajout").notNull().default(now),
+});
+
 // historique des changements de statut du dossier SAV (5.10, 8.4) — utilisateur_id
 // nullable pour rester cohérent avec historique_abonnement (actions automatisées)
 export const savHistorique = sqliteTable("sav_historique", {

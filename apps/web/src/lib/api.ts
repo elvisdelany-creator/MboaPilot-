@@ -12,6 +12,7 @@ import type {
   CompteUtilisateur,
   DossierSav,
   DossierSavDetaille,
+  SavPhoto,
   EchangeMaterielResultat,
   EntreeJournalAudit,
   Famille,
@@ -497,6 +498,27 @@ export async function changerStatutSavRequete(
     body: JSON.stringify(payload),
   });
   return lireJson<ChangerStatutSavResultat>(reponse);
+}
+
+// 5.10 : "photos optionnelles" du dossier SAV
+export async function televerserPhotoSav(token: string, idDossierSav: number, fichier: File): Promise<SavPhoto> {
+  const corps = new FormData();
+  corps.append("file", fichier);
+  const reponse = await fetch(`${BASE}/sav/dossiers/${idDossierSav}/photos`, {
+    method: "POST",
+    headers: headersAuth(token), // pas de Content-Type explicite : le navigateur pose la frontière multipart
+    body: corps,
+  });
+  return lireJson<SavPhoto>(reponse);
+}
+
+// l'endpoint de la photo exige une authentification (Bearer) — une balise
+// <img src> classique ne peut pas la porter, on récupère donc le fichier en
+// blob puis on crée une URL locale temporaire (à révoquer après usage)
+export async function chargerUrlPhotoSav(token: string, idPhoto: number): Promise<string> {
+  const reponse = await fetch(`${BASE}/sav/photos/${idPhoto}`, { headers: headersAuth(token) });
+  if (!reponse.ok) throw new Error("Impossible de charger la photo.");
+  return URL.createObjectURL(await reponse.blob());
 }
 
 // 6.3 : sous-distributeurs et apporteurs d'affaires

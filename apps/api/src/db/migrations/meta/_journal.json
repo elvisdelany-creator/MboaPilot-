@@ -134,6 +134,13 @@
       "when": 1788975861118,
       "tag": "0018_aspiring_northstar",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "6",
+      "when": 1788978057026,
+      "tag": "0019_pink_stick",
+      "breakpoints": true
     }
   ]
 }

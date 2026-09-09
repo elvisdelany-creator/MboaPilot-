@@ -1,8 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Plus, Wrench } from "lucide-react";
+import { ImagePlus, Plus, Wrench } from "lucide-react";
 import { peutTransitionnerSav, type StatutSav } from "@mboapilot/shared";
-import { chargerDossierSav, chargerDossiersSav, ErreurAuthentification } from "@/lib/api";
+import { chargerDossierSav, chargerDossiersSav, chargerUrlPhotoSav, televerserPhotoSav, ErreurAuthentification } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { AppHeader, type Vue } from "@/components/layout/AppHeader";
 import { Button } from "@/components/ui/button";
@@ -66,6 +66,10 @@ export function SavPage({ onNaviguer }: Props) {
   const [nouveauOuvert, setNouveauOuvert] = useState(false);
   const [pieceOuvert, setPieceOuvert] = useState(false);
   const [statutCible, setStatutCible] = useState<StatutSav | null>(null);
+  // 5.10 : "photos optionnelles" du dossier SAV
+  const [photoUrls, setPhotoUrls] = useState<Record<number, string>>({});
+  const [televersementEnCours, setTeleversementEnCours] = useState(false);
+  const fichierPhotoRef = useRef<HTMLInputElement>(null);
 
   function gererErreur(erreur: unknown, messageParDefaut: string) {
     if (erreur instanceof ErreurAuthentification) {
@@ -95,6 +99,38 @@ export function SavPage({ onNaviguer }: Props) {
     else setDetail(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [idSelectionne]);
+
+  // 5.10 : charge chaque photo en blob (l'endpoint exige une authentification
+  // Bearer, incompatible avec une balise <img src> classique)
+  useEffect(() => {
+    if (!detail) return;
+    detail.photos.forEach((p) => {
+      setPhotoUrls((prev) => {
+        if (prev[p.idPhoto]) return prev;
+        chargerUrlPhotoSav(token, p.idPhoto)
+          .then((url) => setPhotoUrls((courant) => ({ ...courant, [p.idPhoto]: url })))
+          .catch(() => {});
+        return prev;
+      });
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [detail?.idDossierSav, detail?.photos.length]);
+
+  async function gererFichierPhotoChoisi(e: React.ChangeEvent<HTMLInputElement>) {
+    const fichier = e.target.files?.[0];
+    e.target.value = "";
+    if (!fichier || !detail) return;
+    setTeleversementEnCours(true);
+    try {
+      await televerserPhotoSav(token, detail.idDossierSav, fichier);
+      toast.success("Photo ajoutée.");
+      rechargerDetail(detail.idDossierSav);
+    } catch (erreur) {
+      gererErreur(erreur, "Échec de l'envoi de la photo.");
+    } finally {
+      setTeleversementEnCours(false);
+    }
+  }
 
   const prochainesTransitions =
     detail !== null ? TOUS_LES_STATUTS.filter((s) => peutTransitionnerSav(detail.statut, s)) : [];
@@ -195,6 +231,37 @@ export function SavPage({ onNaviguer }: Props) {
                   </ul>
                 </div>
               )}
+
+              <div>
+                <div className="mb-2 flex items-center justify-between">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Photos</p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="cursor-pointer gap-1"
+                    disabled={televersementEnCours}
+                    onClick={() => fichierPhotoRef.current?.click()}
+                  >
+                    <ImagePlus className="size-4" />
+                    {televersementEnCours ? "Envoi…" : "Ajouter une photo"}
+                  </Button>
+                  <input ref={fichierPhotoRef} type="file" accept="image/*" hidden onChange={gererFichierPhotoChoisi} />
+                </div>
+                {detail.photos.length === 0 && <p className="text-sm text-muted-foreground">Aucune photo.</p>}
+                {detail.photos.length > 0 && (
+                  <div className="flex flex-wrap gap-2">
+                    {detail.photos.map((p) => (
+                      <a key={p.idPhoto} href={photoUrls[p.idPhoto]} target="_blank" rel="noreferrer" title={p.nomFichierOriginal}>
+                        {photoUrls[p.idPhoto] ? (
+                          <img src={photoUrls[p.idPhoto]} alt={p.nomFichierOriginal} className="size-20 rounded-md border border-border object-cover" />
+                        ) : (
+                          <div className="size-20 animate-pulse rounded-md border border-border bg-muted" />
+                        )}
+                      </a>
+                    ))}
+                  </div>
+                )}
+              </div>
 
               <div>
                 <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Historique</p>

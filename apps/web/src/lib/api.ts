@@ -702,6 +702,17 @@ export async function chargerEvolutionCA(token: string, siteId: number, aujourdH
   return lireJson<PointEvolutionCA[]>(reponse);
 }
 
+// 8.6 : "Chiffre d'affaires — par famille d'activité (produits, abonnements TV, streaming, SAV)"
+export interface VentilationCAFamille {
+  libelle: string;
+  montant: number;
+}
+
+export async function chargerVentilationCA(token: string, siteId: number, aujourdHui: string): Promise<VentilationCAFamille[]> {
+  const reponse = await fetch(`${BASE}/tableau-bord/ventilation-ca?siteId=${siteId}&aujourdHui=${aujourdHui}`, { headers: headersAuth(token) });
+  return lireJson<VentilationCAFamille[]>(reponse);
+}
+
 export async function chargerValorisationStock(token: string, siteId: number): Promise<number> {
   const reponse = await fetch(`${BASE}/tableau-bord/valorisation-stock?siteId=${siteId}`, { headers: headersAuth(token) });
   const { valorisation } = await lireJson<{ valorisation: number }>(reponse);

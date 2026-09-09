@@ -6,10 +6,12 @@ import { recruterAbonne } from "../abonnements/recrutement.service.js";
 import { creerApporteur } from "../apporteurs/apporteur.repository.js";
 import { creerProduit } from "../produits/produit.repository.js";
 import { receptionnerAchat } from "../stock/stock.service.js";
+import { creerVenteProduits } from "../ventes/vente.service.js";
 import {
   calculerEvolutionCA,
   calculerIndicateursJour,
   calculerValorisationStock,
+  calculerVentilationCAJour,
   listerCommissionsCanalplusEnCours,
   listerEncaissementsJour,
 } from "./tableau-bord.service.js";
@@ -114,5 +116,59 @@ describe("listerCommissionsCanalplusEnCours (8.6, 6.2)", () => {
     expect(commissions).toHaveLength(1);
     expect(commissions[0].commission.statut).toBe("EN_COURS");
     expect(commissions[0].abonne.nom).toBe("Nga");
+  });
+});
+
+// 8.6 : "Chiffre d'affaires — par famille d'activité (produits, abonnements
+// TV, streaming, SAV)"
+describe("calculerVentilationCAJour (8.6)", () => {
+  it("ventile le CA du jour par famille d'abonnement", () => {
+    const dstv = db.insert(schema.familleAbonnement).values({ libelle: "DSTV" }).returning().get();
+    const formuleDstv = db.insert(schema.formule).values({ idFamille: dstv.idFamille, libelle: "COMPAQ", prix: 13000, rang: 1 }).returning().get().idFormule;
+
+    recruterAbonne(db, { siteId, userId, aujourdHui: AUJOURDHUI, abonne: { nom: "Nga", prenom: "Paul", telephone: "690000000" }, idFormule, montantEncaisse: 10500 });
+    recruterAbonne(db, { siteId, userId, aujourdHui: AUJOURDHUI, abonne: { nom: "Eyenga", prenom: "Sarah", telephone: "690000001" }, idFormule: formuleDstv, montantEncaisse: 13000 });
+
+    const ventilation = calculerVentilationCAJour(db, siteId, AUJOURDHUI);
+
+    expect(ventilation).toContainEqual({ libelle: "CANAL+", montant: 10500 });
+    expect(ventilation).toContainEqual({ libelle: "DSTV", montant: 13000 });
+  });
+
+  it("regroupe les biens/services hors SAV sous « Produits & Services », et le SAV séparément", () => {
+    const produit = creerProduit(db, { siteId, type: "BIEN", libelle: "Câble", prixVente: 2000, coutRevient: 1000, margeType: "VALEUR", margeValeur: 500 });
+    const service = creerProduit(db, { siteId, type: "SERVICE", libelle: "Installation", prixVente: 5000, coutRevient: 0, margeType: "VALEUR", margeValeur: 5000 });
+    const piece = creerProduit(db, { siteId, type: "SAV", libelle: "Pièce détachée", prixVente: 3000, coutRevient: 1000, margeType: "VALEUR", margeValeur: 2000 });
+
+    creerVenteProduits(db, { siteId, userId, lignes: [{ idProduit: produit.idProduit, quantite: 1 }, { idProduit: service.idProduit, quantite: 1 }], montantEncaisse: 7000 });
+    creerVenteProduits(db, { siteId, userId, lignes: [{ idProduit: piece.idProduit, quantite: 1 }], montantEncaisse: 3000 });
+
+    const ventilation = calculerVentilationCAJour(db, siteId, AUJOURDHUI);
+
+    expect(ventilation).toContainEqual({ libelle: "Produits & Services", montant: 7000 });
+    expect(ventilation).toContainEqual({ libelle: "SAV", montant: 3000 });
+  });
+
+  it("ventile la partie kit d'un recrutement sous la famille du kit", () => {
+    const idFamilleCanal = db.select().from(schema.familleAbonnement).where(eq(schema.familleAbonnement.libelle, "CANAL+")).get()!.idFamille;
+    const kit = db.insert(schema.kit).values({ idFamille: idFamilleCanal, libelle: "KIT", reglePrix: "PRIX_FIXE", prixFixe: 15000 }).returning().get();
+
+    recruterAbonne(db, {
+      siteId,
+      userId,
+      aujourdHui: AUJOURDHUI,
+      abonne: { nom: "Nga", prenom: "Paul", telephone: "690000000" },
+      idFormule,
+      idKit: kit.idKit,
+      montantEncaisse: 25500,
+    });
+
+    const ventilation = calculerVentilationCAJour(db, siteId, AUJOURDHUI);
+
+    expect(ventilation.find((v) => v.libelle === "CANAL+")?.montant).toBe(25500); // 10500 formule + 15000 kit
+  });
+
+  it("renvoie une liste vide sans vente", () => {
+    expect(calculerVentilationCAJour(db, siteId, AUJOURDHUI)).toEqual([]);
   });
 });

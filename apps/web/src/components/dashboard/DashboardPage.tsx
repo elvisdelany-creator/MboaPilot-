@@ -13,9 +13,11 @@ import {
   chargerProduitsRotationLente,
   chargerResumesApporteurs,
   chargerValorisationStock,
+  chargerVentilationCA,
   ErreurAuthentification,
   type ProduitRotationLente,
   type ResumeApporteur,
+  type VentilationCAFamille,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { AppHeader, type Vue } from "@/components/layout/AppHeader";
@@ -85,6 +87,8 @@ export function DashboardPage({ onNaviguer, onReabonnerDepuisAlerte, onReabonner
   const [rotationLente, setRotationLente] = useState<ProduitRotationLente[]>([]);
   const [indicateurs, setIndicateurs] = useState<IndicateursJour | null>(null);
   const [evolutionCA, setEvolutionCA] = useState<PointEvolutionCA[]>([]);
+  // 8.6 : "Chiffre d'affaires — par famille d'activité"
+  const [ventilationCA, setVentilationCA] = useState<VentilationCAFamille[]>([]);
   const [periodeCA, setPeriodeCA] = useState<7 | 30>(7);
   const [encaissements, setEncaissements] = useState<VentilationPaiement[]>([]);
   const [valorisationStock, setValorisationStock] = useState<number | null>(null);
@@ -129,6 +133,10 @@ export function DashboardPage({ onNaviguer, onReabonnerDepuisAlerte, onReabonner
     chargerEvolutionCA(token, siteId, aujourdHui, periodeCA)
       .then(setEvolutionCA)
       .catch(() => setEvolutionCA([]));
+    // 8.6 : "Chiffre d'affaires — par famille d'activité"
+    chargerVentilationCA(token, siteId, aujourdHui)
+      .then(setVentilationCA)
+      .catch(() => setVentilationCA([]));
     chargerValorisationStock(token, siteId)
       .then(setValorisationStock)
       .catch(() => setValorisationStock(null));
@@ -207,6 +215,20 @@ export function DashboardPage({ onNaviguer, onReabonnerDepuisAlerte, onReabonner
               </div>
               <Card className="p-4">
                 <EvolutionCaChart points={evolutionCA} />
+              </Card>
+            </div>
+          )}
+
+          {peutPiloter && ventilationCA.length > 0 && (
+            <div className="mb-8">
+              <h2 className="mb-3 font-heading text-lg font-semibold text-foreground">Chiffre d'affaires par famille d'activité</h2>
+              <Card className="gap-2 p-4">
+                {ventilationCA.map((v) => (
+                  <div key={v.libelle} className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">{v.libelle}</span>
+                    <span className="tabular-nums font-medium text-card-foreground">{formateurFcfa.format(v.montant)} FCFA</span>
+                  </div>
+                ))}
               </Card>
             </div>
           )}

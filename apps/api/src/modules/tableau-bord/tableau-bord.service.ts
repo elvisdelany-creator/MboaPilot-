@@ -107,6 +107,61 @@ export function listerEncaissementsJour(db: Db, siteId: number, aujourdHui: stri
   return MODES_PAIEMENT.map((mode) => ({ mode, total: totalParMode.get(mode) ?? 0 }));
 }
 
+const LIBELLE_PRODUITS_SERVICES = "Produits & Services";
+const LIBELLE_SAV = "SAV";
+const LIBELLE_AUTRE = "Autre";
+
+// résout le libellé de famille d'une ligne de vente : famille d'abonnement
+// (ligne rattachée à un abonnement ou à un kit), sinon Produits & Services
+// / SAV selon le type d'article (5.2, 5.3), pour couvrir toute nature de vente.
+function resoudreLibelleFamilleLigne(db: Db, ligne: typeof schema.ligneVente.$inferSelect): string {
+  if (ligne.numeroAbonnement !== null) {
+    const abonnement = db.select().from(schema.abonnement).where(eq(schema.abonnement.numeroAbonnement, ligne.numeroAbonnement)).get();
+    const formule = abonnement && db.select().from(schema.formule).where(eq(schema.formule.idFormule, abonnement.idFormule)).get();
+    const famille = formule && db.select().from(schema.familleAbonnement).where(eq(schema.familleAbonnement.idFamille, formule.idFamille)).get();
+    if (famille) return famille.libelle;
+  }
+  if (ligne.idKit !== null) {
+    const kit = db.select().from(schema.kit).where(eq(schema.kit.idKit, ligne.idKit)).get();
+    const famille = kit && db.select().from(schema.familleAbonnement).where(eq(schema.familleAbonnement.idFamille, kit.idFamille)).get();
+    if (famille) return famille.libelle;
+  }
+  if (ligne.idProduit !== null) {
+    const produit = db.select().from(schema.produit).where(eq(schema.produit.idProduit, ligne.idProduit)).get();
+    return produit?.type === "SAV" ? LIBELLE_SAV : LIBELLE_PRODUITS_SERVICES;
+  }
+  return LIBELLE_AUTRE;
+}
+
+export interface VentilationCAFamille {
+  libelle: string;
+  montant: number;
+}
+
+// 8.6 : "Chiffre d'affaires — par famille d'activité (produits, abonnements
+// TV, streaming, SAV)" — chaque famille d'abonnement (TV satellite comme
+// streaming, structurellement identiques, 5.9) apparaît sous son propre
+// libellé ; le hors-abonnement se regroupe sous Produits & Services / SAV.
+export function calculerVentilationCAJour(db: Db, siteId: number, aujourdHui: string): VentilationCAFamille[] {
+  const facturesJour = db
+    .select()
+    .from(schema.facture)
+    .where(and(eq(schema.facture.siteId, siteId), eq(schema.facture.statut, "VALIDEE")))
+    .all()
+    .filter((f) => f.dateCreation.slice(0, 10) === aujourdHui);
+
+  const idsFactures = facturesJour.map((f) => f.idFacture);
+  const lignes = idsFactures.length > 0 ? db.select().from(schema.ligneVente).where(inArray(schema.ligneVente.idFacture, idsFactures)).all() : [];
+
+  const totalParLibelle = new Map<string, number>();
+  for (const ligne of lignes) {
+    const libelle = resoudreLibelleFamilleLigne(db, ligne);
+    totalParLibelle.set(libelle, (totalParLibelle.get(libelle) ?? 0) + ligne.prixApplique);
+  }
+
+  return [...totalParLibelle.entries()].map(([libelle, montant]) => ({ libelle, montant })).sort((a, b) => b.montant - a.montant);
+}
+
 // 8.6, 6.2 : commissions CANAL+ encore en période probatoire de 4 mois
 export function listerCommissionsCanalplusEnCours(db: Db, siteId: number) {
   return db

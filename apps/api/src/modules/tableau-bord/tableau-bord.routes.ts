@@ -5,6 +5,7 @@ import {
   calculerEvolutionCA,
   calculerIndicateursJour,
   calculerValorisationStock,
+  calculerVentilationCAJour,
   listerCommissionsCanalplusEnCours,
   listerEncaissementsJour,
 } from "./tableau-bord.service.js";
@@ -46,6 +47,16 @@ export function registerTableauBordRoutes(app: FastifyInstance, db: Db, guards: 
     async (request, reply) => {
       const { siteId, aujourdHui } = request.query;
       reply.code(200).send(listerEncaissementsJour(db, Number(siteId), aujourdHui));
+    }
+  );
+
+  // 8.6 : "Chiffre d'affaires — par famille d'activité"
+  app.get<{ Querystring: { siteId: string; aujourdHui: string } }>(
+    "/api/v1/tableau-bord/ventilation-ca",
+    { preHandler: [guards.authRequis, guards.pilotage] },
+    async (request, reply) => {
+      const { siteId, aujourdHui } = request.query;
+      reply.code(200).send(calculerVentilationCAJour(db, Number(siteId), aujourdHui));
     }
   );
 

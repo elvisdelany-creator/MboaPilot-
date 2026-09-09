@@ -1573,6 +1573,30 @@ describe("Tableau de bord de pilotage (8.6, 9.3)", () => {
     expect(reponse.json()[0].chiffreAffaires).toBe(13000);
   });
 
+  // 8.6 : "Chiffre d'affaires — par famille d'activité (produits, abonnements TV, streaming, SAV)"
+  it("8.6 : ventile le CA du jour par famille d'activité", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    creerUtilisateur(db, { siteId, nom: "Admin", prenom: "D", identifiant: "admin1", motDePasse: "motdepasse-secret", role: "ADMINISTRATEUR" });
+    const token = await connecter(app, "admin1");
+    const aujourdHui = new Date().toISOString().slice(0, 10);
+
+    await app.inject({
+      method: "POST",
+      url: "/api/v1/recrutements",
+      headers: authHeader(token),
+      payload: { siteId, userId, aujourdHui, abonne: { nom: "Nga", prenom: "Paul", telephone: "690000000" }, idFormule, montantEncaisse: 13000 },
+    });
+
+    const reponse = await app.inject({
+      method: "GET",
+      url: `/api/v1/tableau-bord/ventilation-ca?siteId=${siteId}&aujourdHui=${aujourdHui}`,
+      headers: authHeader(token),
+    });
+
+    expect(reponse.statusCode).toBe(200);
+    expect(reponse.json()).toContainEqual({ libelle: "DSTV", montant: 13000 });
+  });
+
   it("un caissier n'a pas accès au tableau de bord de pilotage (403)", async () => {
     const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
     const token = await connecter(app);

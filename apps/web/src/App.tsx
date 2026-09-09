@@ -10,6 +10,7 @@ import { ApporteurFichePage } from "@/components/apporteurs/ApporteurFichePage";
 import { StockPage } from "@/components/stock/StockPage";
 import { ClientsPage } from "@/components/clients/ClientsPage";
 import { AdministrationPage } from "@/components/administration/AdministrationPage";
+import { LicenceBanner } from "@/components/layout/LicenceBanner";
 import type { Vue } from "@/components/layout/AppHeader";
 import type { Abonne, AbonnementExpire, AlerteEcheance } from "@/lib/types";
 
@@ -31,7 +32,12 @@ function Contenu() {
   // 2.5.1, 6.3 : le rôle APPORTEUR n'a accès qu'à sa propre fiche — les autres
   // routes sont de toute façon bloquées côté serveur, on ne les propose même pas.
   if (session.utilisateur.role === "APPORTEUR") {
-    return <ApporteurFichePage />;
+    return (
+      <>
+        <LicenceBanner token={session.token} />
+        <ApporteurFichePage />
+      </>
+    );
   }
 
   function naviguer(cible: Vue) {
@@ -54,31 +60,29 @@ function Contenu() {
     setVue({ nom: "caisse", abonneInitial: abonne, idFamilleInitiale: idFamille });
   }
 
+  let contenuPage;
   if (vue.nom === "dashboard") {
-    return <DashboardPage onNaviguer={naviguer} onReabonnerDepuisAlerte={reabonnerDepuisAlerte} onReabonnerDepuisExpire={reabonnerDepuisExpire} />;
+    contenuPage = <DashboardPage onNaviguer={naviguer} onReabonnerDepuisAlerte={reabonnerDepuisAlerte} onReabonnerDepuisExpire={reabonnerDepuisExpire} />;
+  } else if (vue.nom === "sav") {
+    contenuPage = <SavPage onNaviguer={naviguer} />;
+  } else if (vue.nom === "apporteurs") {
+    contenuPage = <ApporteursPage onNaviguer={naviguer} />;
+  } else if (vue.nom === "stock") {
+    contenuPage = <StockPage onNaviguer={naviguer} />;
+  } else if (vue.nom === "clients") {
+    contenuPage = <ClientsPage onNaviguer={naviguer} onReabonnerDepuisFiche={reabonnerDepuisFiche} />;
+  } else if (vue.nom === "administration") {
+    contenuPage = <AdministrationPage onNaviguer={naviguer} />;
+  } else {
+    contenuPage = <CaissePage onNaviguer={naviguer} abonneInitial={vue.abonneInitial} idFamilleInitiale={vue.idFamilleInitiale} />;
   }
 
-  if (vue.nom === "sav") {
-    return <SavPage onNaviguer={naviguer} />;
-  }
-
-  if (vue.nom === "apporteurs") {
-    return <ApporteursPage onNaviguer={naviguer} />;
-  }
-
-  if (vue.nom === "stock") {
-    return <StockPage onNaviguer={naviguer} />;
-  }
-
-  if (vue.nom === "clients") {
-    return <ClientsPage onNaviguer={naviguer} onReabonnerDepuisFiche={reabonnerDepuisFiche} />;
-  }
-
-  if (vue.nom === "administration") {
-    return <AdministrationPage onNaviguer={naviguer} />;
-  }
-
-  return <CaissePage onNaviguer={naviguer} abonneInitial={vue.abonneInitial} idFamilleInitiale={vue.idFamilleInitiale} />;
+  return (
+    <>
+      <LicenceBanner token={session.token} />
+      {contenuPage}
+    </>
+  );
 }
 
 // remonte Contenu à chaque changement d'utilisateur connecté (déconnexion

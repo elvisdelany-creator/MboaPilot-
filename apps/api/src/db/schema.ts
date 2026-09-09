@@ -44,6 +44,21 @@ export const entreprise = sqliteTable("entreprise", {
   dateCreation: text("date_creation").notNull().default(now),
 });
 
+// 10.4 : licence logicielle mode local — jeton simulé (en l'absence de
+// serveur de licence éditeur réel), persisté en base (et non sur disque)
+// pour rester cohérent avec l'export/import complet via le fichier SQLite
+// (2.4) et l'isolement de chaque base de test. Singleton (une seule ligne,
+// mono-entreprise 2.2) créée à la volée par obtenirOuCreerLicence.
+export const licence = sqliteTable("licence", {
+  idLicence: integer("id_licence").primaryKey({ autoIncrement: true }),
+  palier: text("palier").notNull().default("ESSENTIEL"), // ESSENTIEL | PRO | RESEAU (10.1)
+  empreinteInstallation: text("empreinte_installation").notNull(),
+  dateExpirationAbonnement: text("date_expiration_abonnement").notNull(),
+  // dernière revalidation périodique réussie auprès du serveur de licence
+  // (simulée) — sert de point de départ au délai de grâce hors ligne (21 j)
+  derniereRevalidationReussie: text("derniere_revalidation_reussie").notNull(),
+});
+
 export const site = sqliteTable("site", {
   idSite: integer("id_site").primaryKey({ autoIncrement: true }),
   idEntreprise: integer("id_entreprise").notNull().references(() => entreprise.idEntreprise),

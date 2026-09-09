@@ -713,6 +713,25 @@ export async function chargerVentilationCA(token: string, siteId: number, aujour
   return lireJson<VentilationCAFamille[]>(reponse);
 }
 
+// 10.4 : état de la licence éditeur (mode dégradé après expiration du délai de grâce hors ligne)
+export interface StatutLicence {
+  palier: string;
+  dateExpirationAbonnement: string;
+  derniereRevalidationReussie: string;
+  etat: "ACTIVE" | "DEGRADE";
+  joursRestantsGrace: number;
+}
+
+export async function chargerEtatLicence(token: string): Promise<StatutLicence> {
+  const reponse = await fetch(`${BASE}/licence/etat`, { headers: headersAuth(token) });
+  return lireJson<StatutLicence>(reponse);
+}
+
+export async function revaliderLicence(token: string): Promise<StatutLicence> {
+  const reponse = await fetch(`${BASE}/licence/revalider`, { method: "POST", headers: headersAuth(token) });
+  return lireJson<StatutLicence>(reponse);
+}
+
 export async function chargerValorisationStock(token: string, siteId: number): Promise<number> {
   const reponse = await fetch(`${BASE}/tableau-bord/valorisation-stock?siteId=${siteId}`, { headers: headersAuth(token) });
   const { valorisation } = await lireJson<{ valorisation: number }>(reponse);

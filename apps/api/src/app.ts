@@ -19,6 +19,8 @@ import { registerComptesPartagesRoutes } from "./modules/comptes-partages/compte
 import { registerVentesRoutes } from "./modules/ventes/ventes.routes.js";
 import { registerSauvegardeRoutes } from "./modules/sauvegarde/sauvegarde.routes.js";
 import { registerAvoirRoutes } from "./modules/factures/avoir.routes.js";
+import { registerLicenceRoutes } from "./modules/licence/licence.routes.js";
+import { obtenirOuCreerLicence, calculerEtatLicence } from "./modules/licence/licence.service.js";
 
 export interface BuildAppOptions {
   jwtSecret: string;
@@ -30,11 +32,33 @@ export interface BuildAppOptions {
   dossierSauvegardes?: string;
 }
 
+// 10.4 : préfixes toujours autorisés en écriture même en mode dégradé —
+// authentification (pour pouvoir se connecter et consulter), licence
+// (pour revalider et sortir du mode dégradé) et sauvegarde ("export des
+// données toujours possible", 10.3).
+const PREFIXES_ECRITURE_TOUJOURS_AUTORISES = ["/api/v1/auth", "/api/v1/licence", "/api/v1/sauvegarde"];
+
 export function buildApp(db: Db, options: BuildAppOptions) {
   const app = Fastify();
   registerAuthPlugin(app, options.jwtSecret);
   registerAuthRoutes(app, db);
   const fournisseurPaiementMobile = options.fournisseurPaiementMobile ?? new SimulateurOrangeMoney();
+
+  // 10.3, 10.4 : un abonnement éditeur expiré ou une revalidation périodique
+  // non réussie au-delà du délai de grâce hors ligne bascule l'application
+  // en mode dégradé (lecture seule) — jamais de suppression de données,
+  // jamais de blocage brutal des consultations.
+  app.addHook("preHandler", async (request, reply) => {
+    if (request.method === "GET" || request.method === "HEAD") return;
+    const chemin = request.url.split("?")[0];
+    if (PREFIXES_ECRITURE_TOUJOURS_AUTORISES.some((prefixe) => chemin.startsWith(prefixe))) return;
+
+    const licence = obtenirOuCreerLicence(db, new Date().toISOString());
+    const { etat } = calculerEtatLicence(licence, new Date().toISOString());
+    if (etat === "DEGRADE") {
+      reply.code(403).send({ message: "Licence éditeur expirée : application en mode dégradé (lecture seule). Contactez votre éditeur pour réactiver l'abonnement." });
+    }
+  });
 
   // 2.5.1 : seuls Administrateur, Gérant et Caissier peuvent réaliser une vente
   const ventes = exigerRole("ADMINISTRATEUR", "GERANT", "CAISSIER");
@@ -81,6 +105,8 @@ export function buildApp(db: Db, options: BuildAppOptions) {
   registerSauvegardeRoutes(app, db, options.dossierSauvegardes ?? "./data/backups", { authRequis, admin });
   // 6.4 : correction d'une facture VALIDEE par avoir
   registerAvoirRoutes(app, db, { authRequis, ventes, gestionAvoirs });
+  // 10.4 : état de la licence éditeur, consultable par tout utilisateur connecté
+  registerLicenceRoutes(app, db, { authRequis });
 
   return app;
 }

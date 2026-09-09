@@ -1611,6 +1611,56 @@ describe("Tableau de bord de pilotage (8.6, 9.3)", () => {
   });
 });
 
+describe("Licence logicielle mode local (10.4)", () => {
+  it("10.4 : une installation fraîche est en état ACTIVE", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const token = await connecter(app);
+
+    const reponse = await app.inject({ method: "GET", url: "/api/v1/licence/etat", headers: authHeader(token) });
+
+    expect(reponse.statusCode).toBe(200);
+    expect(reponse.json().etat).toBe("ACTIVE");
+    expect(reponse.json().palier).toBe("ESSENTIEL");
+  });
+
+  it("10.4 : la revalidation manuelle avance la date de dernière revalidation réussie", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const token = await connecter(app);
+
+    const reponse = await app.inject({ method: "POST", url: "/api/v1/licence/revalider", headers: authHeader(token) });
+
+    expect(reponse.statusCode).toBe(200);
+    expect(reponse.json().derniereRevalidationReussie.slice(0, 10)).toBe(new Date().toISOString().slice(0, 10));
+  });
+
+  it("10.4 : au-delà du délai de grâce hors ligne, les routes d'écriture sont bloquées (403) mais la lecture et la revalidation restent disponibles", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    creerUtilisateur(db, { siteId, nom: "Admin", prenom: "D", identifiant: "admin1", motDePasse: "motdepasse-secret", role: "ADMINISTRATEUR" });
+    const token = await connecter(app, "admin1");
+
+    // force une dernière revalidation il y a 30 jours (> 21 j de grâce)
+    await app.inject({ method: "POST", url: "/api/v1/licence/revalider", headers: authHeader(token) });
+    const ilYA30Jours = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+    db.update(schema.licence).set({ derniereRevalidationReussie: ilYA30Jours }).run();
+
+    const aujourdHui = new Date().toISOString().slice(0, 10);
+    const ecriture = await app.inject({
+      method: "POST",
+      url: "/api/v1/recrutements",
+      headers: authHeader(token),
+      payload: { siteId, userId, aujourdHui, abonne: { nom: "Nga", prenom: "Paul", telephone: "690000000" }, idFormule, montantEncaisse: 13000 },
+    });
+    expect(ecriture.statusCode).toBe(403);
+
+    const lecture = await app.inject({ method: "GET", url: `/api/v1/tableau-bord/indicateurs?siteId=${siteId}&aujourdHui=${aujourdHui}`, headers: authHeader(token) });
+    expect(lecture.statusCode).toBe(200);
+
+    const revalidation = await app.inject({ method: "POST", url: "/api/v1/licence/revalider", headers: authHeader(token) });
+    expect(revalidation.statusCode).toBe(200);
+    expect(revalidation.json().etat).toBe("ACTIVE");
+  });
+});
+
 describe("Module gestion des utilisateurs, rôles et sites (8.7)", () => {
   async function connecterAdmin(app: FastifyInstance) {
     creerUtilisateur(db, { siteId, nom: "Admin", prenom: "D", identifiant: "admin1", motDePasse: "motdepasse-secret", role: "ADMINISTRATEUR" });

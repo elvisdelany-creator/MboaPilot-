@@ -40,9 +40,11 @@ export function ParametresTab() {
   const [mdpExigerMajuscule, setMdpExigerMajuscule] = useState(false);
   const [mdpExigerChiffre, setMdpExigerChiffre] = useState(false);
   const [mdpExigerCaractereSpecial, setMdpExigerCaractereSpecial] = useState(false);
+  const [dureeConservationDonnees, setDureeConservationDonnees] = useState("1095");
   const [enCours, setEnCours] = useState(false);
   const [enCoursJalons, setEnCoursJalons] = useState(false);
   const [enCoursMdp, setEnCoursMdp] = useState(false);
+  const [enCoursConservation, setEnCoursConservation] = useState(false);
   const [sauvegardes, setSauvegardes] = useState<Sauvegarde[]>([]);
   const [exportEnCours, setExportEnCours] = useState(false);
 
@@ -70,6 +72,7 @@ export function ParametresTab() {
         setMdpExigerMajuscule(infos.entreprise.politiqueMdpExigerMajuscule);
         setMdpExigerChiffre(infos.entreprise.politiqueMdpExigerChiffre);
         setMdpExigerCaractereSpecial(infos.entreprise.politiqueMdpExigerCaractereSpecial);
+        setDureeConservationDonnees(String(infos.entreprise.dureeConservationDonneesJours));
       })
       .catch((e) => gererErreur(e, "Impossible de charger les paramètres de l'entreprise."));
   }
@@ -158,6 +161,21 @@ export function ParametresTab() {
       gererErreur(erreur, "Échec de l'enregistrement de la politique de mot de passe.");
     } finally {
       setEnCoursMdp(false);
+    }
+  }
+
+  // 11.3, 8.8 : "durée de conservation définie et paramétrable, avec
+  // archivage ou anonymisation au-delà" — appliquée par le job quotidien
+  async function enregistrerDureeConservation() {
+    setEnCoursConservation(true);
+    try {
+      await modifierEntrepriseRequete(token, { dureeConservationDonneesJours: Number(dureeConservationDonnees) });
+      toast.success("Durée de conservation enregistrée.");
+      rechargerEntreprise();
+    } catch (erreur) {
+      gererErreur(erreur, "Échec de l'enregistrement de la durée de conservation.");
+    } finally {
+      setEnCoursConservation(false);
     }
   }
 
@@ -288,6 +306,28 @@ export function ParametresTab() {
         </div>
         <Button className="w-fit cursor-pointer" disabled={enCoursMdp} onClick={enregistrerPolitiqueMdp}>
           {enCoursMdp ? "Enregistrement…" : "Enregistrer"}
+        </Button>
+      </Card>
+
+      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Conservation des données personnelles</p>
+      <Card className="max-w-xl gap-4 p-4">
+        <p className="text-sm text-muted-foreground">
+          Durée de conservation (11.3) au-delà de laquelle un abonné sans abonnement actif est anonymisé automatiquement par la tâche
+          quotidienne (identité et coordonnées effacées, historique de facturation conservé) — 3 ans (1095 jours) par défaut.
+        </p>
+        <div>
+          <Label htmlFor="parametres-conservation">Durée de conservation (jours)</Label>
+          <Input
+            id="parametres-conservation"
+            type="number"
+            min={1}
+            value={dureeConservationDonnees}
+            onChange={(e) => setDureeConservationDonnees(e.target.value)}
+            className="mt-1 max-w-32"
+          />
+        </div>
+        <Button className="w-fit cursor-pointer" disabled={enCoursConservation} onClick={enregistrerDureeConservation}>
+          {enCoursConservation ? "Enregistrement…" : "Enregistrer"}
         </Button>
       </Card>
 

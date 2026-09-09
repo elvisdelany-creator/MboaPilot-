@@ -36,6 +36,11 @@ export const entreprise = sqliteTable("entreprise", {
   politiqueMdpExigerMajuscule: integer("politique_mdp_exiger_majuscule").notNull().default(0),
   politiqueMdpExigerChiffre: integer("politique_mdp_exiger_chiffre").notNull().default(0),
   politiqueMdpExigerCaractereSpecial: integer("politique_mdp_exiger_caractere_special").notNull().default(0),
+  // 11.3 : "Une durée de conservation définie et paramétrable, avec archivage
+  // ou anonymisation au-delà" — jours écoulés depuis la dernière activité
+  // (dernière date_fin d'abonnement, ou création si aucun abonnement) avant
+  // anonymisation automatique par le job quotidien. 1095 j = 3 ans par défaut.
+  dureeConservationDonneesJours: integer("duree_conservation_donnees_jours").notNull().default(1095),
   dateCreation: text("date_creation").notNull().default(now),
 });
 
@@ -430,7 +435,7 @@ export const savHistorique = sqliteTable("sav_historique", {
 // journal d'audit immuable — 11.5 : jamais de UPDATE/DELETE applicatif sur cette table
 export const journalAudit = sqliteTable("journal_audit", {
   idAudit: integer("id_audit").primaryKey({ autoIncrement: true }),
-  utilisateurId: integer("utilisateur_id").notNull().references(() => utilisateur.idUser),
+  utilisateurId: integer("utilisateur_id").references(() => utilisateur.idUser), // NULL = job automatique (11.3, comme historique_abonnement)
   action: text("action", { enum: ["CREATION", "MODIFICATION", "SUPPRESSION"] }).notNull(),
   tableCible: text("table_cible").notNull(),
   idCible: text("id_cible").notNull(),

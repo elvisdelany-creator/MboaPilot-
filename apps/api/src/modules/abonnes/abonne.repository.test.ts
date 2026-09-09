@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { creerDbTest, type Db } from "../../test-utils/db.js";
-import { creerAbonne, modifierAbonne, rechercherAbonnes, trouverAbonne } from "./abonne.repository.js";
+import { creerAbonne, listerAbonnesEligiblesAnonymisationAutomatique, modifierAbonne, rechercherAbonnes, trouverAbonne } from "./abonne.repository.js";
+import { recruterAbonne } from "../abonnements/recrutement.service.js";
 import * as schema from "../../db/schema.js";
 
 let db: Db;
@@ -112,5 +113,83 @@ describe("modifierAbonne (8.1 : consultation et modification de fiche abonné)",
 
   it("rejette un abonné inconnu", () => {
     expect(() => modifierAbonne(db, 999999, { email: "x@example.cm" })).toThrow(/introuvable/);
+  });
+});
+
+// 11.3 : "durée de conservation définie et paramétrable, avec archivage ou
+// anonymisation au-delà" — abonnés éligibles à l'anonymisation automatique
+describe("listerAbonnesEligiblesAnonymisationAutomatique (11.3)", () => {
+  let userId: number;
+  let idFormule: number;
+
+  beforeEach(() => {
+    userId = db
+      .insert(schema.utilisateur)
+      .values({ siteId, nom: "A", prenom: "B", identifiant: "ab", motDePasseHash: "h", role: "ADMINISTRATEUR" })
+      .returning()
+      .get().idUser;
+    const fam = db.insert(schema.familleAbonnement).values({ libelle: "CANAL+" }).returning().get();
+    idFormule = db.insert(schema.formule).values({ idFamille: fam.idFamille, libelle: "EVASION", prix: 10500, rang: 2 }).returning().get().idFormule;
+  });
+
+  it("signale un abonné dont le seul abonnement est expiré depuis plus longtemps que la durée de conservation", () => {
+    const abonne = creerAbonne(db, { siteId, nom: "Nga", prenom: "Valentin", telephone: "690000000" });
+    db.insert(schema.abonnement)
+      .values({ idAbonne: abonne.idAbonne, idFormule, siteId, dateDebut: "2020-01-01", dateFin: "2020-01-31", statut: "EXPIRE", creePar: userId })
+      .run();
+
+    const eligibles = listerAbonnesEligiblesAnonymisationAutomatique(db, "2026-01-01", 1095);
+
+    expect(eligibles).toHaveLength(1);
+    expect(eligibles[0].abonne.idAbonne).toBe(abonne.idAbonne);
+    expect(eligibles[0].derniereActivite).toBe("2020-01-31");
+  });
+
+  it("ignore un abonné avec un abonnement encore ACTIF, même ancien", () => {
+    const abonne = creerAbonne(db, { siteId, nom: "Nga", prenom: "Valentin", telephone: "690000000" });
+    db.insert(schema.abonnement)
+      .values({ idAbonne: abonne.idAbonne, idFormule, siteId, dateDebut: "2020-01-01", dateFin: "2020-01-31", statut: "ACTIF", creePar: userId })
+      .run();
+
+    expect(listerAbonnesEligiblesAnonymisationAutomatique(db, "2026-01-01", 1095)).toHaveLength(0);
+  });
+
+  it("ignore un abonné dont la dernière expiration est trop récente", () => {
+    const abonne = creerAbonne(db, { siteId, nom: "Nga", prenom: "Valentin", telephone: "690000000" });
+    db.insert(schema.abonnement)
+      .values({ idAbonne: abonne.idAbonne, idFormule, siteId, dateDebut: "2025-11-01", dateFin: "2025-12-01", statut: "EXPIRE", creePar: userId })
+      .run();
+
+    expect(listerAbonnesEligiblesAnonymisationAutomatique(db, "2026-01-01", 1095)).toHaveLength(0);
+  });
+
+  it("ignore une fiche déjà anonymisée", () => {
+    const abonne = creerAbonne(db, { siteId, nom: "Anonymisé", prenom: "Anonymisé", telephone: "0000000000" });
+    db.insert(schema.abonnement)
+      .values({ idAbonne: abonne.idAbonne, idFormule, siteId, dateDebut: "2020-01-01", dateFin: "2020-01-31", statut: "EXPIRE", creePar: userId })
+      .run();
+
+    expect(listerAbonnesEligiblesAnonymisationAutomatique(db, "2026-01-01", 1095)).toHaveLength(0);
+  });
+
+  it("signale un abonné sans aucun abonnement, en s'appuyant sur sa date de création", () => {
+    db.insert(schema.abonne).values({ siteId, nom: "Sans Abonnement", prenom: "X", telephone: "690000001", dateCreation: "2020-01-01" }).run();
+
+    const eligibles = listerAbonnesEligiblesAnonymisationAutomatique(db, "2026-01-01", 1095);
+
+    expect(eligibles).toHaveLength(1);
+    expect(eligibles[0].derniereActivite).toBe("2020-01-01");
+  });
+
+  it("prend en compte l'abonnement le plus récent quand plusieurs existent", () => {
+    const abonne = creerAbonne(db, { siteId, nom: "Nga", prenom: "Valentin", telephone: "690000000" });
+    db.insert(schema.abonnement)
+      .values({ idAbonne: abonne.idAbonne, idFormule, siteId, dateDebut: "2018-01-01", dateFin: "2018-01-31", statut: "EXPIRE", creePar: userId })
+      .run();
+    db.insert(schema.abonnement)
+      .values({ idAbonne: abonne.idAbonne, idFormule, siteId, dateDebut: "2025-11-01", dateFin: "2025-12-01", statut: "EXPIRE", creePar: userId })
+      .run();
+
+    expect(listerAbonnesEligiblesAnonymisationAutomatique(db, "2026-01-01", 1095)).toHaveLength(0); // le plus récent (2025-12-01) est trop proche
   });
 });

@@ -2,7 +2,9 @@ import { eq } from "drizzle-orm";
 import { detecterJalonAlerte, evaluerExpiration, evaluerSuiviCommission } from "@mboapilot/shared";
 import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
-import { trouverJalonsAlerteEntreprise } from "../entreprise/entreprise.repository.js";
+import { trouverDureeConservationDonneesEntreprise, trouverJalonsAlerteEntreprise } from "../entreprise/entreprise.repository.js";
+import { listerAbonnesEligiblesAnonymisationAutomatique } from "../abonnes/abonne.repository.js";
+import { anonymiserAbonne } from "../abonnes/anonymisation.service.js";
 import { envoyerNotificationAbonne } from "../notifications/notification.service.js";
 import { SimulateurNotification } from "../notifications/simulateur-notification.js";
 import type { FournisseurNotification } from "../notifications/fournisseur.js";
@@ -13,6 +15,7 @@ export interface JobQuotidienResultat {
   notificationsTentees: number;
   commissionsConfirmees: number;
   commissionsAnnulees: number;
+  abonnesAnonymises: number;
 }
 
 // 4.3, 4.4, 6.2 : job quotidien — fait transitionner les abonnements expirés,
@@ -31,6 +34,7 @@ export function executerJobQuotidien(
     notificationsTentees: 0,
     commissionsConfirmees: 0,
     commissionsAnnulees: 0,
+    abonnesAnonymises: 0,
   };
 
   const abonnementsActifs = db.select().from(schema.abonnement).where(eq(schema.abonnement.statut, "ACTIF")).all();
@@ -117,6 +121,15 @@ export function executerJobQuotidien(
       if (nouveauStatutSuivi === "CONFIRMEE") resultat.commissionsConfirmees += 1;
       if (nouveauStatutSuivi === "ANNULEE") resultat.commissionsAnnulees += 1;
     }
+  }
+
+  // 11.3 : "durée de conservation définie et paramétrable, avec archivage ou
+  // anonymisation au-delà" — mono-entreprise (2.2), pas de filtre par site
+  const dureeConservation = trouverDureeConservationDonneesEntreprise(db);
+  const eligibles = listerAbonnesEligiblesAnonymisationAutomatique(db, aujourdHui, dureeConservation);
+  for (const { abonne } of eligibles) {
+    anonymiserAbonne(db, { idAbonne: abonne.idAbonne });
+    resultat.abonnesAnonymises += 1;
   }
 
   return resultat;

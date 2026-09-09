@@ -189,3 +189,44 @@ describe("executerJobQuotidien — suivi commission CANAL+ (6.2)", () => {
     expect(resultat.commissionsConfirmees).toBe(1);
   });
 });
+
+// 11.3 : "durée de conservation définie et paramétrable, avec archivage ou
+// anonymisation au-delà" — anonymisation automatique des abonnés inactifs
+describe("executerJobQuotidien — anonymisation automatique (11.3)", () => {
+  it("anonymise un abonné inactif depuis plus longtemps que la durée de conservation configurée", () => {
+    db.update(schema.entreprise).set({ dureeConservationDonneesJours: 30 }).run();
+    const abonne = creerAbonne("690000008");
+    creerAbonnement(abonne.idAbonne, "2025-01-01", "2025-01-31", "EXPIRE"); // très ancien
+
+    const resultat = executerJobQuotidien(db, "2026-01-01");
+
+    expect(resultat.abonnesAnonymises).toBe(1);
+    const misAJour = db.select().from(schema.abonne).where(eq(schema.abonne.idAbonne, abonne.idAbonne)).get();
+    expect(misAJour?.nom).toBe("Anonymisé");
+    const audit = db.select().from(schema.journalAudit).where(eq(schema.journalAudit.idCible, String(abonne.idAbonne))).all();
+    expect(audit).toHaveLength(1);
+    expect(audit[0].utilisateurId).toBeNull();
+  });
+
+  it("n'anonymise pas un abonné inactif depuis moins longtemps que la durée de conservation", () => {
+    db.update(schema.entreprise).set({ dureeConservationDonneesJours: 1095 }).run();
+    const abonne = creerAbonne("690000009");
+    creerAbonnement(abonne.idAbonne, "2025-01-01", "2025-01-31", "EXPIRE");
+
+    const resultat = executerJobQuotidien(db, "2026-01-01");
+
+    expect(resultat.abonnesAnonymises).toBe(0);
+    const inchange = db.select().from(schema.abonne).where(eq(schema.abonne.idAbonne, abonne.idAbonne)).get();
+    expect(inchange?.nom).not.toBe("Anonymisé");
+  });
+
+  it("n'anonymise pas un abonné avec un abonnement encore ACTIF", () => {
+    db.update(schema.entreprise).set({ dureeConservationDonneesJours: 30 }).run();
+    const abonne = creerAbonne("690000010");
+    creerAbonnement(abonne.idAbonne, "2025-01-01", "2027-01-31", "ACTIF");
+
+    const resultat = executerJobQuotidien(db, "2026-01-01");
+
+    expect(resultat.abonnesAnonymises).toBe(0);
+  });
+});

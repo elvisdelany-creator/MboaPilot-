@@ -20,6 +20,7 @@ export interface InfosEntreprise {
     politiqueMdpExigerMajuscule: boolean;
     politiqueMdpExigerChiffre: boolean;
     politiqueMdpExigerCaractereSpecial: boolean;
+    dureeConservationDonneesJours: number;
   };
   site: { idSite: number; nom: string; adresse: string | null };
 }
@@ -49,6 +50,7 @@ export function trouverInfosEntrepriseParSite(db: Db, siteId: number): InfosEntr
       politiqueMdpExigerMajuscule: entreprise.politiqueMdpExigerMajuscule === 1,
       politiqueMdpExigerChiffre: entreprise.politiqueMdpExigerChiffre === 1,
       politiqueMdpExigerCaractereSpecial: entreprise.politiqueMdpExigerCaractereSpecial === 1,
+      dureeConservationDonneesJours: entreprise.dureeConservationDonneesJours,
     },
     site: { idSite: site.idSite, nom: site.nom, adresse: site.adresse },
   };
@@ -114,6 +116,16 @@ export function trouverPolitiqueMotDePasseParSite(db: Db, siteId: number): Polit
   };
 }
 
+const DUREE_CONSERVATION_DONNEES_PAR_DEFAUT = 1095; // 3 ans
+
+// 11.3, 2.2 : "durée de conservation définie et paramétrable" avant
+// anonymisation automatique des abonnés inactifs (job-quotidien.service.ts)
+// — mono-entreprise (2.2), même hypothèse que trouverJalonsAlerteEntreprise.
+export function trouverDureeConservationDonneesEntreprise(db: Db): number {
+  const entreprise = db.select().from(schema.entreprise).get();
+  return entreprise?.dureeConservationDonneesJours ?? DUREE_CONSERVATION_DONNEES_PAR_DEFAUT;
+}
+
 export interface ModifierEntrepriseInput {
   tauxTva?: number | null;
   mentionsLegales?: string | null;
@@ -122,6 +134,7 @@ export interface ModifierEntrepriseInput {
   jalonAlerteModere?: number;
   jalonAlerteAnticipe?: number;
   dureeRetentionExpiresJours?: number;
+  dureeConservationDonneesJours?: number;
   politiqueMdpLongueurMin?: number;
   politiqueMdpExigerMajuscule?: boolean;
   politiqueMdpExigerChiffre?: boolean;
@@ -153,6 +166,10 @@ export function modifierEntreprise(db: Db, idEntreprise: number, input: Modifier
     throw new Error("La longueur minimale du mot de passe doit être d'au moins 1 caractère");
   }
 
+  if (input.dureeConservationDonneesJours !== undefined && input.dureeConservationDonneesJours < 1) {
+    throw new Error("La durée de conservation des données doit être d'au moins 1 jour");
+  }
+
   return db
     .update(schema.entreprise)
     .set({
@@ -163,6 +180,7 @@ export function modifierEntreprise(db: Db, idEntreprise: number, input: Modifier
       ...(input.jalonAlerteModere !== undefined && { jalonAlerteModere }),
       ...(input.jalonAlerteAnticipe !== undefined && { jalonAlerteAnticipe }),
       ...(input.dureeRetentionExpiresJours !== undefined && { dureeRetentionExpiresJours: input.dureeRetentionExpiresJours }),
+      ...(input.dureeConservationDonneesJours !== undefined && { dureeConservationDonneesJours: input.dureeConservationDonneesJours }),
       ...(input.politiqueMdpLongueurMin !== undefined && { politiqueMdpLongueurMin: input.politiqueMdpLongueurMin }),
       ...(input.politiqueMdpExigerMajuscule !== undefined && { politiqueMdpExigerMajuscule: input.politiqueMdpExigerMajuscule ? 1 : 0 }),
       ...(input.politiqueMdpExigerChiffre !== undefined && { politiqueMdpExigerChiffre: input.politiqueMdpExigerChiffre ? 1 : 0 }),

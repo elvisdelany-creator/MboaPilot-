@@ -86,6 +86,9 @@ export interface InfosEntreprise {
     politiqueMdpExigerMajuscule: boolean;
     politiqueMdpExigerChiffre: boolean;
     politiqueMdpExigerCaractereSpecial: boolean;
+    // 11.3, 8.8 : durée (jours) de conservation des données d'un abonné
+    // inactif avant anonymisation automatique (défaut 1095 = 3 ans)
+    dureeConservationDonneesJours: number;
   };
   site: { idSite: number; nom: string; adresse: string | null };
 }

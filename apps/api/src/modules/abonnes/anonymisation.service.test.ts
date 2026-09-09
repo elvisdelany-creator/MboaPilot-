@@ -74,4 +74,16 @@ describe("anonymiserAbonne (11.3)", () => {
 
     expect(deuxiemeAppel.email).toBeNull();
   });
+
+  // 11.3 : anonymisation automatique déclenchée par le job quotidien —
+  // aucun utilisateur humain à l'origine de l'action
+  it("sans userId (job automatique), journalise avec utilisateur_id NULL", () => {
+    const abonne = creerAbonne(db, { siteId, nom: "Nga Ndongo", prenom: "Valentin", telephone: "690000000" });
+
+    anonymiserAbonne(db, { idAbonne: abonne.idAbonne });
+
+    const audit = db.select().from(schema.journalAudit).where(eq(schema.journalAudit.tableCible, "abonne")).all();
+    expect(audit).toHaveLength(1);
+    expect(audit[0].utilisateurId).toBeNull();
+  });
 });

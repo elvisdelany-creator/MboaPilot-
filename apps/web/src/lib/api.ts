@@ -1030,6 +1030,7 @@ export async function modifierEntrepriseRequete(
     politiqueMdpExigerMajuscule?: boolean;
     politiqueMdpExigerChiffre?: boolean;
     politiqueMdpExigerCaractereSpecial?: boolean;
+    dureeConservationDonneesJours?: number;
   }
 ): Promise<InfosEntreprise["entreprise"]> {
   const reponse = await fetch(`${BASE}/entreprise`, {

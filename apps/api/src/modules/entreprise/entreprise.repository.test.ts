@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { creerDbTest, type Db } from "../../test-utils/db.js";
 import {
   modifierEntreprise,
+  trouverDureeConservationDonneesEntreprise,
   trouverDureeRetentionExpiresParSite,
   trouverInfosEntrepriseParSite,
   trouverJalonsAlerteParSite,
@@ -236,5 +237,36 @@ describe("modifierEntreprise — politique de complexité du mot de passe (11.2,
       exigerChiffre: false,
       exigerCaractereSpecial: false,
     });
+  });
+});
+
+// 11.3 : "Une durée de conservation définie et paramétrable, avec archivage
+// ou anonymisation au-delà" — utilisée par le job quotidien pour
+// l'anonymisation automatique des abonnés inactifs
+describe("modifierEntreprise — durée de conservation des données (11.3, 8.8)", () => {
+  it("la durée par défaut est de 1095 jours (3 ans)", () => {
+    const ent = db.insert(schema.entreprise).values({ nom: "Boutique Test" }).returning().get();
+
+    expect(trouverDureeConservationDonneesEntreprise(db)).toBe(1095);
+    expect(trouverInfosEntrepriseParSite(db, db.insert(schema.site).values({ idEntreprise: ent.idEntreprise, nom: "Site A" }).returning().get().idSite)?.entreprise.dureeConservationDonneesJours).toBe(1095);
+  });
+
+  it("définit une durée personnalisée", () => {
+    const ent = db.insert(schema.entreprise).values({ nom: "Boutique Test" }).returning().get();
+
+    const modifiee = modifierEntreprise(db, ent.idEntreprise, { dureeConservationDonneesJours: 730 });
+
+    expect(modifiee?.dureeConservationDonneesJours).toBe(730);
+    expect(trouverDureeConservationDonneesEntreprise(db)).toBe(730);
+  });
+
+  it("rejette une durée inférieure à 1 jour", () => {
+    const ent = db.insert(schema.entreprise).values({ nom: "Boutique Test" }).returning().get();
+
+    expect(() => modifierEntreprise(db, ent.idEntreprise, { dureeConservationDonneesJours: 0 })).toThrow(/au moins 1 jour/);
+  });
+
+  it("renvoie 1095 jours par défaut quand aucune entreprise n'existe", () => {
+    expect(trouverDureeConservationDonneesEntreprise(db)).toBe(1095);
   });
 });

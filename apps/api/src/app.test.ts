@@ -1541,6 +1541,38 @@ describe("Tableau de bord de pilotage (8.6, 9.3)", () => {
     expect(commissions.statusCode).toBe(200);
   });
 
+  // 8.6 : "Suivi des apporteurs d'affaires — Chiffre d'affaires et commissions générés par chaque apporteur"
+  it("8.6 : consolide le CA d'un apporteur sur le tableau de bord de pilotage", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    creerUtilisateur(db, { siteId, nom: "Admin", prenom: "D", identifiant: "admin1", motDePasse: "motdepasse-secret", role: "ADMINISTRATEUR" });
+    const token = await connecter(app, "admin1");
+    const apporteur = (
+      await app.inject({ method: "POST", url: "/api/v1/apporteurs", headers: authHeader(token), payload: { nom: "Jean Apporteur" } })
+    ).json();
+
+    await app.inject({
+      method: "POST",
+      url: "/api/v1/recrutements",
+      headers: authHeader(token),
+      payload: {
+        siteId,
+        userId,
+        aujourdHui: "2025-11-16",
+        abonne: { nom: "Nga", prenom: "Paul", telephone: "690000000" },
+        idFormule,
+        montantEncaisse: 13000,
+        apporteurId: apporteur.idApporteur,
+      },
+    });
+
+    const reponse = await app.inject({ method: "GET", url: "/api/v1/tableau-bord/apporteurs", headers: authHeader(token) });
+
+    expect(reponse.statusCode).toBe(200);
+    expect(reponse.json()).toHaveLength(1);
+    expect(reponse.json()[0].nom).toBe("Jean Apporteur");
+    expect(reponse.json()[0].chiffreAffaires).toBe(13000);
+  });
+
   it("un caissier n'a pas accès au tableau de bord de pilotage (403)", async () => {
     const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
     const token = await connecter(app);

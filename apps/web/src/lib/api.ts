@@ -718,6 +718,22 @@ export async function chargerCommissionsCanalplusEnCours(token: string, siteId: 
   return lireJson<CommissionCanalplusEnCours[]>(reponse);
 }
 
+// 8.6, 6.3 : "Suivi des apporteurs d'affaires — Chiffre d'affaires et
+// commissions générés par chaque apporteur" — résumé pour le tableau de bord
+export interface ResumeApporteur {
+  idApporteur: number;
+  nom: string;
+  chiffreAffaires: number;
+  montantCommissionConfirmee: number;
+  montantCommissionRegle: number;
+  soldeCommissionDu: number;
+}
+
+export async function chargerResumesApporteurs(token: string): Promise<ResumeApporteur[]> {
+  const reponse = await fetch(`${BASE}/tableau-bord/apporteurs`, { headers: headersAuth(token) });
+  return lireJson<ResumeApporteur[]>(reponse);
+}
+
 // 8.7 : gestion des comptes utilisateurs, des sites et journal d'audit —
 // réservé à l'Administrateur
 export async function chargerUtilisateurs(token: string): Promise<CompteUtilisateur[]> {

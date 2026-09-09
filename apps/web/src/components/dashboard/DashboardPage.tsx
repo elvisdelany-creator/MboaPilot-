@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { AlertTriangle, History, PackageX, RotateCw, TrendingDown } from "lucide-react";
+import { AlertTriangle, History, PackageX, RotateCw, TrendingDown, Users } from "lucide-react";
 import {
   chargerAbonnementsExpires,
   chargerAlertesEcheance,
@@ -11,9 +11,11 @@ import {
   chargerFamilles,
   chargerIndicateursJour,
   chargerProduitsRotationLente,
+  chargerResumesApporteurs,
   chargerValorisationStock,
   ErreurAuthentification,
   type ProduitRotationLente,
+  type ResumeApporteur,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { AppHeader, type Vue } from "@/components/layout/AppHeader";
@@ -87,6 +89,8 @@ export function DashboardPage({ onNaviguer, onReabonnerDepuisAlerte, onReabonner
   const [encaissements, setEncaissements] = useState<VentilationPaiement[]>([]);
   const [valorisationStock, setValorisationStock] = useState<number | null>(null);
   const [commissionsCanalplus, setCommissionsCanalplus] = useState<CommissionCanalplusEnCours[]>([]);
+  // 8.6, 6.3 : "Suivi des apporteurs d'affaires"
+  const [resumesApporteurs, setResumesApporteurs] = useState<ResumeApporteur[]>([]);
 
   function gererErreur(erreur: unknown, messageParDefaut: string) {
     if (erreur instanceof ErreurAuthentification) {
@@ -134,6 +138,10 @@ export function DashboardPage({ onNaviguer, onReabonnerDepuisAlerte, onReabonner
     chargerCommissionsCanalplusEnCours(token, siteId)
       .then(setCommissionsCanalplus)
       .catch(() => setCommissionsCanalplus([]));
+    // 8.6, 6.3 : "Suivi des apporteurs d'affaires"
+    chargerResumesApporteurs(token)
+      .then(setResumesApporteurs)
+      .catch(() => setResumesApporteurs([]));
   }
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -256,6 +264,32 @@ export function DashboardPage({ onNaviguer, onReabonnerDepuisAlerte, onReabonner
                         </p>
                       </div>
                       <span className="tabular-nums font-medium text-primary">{formateurFcfa.format(c.commission.montantCommission)} FCFA</span>
+                    </Card>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {peutPiloter && resumesApporteurs.length > 0 && (
+            <div className="mb-8">
+              <h2 className="mb-3 font-heading text-lg font-semibold text-foreground">Suivi des apporteurs d'affaires</h2>
+              <ul className="space-y-2">
+                {resumesApporteurs.map((r) => (
+                  <li key={r.idApporteur}>
+                    <Card className="flex-row items-center justify-between gap-3 p-3">
+                      <div className="flex items-center gap-3">
+                        <span className="flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-xs font-semibold text-muted-foreground">
+                          <Users className="size-3.5" aria-hidden="true" />
+                          {r.nom}
+                        </span>
+                        {r.soldeCommissionDu > 0 && (
+                          <span className="text-sm text-muted-foreground">
+                            Solde dû : {formateurFcfa.format(r.soldeCommissionDu)} FCFA
+                          </span>
+                        )}
+                      </div>
+                      <span className="tabular-nums font-medium text-primary">{formateurFcfa.format(r.chiffreAffaires)} FCFA CA</span>
                     </Card>
                   </li>
                 ))}

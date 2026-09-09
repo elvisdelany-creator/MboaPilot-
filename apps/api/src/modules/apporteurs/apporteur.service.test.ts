@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 import { creerDbTest, type Db } from "../../test-utils/db.js";
 import { recruterAbonne } from "../abonnements/recrutement.service.js";
 import { creerApporteur } from "./apporteur.repository.js";
-import { construireFicheApporteur, enregistrerReglement } from "./apporteur.service.js";
+import { construireFicheApporteur, enregistrerReglement, listerResumesApporteurs } from "./apporteur.service.js";
 import * as schema from "../../db/schema.js";
 
 let db: Db;
@@ -143,5 +143,70 @@ describe("enregistrerReglement (6.3)", () => {
 
   it("rejette un apporteur inconnu", () => {
     expect(() => enregistrerReglement(db, { apporteurId: 999999, montant: 1000, modePaiement: "CASH", utilisateurId: userId })).toThrow(/introuvable/);
+  });
+});
+
+// 8.6 : "Suivi des apporteurs d'affaires — Chiffre d'affaires et commissions
+// générés par chaque apporteur" — résumé pour le tableau de bord
+describe("listerResumesApporteurs (8.6, 6.3)", () => {
+  it("consolide le CA et le solde de commission de chaque apporteur actif, triés par CA décroissant", () => {
+    const gros = creerApporteur(db, { nom: "Gros Apporteur", tauxCommissionDefaut: 500 });
+    const petit = creerApporteur(db, { nom: "Petit Apporteur", tauxCommissionDefaut: 500 });
+
+    recruterAbonne(db, {
+      siteId,
+      userId,
+      aujourdHui: "2025-11-16",
+      abonne: { nom: "Client1", prenom: "A", telephone: "690000000" },
+      idFormule: idFormuleDstv,
+      montantEncaisse: 13000,
+      apporteurId: gros.idApporteur,
+    });
+    recruterAbonne(db, {
+      siteId,
+      userId,
+      aujourdHui: "2025-11-16",
+      abonne: { nom: "Client2", prenom: "B", telephone: "690000001" },
+      idFormule: idFormuleDstv,
+      montantEncaisse: 5000, // encaissement partiel, peu importe pour le CA (montant facturé)
+      apporteurId: petit.idApporteur,
+    });
+
+    const resumes = listerResumesApporteurs(db);
+
+    expect(resumes).toHaveLength(2);
+    expect(resumes[0].nom).toBe("Gros Apporteur");
+    expect(resumes[0].chiffreAffaires).toBe(13000);
+    expect(resumes[1].nom).toBe("Petit Apporteur");
+    expect(resumes[1].chiffreAffaires).toBe(13000); // montant facturé, pas encaissé
+  });
+
+  it("exclut les apporteurs désactivés", () => {
+    creerApporteur(db, { nom: "Actif" });
+    const inactif = creerApporteur(db, { nom: "Inactif" });
+    db.update(schema.sousDistributeur).set({ actif: 0 }).where(eq(schema.sousDistributeur.idApporteur, inactif.idApporteur)).run();
+
+    const resumes = listerResumesApporteurs(db);
+
+    expect(resumes.map((r) => r.nom)).toEqual(["Actif"]);
+  });
+
+  it("renvoie un solde de commission dû cohérent avec la fiche apporteur", () => {
+    const apporteur = creerApporteur(db, { nom: "Jean", tauxCommissionDefaut: 500 });
+    const resultat = recruterAbonne(db, {
+      siteId,
+      userId,
+      aujourdHui: "2025-11-16",
+      abonne: { nom: "Client", prenom: "A", telephone: "690000000" },
+      idFormule: idFormuleCanal,
+      montantEncaisse: 10500,
+      apporteurId: apporteur.idApporteur,
+    });
+    db.update(schema.suiviCommissionCanalplus).set({ statut: "CONFIRMEE" }).where(eq(schema.suiviCommissionCanalplus.numeroAbonnement, resultat.numeroAbonnement)).run();
+
+    const resumes = listerResumesApporteurs(db);
+
+    expect(resumes[0].montantCommissionConfirmee).toBe(5250);
+    expect(resumes[0].soldeCommissionDu).toBe(5250);
   });
 });

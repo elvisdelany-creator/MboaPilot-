@@ -3,6 +3,7 @@ import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
 import {
   enregistrerReglementCommission,
+  listerApporteurs,
   listerReglementsApporteur,
   trouverApporteur,
   type EnregistrerReglementCommissionInput,
@@ -62,6 +63,36 @@ export function construireFicheApporteur(db: Db, idApporteur: number): FicheAppo
     .all();
 
   return { apporteur, abonnes, chiffreAffaires, commissionsCanalplus, ...calculerSoldeCommission(db, idApporteur) };
+}
+
+export interface ResumeApporteur {
+  idApporteur: number;
+  nom: string;
+  chiffreAffaires: number;
+  montantCommissionConfirmee: number;
+  montantCommissionRegle: number;
+  soldeCommissionDu: number;
+}
+
+// 8.6 : "Suivi des apporteurs d'affaires — Chiffre d'affaires et commissions
+// générés par chaque apporteur" — résumé compact pour le tableau de bord,
+// réutilise construireFicheApporteur pour ne pas dupliquer le calcul.
+// Seuls les apporteurs actifs sont consolidés, triés du CA le plus élevé au plus faible.
+export function listerResumesApporteurs(db: Db): ResumeApporteur[] {
+  return listerApporteurs(db)
+    .filter((a) => a.actif === 1)
+    .map((a) => {
+      const fiche = construireFicheApporteur(db, a.idApporteur);
+      return {
+        idApporteur: a.idApporteur,
+        nom: a.nom,
+        chiffreAffaires: fiche.chiffreAffaires,
+        montantCommissionConfirmee: fiche.montantCommissionConfirmee,
+        montantCommissionRegle: fiche.montantCommissionRegle,
+        soldeCommissionDu: fiche.soldeCommissionDu,
+      };
+    })
+    .sort((a, b) => b.chiffreAffaires - a.chiffreAffaires);
 }
 
 // 6.3 : enregistre un règlement de commission — jamais au-delà du solde

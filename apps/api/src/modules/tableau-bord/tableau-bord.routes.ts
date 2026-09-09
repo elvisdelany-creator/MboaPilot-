@@ -8,6 +8,7 @@ import {
   listerCommissionsCanalplusEnCours,
   listerEncaissementsJour,
 } from "./tableau-bord.service.js";
+import { listerResumesApporteurs } from "../apporteurs/apporteur.service.js";
 
 // 8.6, 9.3 : tableau de bord de pilotage — vue Administrateur/Gérant/Comptable
 // (indicateurs financiers), distincte des alertes d'échéance/de stock déjà
@@ -55,4 +56,10 @@ export function registerTableauBordRoutes(app: FastifyInstance, db: Db, guards: 
       reply.code(200).send(listerCommissionsCanalplusEnCours(db, Number(request.query.siteId)));
     }
   );
+
+  // 8.6 : "Suivi des apporteurs d'affaires — Chiffre d'affaires et commissions
+  // générés par chaque apporteur" — mono-entreprise (2.2), pas de filtre par site
+  app.get("/api/v1/tableau-bord/apporteurs", { preHandler: [guards.authRequis, guards.pilotage] }, async (_request, reply) => {
+    reply.code(200).send(listerResumesApporteurs(db));
+  });
 }

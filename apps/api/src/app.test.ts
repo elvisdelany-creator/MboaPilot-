@@ -1597,6 +1597,36 @@ describe("Tableau de bord de pilotage (8.6, 9.3)", () => {
     expect(reponse.json()).toContainEqual({ libelle: "DSTV", montant: 13000 });
   });
 
+  // 9.3 : courbe d'évolution du CA "filtrable... par famille d'activité"
+  it("9.3 : filtre la courbe d'évolution du CA par famille d'activité", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    creerUtilisateur(db, { siteId, nom: "Admin", prenom: "D", identifiant: "admin1", motDePasse: "motdepasse-secret", role: "ADMINISTRATEUR" });
+    const token = await connecter(app, "admin1");
+    const aujourdHui = new Date().toISOString().slice(0, 10);
+
+    await app.inject({
+      method: "POST",
+      url: "/api/v1/recrutements",
+      headers: authHeader(token),
+      payload: { siteId, userId, aujourdHui, abonne: { nom: "Nga", prenom: "Paul", telephone: "690000000" }, idFormule, montantEncaisse: 13000 },
+    });
+
+    const filtree = await app.inject({
+      method: "GET",
+      url: `/api/v1/tableau-bord/evolution-ca?siteId=${siteId}&aujourdHui=${aujourdHui}&jours=1&libelleFamille=DSTV`,
+      headers: authHeader(token),
+    });
+    expect(filtree.statusCode).toBe(200);
+    expect(filtree.json()[0].montant).toBe(13000);
+
+    const autreFamille = await app.inject({
+      method: "GET",
+      url: `/api/v1/tableau-bord/evolution-ca?siteId=${siteId}&aujourdHui=${aujourdHui}&jours=1&libelleFamille=Produits+%26+Services`,
+      headers: authHeader(token),
+    });
+    expect(autreFamille.json()[0].montant).toBe(0);
+  });
+
   it("un caissier n'a pas accès au tableau de bord de pilotage (403)", async () => {
     const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
     const token = await connecter(app);

@@ -76,6 +76,25 @@ describe("calculerEvolutionCA (9.3 : courbe d'évolution du CA)", () => {
     expect(evolution[1].montant).toBe(0);
     expect(evolution[2].montant).toBe(0);
   });
+
+  // 9.3 : "filtrable... par famille d'activité" — même logique de résolution
+  // de famille que la ventilation du CA du jour (8.6)
+  it("filtre la courbe par famille d'activité quand un libellé est fourni", () => {
+    const familleDstv = db.insert(schema.familleAbonnement).values({ libelle: "DSTV" }).returning().get();
+    const idFormuleDstv = db.insert(schema.formule).values({ idFamille: familleDstv.idFamille, libelle: "COMPAQ", prix: 13000, rang: 3 }).returning().get().idFormule;
+
+    recruterAbonne(db, { siteId, userId, aujourdHui: AUJOURDHUI, abonne: { nom: "Nga", prenom: "Paul", telephone: "690000000" }, idFormule, montantEncaisse: 10500 });
+    recruterAbonne(db, { siteId, userId, aujourdHui: AUJOURDHUI, abonne: { nom: "Ada", prenom: "Eve", telephone: "690000001" }, idFormule: idFormuleDstv, montantEncaisse: 13000 });
+
+    const evolutionCanal = calculerEvolutionCA(db, siteId, AUJOURDHUI, 3, "CANAL+");
+    expect(evolutionCanal.at(-1)?.montant).toBe(10500);
+
+    const evolutionDstv = calculerEvolutionCA(db, siteId, AUJOURDHUI, 3, "DSTV");
+    expect(evolutionDstv.at(-1)?.montant).toBe(13000);
+
+    const evolutionTout = calculerEvolutionCA(db, siteId, AUJOURDHUI, 3);
+    expect(evolutionTout.at(-1)?.montant).toBe(23500);
+  });
 });
 
 describe("calculerValorisationStock (8.6 : état des stocks)", () => {

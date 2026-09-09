@@ -695,8 +695,16 @@ export async function chargerIndicateursJour(token: string, siteId: number, aujo
   return lireJson<IndicateursJour>(reponse);
 }
 
-export async function chargerEvolutionCA(token: string, siteId: number, aujourdHui: string, jours: number): Promise<PointEvolutionCA[]> {
-  const reponse = await fetch(`${BASE}/tableau-bord/evolution-ca?siteId=${siteId}&aujourdHui=${aujourdHui}&jours=${jours}`, {
+// 9.3 : courbe d'évolution du CA, "filtrable... par famille d'activité"
+export async function chargerEvolutionCA(
+  token: string,
+  siteId: number,
+  aujourdHui: string,
+  jours: number,
+  libelleFamille?: string
+): Promise<PointEvolutionCA[]> {
+  const filtre = libelleFamille ? `&libelleFamille=${encodeURIComponent(libelleFamille)}` : "";
+  const reponse = await fetch(`${BASE}/tableau-bord/evolution-ca?siteId=${siteId}&aujourdHui=${aujourdHui}&jours=${jours}${filtre}`, {
     headers: headersAuth(token),
   });
   return lireJson<PointEvolutionCA[]>(reponse);

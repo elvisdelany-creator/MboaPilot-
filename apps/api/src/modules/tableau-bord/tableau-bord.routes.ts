@@ -24,12 +24,13 @@ export function registerTableauBordRoutes(app: FastifyInstance, db: Db, guards: 
     }
   );
 
-  app.get<{ Querystring: { siteId: string; aujourdHui: string; jours?: string } }>(
+  // 9.3 : courbe d'évolution du CA, "filtrable... par famille d'activité"
+  app.get<{ Querystring: { siteId: string; aujourdHui: string; jours?: string; libelleFamille?: string } }>(
     "/api/v1/tableau-bord/evolution-ca",
     { preHandler: [guards.authRequis, guards.pilotage] },
     async (request, reply) => {
-      const { siteId, aujourdHui, jours } = request.query;
-      reply.code(200).send(calculerEvolutionCA(db, Number(siteId), aujourdHui, jours ? Number(jours) : 30));
+      const { siteId, aujourdHui, jours, libelleFamille } = request.query;
+      reply.code(200).send(calculerEvolutionCA(db, Number(siteId), aujourdHui, jours ? Number(jours) : 30, libelleFamille || undefined));
     }
   );
 

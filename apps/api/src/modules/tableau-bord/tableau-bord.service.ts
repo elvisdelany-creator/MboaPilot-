@@ -53,8 +53,10 @@ export interface PointEvolutionCA {
   montant: number;
 }
 
-// 9.3 : courbe d'évolution du CA sur une période glissante (7/30 jours)
-export function calculerEvolutionCA(db: Db, siteId: number, aujourdHui: string, nombreJours: number): PointEvolutionCA[] {
+// 9.3 : courbe d'évolution du CA sur une période glissante (7/30 jours),
+// "filtrable... par famille d'activité" — même résolution de famille que la
+// ventilation du CA du jour (8.6, resoudreLibelleFamilleLigne plus bas).
+export function calculerEvolutionCA(db: Db, siteId: number, aujourdHui: string, nombreJours: number, libelleFamille?: string): PointEvolutionCA[] {
   const jours = genererPlageJours(aujourdHui, nombreJours);
   const premierJour = jours[0];
 
@@ -66,9 +68,22 @@ export function calculerEvolutionCA(db: Db, siteId: number, aujourdHui: string, 
     .filter((f) => f.dateCreation.slice(0, 10) >= premierJour);
 
   const montantParJour = new Map<string, number>();
-  for (const f of factures) {
-    const jour = f.dateCreation.slice(0, 10);
-    montantParJour.set(jour, (montantParJour.get(jour) ?? 0) + f.montantTotal);
+
+  if (!libelleFamille) {
+    for (const f of factures) {
+      const jour = f.dateCreation.slice(0, 10);
+      montantParJour.set(jour, (montantParJour.get(jour) ?? 0) + f.montantTotal);
+    }
+  } else {
+    const factureParId = new Map(factures.map((f) => [f.idFacture, f]));
+    const idsFactures = factures.map((f) => f.idFacture);
+    const lignes = idsFactures.length > 0 ? db.select().from(schema.ligneVente).where(inArray(schema.ligneVente.idFacture, idsFactures)).all() : [];
+    for (const ligne of lignes) {
+      if (resoudreLibelleFamilleLigne(db, ligne) !== libelleFamille) continue;
+      const facture = factureParId.get(ligne.idFacture)!;
+      const jour = facture.dateCreation.slice(0, 10);
+      montantParJour.set(jour, (montantParJour.get(jour) ?? 0) + ligne.prixApplique);
+    }
   }
 
   return jours.map((date) => ({ date, montant: montantParJour.get(date) ?? 0 }));

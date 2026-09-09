@@ -90,6 +90,8 @@ export function DashboardPage({ onNaviguer, onReabonnerDepuisAlerte, onReabonner
   // 8.6 : "Chiffre d'affaires — par famille d'activité"
   const [ventilationCA, setVentilationCA] = useState<VentilationCAFamille[]>([]);
   const [periodeCA, setPeriodeCA] = useState<7 | 30>(7);
+  // 9.3 : courbe d'évolution du CA, "filtrable... par famille d'activité"
+  const [familleCAFiltre, setFamilleCAFiltre] = useState<string | null>(null);
   const [encaissements, setEncaissements] = useState<VentilationPaiement[]>([]);
   const [valorisationStock, setValorisationStock] = useState<number | null>(null);
   const [commissionsCanalplus, setCommissionsCanalplus] = useState<CommissionCanalplusEnCours[]>([]);
@@ -130,7 +132,7 @@ export function DashboardPage({ onNaviguer, onReabonnerDepuisAlerte, onReabonner
     chargerIndicateursJour(token, siteId, aujourdHui)
       .then(setIndicateurs)
       .catch(() => setIndicateurs(null));
-    chargerEvolutionCA(token, siteId, aujourdHui, periodeCA)
+    chargerEvolutionCA(token, siteId, aujourdHui, periodeCA, familleCAFiltre ?? undefined)
       .then(setEvolutionCA)
       .catch(() => setEvolutionCA([]));
     // 8.6 : "Chiffre d'affaires — par famille d'activité"
@@ -153,7 +155,7 @@ export function DashboardPage({ onNaviguer, onReabonnerDepuisAlerte, onReabonner
   }
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(charger, [token, siteId, periodeCA, idFamilleFiltre]);
+  useEffect(charger, [token, siteId, periodeCA, idFamilleFiltre, familleCAFiltre]);
 
   useEffect(() => {
     chargerFamilles(token)
@@ -202,15 +204,33 @@ export function DashboardPage({ onNaviguer, onReabonnerDepuisAlerte, onReabonner
 
           {peutPiloter && evolutionCA.length > 0 && (
             <div className="mb-8">
-              <div className="mb-3 flex items-center justify-between">
+              <div className="mb-3 flex items-center justify-between gap-2">
                 <h2 className="font-heading text-lg font-semibold text-foreground">Évolution du chiffre d'affaires</h2>
-                <div className="flex gap-1">
-                  <Button variant={periodeCA === 7 ? "default" : "outline"} size="sm" className="cursor-pointer" onClick={() => setPeriodeCA(7)}>
-                    7 jours
-                  </Button>
-                  <Button variant={periodeCA === 30 ? "default" : "outline"} size="sm" className="cursor-pointer" onClick={() => setPeriodeCA(30)}>
-                    30 jours
-                  </Button>
+                <div className="flex items-center gap-2">
+                  {/* 9.3 : "filtrable... par famille d'activité" */}
+                  {ventilationCA.length > 0 && (
+                    <Select value={familleCAFiltre ?? "toutes"} onValueChange={(v) => setFamilleCAFiltre(v === "toutes" ? null : v)}>
+                      <SelectTrigger className="h-8 w-40 text-xs" aria-label="Filtrer par famille d'activité">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="toutes">Toutes les familles</SelectItem>
+                        {ventilationCA.map((v) => (
+                          <SelectItem key={v.libelle} value={v.libelle}>
+                            {v.libelle}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                  <div className="flex gap-1">
+                    <Button variant={periodeCA === 7 ? "default" : "outline"} size="sm" className="cursor-pointer" onClick={() => setPeriodeCA(7)}>
+                      7 jours
+                    </Button>
+                    <Button variant={periodeCA === 30 ? "default" : "outline"} size="sm" className="cursor-pointer" onClick={() => setPeriodeCA(30)}>
+                      30 jours
+                    </Button>
+                  </div>
                 </div>
               </div>
               <Card className="p-4">

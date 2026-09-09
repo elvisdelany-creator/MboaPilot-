@@ -21,6 +21,7 @@ export interface InfosEntreprise {
     politiqueMdpExigerChiffre: boolean;
     politiqueMdpExigerCaractereSpecial: boolean;
     dureeConservationDonneesJours: number;
+    delaiGraceReabonnementJours: number;
   };
   site: { idSite: number; nom: string; adresse: string | null };
 }
@@ -51,6 +52,7 @@ export function trouverInfosEntrepriseParSite(db: Db, siteId: number): InfosEntr
       politiqueMdpExigerChiffre: entreprise.politiqueMdpExigerChiffre === 1,
       politiqueMdpExigerCaractereSpecial: entreprise.politiqueMdpExigerCaractereSpecial === 1,
       dureeConservationDonneesJours: entreprise.dureeConservationDonneesJours,
+      delaiGraceReabonnementJours: entreprise.delaiGraceReabonnementJours,
     },
     site: { idSite: site.idSite, nom: site.nom, adresse: site.adresse },
   };
@@ -126,6 +128,16 @@ export function trouverDureeConservationDonneesEntreprise(db: Db): number {
   return entreprise?.dureeConservationDonneesJours ?? DUREE_CONSERVATION_DONNEES_PAR_DEFAUT;
 }
 
+const DELAI_GRACE_REABONNEMENT_PAR_DEFAUT = 0;
+
+// 4.3, 8.8 : "délai de grâce" de réabonnement — 0 jour par défaut (comportement
+// MVP inchangé) ; mono-entreprise (2.2), même hypothèse que
+// trouverDureeConservationDonneesEntreprise.
+export function trouverDelaiGraceReabonnementEntreprise(db: Db): number {
+  const entreprise = db.select().from(schema.entreprise).get();
+  return entreprise?.delaiGraceReabonnementJours ?? DELAI_GRACE_REABONNEMENT_PAR_DEFAUT;
+}
+
 export interface ModifierEntrepriseInput {
   tauxTva?: number | null;
   mentionsLegales?: string | null;
@@ -139,6 +151,7 @@ export interface ModifierEntrepriseInput {
   politiqueMdpExigerMajuscule?: boolean;
   politiqueMdpExigerChiffre?: boolean;
   politiqueMdpExigerCaractereSpecial?: boolean;
+  delaiGraceReabonnementJours?: number;
 }
 
 // 6.1, 6.2, 4.4, 8.8 : paramétrage des taxes applicables (le cas échéant),
@@ -170,6 +183,10 @@ export function modifierEntreprise(db: Db, idEntreprise: number, input: Modifier
     throw new Error("La durée de conservation des données doit être d'au moins 1 jour");
   }
 
+  if (input.delaiGraceReabonnementJours !== undefined && input.delaiGraceReabonnementJours < 0) {
+    throw new Error("Le délai de grâce de réabonnement ne peut pas être négatif");
+  }
+
   return db
     .update(schema.entreprise)
     .set({
@@ -187,6 +204,7 @@ export function modifierEntreprise(db: Db, idEntreprise: number, input: Modifier
       ...(input.politiqueMdpExigerCaractereSpecial !== undefined && {
         politiqueMdpExigerCaractereSpecial: input.politiqueMdpExigerCaractereSpecial ? 1 : 0,
       }),
+      ...(input.delaiGraceReabonnementJours !== undefined && { delaiGraceReabonnementJours: input.delaiGraceReabonnementJours }),
     })
     .where(eq(schema.entreprise.idEntreprise, idEntreprise))
     .returning()

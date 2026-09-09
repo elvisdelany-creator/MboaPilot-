@@ -89,6 +89,10 @@ export interface InfosEntreprise {
     // 11.3, 8.8 : durée (jours) de conservation des données d'un abonné
     // inactif avant anonymisation automatique (défaut 1095 = 3 ans)
     dureeConservationDonneesJours: number;
+    // 4.3, 8.8 : "délai de grâce" (jours) — un réabonnement tardif dans ce
+    // délai après la date_fin théorique redémarre à cette date_fin plutôt
+    // que la date réelle de paiement (défaut 0 = comportement inchangé)
+    delaiGraceReabonnementJours: number;
   };
   site: { idSite: number; nom: string; adresse: string | null };
 }

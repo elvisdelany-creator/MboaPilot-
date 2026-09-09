@@ -41,6 +41,11 @@ export const entreprise = sqliteTable("entreprise", {
   // (dernière date_fin d'abonnement, ou création si aucun abonnement) avant
   // anonymisation automatique par le job quotidien. 1095 j = 3 ans par défaut.
   dureeConservationDonneesJours: integer("duree_conservation_donnees_jours").notNull().default(1095),
+  // 4.3, 8.8 : "délai de grâce" (jours) — un réabonnement tardif effectué
+  // dans ce délai après la date_fin théorique redémarre à compter de cette
+  // date_fin plutôt que de la date réelle de paiement, pour ne pas pénaliser
+  // un client en léger retard. 0 par défaut (comportement MVP inchangé).
+  delaiGraceReabonnementJours: integer("delai_grace_reabonnement_jours").notNull().default(0),
   dateCreation: text("date_creation").notNull().default(now),
 });
 

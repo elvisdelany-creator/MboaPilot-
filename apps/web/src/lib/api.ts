@@ -1061,6 +1061,7 @@ export async function modifierEntrepriseRequete(
     politiqueMdpExigerChiffre?: boolean;
     politiqueMdpExigerCaractereSpecial?: boolean;
     dureeConservationDonneesJours?: number;
+    delaiGraceReabonnementJours?: number;
   }
 ): Promise<InfosEntreprise["entreprise"]> {
   const reponse = await fetch(`${BASE}/entreprise`, {

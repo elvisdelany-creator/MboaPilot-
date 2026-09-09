@@ -8,6 +8,7 @@ import * as schema from "../../db/schema.js";
 let db: Db;
 let siteId: number;
 let userId: number;
+let idEntreprise: number;
 let familleDstv: number;
 let compaq: number;
 let premium: number;
@@ -16,6 +17,7 @@ let numeroAbonnement: number;
 beforeEach(() => {
   db = creerDbTest();
   const ent = db.insert(schema.entreprise).values({ nom: "Boutique Test" }).returning().get();
+  idEntreprise = ent.idEntreprise;
   siteId = db.insert(schema.site).values({ idEntreprise: ent.idEntreprise, nom: "Site A" }).returning().get().idSite;
   userId = db
     .insert(schema.utilisateur)
@@ -144,5 +146,46 @@ describe("reabonner (7.2)", () => {
     expect(() =>
       reabonner(db, { siteId, userId, aujourdHui: "2025-12-20", numeroAbonnement, montantEncaisse: 0, remise: 20000 })
     ).toThrow(/remise/i);
+  });
+});
+
+// 4.3 : "délai de grâce" — un réabonnement tardif effectué dans ce délai
+// après la date_fin théorique (2025-12-15 pour cet abonnement, recruté le
+// 2025-11-16 sur 30 jours) redémarre à compter de cette date_fin plutôt que
+// de la date réelle de paiement, pour ne pas pénaliser un client en léger retard.
+describe("reabonner — délai de grâce (4.3, 8.8)", () => {
+  beforeEach(() => {
+    db.update(schema.abonnement).set({ statut: "EXPIRE" }).where(eq(schema.abonnement.numeroAbonnement, numeroAbonnement)).run();
+  });
+
+  it("un réabonnement tardif dans le délai de grâce configuré redémarre à la date de fin théorique précédente", () => {
+    db.update(schema.entreprise).set({ delaiGraceReabonnementJours: 5 }).where(eq(schema.entreprise.idEntreprise, idEntreprise)).run();
+
+    // 3 jours après la date_fin théorique (2025-12-15) — dans le délai de grâce de 5 jours
+    reabonner(db, { siteId, userId, aujourdHui: "2025-12-18", numeroAbonnement, montantEncaisse: 13000 });
+
+    const abonnement = db.select().from(schema.abonnement).where(eq(schema.abonnement.numeroAbonnement, numeroAbonnement)).get();
+    expect(abonnement?.dateDebut).toBe("2025-12-15");
+    expect(abonnement?.dateFin).toBe("2026-01-13"); // 2025-12-15 + 29 jours
+
+    const historique = db.select().from(schema.historiqueAbonnement).where(eq(schema.historiqueAbonnement.numeroAbonnement, numeroAbonnement)).all();
+    expect(historique.some((h) => h.typeChangement === "STATUT" && h.valeurAvant === "EXPIRE" && h.valeurApres === "ACTIF")).toBe(true);
+  });
+
+  it("au-delà du délai de grâce configuré, le réabonnement tardif démarre à la date réelle du paiement", () => {
+    db.update(schema.entreprise).set({ delaiGraceReabonnementJours: 5 }).where(eq(schema.entreprise.idEntreprise, idEntreprise)).run();
+
+    // 10 jours après la date_fin théorique (2025-12-15) — au-delà du délai de grâce de 5 jours
+    reabonner(db, { siteId, userId, aujourdHui: "2025-12-25", numeroAbonnement, montantEncaisse: 13000 });
+
+    const abonnement = db.select().from(schema.abonnement).where(eq(schema.abonnement.numeroAbonnement, numeroAbonnement)).get();
+    expect(abonnement?.dateDebut).toBe("2025-12-25");
+  });
+
+  it("par défaut (délai de grâce à 0), un réabonnement tardif démarre toujours à la date réelle du paiement", () => {
+    reabonner(db, { siteId, userId, aujourdHui: "2025-12-18", numeroAbonnement, montantEncaisse: 13000 });
+
+    const abonnement = db.select().from(schema.abonnement).where(eq(schema.abonnement.numeroAbonnement, numeroAbonnement)).get();
+    expect(abonnement?.dateDebut).toBe("2025-12-18");
   });
 });

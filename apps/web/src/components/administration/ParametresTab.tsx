@@ -41,10 +41,12 @@ export function ParametresTab() {
   const [mdpExigerChiffre, setMdpExigerChiffre] = useState(false);
   const [mdpExigerCaractereSpecial, setMdpExigerCaractereSpecial] = useState(false);
   const [dureeConservationDonnees, setDureeConservationDonnees] = useState("1095");
+  const [delaiGrace, setDelaiGrace] = useState("0");
   const [enCours, setEnCours] = useState(false);
   const [enCoursJalons, setEnCoursJalons] = useState(false);
   const [enCoursMdp, setEnCoursMdp] = useState(false);
   const [enCoursConservation, setEnCoursConservation] = useState(false);
+  const [enCoursDelaiGrace, setEnCoursDelaiGrace] = useState(false);
   const [sauvegardes, setSauvegardes] = useState<Sauvegarde[]>([]);
   const [exportEnCours, setExportEnCours] = useState(false);
 
@@ -73,6 +75,7 @@ export function ParametresTab() {
         setMdpExigerChiffre(infos.entreprise.politiqueMdpExigerChiffre);
         setMdpExigerCaractereSpecial(infos.entreprise.politiqueMdpExigerCaractereSpecial);
         setDureeConservationDonnees(String(infos.entreprise.dureeConservationDonneesJours));
+        setDelaiGrace(String(infos.entreprise.delaiGraceReabonnementJours));
       })
       .catch((e) => gererErreur(e, "Impossible de charger les paramètres de l'entreprise."));
   }
@@ -179,6 +182,22 @@ export function ParametresTab() {
     }
   }
 
+  // 4.3, 8.8 : "délai de grâce" — un réabonnement tardif dans ce délai après
+  // la date_fin théorique redémarre à cette date_fin plutôt que la date
+  // réelle de paiement, pour ne pas pénaliser un client en léger retard.
+  async function enregistrerDelaiGrace() {
+    setEnCoursDelaiGrace(true);
+    try {
+      await modifierEntrepriseRequete(token, { delaiGraceReabonnementJours: Number(delaiGrace) });
+      toast.success("Délai de grâce enregistré.");
+      rechargerEntreprise();
+    } catch (erreur) {
+      gererErreur(erreur, "Échec de l'enregistrement du délai de grâce.");
+    } finally {
+      setEnCoursDelaiGrace(false);
+    }
+  }
+
   if (!entreprise) return <p className="text-sm text-muted-foreground">Chargement…</p>;
 
   return (
@@ -271,6 +290,29 @@ export function ParametresTab() {
         </div>
         <Button className="w-fit cursor-pointer" disabled={enCoursJalons} onClick={enregistrerJalons}>
           {enCoursJalons ? "Enregistrement…" : "Enregistrer"}
+        </Button>
+      </Card>
+
+      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Réabonnement tardif</p>
+      <Card className="max-w-xl gap-4 p-4">
+        <p className="text-sm text-muted-foreground">
+          Délai de grâce (4.3) : un réabonnement effectué dans ce délai après la date de fin théorique d'un abonnement expiré redémarre à
+          compter de cette date de fin plutôt que de la date réelle de paiement, pour ne pas pénaliser un client en léger retard — 0 jour
+          (désactivé) par défaut.
+        </p>
+        <div>
+          <Label htmlFor="parametres-delai-grace">Délai de grâce (jours)</Label>
+          <Input
+            id="parametres-delai-grace"
+            type="number"
+            min={0}
+            value={delaiGrace}
+            onChange={(e) => setDelaiGrace(e.target.value)}
+            className="mt-1 max-w-32"
+          />
+        </div>
+        <Button className="w-fit cursor-pointer" disabled={enCoursDelaiGrace} onClick={enregistrerDelaiGrace}>
+          {enCoursDelaiGrace ? "Enregistrement…" : "Enregistrer"}
         </Button>
       </Card>
 

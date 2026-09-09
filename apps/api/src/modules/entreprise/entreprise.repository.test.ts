@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { creerDbTest, type Db } from "../../test-utils/db.js";
 import {
   modifierEntreprise,
+  trouverDelaiGraceReabonnementEntreprise,
   trouverDureeConservationDonneesEntreprise,
   trouverDureeRetentionExpiresParSite,
   trouverInfosEntrepriseParSite,
@@ -268,5 +269,32 @@ describe("modifierEntreprise — durée de conservation des données (11.3, 8.8)
 
   it("renvoie 1095 jours par défaut quand aucune entreprise n'existe", () => {
     expect(trouverDureeConservationDonneesEntreprise(db)).toBe(1095);
+  });
+});
+
+describe("modifierEntreprise — délai de grâce de réabonnement (4.3, 8.8)", () => {
+  it("le délai par défaut est de 0 jour (comportement MVP inchangé)", () => {
+    db.insert(schema.entreprise).values({ nom: "Boutique Test" }).returning().get();
+
+    expect(trouverDelaiGraceReabonnementEntreprise(db)).toBe(0);
+  });
+
+  it("définit un délai de grâce personnalisé", () => {
+    const ent = db.insert(schema.entreprise).values({ nom: "Boutique Test" }).returning().get();
+
+    const modifiee = modifierEntreprise(db, ent.idEntreprise, { delaiGraceReabonnementJours: 5 });
+
+    expect(modifiee?.delaiGraceReabonnementJours).toBe(5);
+    expect(trouverDelaiGraceReabonnementEntreprise(db)).toBe(5);
+  });
+
+  it("rejette un délai négatif", () => {
+    const ent = db.insert(schema.entreprise).values({ nom: "Boutique Test" }).returning().get();
+
+    expect(() => modifierEntreprise(db, ent.idEntreprise, { delaiGraceReabonnementJours: -1 })).toThrow(/négatif/);
+  });
+
+  it("renvoie 0 jour par défaut quand aucune entreprise n'existe", () => {
+    expect(trouverDelaiGraceReabonnementEntreprise(db)).toBe(0);
   });
 });

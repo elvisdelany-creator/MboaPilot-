@@ -2264,6 +2264,40 @@ describe("GET /api/v1/entreprise (6.7)", () => {
 
     expect(reponse.statusCode).toBe(400);
   });
+
+  // 4.3, 8.8 : "délai de grâce" de réabonnement, paramétrable
+  it("4.3 : un administrateur configure un délai de grâce de réabonnement, reflété dans les réponses de l'entreprise", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    creerUtilisateur(db, { siteId, nom: "Admin", prenom: "D", identifiant: "admin1", motDePasse: "motdepasse-secret", role: "ADMINISTRATEUR" });
+    const tokenAdmin = await connecter(app, "admin1");
+
+    const modification = await app.inject({
+      method: "PATCH",
+      url: "/api/v1/entreprise",
+      headers: authHeader(tokenAdmin),
+      payload: { delaiGraceReabonnementJours: 5 },
+    });
+    expect(modification.statusCode).toBe(200);
+    expect(modification.json().delaiGraceReabonnementJours).toBe(5);
+
+    const lecture = await app.inject({ method: "GET", url: "/api/v1/entreprise", headers: authHeader(tokenAdmin) });
+    expect(lecture.json().entreprise.delaiGraceReabonnementJours).toBe(5);
+  });
+
+  it("4.3, 8.8 : rejette un délai de grâce négatif (400)", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    creerUtilisateur(db, { siteId, nom: "Admin", prenom: "D", identifiant: "admin1", motDePasse: "motdepasse-secret", role: "ADMINISTRATEUR" });
+    const tokenAdmin = await connecter(app, "admin1");
+
+    const reponse = await app.inject({
+      method: "PATCH",
+      url: "/api/v1/entreprise",
+      headers: authHeader(tokenAdmin),
+      payload: { delaiGraceReabonnementJours: -1 },
+    });
+
+    expect(reponse.statusCode).toBe(400);
+  });
 });
 
 describe("Comptes partagés streaming (5.9)", () => {

@@ -127,6 +127,13 @@
       "when": 1788973420348,
       "tag": "0017_unknown_domino",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "6",
+      "when": 1788975861118,
+      "tag": "0018_aspiring_northstar",
+      "breakpoints": true
     }
   ]
 }

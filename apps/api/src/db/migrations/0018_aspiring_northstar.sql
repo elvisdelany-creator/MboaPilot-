@@ -1,0 +1,1 @@
+ALTER TABLE `entreprise` ADD `delai_grace_reabonnement_jours` integer DEFAULT 0 NOT NULL;

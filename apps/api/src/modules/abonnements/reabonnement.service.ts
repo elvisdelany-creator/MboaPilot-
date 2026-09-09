@@ -1,12 +1,13 @@
 import { eq } from "drizzle-orm";
-import { calculerDateFin } from "@mboapilot/shared";
+import { calculerDateFin, joursAvantEcheance } from "@mboapilot/shared";
 import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
+import { trouverDelaiGraceReabonnementEntreprise } from "../entreprise/entreprise.repository.js";
 
 export interface ReabonnerParams {
   siteId: number;
   userId: number;
-  aujourdHui: string; // horloge injectée — nouvelle période calculée à partir de cette date (7.2, pas de délai de grâce en MVP)
+  aujourdHui: string; // horloge injectée — nouvelle période calculée à partir de cette date, sauf délai de grâce applicable (4.3, 7.2)
   numeroAbonnement: number;
   idFormule?: number; // absent = reconduction de la formule actuelle
   montantEncaisse: number;
@@ -46,8 +47,29 @@ export function reabonner(db: Db, params: ReabonnerParams): ReabonnementResultat
   if (remise < 0) throw new Error("La remise ne peut pas être négative");
   if (remise > formule.prix) throw new Error(`La remise (${remise}) dépasse le prix de la formule (${formule.prix})`);
 
-  const dateDebut = params.aujourdHui;
+  // 4.3, 8.8 : "délai de grâce" — un réabonnement tardif effectué dans ce
+  // délai après la date_fin théorique précédente redémarre à compter de
+  // cette date_fin plutôt que de la date réelle de paiement, pour ne pas
+  // pénaliser un client en léger retard (paramétrable, 0 jour par défaut).
+  const delaiGrace = trouverDelaiGraceReabonnementEntreprise(db);
+  const joursDepuisExpiration = -joursAvantEcheance(abonnementActuel.dateFin, params.aujourdHui);
+  const dansLeDelaiDeGrace = abonnementActuel.statut === "EXPIRE" && joursDepuisExpiration > 0 && joursDepuisExpiration <= delaiGrace;
+
+  const dateDebut = dansLeDelaiDeGrace ? abonnementActuel.dateFin : params.aujourdHui;
   const dateFin = calculerDateFin(dateDebut, formule.dureeCycles, formule.modeDuree);
+
+  if (dansLeDelaiDeGrace) {
+    db.insert(schema.historiqueAbonnement)
+      .values({
+        numeroAbonnement: params.numeroAbonnement,
+        typeChangement: "STATUT",
+        valeurAvant: "EXPIRE",
+        valeurApres: "ACTIF",
+        motif: `reabonnement_delai_grace (${joursDepuisExpiration} j après échéance)`,
+        utilisateurId: params.userId,
+      })
+      .run();
+  }
 
   if (idFormule !== abonnementActuel.idFormule) {
     db.insert(schema.historiqueAbonnement)

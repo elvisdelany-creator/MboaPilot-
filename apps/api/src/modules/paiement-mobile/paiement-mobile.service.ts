@@ -57,7 +57,7 @@ export function trouverTransaction(db: Db, idTransaction: number) {
 // callback/webhook officiel viendra remplacer cet appel manuel sans changer
 // la logique métier ci-dessous. Idempotent : un état terminal ne rappelle
 // jamais le fournisseur ni ne recrée de paiement.
-export async function actualiserStatutTransaction(db: Db, fournisseur: FournisseurPaiementMobile, idTransaction: number) {
+export async function actualiserStatutTransaction(db: Db, fournisseur: FournisseurPaiementMobile, idTransaction: number, userId: number) {
   const transaction = trouverTransaction(db, idTransaction);
   if (!transaction) throw new Error(`Transaction ${idTransaction} introuvable`);
 
@@ -80,6 +80,7 @@ export async function actualiserStatutTransaction(db: Db, fournisseur: Fournisse
           idFacture: transaction.idFacture,
           mode: "MOBILE_MONEY",
           montant: transaction.montant,
+          utilisateurId: userId,
           referenceTransaction: transaction.referenceTransaction,
         })
         .run();

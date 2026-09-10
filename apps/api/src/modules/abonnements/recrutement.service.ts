@@ -138,6 +138,7 @@ export function recruterAbonne(db: Db, params: RecruterAbonneParams): Recrutemen
         idFacture: facture.idFacture,
         mode: params.modePaiement ?? "CASH",
         montant: params.montantEncaisse,
+        utilisateurId: params.userId,
         banque: params.banque,
         numeroCheque: params.numeroCheque,
         titulaireCheque: params.titulaireCheque,

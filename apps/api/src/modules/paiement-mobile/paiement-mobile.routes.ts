@@ -45,7 +45,7 @@ export function registerPaiementMobileRoutes(app: FastifyInstance, db: Db, fourn
     { preHandler: [guards.authRequis, guards.ventes] },
     async (request, reply) => {
       try {
-        reply.code(200).send(await actualiserStatutTransaction(db, fournisseur, Number(request.params.idTransaction)));
+        reply.code(200).send(await actualiserStatutTransaction(db, fournisseur, Number(request.params.idTransaction), request.user.idUser));
       } catch (erreur) {
         envoyerErreur(reply, erreur);
       }

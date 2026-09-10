@@ -124,6 +124,26 @@ describe("changerStatutSav — cycle de vie (5.10)", () => {
     expect(dossier?.statut).toBe("LIVRE");
   });
 
+  // 11.5 : "toute action sensible doit être journalisée... encaissement" — un
+  // caissier différent de celui qui a ouvert le dossier peut restituer
+  // l'appareil et encaisser le solde.
+  it("11.5 : journalise l'auteur de l'encaissement à la restitution, potentiellement différent de l'ouvreur du dossier", () => {
+    const autreCaissier = db
+      .insert(schema.utilisateur)
+      .values({ siteId, nom: "C", prenom: "D", identifiant: "cd", motDePasseHash: "h", role: "CAISSIER" })
+      .returning()
+      .get().idUser;
+
+    changerStatutSav(db, { idDossierSav, nouveauStatut: "DIAGNOSTIC", userId });
+    changerStatutSav(db, { idDossierSav, nouveauStatut: "REPARATION", userId });
+    changerStatutSav(db, { idDossierSav, nouveauStatut: "PRET", montantMainOeuvre: 4000, userId });
+
+    const resultat = changerStatutSav(db, { idDossierSav, nouveauStatut: "LIVRE", montantEncaisse: 4000, userId: autreCaissier });
+
+    const paiements = db.select().from(schema.paiement).where(eq(schema.paiement.idFacture, resultat.idFacture!)).all();
+    expect(paiements[0].utilisateurId).toBe(autreCaissier);
+  });
+
   // 6.5 : "Chèque — Banque, numéro de chèque, titulaire, date"
   it("PRET -> LIVRE payé par chèque -> le paiement enregistre le mode et les champs propres au chèque", () => {
     changerStatutSav(db, { idDossierSav, nouveauStatut: "DIAGNOSTIC", userId });

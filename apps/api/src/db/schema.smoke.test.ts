@@ -78,13 +78,13 @@ describe("schéma MboaPilot", () => {
     const fac = db.insert(schema.facture).values({ siteId: s.idSite, creePar: u.idUser }).returning().get();
 
     db.insert(schema.paiement)
-      .values({ idFacture: fac.idFacture, mode: "MOBILE_MONEY", montant: 5000, referenceTransaction: "OM-TXN-1" })
+      .values({ idFacture: fac.idFacture, mode: "MOBILE_MONEY", montant: 5000, utilisateurId: u.idUser, referenceTransaction: "OM-TXN-1" })
       .run();
 
     expect(() =>
       db
         .insert(schema.paiement)
-        .values({ idFacture: fac.idFacture, mode: "MOBILE_MONEY", montant: 5000, referenceTransaction: "OM-TXN-1" })
+        .values({ idFacture: fac.idFacture, mode: "MOBILE_MONEY", montant: 5000, utilisateurId: u.idUser, referenceTransaction: "OM-TXN-1" })
         .run()
     ).toThrow(/UNIQUE constraint failed/);
   });

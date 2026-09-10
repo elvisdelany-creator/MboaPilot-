@@ -80,7 +80,7 @@ describe("actualiserStatutTransaction (6.6)", () => {
     });
 
     fournisseur.statut = "REUSSIE";
-    const resultat = await actualiserStatutTransaction(db, fournisseur, transaction.idTransaction);
+    const resultat = await actualiserStatutTransaction(db, fournisseur, transaction.idTransaction, userId);
 
     expect(resultat.statut).toBe("REUSSIE");
     const facture = db.select().from(schema.facture).where(eq(schema.facture.idFacture, idFacture)).get();
@@ -90,6 +90,7 @@ describe("actualiserStatutTransaction (6.6)", () => {
     expect(paiements[0].mode).toBe("MOBILE_MONEY");
     expect(paiements[0].montant).toBe(5000);
     expect(paiements[0].referenceTransaction).toBe("REF-TEST-1");
+    expect(paiements[0].utilisateurId).toBe(userId); // 11.5 : caissier ayant consulté la confirmation
   });
 
   it("est idempotent : appelée deux fois après REUSSIE, ne crée qu'un seul paiement", async () => {
@@ -101,8 +102,8 @@ describe("actualiserStatutTransaction (6.6)", () => {
     });
 
     fournisseur.statut = "REUSSIE";
-    await actualiserStatutTransaction(db, fournisseur, transaction.idTransaction);
-    await actualiserStatutTransaction(db, fournisseur, transaction.idTransaction);
+    await actualiserStatutTransaction(db, fournisseur, transaction.idTransaction, userId);
+    await actualiserStatutTransaction(db, fournisseur, transaction.idTransaction, userId);
 
     const paiements = db.select().from(schema.paiement).where(eq(schema.paiement.idFacture, idFacture)).all();
     expect(paiements).toHaveLength(1);
@@ -117,7 +118,7 @@ describe("actualiserStatutTransaction (6.6)", () => {
     });
 
     fournisseur.statut = "ECHOUEE";
-    const resultat = await actualiserStatutTransaction(db, fournisseur, transaction.idTransaction);
+    const resultat = await actualiserStatutTransaction(db, fournisseur, transaction.idTransaction, userId);
 
     expect(resultat.statut).toBe("ECHOUEE");
     const facture = db.select().from(schema.facture).where(eq(schema.facture.idFacture, idFacture)).get();
@@ -126,6 +127,6 @@ describe("actualiserStatutTransaction (6.6)", () => {
   });
 
   it("rejette une transaction inconnue", async () => {
-    await expect(actualiserStatutTransaction(db, fournisseur, 999999)).rejects.toThrow(/introuvable/);
+    await expect(actualiserStatutTransaction(db, fournisseur, 999999, userId)).rejects.toThrow(/introuvable/);
   });
 });

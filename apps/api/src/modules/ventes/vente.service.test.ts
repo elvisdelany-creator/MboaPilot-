@@ -81,6 +81,14 @@ describe("creerVenteProduits (5.2, 5.3, 8.5)", () => {
     expect(paiements[0].montant).toBe(2500);
   });
 
+  // 11.5 : "toute action sensible doit être journalisée... encaissement"
+  it("11.5 : journalise l'auteur de l'encaissement sur le paiement", () => {
+    const resultat = creerVenteProduits(db, { siteId, userId, lignes: [{ idProduit: idBien, quantite: 1 }], montantEncaisse: 2500 });
+
+    const paiements = db.select().from(schema.paiement).where(eq(schema.paiement.idFacture, resultat.idFacture)).all();
+    expect(paiements[0].utilisateurId).toBe(userId);
+  });
+
   // 6.5 : "Virement bancaire — Banque émettrice, référence de virement"
   it("vente payée par virement -> le paiement enregistre le mode et la référence de virement", () => {
     const resultat = creerVenteProduits(db, {

@@ -387,6 +387,12 @@ export const paiement = sqliteTable("paiement", {
   idFacture: integer("id_facture").notNull().references(() => facture.idFacture),
   mode: text("mode", { enum: ["CASH", "CHEQUE", "VIREMENT", "MOBILE_MONEY"] }).notNull(),
   montant: integer("montant").notNull(),
+  // 11.5 : "toute action sensible doit être journalisée... encaissement" —
+  // un paiement complémentaire ultérieur (6.4) peut être enregistré par un
+  // caissier différent de celui qui a créé la facture (facture.cree_par) ;
+  // toujours un acteur humain (jamais de job automatique), contrairement à
+  // journal_audit/historique_abonnement.
+  utilisateurId: integer("utilisateur_id").notNull().references(() => utilisateur.idUser),
   referenceTransaction: text("reference_transaction"), // clé d'idempotence MOBILE_MONEY (13.2)
   // 6.5 : champs à saisir propres au chèque ("Banque, numéro de chèque,
   // titulaire, date") — renseignés uniquement lorsque mode = CHEQUE

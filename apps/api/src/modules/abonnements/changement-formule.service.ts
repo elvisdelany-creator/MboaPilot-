@@ -78,6 +78,7 @@ export function changerFormule(db: Db, params: ChangerFormuleParams): ChangerFor
         idFacture: facture.idFacture,
         mode: params.modePaiement ?? "CASH",
         montant: params.montantEncaisse,
+        utilisateurId: params.userId,
         banque: params.banque,
         numeroCheque: params.numeroCheque,
         titulaireCheque: params.titulaireCheque,

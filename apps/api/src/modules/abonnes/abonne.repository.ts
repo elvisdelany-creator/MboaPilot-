@@ -42,10 +42,12 @@ export interface ModifierAbonneInput {
   email?: string;
   numeroCni?: string;
   adresse?: string;
+  // 6.3, 14.2 : "non modifiable après création sans droit administrateur" —
+  // la restriction de rôle est vérifiée côté route (abonnes.routes.ts), pas ici.
+  apporteurId?: number | null;
 }
 
-// 8.1 : modification de fiche abonné — l'apporteur d'affaires n'est jamais
-// modifiable ici, il est permanent une fois renseigné à la création (6.3)
+// 8.1 : modification de fiche abonné
 export function modifierAbonne(db: Db, idAbonne: number, input: ModifierAbonneInput) {
   const existant = trouverAbonne(db, idAbonne);
   if (!existant) throw new Error(`Abonné ${idAbonne} introuvable`);
@@ -59,6 +61,7 @@ export function modifierAbonne(db: Db, idAbonne: number, input: ModifierAbonneIn
       email: input.email ?? existant.email,
       numeroCni: input.numeroCni ?? existant.numeroCni,
       adresse: input.adresse ?? existant.adresse,
+      ...(input.apporteurId !== undefined && { apporteurId: input.apporteurId }),
     })
     .where(eq(schema.abonne.idAbonne, idAbonne))
     .returning()

@@ -129,6 +129,8 @@ export interface ModifierAbonnePayload {
   email?: string;
   numeroCni?: string;
   adresse?: string;
+  // 6.3, 14.2 : "non modifiable après création sans droit administrateur" — rejeté par l'API pour tout autre rôle
+  apporteurId?: number | null;
 }
 
 export async function modifierAbonneRequete(token: string, idAbonne: number, payload: ModifierAbonnePayload): Promise<Abonne> {

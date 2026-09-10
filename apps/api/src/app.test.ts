@@ -1457,6 +1457,41 @@ describe("Fiche client 360° et fusion de doublons (8.1)", () => {
     expect(modification.json().email).toBe("valentin@example.cm");
   });
 
+  // 6.3, 14.2 : "non modifiable après création sans droit administrateur"
+  it("un administrateur peut modifier l'apporteur d'affaires d'un abonné", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    creerUtilisateur(db, { siteId, nom: "Admin", prenom: "D", identifiant: "admin1", motDePasse: "motdepasse-secret", role: "ADMINISTRATEUR" });
+    const tokenAdmin = await connecter(app, "admin1");
+    const { idAbonne } = await creerAbonneViaRecrutement(app, tokenAdmin, "Nga Ndongo", "690000000");
+    const apporteur = db.insert(schema.sousDistributeur).values({ nom: "Jean Apporteur" }).returning().get();
+
+    const modification = await app.inject({
+      method: "PATCH",
+      url: `/api/v1/abonnes/${idAbonne}`,
+      headers: authHeader(tokenAdmin),
+      payload: { apporteurId: apporteur.idApporteur },
+    });
+
+    expect(modification.statusCode).toBe(200);
+    expect(modification.json().apporteurId).toBe(apporteur.idApporteur);
+  });
+
+  it("un caissier ne peut pas modifier l'apporteur d'affaires d'un abonné (403)", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const token = await connecter(app);
+    const { idAbonne } = await creerAbonneViaRecrutement(app, token, "Nga Ndongo", "690000000");
+    const apporteur = db.insert(schema.sousDistributeur).values({ nom: "Jean Apporteur" }).returning().get();
+
+    const modification = await app.inject({
+      method: "PATCH",
+      url: `/api/v1/abonnes/${idAbonne}`,
+      headers: authHeader(token),
+      payload: { apporteurId: apporteur.idApporteur },
+    });
+
+    expect(modification.statusCode).toBe(403);
+  });
+
   it("un administrateur fusionne deux fiches doublons, l'historique du doublon est conservé", async () => {
     const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
     creerUtilisateur(db, { siteId, nom: "Admin", prenom: "D", identifiant: "admin1", motDePasse: "motdepasse-secret", role: "ADMINISTRATEUR" });

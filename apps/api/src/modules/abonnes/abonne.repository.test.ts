@@ -114,6 +114,36 @@ describe("modifierAbonne (8.1 : consultation et modification de fiche abonné)",
   it("rejette un abonné inconnu", () => {
     expect(() => modifierAbonne(db, 999999, { email: "x@example.cm" })).toThrow(/introuvable/);
   });
+
+  // 6.3, 14.2 : "non modifiable après création sans droit administrateur" —
+  // la restriction de rôle est vérifiée côté route (abonnes.routes.ts) ;
+  // ici, la fonction accepte le champ quand on choisit de le transmettre.
+  it("modifie l'apporteur d'affaires quand transmis explicitement", () => {
+    const apporteur = db.insert(schema.sousDistributeur).values({ nom: "Jean Apporteur" }).returning().get();
+    const ab = creerAbonne(db, { siteId, nom: "Nga Ndongo", prenom: "Valentin", telephone: "690000000" });
+
+    const modifie = modifierAbonne(db, ab.idAbonne, { apporteurId: apporteur.idApporteur });
+
+    expect(modifie.apporteurId).toBe(apporteur.idApporteur);
+  });
+
+  it("conserve l'apporteur d'affaires actuel quand le champ n'est pas transmis", () => {
+    const apporteur = db.insert(schema.sousDistributeur).values({ nom: "Jean Apporteur" }).returning().get();
+    const ab = creerAbonne(db, { siteId, nom: "Nga Ndongo", prenom: "Valentin", telephone: "690000000", apporteurId: apporteur.idApporteur });
+
+    const modifie = modifierAbonne(db, ab.idAbonne, { email: "valentin@example.cm" });
+
+    expect(modifie.apporteurId).toBe(apporteur.idApporteur);
+  });
+
+  it("retire l'apporteur d'affaires quand explicitement mis à null", () => {
+    const apporteur = db.insert(schema.sousDistributeur).values({ nom: "Jean Apporteur" }).returning().get();
+    const ab = creerAbonne(db, { siteId, nom: "Nga Ndongo", prenom: "Valentin", telephone: "690000000", apporteurId: apporteur.idApporteur });
+
+    const modifie = modifierAbonne(db, ab.idAbonne, { apporteurId: null });
+
+    expect(modifie.apporteurId).toBeNull();
+  });
 });
 
 // 11.3 : "durée de conservation définie et paramétrable, avec archivage ou

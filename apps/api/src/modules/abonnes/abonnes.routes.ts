@@ -57,6 +57,11 @@ export function registerAbonnesRoutes(app: FastifyInstance, db: Db, guards: Rout
     "/api/v1/abonnes/:idAbonne",
     { preHandler: [guards.authRequis, guards.ventes] },
     async (request, reply) => {
+      // 6.3, 14.2 : "non modifiable après création sans droit administrateur"
+      if (request.body.apporteurId !== undefined && request.user.role !== "ADMINISTRATEUR") {
+        reply.code(403).send({ erreur: "Seul un administrateur peut modifier l'apporteur d'affaires d'un abonné" });
+        return;
+      }
       try {
         reply.code(200).send(modifierAbonne(db, Number(request.params.idAbonne), request.body));
       } catch (erreur) {

@@ -119,7 +119,8 @@ export const abonne = sqliteTable("abonne", {
   numeroCni: text("numero_cni"),
   adresse: text("adresse"),
   telephone: text("telephone").notNull(),
-  // non modifiable après création sans droit administrateur (6.3) : à faire respecter côté API, pas ici
+  // non modifiable après création sans droit administrateur (6.3) — appliqué
+  // dans abonnes.routes.ts (PATCH /api/v1/abonnes/:idAbonne)
   apporteurId: integer("apporteur_id").references(() => sousDistributeur.idApporteur),
   dateCreation: text("date_creation").notNull().default(now),
 }, (t) => ({

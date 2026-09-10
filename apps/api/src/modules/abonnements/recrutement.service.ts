@@ -16,6 +16,11 @@ export interface RecruterAbonneParams {
   abonne: { idAbonne: number } | Omit<AbonneInput, "siteId">;
   idFormule: number;
   idKit?: number;
+  // 3.2.2, 7.1 : "Décodeur/carte d'accès effectivement installés chez un
+  // abonné (numéros de série)" — uniquement pertinent si idKit est fourni
+  // (recrutement TV satellite avec matériel physique, pas un compte streaming)
+  typeMateriel?: string; // ex. DECODEUR, PARABOLE, CARTE_ACCES — "DECODEUR" par défaut
+  numeroSerie?: string;
   // 3.2.2, 5.4.2 : options complémentaires (ex. Option English Plus) —
   // chacune doit être compatible avec la formule choisie (formule_option_compat)
   idsOptions?: number[];
@@ -147,6 +152,12 @@ export function recruterAbonne(db: Db, params: RecruterAbonneParams): Recrutemen
     db.insert(schema.ligneVente).values({ idFacture: facture.idFacture, idKit: kitRow.idKit, prixApplique: prixKit }).run();
     // 5.1, 5.2 : le kit est un "produit composé" — décrémente le stock de chacun de ses composants
     decrementerComposantsKit(db, { idKit: kitRow.idKit, siteId: params.siteId, userId: params.userId });
+    // 3.2.2, 7.1 : matériel effectivement installé (décodeur/carte d'accès)
+    // — capturé dès le premier équipement, pas seulement lors d'un échange
+    // ultérieur (7.3, echange-materiel.service.ts)
+    db.insert(schema.materielAbonne)
+      .values({ numeroAbonnement: abonnement.numeroAbonnement, typeMateriel: params.typeMateriel ?? "DECODEUR", numeroSerie: params.numeroSerie })
+      .run();
   }
 
   for (const o of optionsAppliquees) {

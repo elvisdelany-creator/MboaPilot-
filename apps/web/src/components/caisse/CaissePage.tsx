@@ -62,6 +62,8 @@ export function CaissePage({ onNaviguer, abonneInitial, idFamilleInitiale }: Pro
   // recrutement uniquement, comme les kits (voir masquerKits plus bas)
   const [options, setOptions] = useState<OptionCatalogue[]>([]);
   const [idsOptionsSelectionnees, setIdsOptionsSelectionnees] = useState<number[]>([]);
+  // 3.2.2, 7.1 : numéro de série du décodeur/carte d'accès installé (recrutement uniquement)
+  const [numeroSerie, setNumeroSerie] = useState("");
   // 6.4, 7.1 : "remise ponctuelle" sur le prix de la formule
   const [remise, setRemise] = useState(0);
   const [comptesPartages, setComptesPartages] = useState<ComptePartage[]>([]);
@@ -195,6 +197,12 @@ export function CaissePage({ onNaviguer, abonneInitial, idFamilleInitiale }: Pro
   useEffect(() => {
     if (abonnementARenouveler) setKitSelectionne(null);
   }, [abonnementARenouveler]);
+
+  // 3.2.2, 7.1 : le numéro de série est propre au kit sélectionné — repart de
+  // zéro dès qu'on change de kit (ou qu'on le retire)
+  useEffect(() => {
+    setNumeroSerie("");
+  }, [kitSelectionne?.idKit]);
 
   // 6.4 : la remise porte sur une formule précise — repart de zéro dès qu'on
   // change de formule ou d'opération, pour ne jamais la reporter par erreur
@@ -401,6 +409,7 @@ export function CaissePage({ onNaviguer, abonneInitial, idFamilleInitiale }: Pro
             abonne: "idAbonne" in abonneSelectionne ? { idAbonne: abonneSelectionne.idAbonne } : abonneSelectionne,
             idFormule: formuleSelectionnee.idFormule,
             idKit: kitSelectionne?.idKit,
+            numeroSerie: kitSelectionne && numeroSerie.trim() ? numeroSerie.trim() : undefined,
             idsOptions: idsOptionsSelectionnees.length > 0 ? idsOptionsSelectionnees : undefined,
             montantEncaisse,
             // 6.3 : lien permanent — uniquement renseigné à la création d'un nouveau client,
@@ -520,6 +529,8 @@ export function CaissePage({ onNaviguer, abonneInitial, idFamilleInitiale }: Pro
                 abonneSelectionne={abonneSelectionne}
                 formuleSelectionnee={formuleSelectionnee}
                 kitSelectionne={kitSelectionne}
+                numeroSerie={numeroSerie}
+                onChangerNumeroSerie={setNumeroSerie}
                 optionsCompatibles={optionsCompatibles}
                 idsOptionsSelectionnees={idsOptionsSelectionnees}
                 onChangerOptionsSelectionnees={setIdsOptionsSelectionnees}

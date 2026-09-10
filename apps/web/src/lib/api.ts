@@ -207,6 +207,8 @@ export interface RecruterPayload {
   abonne: { idAbonne: number } | NouvelAbonne;
   idFormule: number;
   idKit?: number;
+  // 3.2.2, 7.1 : numéro de série du matériel installé (décodeur), lié au kit
+  numeroSerie?: string;
   // 3.2.2, 5.4.2 : options complémentaires (ex. Option English Plus)
   idsOptions?: number[];
   montantEncaisse: number;

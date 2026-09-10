@@ -2342,6 +2342,38 @@ describe("Back-office catalogue : règles de prix dynamique des kits (5.1.1, 8.8
     expect(composantsApres.json()).toEqual([]);
   });
 
+  // 3.2.2, 7.1 : "Décodeur/carte d'accès effectivement installés chez un abonné (numéros de série)"
+  it("3.2.2, 7.1 : capture le numéro de série du matériel installé au recrutement, visible dans la fiche 360°", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const token = await connecter(app);
+    const famille = db.insert(schema.familleAbonnement).values({ libelle: "CANAL+" }).returning().get();
+    const formule = db.insert(schema.formule).values({ idFamille: famille.idFamille, libelle: "EVASION", prix: 10500, rang: 2 }).returning().get();
+    const kit = db.insert(schema.kit).values({ idFamille: famille.idFamille, libelle: "KIT CANAL+ GLOBALZ", reglePrix: "PRIX_FIXE", prixFixe: 15000 }).returning().get();
+
+    const recrutement = await app.inject({
+      method: "POST",
+      url: "/api/v1/recrutements",
+      headers: authHeader(token),
+      payload: {
+        siteId,
+        userId,
+        aujourdHui: "2025-11-16",
+        abonne: { nom: "Nga", prenom: "Paul", telephone: "690000000" },
+        idFormule: formule.idFormule,
+        idKit: kit.idKit,
+        numeroSerie: "SN-001",
+        montantEncaisse: 0,
+      },
+    });
+    expect(recrutement.statusCode).toBe(201);
+
+    const abonnes = await app.inject({ method: "GET", url: `/api/v1/abonnes?siteId=${siteId}&q=690000000`, headers: authHeader(token) });
+    const idAbonne = abonnes.json()[0].idAbonne as number;
+    const fiche = await app.inject({ method: "GET", url: `/api/v1/abonnes/${idAbonne}/fiche-360`, headers: authHeader(token) });
+
+    expect(fiche.json().materiels).toEqual([expect.objectContaining({ typeMateriel: "DECODEUR", numeroSerie: "SN-001", statut: "ACTIF" })]);
+  });
+
   it("un caissier ne peut pas définir de composant de kit (403)", async () => {
     const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
     const token = await connecter(app);

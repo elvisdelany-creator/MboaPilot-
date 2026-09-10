@@ -561,3 +561,42 @@ describe("recruterAbonne — options complémentaires (3.2.2, 5.4.2)", () => {
     ).toThrow(/compatible/i);
   });
 });
+
+// 3.2.2, 7.1 : "Décodeur/carte d'accès effectivement installés chez un
+// abonné (numéros de série), rattachés à l'abonnement en cours" — capturé
+// dès le premier équipement (recrutement), pas seulement lors d'un échange
+// ultérieur (7.3, déjà câblé dans echange-materiel.service.ts)
+describe("recruterAbonne — matériel installé (3.2.2, 7.1)", () => {
+  it("enregistre le matériel installé (décodeur) quand un kit est vendu, avec son numéro de série", () => {
+    const resultat = recruterAbonne(db, {
+      siteId,
+      userId,
+      aujourdHui: "2025-11-16",
+      abonne: { nom: "Nga Ndongo", prenom: "Valentin", telephone: "690000000" },
+      idFormule: formuleToutCanalPlus,
+      idKit: kitGlobalZ,
+      numeroSerie: "SN-GLOBALZ-001",
+      montantEncaisse: 57000,
+    });
+
+    const materiels = db.select().from(schema.materielAbonne).where(eq(schema.materielAbonne.numeroAbonnement, resultat.numeroAbonnement)).all();
+    expect(materiels).toHaveLength(1);
+    expect(materiels[0].typeMateriel).toBe("DECODEUR");
+    expect(materiels[0].numeroSerie).toBe("SN-GLOBALZ-001");
+    expect(materiels[0].statut).toBe("ACTIF");
+  });
+
+  it("n'enregistre aucun matériel pour un recrutement sans kit (ex. compte streaming)", () => {
+    const resultat = recruterAbonne(db, {
+      siteId,
+      userId,
+      aujourdHui: "2025-11-16",
+      abonne: { nom: "Nga Ndongo", prenom: "Valentin", telephone: "690000000" },
+      idFormule: formuleToutCanalPlus,
+      montantEncaisse: 28000,
+    });
+
+    const materiels = db.select().from(schema.materielAbonne).where(eq(schema.materielAbonne.numeroAbonnement, resultat.numeroAbonnement)).all();
+    expect(materiels).toHaveLength(0);
+  });
+});

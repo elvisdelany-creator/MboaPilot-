@@ -28,6 +28,10 @@ interface Props {
   abonneSelectionne: Abonne | NouvelAbonne | null;
   formuleSelectionnee: Formule | null;
   kitSelectionne: CatalogueKit | null;
+  // 3.2.2, 7.1 : numéro de série du matériel installé (décodeur) — pertinent
+  // uniquement quand un kit est vendu, au recrutement
+  numeroSerie: string;
+  onChangerNumeroSerie: (numeroSerie: string) => void;
   // 3.2.2, 5.4.2 : options complémentaires compatibles avec la formule
   // sélectionnée (déjà filtrées par CaissePage)
   optionsCompatibles: OptionCompatible[];
@@ -62,6 +66,8 @@ export function TicketPanel({
   abonneSelectionne,
   formuleSelectionnee,
   kitSelectionne,
+  numeroSerie,
+  onChangerNumeroSerie,
   optionsCompatibles,
   idsOptionsSelectionnees,
   onChangerOptionsSelectionnees,
@@ -193,6 +199,22 @@ export function TicketPanel({
             </li>
           ))}
         </ul>
+
+        {/* 3.2.2, 7.1 : "Décodeur/carte d'accès effectivement installés (numéros de série)" */}
+        {kitSelectionne && (
+          <div className="mt-3">
+            <Label htmlFor="ticket-numero-serie" className="text-sm font-normal text-muted-foreground">
+              N° de série du matériel (optionnel)
+            </Label>
+            <Input
+              id="ticket-numero-serie"
+              value={numeroSerie}
+              onChange={(e) => onChangerNumeroSerie(e.target.value)}
+              placeholder="Ex. SN-GLOBALZ-00123"
+              className="mt-1"
+            />
+          </div>
+        )}
 
         {/* 3.2.2, 5.4.2 : options complémentaires compatibles avec la formule (ex. Option English Plus) */}
         {optionsCompatibles.length > 0 && (

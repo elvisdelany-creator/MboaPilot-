@@ -180,6 +180,12 @@ export function TicketProduitsPanel({ panier, onIncrementer, onDecrementer, onRe
                 Encaissement partiel — solde de {formateurFcfa.format(total - montant)} FCFA restant dû.
               </p>
             )}
+            {/* 8.5, 9.2 : "calcul automatique des totaux et de la monnaie rendue" */}
+            {montant > total && (
+              <p className="mt-1 text-sm text-muted-foreground">
+                Monnaie à rendre : <span className="font-medium text-card-foreground">{formateurFcfa.format(montant - total)} FCFA</span>
+              </p>
+            )}
           </div>
         )}
 

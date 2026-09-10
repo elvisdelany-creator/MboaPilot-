@@ -211,6 +211,12 @@ export function EchangeMaterielDialog({ numeroAbonnement, onFerme, onSucces }: P
                 Encaissement partiel — solde de {formateurFcfa.format(montantFacture - montantEncaisse)} FCFA restant dû.
               </p>
             )}
+            {/* 8.5, 9.2 : "calcul automatique des totaux et de la monnaie rendue" */}
+            {modePaiement === "CASH" && montantEncaisse > montantFacture && (
+              <p className="mt-1 text-sm text-muted-foreground">
+                Monnaie à rendre : <span className="font-medium text-card-foreground">{formateurFcfa.format(montantEncaisse - montantFacture)} FCFA</span>
+              </p>
+            )}
           </div>
 
           {/* 6.5 : "Chèque — Banque, numéro de chèque, titulaire, date" */}

@@ -189,6 +189,20 @@ export function ChangerStatutDialog({ dossier, statutCible, onFerme, onSucces }:
                   onChange={(e) => setMontantEncaisse(Number(e.target.value))}
                   className="mt-1"
                 />
+                {dossier.facture && montantEncaisse > 0 && montantEncaisse < dossier.facture.montantTotal && (
+                  <p className="mt-1 text-sm text-alert-j3-fg">
+                    Encaissement partiel — solde de {formateurFcfa.format(dossier.facture.montantTotal - montantEncaisse)} FCFA restant dû.
+                  </p>
+                )}
+                {/* 8.5, 9.2 : "calcul automatique des totaux et de la monnaie rendue" */}
+                {modePaiement === "CASH" && dossier.facture && montantEncaisse > dossier.facture.montantTotal && (
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Monnaie à rendre :{" "}
+                    <span className="font-medium text-card-foreground">
+                      {formateurFcfa.format(montantEncaisse - dossier.facture.montantTotal)} FCFA
+                    </span>
+                  </p>
+                )}
               </div>
 
               {/* 6.5 : "Chèque — Banque, numéro de chèque, titulaire, date" */}

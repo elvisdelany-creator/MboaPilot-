@@ -209,15 +209,16 @@ export function CaissePage({ onNaviguer, abonneInitial, idFamilleInitiale }: Pro
     setIdsOptionsSelectionnees([]);
   }, [formuleSelectionnee?.idFormule, abonnementARenouveler]);
 
-  // 3.2.2, 5.4.2 : options compatibles avec la formule sélectionnée, avec
-  // leur tarif différencié éventuel
+  // 3.2.2, 5.4.2, 7.2 : options compatibles avec la formule sélectionnée
+  // (recrutement comme réabonnement — "ajuster ses options" au renouvellement,
+  // 7.2), avec leur tarif différencié éventuel
   const optionsCompatibles = useMemo(() => {
-    if (!formuleSelectionnee || abonnementARenouveler) return [];
+    if (!formuleSelectionnee) return [];
     return options
       .map((o) => ({ option: o, compat: o.formulesCompatibles.find((c) => c.idFormule === formuleSelectionnee.idFormule) }))
       .filter((o): o is { option: OptionCatalogue; compat: { idFormule: number; prixSurcharge: number | null } } => o.compat !== undefined)
       .map(({ option, compat }) => ({ ...option, prixApplique: compat.prixSurcharge ?? option.prix }));
-  }, [options, formuleSelectionnee, abonnementARenouveler]);
+  }, [options, formuleSelectionnee]);
 
   const optionsSelectionnees = optionsCompatibles.filter((o) => idsOptionsSelectionnees.includes(o.idOption));
   const prixOptions = optionsSelectionnees.reduce((total, o) => total + o.prixApplique, 0);
@@ -388,6 +389,7 @@ export function CaissePage({ onNaviguer, abonneInitial, idFamilleInitiale }: Pro
             userId: utilisateur.idUser,
             aujourdHui,
             idFormule: formuleSelectionnee.idFormule,
+            idsOptions: idsOptionsSelectionnees.length > 0 ? idsOptionsSelectionnees : undefined,
             montantEncaisse,
             remise: remiseEffective || undefined,
             ...detailsPaiement,

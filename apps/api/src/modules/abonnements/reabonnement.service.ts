@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { calculerDateFin, joursAvantEcheance } from "@mboapilot/shared";
 import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
@@ -10,6 +10,9 @@ export interface ReabonnerParams {
   aujourdHui: string; // horloge injectée — nouvelle période calculée à partir de cette date, sauf délai de grâce applicable (4.3, 7.2)
   numeroAbonnement: number;
   idFormule?: number; // absent = reconduction de la formule actuelle
+  // 3.2.2, 5.4.2, 7.2 : "ajuster ses options" au réabonnement — chacune doit
+  // être compatible avec la formule (nouvelle ou reconduite)
+  idsOptions?: number[];
   montantEncaisse: number;
   // 6.4, 7.2 : "remise ponctuelle" — montant en FCFA déduit du prix de la formule
   remise?: number;
@@ -89,17 +92,39 @@ export function reabonner(db: Db, params: ReabonnerParams): ReabonnementResultat
     .where(eq(schema.abonnement.numeroAbonnement, params.numeroAbonnement))
     .run();
 
+  // 3.2.2, 5.4.2, 7.2 : "ajuster ses options" — même règle de compatibilité
+  // et de tarif différencié qu'au recrutement (5.4.2)
+  const optionsAppliquees = (params.idsOptions ?? []).map((idOption) => {
+    const option = db.select().from(schema.optionComplement).where(eq(schema.optionComplement.idOption, idOption)).get();
+    if (!option) throw new Error(`Option ${idOption} introuvable`);
+    const compat = db
+      .select()
+      .from(schema.formuleOptionCompat)
+      .where(and(eq(schema.formuleOptionCompat.idFormule, idFormule), eq(schema.formuleOptionCompat.idOption, idOption)))
+      .get();
+    if (!compat) throw new Error(`Option "${option.libelle}" non compatible avec la formule "${formule.libelle}"`);
+    return { idOption, prixApplique: compat.prixSurcharge ?? option.prix };
+  });
+  const prixOptions = optionsAppliquees.reduce((total, o) => total + o.prixApplique, 0);
+
   const prixApplique = formule.prix - remise;
+  const montantTotal = prixApplique + prixOptions;
 
   const facture = db
     .insert(schema.facture)
-    .values({ siteId: params.siteId, idAbonne: abonnementActuel.idAbonne, creePar: params.userId, montantTotal: prixApplique })
+    .values({ siteId: params.siteId, idAbonne: abonnementActuel.idAbonne, creePar: params.userId, montantTotal })
     .returning()
     .get();
 
   db.insert(schema.ligneVente)
     .values({ idFacture: facture.idFacture, numeroAbonnement: params.numeroAbonnement, prixApplique, remise })
     .run();
+
+  for (const o of optionsAppliquees) {
+    db.insert(schema.ligneVente)
+      .values({ idFacture: facture.idFacture, idOption: o.idOption, numeroAbonnement: params.numeroAbonnement, prixApplique: o.prixApplique })
+      .run();
+  }
 
   let statutFacture: "BROUILLON" | "VALIDEE" = "BROUILLON";
   if (params.montantEncaisse > 0) {

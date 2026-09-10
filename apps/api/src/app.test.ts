@@ -270,6 +270,39 @@ describe("POST /api/v1/abonnements/:numeroAbonnement/reabonnements", () => {
     expect(reponse.json().statutFacture).toBe("VALIDEE");
   });
 
+  // 3.2.2, 5.4.2, 7.2 : "ajuster ses options" au réabonnement
+  it("3.2.2, 5.4.2, 7.2 : ajuste ses options au réabonnement, au tarif différencié pour la formule", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const token = await connecter(app);
+    const creation = await app.inject({
+      method: "POST",
+      url: "/api/v1/recrutements",
+      headers: authHeader(token),
+      payload: {
+        siteId,
+        userId,
+        aujourdHui: "2025-11-16",
+        abonne: { nom: "Nga Ndongo", prenom: "Valentin", telephone: "690000000" },
+        idFormule,
+        montantEncaisse: 13000,
+      },
+    });
+    const { numeroAbonnement } = creation.json();
+    const option = db.insert(schema.optionComplement).values({ libelle: "French Plus", prix: 13000 }).returning().get();
+    db.insert(schema.formuleOptionCompat).values({ idFormule, idOption: option.idOption, prixSurcharge: 6000 }).run();
+
+    const reponse = await app.inject({
+      method: "POST",
+      url: `/api/v1/abonnements/${numeroAbonnement}/reabonnements`,
+      headers: authHeader(token),
+      payload: { siteId, userId, aujourdHui: "2025-12-20", idsOptions: [option.idOption], montantEncaisse: 19000 },
+    });
+
+    expect(reponse.statusCode).toBe(200);
+    const facture = db.select().from(schema.facture).where(eq(schema.facture.idFacture, reponse.json().idFacture)).get();
+    expect(facture?.montantTotal).toBe(19000); // 13000 (formule) + 6000 (tarif différencié)
+  });
+
   it("renvoie 404 pour un numéro d'abonnement inconnu", async () => {
     const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
     const token = await connecter(app);

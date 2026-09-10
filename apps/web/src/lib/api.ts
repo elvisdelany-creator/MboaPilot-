@@ -383,6 +383,8 @@ export interface ReabonnerPayload {
   userId: number;
   aujourdHui: string;
   idFormule?: number;
+  // 3.2.2, 5.4.2, 7.2 : "ajuster ses options" au réabonnement
+  idsOptions?: number[];
   montantEncaisse: number;
   remise?: number; // 6.4 : remise ponctuelle sur le prix de la formule
   modePaiement?: ModePaiementEncaissement;

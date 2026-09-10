@@ -189,3 +189,51 @@ describe("reabonner — délai de grâce (4.3, 8.8)", () => {
     expect(abonnement?.dateDebut).toBe("2025-12-18");
   });
 });
+
+// 3.2.2, 5.4.2, 7.2 : "changement éventuel de formule et/ou de compléments...
+// et ajuster ses options" — mêmes règles de compatibilité et de tarif
+// différencié qu'au recrutement (5.4.2)
+describe("reabonner — options complémentaires (7.2)", () => {
+  let optionFrenchPlus: number;
+
+  beforeEach(() => {
+    optionFrenchPlus = db.insert(schema.optionComplement).values({ libelle: "French Plus", prix: 13000 }).returning().get().idOption;
+    db.insert(schema.formuleOptionCompat).values({ idFormule: compaq, idOption: optionFrenchPlus }).run();
+    db.insert(schema.formuleOptionCompat).values({ idFormule: premium, idOption: optionFrenchPlus, prixSurcharge: 8000 }).run();
+  });
+
+  it("ajuste ses options au réabonnement, au tarif par défaut pour la formule actuelle", () => {
+    const resultat = reabonner(db, { siteId, userId, aujourdHui: "2025-12-20", numeroAbonnement, idsOptions: [optionFrenchPlus], montantEncaisse: 26000 });
+
+    const facture = db.select().from(schema.facture).where(eq(schema.facture.idFacture, resultat.idFacture)).get();
+    expect(facture?.montantTotal).toBe(26000); // 13000 (COMPAQ) + 13000 (option, prix par défaut)
+
+    const lignes = db.select().from(schema.ligneVente).where(eq(schema.ligneVente.idFacture, resultat.idFacture)).all();
+    const ligneOption = lignes.find((l) => l.idOption === optionFrenchPlus);
+    expect(ligneOption?.prixApplique).toBe(13000);
+    expect(ligneOption?.numeroAbonnement).toBe(numeroAbonnement);
+  });
+
+  it("applique le tarif différencié de l'option lors d'un changement de formule au réabonnement", () => {
+    const resultat = reabonner(db, {
+      siteId,
+      userId,
+      aujourdHui: "2025-12-20",
+      numeroAbonnement,
+      idFormule: premium,
+      idsOptions: [optionFrenchPlus],
+      montantEncaisse: 36000,
+    });
+
+    const facture = db.select().from(schema.facture).where(eq(schema.facture.idFacture, resultat.idFacture)).get();
+    expect(facture?.montantTotal).toBe(36000); // 28000 (PREMIUM) + 8000 (tarif différencié)
+  });
+
+  it("rejette une option incompatible avec la formule choisie", () => {
+    const autreFormule = db.insert(schema.formule).values({ idFamille: familleDstv, libelle: "YANGA", prix: 5000, rang: 1 }).returning().get().idFormule;
+
+    expect(() =>
+      reabonner(db, { siteId, userId, aujourdHui: "2025-12-20", numeroAbonnement, idFormule: autreFormule, idsOptions: [optionFrenchPlus], montantEncaisse: 0 })
+    ).toThrow(/compatible/i);
+  });
+});

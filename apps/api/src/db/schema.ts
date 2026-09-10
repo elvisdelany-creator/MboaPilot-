@@ -46,6 +46,10 @@ export const entreprise = sqliteTable("entreprise", {
   // date_fin plutôt que de la date réelle de paiement, pour ne pas pénaliser
   // un client en léger retard. 0 par défaut (comportement MVP inchangé).
   delaiGraceReabonnementJours: integer("delai_grace_reabonnement_jours").notNull().default(0),
+  // 5.10, 7.3, 8.8 : "sous garantie (gratuit ou tarif réduit selon la
+  // politique)" — taux appliqué au tarif plein d'une réparation SAV ou d'un
+  // échange de matériel sous garantie (0 = gratuit, 100 = tarif plein).
+  tauxGarantiePourcent: integer("taux_garantie_pourcent").notNull().default(0),
   dateCreation: text("date_creation").notNull().default(now),
 });
 

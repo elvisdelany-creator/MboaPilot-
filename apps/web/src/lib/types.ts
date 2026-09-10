@@ -93,6 +93,9 @@ export interface InfosEntreprise {
     // délai après la date_fin théorique redémarre à cette date_fin plutôt
     // que la date réelle de paiement (défaut 0 = comportement inchangé)
     delaiGraceReabonnementJours: number;
+    // 5.10, 7.3, 8.8 : "sous garantie (gratuit ou tarif réduit selon la
+    // politique)" — taux appliqué au tarif plein (0 = gratuit par défaut)
+    tauxGarantiePourcent: number;
   };
   site: { idSite: number; nom: string; adresse: string | null };
 }

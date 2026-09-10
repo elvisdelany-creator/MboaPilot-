@@ -98,6 +98,20 @@ describe("changerStatutSav — cycle de vie (5.10)", () => {
     expect(resultat.statutFacture).toBe("VALIDEE");
   });
 
+  // 5.10, 7.3 : "sous garantie (gratuit ou tarif réduit selon la politique)"
+  it("passage en PRET sous garantie avec un taux de garantie configuré : facture au tarif réduit, BROUILLON", () => {
+    db.update(schema.entreprise).set({ tauxGarantiePourcent: 50 }).run();
+    db.update(schema.savDossier).set({ sousGarantie: 1 }).where(eq(schema.savDossier.idDossierSav, idDossierSav)).run();
+    changerStatutSav(db, { idDossierSav, nouveauStatut: "DIAGNOSTIC", userId });
+    affecterPieceSav(db, { idDossierSav, idProduit: idProduitPiece, quantite: 1, userId }); // 3000 FCFA
+    changerStatutSav(db, { idDossierSav, nouveauStatut: "REPARATION", userId });
+
+    const resultat = changerStatutSav(db, { idDossierSav, nouveauStatut: "PRET", montantMainOeuvre: 2000, userId }); // 5000 FCFA plein tarif
+
+    expect(resultat.montantFacture).toBe(2500); // 50 % de 5000
+    expect(resultat.statutFacture).toBe("BROUILLON");
+  });
+
   it("PRET -> LIVRE avec encaissement valide la facture", () => {
     changerStatutSav(db, { idDossierSav, nouveauStatut: "DIAGNOSTIC", userId });
     changerStatutSav(db, { idDossierSav, nouveauStatut: "REPARATION", userId });

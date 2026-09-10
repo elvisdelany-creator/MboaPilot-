@@ -4,6 +4,7 @@ import {
   modifierEntreprise,
   trouverDelaiGraceReabonnementEntreprise,
   trouverDureeConservationDonneesEntreprise,
+  trouverTauxGarantieEntreprise,
   trouverDureeRetentionExpiresParSite,
   trouverInfosEntrepriseParSite,
   trouverJalonsAlerteParSite,
@@ -296,5 +297,33 @@ describe("modifierEntreprise — délai de grâce de réabonnement (4.3, 8.8)", 
 
   it("renvoie 0 jour par défaut quand aucune entreprise n'existe", () => {
     expect(trouverDelaiGraceReabonnementEntreprise(db)).toBe(0);
+  });
+});
+
+describe("modifierEntreprise — taux de garantie (5.10, 7.3, 8.8)", () => {
+  it("le taux par défaut est de 0 % (gratuit, comportement MVP inchangé)", () => {
+    db.insert(schema.entreprise).values({ nom: "Boutique Test" }).returning().get();
+
+    expect(trouverTauxGarantieEntreprise(db)).toBe(0);
+  });
+
+  it("définit un taux de garantie personnalisé (tarif réduit)", () => {
+    const ent = db.insert(schema.entreprise).values({ nom: "Boutique Test" }).returning().get();
+
+    const modifiee = modifierEntreprise(db, ent.idEntreprise, { tauxGarantiePourcent: 50 });
+
+    expect(modifiee?.tauxGarantiePourcent).toBe(50);
+    expect(trouverTauxGarantieEntreprise(db)).toBe(50);
+  });
+
+  it("rejette un taux hors de la plage 0-100", () => {
+    const ent = db.insert(schema.entreprise).values({ nom: "Boutique Test" }).returning().get();
+
+    expect(() => modifierEntreprise(db, ent.idEntreprise, { tauxGarantiePourcent: -1 })).toThrow(/0 et 100/);
+    expect(() => modifierEntreprise(db, ent.idEntreprise, { tauxGarantiePourcent: 101 })).toThrow(/0 et 100/);
+  });
+
+  it("renvoie 0 % par défaut quand aucune entreprise n'existe", () => {
+    expect(trouverTauxGarantieEntreprise(db)).toBe(0);
   });
 });

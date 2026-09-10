@@ -6,6 +6,7 @@ import { enregistrerMouvement } from "../stock/stock.repository.js";
 import { envoyerNotificationAbonne } from "../notifications/notification.service.js";
 import { SimulateurNotification } from "../notifications/simulateur-notification.js";
 import type { FournisseurNotification } from "../notifications/fournisseur.js";
+import { trouverTauxGarantieEntreprise } from "../entreprise/entreprise.repository.js";
 
 export interface AffecterPieceParams {
   idDossierSav: number;
@@ -94,7 +95,10 @@ export function changerStatutSav(
       montantPieces += (produit?.prixVente ?? 0) * piece.quantite;
     }
 
-    montantFacture = dossier.sousGarantie === 1 ? 0 : montantPieces + montantMainOeuvre;
+    // 5.10, 7.3, 8.8 : "sous garantie (gratuit ou tarif réduit selon la
+    // politique)" — tauxGarantiePourcent à 0 (gratuit) par défaut
+    const montantPlein = montantPieces + montantMainOeuvre;
+    montantFacture = dossier.sousGarantie === 1 ? Math.round((montantPlein * trouverTauxGarantieEntreprise(db)) / 100) : montantPlein;
 
     const facture = db
       .insert(schema.facture)

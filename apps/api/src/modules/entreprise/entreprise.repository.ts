@@ -22,6 +22,7 @@ export interface InfosEntreprise {
     politiqueMdpExigerCaractereSpecial: boolean;
     dureeConservationDonneesJours: number;
     delaiGraceReabonnementJours: number;
+    tauxGarantiePourcent: number;
   };
   site: { idSite: number; nom: string; adresse: string | null };
 }
@@ -53,6 +54,7 @@ export function trouverInfosEntrepriseParSite(db: Db, siteId: number): InfosEntr
       politiqueMdpExigerCaractereSpecial: entreprise.politiqueMdpExigerCaractereSpecial === 1,
       dureeConservationDonneesJours: entreprise.dureeConservationDonneesJours,
       delaiGraceReabonnementJours: entreprise.delaiGraceReabonnementJours,
+      tauxGarantiePourcent: entreprise.tauxGarantiePourcent,
     },
     site: { idSite: site.idSite, nom: site.nom, adresse: site.adresse },
   };
@@ -138,6 +140,17 @@ export function trouverDelaiGraceReabonnementEntreprise(db: Db): number {
   return entreprise?.delaiGraceReabonnementJours ?? DELAI_GRACE_REABONNEMENT_PAR_DEFAUT;
 }
 
+const TAUX_GARANTIE_PAR_DEFAUT = 0;
+
+// 5.10, 7.3, 8.8 : "sous garantie (gratuit ou tarif réduit selon la
+// politique)" — taux appliqué au tarif plein (0 = gratuit par défaut,
+// comportement MVP inchangé) ; mono-entreprise (2.2), même hypothèse que
+// trouverDelaiGraceReabonnementEntreprise.
+export function trouverTauxGarantieEntreprise(db: Db): number {
+  const entreprise = db.select().from(schema.entreprise).get();
+  return entreprise?.tauxGarantiePourcent ?? TAUX_GARANTIE_PAR_DEFAUT;
+}
+
 export interface ModifierEntrepriseInput {
   tauxTva?: number | null;
   mentionsLegales?: string | null;
@@ -152,6 +165,7 @@ export interface ModifierEntrepriseInput {
   politiqueMdpExigerChiffre?: boolean;
   politiqueMdpExigerCaractereSpecial?: boolean;
   delaiGraceReabonnementJours?: number;
+  tauxGarantiePourcent?: number;
 }
 
 // 6.1, 6.2, 4.4, 8.8 : paramétrage des taxes applicables (le cas échéant),
@@ -187,6 +201,10 @@ export function modifierEntreprise(db: Db, idEntreprise: number, input: Modifier
     throw new Error("Le délai de grâce de réabonnement ne peut pas être négatif");
   }
 
+  if (input.tauxGarantiePourcent !== undefined && (input.tauxGarantiePourcent < 0 || input.tauxGarantiePourcent > 100)) {
+    throw new Error("Le taux de garantie doit être compris entre 0 et 100 %");
+  }
+
   return db
     .update(schema.entreprise)
     .set({
@@ -205,6 +223,7 @@ export function modifierEntreprise(db: Db, idEntreprise: number, input: Modifier
         politiqueMdpExigerCaractereSpecial: input.politiqueMdpExigerCaractereSpecial ? 1 : 0,
       }),
       ...(input.delaiGraceReabonnementJours !== undefined && { delaiGraceReabonnementJours: input.delaiGraceReabonnementJours }),
+      ...(input.tauxGarantiePourcent !== undefined && { tauxGarantiePourcent: input.tauxGarantiePourcent }),
     })
     .where(eq(schema.entreprise.idEntreprise, idEntreprise))
     .returning()

@@ -42,11 +42,13 @@ export function ParametresTab() {
   const [mdpExigerCaractereSpecial, setMdpExigerCaractereSpecial] = useState(false);
   const [dureeConservationDonnees, setDureeConservationDonnees] = useState("1095");
   const [delaiGrace, setDelaiGrace] = useState("0");
+  const [tauxGarantie, setTauxGarantie] = useState("0");
   const [enCours, setEnCours] = useState(false);
   const [enCoursJalons, setEnCoursJalons] = useState(false);
   const [enCoursMdp, setEnCoursMdp] = useState(false);
   const [enCoursConservation, setEnCoursConservation] = useState(false);
   const [enCoursDelaiGrace, setEnCoursDelaiGrace] = useState(false);
+  const [enCoursTauxGarantie, setEnCoursTauxGarantie] = useState(false);
   const [sauvegardes, setSauvegardes] = useState<Sauvegarde[]>([]);
   const [exportEnCours, setExportEnCours] = useState(false);
 
@@ -76,6 +78,7 @@ export function ParametresTab() {
         setMdpExigerCaractereSpecial(infos.entreprise.politiqueMdpExigerCaractereSpecial);
         setDureeConservationDonnees(String(infos.entreprise.dureeConservationDonneesJours));
         setDelaiGrace(String(infos.entreprise.delaiGraceReabonnementJours));
+        setTauxGarantie(String(infos.entreprise.tauxGarantiePourcent));
       })
       .catch((e) => gererErreur(e, "Impossible de charger les paramètres de l'entreprise."));
   }
@@ -198,6 +201,22 @@ export function ParametresTab() {
     }
   }
 
+  // 5.10, 7.3, 8.8 : "sous garantie (gratuit ou tarif réduit selon la
+  // politique)" — taux appliqué au tarif plein d'une réparation SAV ou d'un
+  // échange de matériel sous garantie
+  async function enregistrerTauxGarantie() {
+    setEnCoursTauxGarantie(true);
+    try {
+      await modifierEntrepriseRequete(token, { tauxGarantiePourcent: Number(tauxGarantie) });
+      toast.success("Taux de garantie enregistré.");
+      rechargerEntreprise();
+    } catch (erreur) {
+      gererErreur(erreur, "Échec de l'enregistrement du taux de garantie.");
+    } finally {
+      setEnCoursTauxGarantie(false);
+    }
+  }
+
   if (!entreprise) return <p className="text-sm text-muted-foreground">Chargement…</p>;
 
   return (
@@ -313,6 +332,29 @@ export function ParametresTab() {
         </div>
         <Button className="w-fit cursor-pointer" disabled={enCoursDelaiGrace} onClick={enregistrerDelaiGrace}>
           {enCoursDelaiGrace ? "Enregistrement…" : "Enregistrer"}
+        </Button>
+      </Card>
+
+      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Garantie (SAV et échange de matériel)</p>
+      <Card className="max-w-xl gap-4 p-4">
+        <p className="text-sm text-muted-foreground">
+          Taux appliqué au tarif plein d'une réparation SAV ou d'un échange de matériel sous garantie (5.10, 7.3) — 0 % (gratuit) par
+          défaut, ou un tarif réduit selon la politique de l'entreprise.
+        </p>
+        <div>
+          <Label htmlFor="parametres-taux-garantie">Taux de garantie (%)</Label>
+          <Input
+            id="parametres-taux-garantie"
+            type="number"
+            min={0}
+            max={100}
+            value={tauxGarantie}
+            onChange={(e) => setTauxGarantie(e.target.value)}
+            className="mt-1 max-w-32"
+          />
+        </div>
+        <Button className="w-fit cursor-pointer" disabled={enCoursTauxGarantie} onClick={enregistrerTauxGarantie}>
+          {enCoursTauxGarantie ? "Enregistrement…" : "Enregistrer"}
         </Button>
       </Card>
 

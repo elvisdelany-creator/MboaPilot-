@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { changerStatutSavRequete, ErreurAuthentification, type ModePaiementEncaissement } from "@/lib/api";
+import { chargerInfosEntreprise, changerStatutSavRequete, ErreurAuthentification, type ModePaiementEncaissement } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import type { DossierSavDetaille, StatutSav } from "@/lib/types";
 
@@ -48,6 +48,15 @@ export function ChangerStatutDialog({ dossier, statutCible, onFerme, onSucces }:
   const [titulaireCheque, setTitulaireCheque] = useState("");
   const [dateCheque, setDateCheque] = useState("");
   const [referenceVirement, setReferenceVirement] = useState("");
+  // 5.10, 7.3, 8.8 : "sous garantie (gratuit ou tarif réduit selon la politique)"
+  const [tauxGarantie, setTauxGarantie] = useState(0);
+
+  useEffect(() => {
+    chargerInfosEntreprise(token)
+      .then((infos) => setTauxGarantie(infos.entreprise.tauxGarantiePourcent))
+      .catch(() => setTauxGarantie(0));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token]);
 
   useEffect(() => {
     if (statutCible === "LIVRE") setMontantEncaisse(dossier.facture?.statut === "BROUILLON" ? dossier.facture.montantTotal : 0);
@@ -145,7 +154,11 @@ export function ChangerStatutDialog({ dossier, statutCible, onFerme, onSucces }:
                 className="mt-1"
               />
               {dossier.sousGarantie === 1 && (
-                <p className="mt-1 text-sm text-muted-foreground">Dossier sous garantie — la facture sera générée à 0 FCFA.</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {tauxGarantie === 0
+                    ? "Dossier sous garantie — la facture sera générée à 0 FCFA."
+                    : `Dossier sous garantie — tarif réduit à ${tauxGarantie} % du montant plein.`}
+                </p>
               )}
             </div>
           )}

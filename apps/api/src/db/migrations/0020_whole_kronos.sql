@@ -1,0 +1,1 @@
+ALTER TABLE `entreprise` ADD `taux_garantie_pourcent` integer DEFAULT 0 NOT NULL;

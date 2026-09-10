@@ -13,7 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { chargerProduits, echangerMaterielRequete, ErreurAuthentification, type ModePaiementEncaissement } from "@/lib/api";
+import { chargerInfosEntreprise, chargerProduits, echangerMaterielRequete, ErreurAuthentification, type ModePaiementEncaissement } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import type { Produit } from "@/lib/types";
 
@@ -38,6 +38,8 @@ export function EchangeMaterielDialog({ numeroAbonnement, onFerme, onSucces }: P
   const [motif, setMotif] = useState<"panne" | "vol">("panne");
   const [sousGarantie, setSousGarantie] = useState(false);
   const [enCours, setEnCours] = useState(false);
+  // 5.10, 7.3, 8.8 : "sous garantie (gratuit ou tarif réduit selon la politique)"
+  const [tauxGarantie, setTauxGarantie] = useState(0);
 
   const ouvert = numeroAbonnement !== null;
 
@@ -49,11 +51,16 @@ export function EchangeMaterielDialog({ numeroAbonnement, onFerme, onSucces }: P
         setIdProduit((v) => v || String(data[0]?.idProduit ?? ""));
       })
       .catch(() => toast.error("Impossible de charger le catalogue de matériel."));
+    chargerInfosEntreprise(token)
+      .then((infos) => setTauxGarantie(infos.entreprise.tauxGarantiePourcent))
+      .catch(() => setTauxGarantie(0));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ouvert, token, utilisateur.siteId]);
 
   const produitSelectionne = produits.find((p) => p.idProduit === Number(idProduit));
-  const montantFacture = sousGarantie ? 0 : (produitSelectionne?.prixVente ?? 0);
+  const montantFacture = sousGarantie
+    ? Math.round(((produitSelectionne?.prixVente ?? 0) * tauxGarantie) / 100)
+    : (produitSelectionne?.prixVente ?? 0);
 
   const [montantEncaisse, setMontantEncaisse] = useState(montantFacture);
   useEffect(() => setMontantEncaisse(montantFacture), [montantFacture]);
@@ -163,7 +170,7 @@ export function EchangeMaterielDialog({ numeroAbonnement, onFerme, onSucces }: P
 
           <label className="flex items-center gap-2 text-sm text-foreground">
             <Checkbox checked={sousGarantie} onCheckedChange={(v) => setSousGarantie(v === true)} />
-            Sous garantie (remplacement gratuit)
+            Sous garantie ({tauxGarantie === 0 ? "remplacement gratuit" : `tarif réduit à ${tauxGarantie} %`})
           </label>
 
           <div className="flex items-center justify-between text-sm font-medium">

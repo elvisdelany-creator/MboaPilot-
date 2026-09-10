@@ -2372,6 +2372,40 @@ describe("GET /api/v1/entreprise (6.7)", () => {
 
     expect(reponse.statusCode).toBe(400);
   });
+
+  // 5.10, 7.3, 8.8 : "sous garantie (gratuit ou tarif réduit selon la politique)"
+  it("5.10, 7.3 : un administrateur configure un taux de garantie, reflété dans les réponses de l'entreprise", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    creerUtilisateur(db, { siteId, nom: "Admin", prenom: "D", identifiant: "admin1", motDePasse: "motdepasse-secret", role: "ADMINISTRATEUR" });
+    const tokenAdmin = await connecter(app, "admin1");
+
+    const modification = await app.inject({
+      method: "PATCH",
+      url: "/api/v1/entreprise",
+      headers: authHeader(tokenAdmin),
+      payload: { tauxGarantiePourcent: 50 },
+    });
+    expect(modification.statusCode).toBe(200);
+    expect(modification.json().tauxGarantiePourcent).toBe(50);
+
+    const lecture = await app.inject({ method: "GET", url: "/api/v1/entreprise", headers: authHeader(tokenAdmin) });
+    expect(lecture.json().entreprise.tauxGarantiePourcent).toBe(50);
+  });
+
+  it("5.10, 7.3, 8.8 : rejette un taux de garantie hors de la plage 0-100 (400)", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    creerUtilisateur(db, { siteId, nom: "Admin", prenom: "D", identifiant: "admin1", motDePasse: "motdepasse-secret", role: "ADMINISTRATEUR" });
+    const tokenAdmin = await connecter(app, "admin1");
+
+    const reponse = await app.inject({
+      method: "PATCH",
+      url: "/api/v1/entreprise",
+      headers: authHeader(tokenAdmin),
+      payload: { tauxGarantiePourcent: 150 },
+    });
+
+    expect(reponse.statusCode).toBe(400);
+  });
 });
 
 describe("Comptes partagés streaming (5.9)", () => {

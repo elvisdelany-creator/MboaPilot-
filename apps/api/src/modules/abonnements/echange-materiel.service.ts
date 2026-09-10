@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
 import { enregistrerMouvement } from "../stock/stock.repository.js";
+import { trouverTauxGarantieEntreprise } from "../entreprise/entreprise.repository.js";
 
 export interface EchangerMaterielParams {
   siteId: number;
@@ -90,8 +91,9 @@ export function echangerMateriel(db: Db, params: EchangerMaterielParams): Echang
     })
     .run();
 
-  // 7.3 : gratuit sous garantie, tarif plein sinon
-  const montantFacture = params.sousGarantie ? 0 : produit.prixVente;
+  // 7.3, 8.8 : "sous garantie (gratuit ou tarif réduit selon la politique)"
+  // — tauxGarantiePourcent à 0 (gratuit) par défaut
+  const montantFacture = params.sousGarantie ? Math.round((produit.prixVente * trouverTauxGarantieEntreprise(db)) / 100) : produit.prixVente;
 
   const facture = db
     .insert(schema.facture)

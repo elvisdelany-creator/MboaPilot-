@@ -126,6 +126,26 @@ describe("echangerMateriel (7.3)", () => {
     expect(dernier.motif).toBe("panne");
   });
 
+  // 7.3, 8.8 : "sous garantie (gratuit ou tarif réduit selon la politique)"
+  it("panne sous garantie avec un taux de garantie configuré : remplacement au tarif réduit, BROUILLON", () => {
+    db.update(schema.entreprise).set({ tauxGarantiePourcent: 30 }).run(); // décodeur à 15000 -> 30 % = 4500
+
+    const resultat = echangerMateriel(db, {
+      siteId,
+      userId,
+      numeroAbonnement,
+      idProduit: idProduitDecodeur,
+      typeMateriel: "DECODEUR",
+      numeroSerie: "SN-001",
+      sousGarantie: true,
+      motif: "panne",
+      montantEncaisse: 0,
+    });
+
+    expect(resultat.montantFacture).toBe(4500);
+    expect(resultat.statutFacture).toBe("BROUILLON");
+  });
+
   it("vol hors garantie, sans encaissement : facture reste BROUILLON au tarif plein", () => {
     const resultat = echangerMateriel(db, {
       siteId,

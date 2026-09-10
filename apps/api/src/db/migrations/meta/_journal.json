@@ -141,6 +141,13 @@
       "when": 1788978057026,
       "tag": "0019_pink_stick",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "6",
+      "when": 1788981581510,
+      "tag": "0020_whole_kronos",
+      "breakpoints": true
     }
   ]
 }

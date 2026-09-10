@@ -1759,6 +1759,35 @@ describe("Tableau de bord de pilotage (8.6, 9.3)", () => {
     expect(reponse.json()).toContainEqual({ libelle: "DSTV", montant: 13000 });
   });
 
+  // 6.1, 8.6 : "Marge / rentabilité — consolidée... par famille et par article"
+  it("6.1, 8.6 : ventile la marge du jour par article", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    creerUtilisateur(db, { siteId, nom: "Admin", prenom: "D", identifiant: "admin1", motDePasse: "motdepasse-secret", role: "ADMINISTRATEUR" });
+    const token = await connecter(app, "admin1");
+    const aujourdHui = new Date().toISOString().slice(0, 10);
+    const produit = db
+      .insert(schema.produit)
+      .values({ siteId, type: "BIEN", libelle: "Câble HDMI", prixVente: 2000, coutRevient: 1000, margeType: "VALEUR", margeValeur: 500 })
+      .returning()
+      .get();
+
+    await app.inject({
+      method: "POST",
+      url: "/api/v1/ventes",
+      headers: authHeader(token),
+      payload: { siteId, userId, lignes: [{ idProduit: produit.idProduit, quantite: 3 }], montantEncaisse: 6000 },
+    });
+
+    const reponse = await app.inject({
+      method: "GET",
+      url: `/api/v1/tableau-bord/marge-par-article?siteId=${siteId}&aujourdHui=${aujourdHui}`,
+      headers: authHeader(token),
+    });
+
+    expect(reponse.statusCode).toBe(200);
+    expect(reponse.json()).toContainEqual({ idProduit: produit.idProduit, libelle: "Câble HDMI", quantiteVendue: 3, margeEstimee: 1500 });
+  });
+
   // 9.3 : courbe d'évolution du CA "filtrable... par famille d'activité"
   it("9.3 : filtre la courbe d'évolution du CA par famille d'activité", async () => {
     const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });

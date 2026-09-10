@@ -177,6 +177,44 @@ export function calculerVentilationCAJour(db: Db, siteId: number, aujourdHui: st
   return [...totalParLibelle.entries()].map(([libelle, montant]) => ({ libelle, montant })).sort((a, b) => b.montant - a.montant);
 }
 
+export interface MargeArticle {
+  idProduit: number;
+  libelle: string;
+  quantiteVendue: number;
+  margeEstimee: number;
+}
+
+// 6.1, 8.6 : "Marge / rentabilité — consolidée à partir du champ gain
+// valeur/pourcentage, par famille et par article" — vue par article. Seuls
+// les produits portent une marge dans le modèle actuel (9.3) : les lignes
+// d'abonnement/kit/option sont ignorées, pas de coût de revient prévu pour
+// les formules (5.1.1 — non tranché).
+export function calculerMargeParArticleJour(db: Db, siteId: number, aujourdHui: string): MargeArticle[] {
+  const facturesJour = db
+    .select()
+    .from(schema.facture)
+    .where(and(eq(schema.facture.siteId, siteId), eq(schema.facture.statut, "VALIDEE")))
+    .all()
+    .filter((f) => f.dateCreation.slice(0, 10) === aujourdHui);
+
+  const idsFactures = facturesJour.map((f) => f.idFacture);
+  const lignes = idsFactures.length > 0 ? db.select().from(schema.ligneVente).where(inArray(schema.ligneVente.idFacture, idsFactures)).all() : [];
+
+  const margeParProduit = new Map<number, MargeArticle>();
+  for (const ligne of lignes) {
+    if (ligne.idProduit === null) continue;
+    const produit = db.select().from(schema.produit).where(eq(schema.produit.idProduit, ligne.idProduit)).get();
+    if (!produit) continue;
+
+    const entree = margeParProduit.get(produit.idProduit) ?? { idProduit: produit.idProduit, libelle: produit.libelle, quantiteVendue: 0, margeEstimee: 0 };
+    entree.quantiteVendue += ligne.quantite;
+    entree.margeEstimee += (produit.margeValeur ?? 0) * ligne.quantite;
+    margeParProduit.set(produit.idProduit, entree);
+  }
+
+  return [...margeParProduit.values()].sort((a, b) => b.margeEstimee - a.margeEstimee);
+}
+
 // 8.6, 6.2 : commissions CANAL+ encore en période probatoire de 4 mois
 export function listerCommissionsCanalplusEnCours(db: Db, siteId: number) {
   return db

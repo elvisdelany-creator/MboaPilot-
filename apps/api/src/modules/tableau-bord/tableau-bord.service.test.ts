@@ -10,6 +10,7 @@ import { creerVenteProduits } from "../ventes/vente.service.js";
 import {
   calculerEvolutionCA,
   calculerIndicateursJour,
+  calculerMargeParArticleJour,
   calculerValorisationStock,
   calculerVentilationCAJour,
   listerCommissionsCanalplusEnCours,
@@ -189,5 +190,50 @@ describe("calculerVentilationCAJour (8.6)", () => {
 
   it("renvoie une liste vide sans vente", () => {
     expect(calculerVentilationCAJour(db, siteId, AUJOURDHUI)).toEqual([]);
+  });
+});
+
+// 6.1, 8.6 : "Marge / rentabilité — consolidée à partir du champ gain
+// valeur/pourcentage, par famille et par article" — vue par article, seuls
+// les produits portant une marge dans le modèle actuel (9.3, non tranché
+// pour les formules/kits)
+describe("calculerMargeParArticleJour (8.6)", () => {
+  it("ventile la marge du jour par article, triée par marge décroissante", () => {
+    const cable = creerProduit(db, { siteId, type: "BIEN", libelle: "Câble HDMI", prixVente: 2000, coutRevient: 1000, margeType: "VALEUR", margeValeur: 500 });
+    const decodeur = creerProduit(db, {
+      siteId,
+      type: "BIEN",
+      libelle: "Décodeur",
+      prixVente: 1200,
+      coutRevient: 1000,
+      margeType: "POURCENTAGE",
+      margePourcentage: 2000, // 20 % -> 200 FCFA/unité
+    });
+    creerVenteProduits(db, {
+      siteId,
+      userId,
+      lignes: [
+        { idProduit: cable.idProduit, quantite: 3 },
+        { idProduit: decodeur.idProduit, quantite: 2 },
+      ],
+      montantEncaisse: 8400,
+    });
+
+    const marges = calculerMargeParArticleJour(db, siteId, AUJOURDHUI);
+
+    expect(marges).toEqual([
+      { idProduit: cable.idProduit, libelle: "Câble HDMI", quantiteVendue: 3, margeEstimee: 1500 }, // 500 × 3
+      { idProduit: decodeur.idProduit, libelle: "Décodeur", quantiteVendue: 2, margeEstimee: 400 }, // 200 × 2
+    ]);
+  });
+
+  it("ignore les lignes d'abonnement/kit, qui ne portent pas de marge dans le modèle actuel", () => {
+    recruterAbonne(db, { siteId, userId, aujourdHui: AUJOURDHUI, abonne: { nom: "Nga", prenom: "Paul", telephone: "690000000" }, idFormule, montantEncaisse: 10500 });
+
+    expect(calculerMargeParArticleJour(db, siteId, AUJOURDHUI)).toEqual([]);
+  });
+
+  it("renvoie une liste vide sans vente", () => {
+    expect(calculerMargeParArticleJour(db, siteId, AUJOURDHUI)).toEqual([]);
   });
 });

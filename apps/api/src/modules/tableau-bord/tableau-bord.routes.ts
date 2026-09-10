@@ -4,6 +4,7 @@ import type { Guard, RouteGuards } from "../auth/auth.plugin.js";
 import {
   calculerEvolutionCA,
   calculerIndicateursJour,
+  calculerMargeParArticleJour,
   calculerValorisationStock,
   calculerVentilationCAJour,
   listerCommissionsCanalplusEnCours,
@@ -58,6 +59,16 @@ export function registerTableauBordRoutes(app: FastifyInstance, db: Db, guards: 
     async (request, reply) => {
       const { siteId, aujourdHui } = request.query;
       reply.code(200).send(calculerVentilationCAJour(db, Number(siteId), aujourdHui));
+    }
+  );
+
+  // 6.1, 8.6 : "Marge / rentabilité — par famille et par article"
+  app.get<{ Querystring: { siteId: string; aujourdHui: string } }>(
+    "/api/v1/tableau-bord/marge-par-article",
+    { preHandler: [guards.authRequis, guards.pilotage] },
+    async (request, reply) => {
+      const { siteId, aujourdHui } = request.query;
+      reply.code(200).send(calculerMargeParArticleJour(db, Number(siteId), aujourdHui));
     }
   );
 

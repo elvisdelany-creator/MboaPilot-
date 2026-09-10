@@ -751,6 +751,19 @@ export async function chargerVentilationCA(token: string, siteId: number, aujour
   return lireJson<VentilationCAFamille[]>(reponse);
 }
 
+// 6.1, 8.6 : "Marge / rentabilité — consolidée... par famille et par article"
+export interface MargeArticle {
+  idProduit: number;
+  libelle: string;
+  quantiteVendue: number;
+  margeEstimee: number;
+}
+
+export async function chargerMargeParArticle(token: string, siteId: number, aujourdHui: string): Promise<MargeArticle[]> {
+  const reponse = await fetch(`${BASE}/tableau-bord/marge-par-article?siteId=${siteId}&aujourdHui=${aujourdHui}`, { headers: headersAuth(token) });
+  return lireJson<MargeArticle[]>(reponse);
+}
+
 // 10.4 : état de la licence éditeur (mode dégradé après expiration du délai de grâce hors ligne)
 export interface StatutLicence {
   palier: string;

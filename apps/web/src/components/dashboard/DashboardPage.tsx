@@ -10,11 +10,13 @@ import {
   chargerEvolutionCA,
   chargerFamilles,
   chargerIndicateursJour,
+  chargerMargeParArticle,
   chargerProduitsRotationLente,
   chargerResumesApporteurs,
   chargerValorisationStock,
   chargerVentilationCA,
   ErreurAuthentification,
+  type MargeArticle,
   type ProduitRotationLente,
   type ResumeApporteur,
   type VentilationCAFamille,
@@ -89,6 +91,8 @@ export function DashboardPage({ onNaviguer, onReabonnerDepuisAlerte, onReabonner
   const [evolutionCA, setEvolutionCA] = useState<PointEvolutionCA[]>([]);
   // 8.6 : "Chiffre d'affaires — par famille d'activité"
   const [ventilationCA, setVentilationCA] = useState<VentilationCAFamille[]>([]);
+  // 6.1, 8.6 : "Marge / rentabilité — consolidée... par famille et par article"
+  const [margeParArticle, setMargeParArticle] = useState<MargeArticle[]>([]);
   const [periodeCA, setPeriodeCA] = useState<7 | 30>(7);
   // 9.3 : courbe d'évolution du CA, "filtrable... par famille d'activité"
   const [familleCAFiltre, setFamilleCAFiltre] = useState<string | null>(null);
@@ -139,6 +143,10 @@ export function DashboardPage({ onNaviguer, onReabonnerDepuisAlerte, onReabonner
     chargerVentilationCA(token, siteId, aujourdHui)
       .then(setVentilationCA)
       .catch(() => setVentilationCA([]));
+    // 6.1, 8.6 : "Marge / rentabilité — consolidée... par famille et par article"
+    chargerMargeParArticle(token, siteId, aujourdHui)
+      .then(setMargeParArticle)
+      .catch(() => setMargeParArticle([]));
     chargerValorisationStock(token, siteId)
       .then(setValorisationStock)
       .catch(() => setValorisationStock(null));
@@ -247,6 +255,25 @@ export function DashboardPage({ onNaviguer, onReabonnerDepuisAlerte, onReabonner
                   <div key={v.libelle} className="flex items-center justify-between text-sm">
                     <span className="text-muted-foreground">{v.libelle}</span>
                     <span className="tabular-nums font-medium text-card-foreground">{formateurFcfa.format(v.montant)} FCFA</span>
+                  </div>
+                ))}
+              </Card>
+            </div>
+          )}
+
+          {/* 6.1, 8.6 : "Marge / rentabilité — consolidée... par famille et par
+              article" — seuls les produits portent une marge dans le modèle
+              actuel (9.3), les abonnements/kits n'y figurent donc pas */}
+          {peutPiloter && margeParArticle.length > 0 && (
+            <div className="mb-8">
+              <h2 className="mb-3 font-heading text-lg font-semibold text-foreground">Marge par article</h2>
+              <Card className="gap-2 p-4">
+                {margeParArticle.map((m) => (
+                  <div key={m.idProduit} className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">
+                      {m.libelle} <span className="tabular-nums">× {m.quantiteVendue}</span>
+                    </span>
+                    <span className="tabular-nums font-medium text-card-foreground">{formateurFcfa.format(m.margeEstimee)} FCFA</span>
                   </div>
                 ))}
               </Card>

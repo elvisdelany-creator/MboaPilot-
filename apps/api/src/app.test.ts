@@ -188,6 +188,56 @@ describe("POST /api/v1/recrutements", () => {
 
     expect(reponse.statusCode).toBe(404);
   });
+
+  // 3.2.2, 5.4.2 : options complémentaires, avec tarif différencié selon la formule
+  it("3.2.2, 5.4.2 : facture une option complémentaire à son tarif différencié pour la formule choisie", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const token = await connecter(app);
+    const option = db.insert(schema.optionComplement).values({ libelle: "Option English Plus", prix: 5000 }).returning().get();
+    db.insert(schema.formuleOptionCompat).values({ idFormule, idOption: option.idOption, prixSurcharge: 2000 }).run();
+
+    const reponse = await app.inject({
+      method: "POST",
+      url: "/api/v1/recrutements",
+      headers: authHeader(token),
+      payload: {
+        siteId,
+        userId,
+        aujourdHui: "2025-11-16",
+        abonne: { nom: "Nga Ndongo", prenom: "Valentin", telephone: "690000000" },
+        idFormule,
+        idsOptions: [option.idOption],
+        montantEncaisse: 15000,
+      },
+    });
+
+    expect(reponse.statusCode).toBe(201);
+    const facture = db.select().from(schema.facture).where(eq(schema.facture.idFacture, reponse.json().idFacture)).get();
+    expect(facture?.montantTotal).toBe(15000); // 13000 (formule) + 2000 (tarif différencié)
+  });
+
+  it("rejette une option non compatible avec la formule choisie (400)", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const token = await connecter(app);
+    const option = db.insert(schema.optionComplement).values({ libelle: "Option Charme", prix: 7000 }).returning().get();
+
+    const reponse = await app.inject({
+      method: "POST",
+      url: "/api/v1/recrutements",
+      headers: authHeader(token),
+      payload: {
+        siteId,
+        userId,
+        aujourdHui: "2025-11-16",
+        abonne: { nom: "Nga Ndongo", prenom: "Valentin", telephone: "690000000" },
+        idFormule,
+        idsOptions: [option.idOption],
+        montantEncaisse: 0,
+      },
+    });
+
+    expect(reponse.statusCode).toBe(400);
+  });
 });
 
 describe("POST /api/v1/abonnements/:numeroAbonnement/reabonnements", () => {

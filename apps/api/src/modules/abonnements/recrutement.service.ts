@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { calculerDateFin, calculerPrixKit, peutAffecterEcran } from "@mboapilot/shared";
 import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
@@ -16,6 +16,9 @@ export interface RecruterAbonneParams {
   abonne: { idAbonne: number } | Omit<AbonneInput, "siteId">;
   idFormule: number;
   idKit?: number;
+  // 3.2.2, 5.4.2 : options complémentaires (ex. Option English Plus) —
+  // chacune doit être compatible avec la formule choisie (formule_option_compat)
+  idsOptions?: number[];
   dateDebut?: string;
   montantEncaisse: number;
   apporteurId?: number;
@@ -110,8 +113,25 @@ export function recruterAbonne(db: Db, params: RecruterAbonneParams): Recrutemen
     prixKit = calculerPrixKit(construireKitCalcul(db, kitRow), { idFormule: formule.idFormule, prix: formule.prix });
   }
 
+  // 3.2.2, 5.4.2 : "Complément payant rattachable à une ou plusieurs
+  // formules... avec règles de compatibilité et de tarif différencié selon
+  // la formule support" — prix_surcharge remplace le prix par défaut de
+  // l'option quand renseigné pour la paire (formule, option).
+  const optionsAppliquees = (params.idsOptions ?? []).map((idOption) => {
+    const option = db.select().from(schema.optionComplement).where(eq(schema.optionComplement.idOption, idOption)).get();
+    if (!option) throw new Error(`Option ${idOption} introuvable`);
+    const compat = db
+      .select()
+      .from(schema.formuleOptionCompat)
+      .where(and(eq(schema.formuleOptionCompat.idFormule, formule.idFormule), eq(schema.formuleOptionCompat.idOption, idOption)))
+      .get();
+    if (!compat) throw new Error(`Option "${option.libelle}" non compatible avec la formule "${formule.libelle}"`);
+    return { idOption, prixApplique: compat.prixSurcharge ?? option.prix };
+  });
+  const prixOptions = optionsAppliquees.reduce((total, o) => total + o.prixApplique, 0);
+
   const prixFormuleApplique = formule.prix - remise;
-  const montantTotal = prixFormuleApplique + prixKit;
+  const montantTotal = prixFormuleApplique + prixKit + prixOptions;
 
   const facture = db
     .insert(schema.facture)
@@ -127,6 +147,12 @@ export function recruterAbonne(db: Db, params: RecruterAbonneParams): Recrutemen
     db.insert(schema.ligneVente).values({ idFacture: facture.idFacture, idKit: kitRow.idKit, prixApplique: prixKit }).run();
     // 5.1, 5.2 : le kit est un "produit composé" — décrémente le stock de chacun de ses composants
     decrementerComposantsKit(db, { idKit: kitRow.idKit, siteId: params.siteId, userId: params.userId });
+  }
+
+  for (const o of optionsAppliquees) {
+    db.insert(schema.ligneVente)
+      .values({ idFacture: facture.idFacture, idOption: o.idOption, numeroAbonnement: abonnement.numeroAbonnement, prixApplique: o.prixApplique })
+      .run();
   }
 
   let statutFacture: "BROUILLON" | "VALIDEE" = "BROUILLON";

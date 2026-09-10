@@ -6,6 +6,7 @@ import {
   chargerCatalogue,
   chargerComptesPartages,
   chargerInfosEntreprise,
+  chargerOptions,
   chargerProduits,
   creerVenteRequete,
   ErreurAuthentification,
@@ -22,6 +23,7 @@ import type {
   Formule,
   InfosEntreprise,
   NouvelAbonne,
+  OptionCatalogue,
   ParcoursPaiementMobile,
   Produit,
 } from "@/lib/types";
@@ -56,6 +58,10 @@ export function CaissePage({ onNaviguer, abonneInitial, idFamilleInitiale }: Pro
   const [abonnementsAbonne, setAbonnementsAbonne] = useState<Abonnement[]>([]);
   const [formuleSelectionnee, setFormuleSelectionnee] = useState<Formule | null>(null);
   const [kitSelectionne, setKitSelectionne] = useState<CatalogueKit | null>(null);
+  // 3.2.2, 5.4.2 : options complémentaires (ex. Option English Plus) — au
+  // recrutement uniquement, comme les kits (voir masquerKits plus bas)
+  const [options, setOptions] = useState<OptionCatalogue[]>([]);
+  const [idsOptionsSelectionnees, setIdsOptionsSelectionnees] = useState<number[]>([]);
   // 6.4, 7.1 : "remise ponctuelle" sur le prix de la formule
   const [remise, setRemise] = useState(0);
   const [comptesPartages, setComptesPartages] = useState<ComptePartage[]>([]);
@@ -106,6 +112,15 @@ export function CaissePage({ onNaviguer, abonneInitial, idFamilleInitiale }: Pro
     chargerInfosEntreprise(token)
       .then(setInfosEntreprise)
       .catch(() => setInfosEntreprise(null));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token]);
+
+  // 3.2.2, 5.4.2 : options complémentaires, filtrées par compatibilité avec
+  // la formule sélectionnée côté TicketPanel
+  useEffect(() => {
+    chargerOptions(token)
+      .then(setOptions)
+      .catch(() => setOptions([]));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
@@ -187,6 +202,26 @@ export function CaissePage({ onNaviguer, abonneInitial, idFamilleInitiale }: Pro
     setRemise(0);
   }, [formuleSelectionnee?.idFormule, abonnementARenouveler]);
 
+  // 3.2.2, 5.4.2 : options — au recrutement uniquement (comme les kits) ;
+  // repart de zéro dès qu'on change de formule, certaines options pouvant
+  // ne plus être compatibles
+  useEffect(() => {
+    setIdsOptionsSelectionnees([]);
+  }, [formuleSelectionnee?.idFormule, abonnementARenouveler]);
+
+  // 3.2.2, 5.4.2 : options compatibles avec la formule sélectionnée, avec
+  // leur tarif différencié éventuel
+  const optionsCompatibles = useMemo(() => {
+    if (!formuleSelectionnee || abonnementARenouveler) return [];
+    return options
+      .map((o) => ({ option: o, compat: o.formulesCompatibles.find((c) => c.idFormule === formuleSelectionnee.idFormule) }))
+      .filter((o): o is { option: OptionCatalogue; compat: { idFormule: number; prixSurcharge: number | null } } => o.compat !== undefined)
+      .map(({ option, compat }) => ({ ...option, prixApplique: compat.prixSurcharge ?? option.prix }));
+  }, [options, formuleSelectionnee, abonnementARenouveler]);
+
+  const optionsSelectionnees = optionsCompatibles.filter((o) => idsOptionsSelectionnees.includes(o.idOption));
+  const prixOptions = optionsSelectionnees.reduce((total, o) => total + o.prixApplique, 0);
+
   // 6.7 : base du ticket / pro-forma — même calcul que TicketPanel, dupliqué
   // ici pour que CaissePage puisse construire le récapitulatif imprimable
   const prixKit =
@@ -194,10 +229,11 @@ export function CaissePage({ onNaviguer, abonneInitial, idFamilleInitiale }: Pro
       ? calculerPrixKit(kitSelectionne, { idFormule: formuleSelectionnee.idFormule, prix: formuleSelectionnee.prix })
       : 0;
   const remiseEffective = formuleSelectionnee ? Math.min(remise, formuleSelectionnee.prix) : 0;
-  const totalTicket = (formuleSelectionnee?.prix ?? 0) - remiseEffective + prixKit;
+  const totalTicket = (formuleSelectionnee?.prix ?? 0) - remiseEffective + prixKit + prixOptions;
   const lignesTicket: LigneRecu[] = [
     ...(formuleSelectionnee ? [{ libelle: formuleSelectionnee.libelle, montant: formuleSelectionnee.prix - remiseEffective }] : []),
     ...(kitSelectionne ? [{ libelle: kitSelectionne.libelle, montant: prixKit }] : []),
+    ...optionsSelectionnees.map((o) => ({ libelle: o.libelle, montant: o.prixApplique })),
   ];
 
   // 5.9 : comptes actifs du service actuellement sélectionné — vide pour une
@@ -214,6 +250,7 @@ export function CaissePage({ onNaviguer, abonneInitial, idFamilleInitiale }: Pro
   function reinitialiserTicket() {
     setFormuleSelectionnee(null);
     setKitSelectionne(null);
+    setIdsOptionsSelectionnees([]);
     setRemise(0);
     setAbonneSelectionne(null);
     setAbonnementsAbonne([]);
@@ -362,6 +399,7 @@ export function CaissePage({ onNaviguer, abonneInitial, idFamilleInitiale }: Pro
             abonne: "idAbonne" in abonneSelectionne ? { idAbonne: abonneSelectionne.idAbonne } : abonneSelectionne,
             idFormule: formuleSelectionnee.idFormule,
             idKit: kitSelectionne?.idKit,
+            idsOptions: idsOptionsSelectionnees.length > 0 ? idsOptionsSelectionnees : undefined,
             montantEncaisse,
             // 6.3 : lien permanent — uniquement renseigné à la création d'un nouveau client,
             // un abonné existant hérite déjà de son apporteur côté serveur
@@ -480,6 +518,9 @@ export function CaissePage({ onNaviguer, abonneInitial, idFamilleInitiale }: Pro
                 abonneSelectionne={abonneSelectionne}
                 formuleSelectionnee={formuleSelectionnee}
                 kitSelectionne={kitSelectionne}
+                optionsCompatibles={optionsCompatibles}
+                idsOptionsSelectionnees={idsOptionsSelectionnees}
+                onChangerOptionsSelectionnees={setIdsOptionsSelectionnees}
                 numeroAbonnementARenouveler={abonnementARenouveler?.numeroAbonnement ?? null}
                 peutMigrerFormule={peutMigrerFormule}
                 comptesPartagesDisponibles={comptesPartagesFamille}

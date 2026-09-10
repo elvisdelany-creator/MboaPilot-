@@ -369,6 +369,11 @@ export const ligneVente = sqliteTable("ligne_vente", {
   idFacture: integer("id_facture").notNull().references(() => facture.idFacture),
   idProduit: integer("id_produit").references(() => produit.idProduit),
   idKit: integer("id_kit").references(() => kit.idKit), // kit vendu (5.1.1) — distinct du produit stocké
+  // 3.2.2, 5.4.2 : option complémentaire vendue avec un abonnement (ex.
+  // Option English Plus) — rattachée au même numero_abonnement que la ligne
+  // de formule, pour que la ventilation par famille (8.6) l'attribue
+  // correctement sans logique spécifique.
+  idOption: integer("id_option").references(() => optionComplement.idOption),
   numeroAbonnement: integer("numero_abonnement").references(() => abonnement.numeroAbonnement),
   quantite: integer("quantite").notNull().default(1),
   prixApplique: integer("prix_applique").notNull(),

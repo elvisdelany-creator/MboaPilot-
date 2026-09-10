@@ -1,0 +1,1 @@
+ALTER TABLE `ligne_vente` ADD `id_option` integer REFERENCES option_complement(id_option);

@@ -486,3 +486,78 @@ describe("recruterAbonne — compte partagé streaming (5.9)", () => {
     expect(suivi?.montantCommission).toBe(2500); // 10 % de 25000, pas de 28000
   });
 });
+
+// 3.2.2, 5.4.2 : options complémentaires (ex. Option English Plus), avec
+// règles de compatibilité et tarif différencié selon la formule support
+describe("recruterAbonne — options complémentaires (3.2.2, 5.4.2)", () => {
+  let optionEnglishPlus: number;
+  let formuleAccess: number;
+  let formuleAccessPlus: number;
+
+  beforeEach(() => {
+    optionEnglishPlus = db.insert(schema.optionComplement).values({ libelle: "Option English Plus", prix: 5000 }).returning().get().idOption;
+    formuleAccess = db.insert(schema.formule).values({ idFamille: familleCanalPlus, libelle: "ACCESS", prix: 5000, rang: 1 }).returning().get().idFormule;
+    formuleAccessPlus = db.insert(schema.formule).values({ idFamille: familleCanalPlus, libelle: "ACCESS+", prix: 15000, rang: 3 }).returning().get().idFormule;
+
+    // 5.4.2 : "Option English Plus (formules ACCESS, EVASION) 5 000 FCFA" —
+    // pas de prix_surcharge, utilise le prix par défaut de l'option
+    db.insert(schema.formuleOptionCompat).values({ idFormule: formuleAccess, idOption: optionEnglishPlus }).run();
+    // 5.4.2 : "Option English Plus (formule ACCESS+) 2 000 FCFA" — tarif différencié
+    db.insert(schema.formuleOptionCompat).values({ idFormule: formuleAccessPlus, idOption: optionEnglishPlus, prixSurcharge: 2000 }).run();
+  });
+
+  it("facture l'option à son prix par défaut quand aucun tarif différencié n'est configuré pour la formule", () => {
+    const resultat = recruterAbonne(db, {
+      siteId,
+      userId,
+      aujourdHui: "2025-11-16",
+      abonne: { nom: "Nga", prenom: "Paul", telephone: "690000000" },
+      idFormule: formuleAccess,
+      idsOptions: [optionEnglishPlus],
+      montantEncaisse: 10000,
+    });
+
+    const facture = db.select().from(schema.facture).where(eq(schema.facture.idFacture, resultat.idFacture)).get();
+    expect(facture?.montantTotal).toBe(10000); // 5000 (ACCESS) + 5000 (option, prix par défaut)
+
+    const lignes = db.select().from(schema.ligneVente).where(eq(schema.ligneVente.idFacture, resultat.idFacture)).all();
+    const ligneOption = lignes.find((l) => l.idOption === optionEnglishPlus);
+    expect(ligneOption?.prixApplique).toBe(5000);
+    expect(ligneOption?.numeroAbonnement).toBe(resultat.numeroAbonnement);
+  });
+
+  it("facture l'option à son tarif différencié pour la formule support (5.4.2)", () => {
+    const resultat = recruterAbonne(db, {
+      siteId,
+      userId,
+      aujourdHui: "2025-11-16",
+      abonne: { nom: "Nga", prenom: "Paul", telephone: "690000000" },
+      idFormule: formuleAccessPlus,
+      idsOptions: [optionEnglishPlus],
+      montantEncaisse: 17000,
+    });
+
+    const facture = db.select().from(schema.facture).where(eq(schema.facture.idFacture, resultat.idFacture)).get();
+    expect(facture?.montantTotal).toBe(17000); // 15000 (ACCESS+) + 2000 (tarif différencié)
+
+    const lignes = db.select().from(schema.ligneVente).where(eq(schema.ligneVente.idFacture, resultat.idFacture)).all();
+    const ligneOption = lignes.find((l) => l.idOption === optionEnglishPlus);
+    expect(ligneOption?.prixApplique).toBe(2000);
+  });
+
+  it("rejette une option incompatible avec la formule choisie", () => {
+    const autreFormule = db.insert(schema.formule).values({ idFamille: familleCanalPlus, libelle: "TOUT CANAL+ 2", prix: 28000, rang: 5 }).returning().get().idFormule;
+
+    expect(() =>
+      recruterAbonne(db, {
+        siteId,
+        userId,
+        aujourdHui: "2025-11-16",
+        abonne: { nom: "Nga", prenom: "Paul", telephone: "690000000" },
+        idFormule: autreFormule,
+        idsOptions: [optionEnglishPlus],
+        montantEncaisse: 0,
+      })
+    ).toThrow(/compatible/i);
+  });
+});

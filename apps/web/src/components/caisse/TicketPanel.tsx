@@ -7,7 +7,16 @@ import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import type { Abonne, CatalogueKit, ComptePartage, Formule, NouvelAbonne, ParcoursPaiementMobile } from "@/lib/types";
+
+// 3.2.2, 5.4.2 : option complémentaire compatible avec la formule
+// sélectionnée, déjà résolue au tarif différencié applicable
+export interface OptionCompatible {
+  idOption: number;
+  libelle: string;
+  prixApplique: number;
+}
 
 export type PaiementSaisi =
   | { mode: "CASH"; montant: number }
@@ -19,6 +28,11 @@ interface Props {
   abonneSelectionne: Abonne | NouvelAbonne | null;
   formuleSelectionnee: Formule | null;
   kitSelectionne: CatalogueKit | null;
+  // 3.2.2, 5.4.2 : options complémentaires compatibles avec la formule
+  // sélectionnée (déjà filtrées par CaissePage)
+  optionsCompatibles: OptionCompatible[];
+  idsOptionsSelectionnees: number[];
+  onChangerOptionsSelectionnees: (ids: number[]) => void;
   numeroAbonnementARenouveler: number | null;
   // 7.4 : le changement de formule (migration) ne s'applique qu'à un
   // abonnement ACTIF, jamais à un abonnement déjà EXPIRE
@@ -48,6 +62,9 @@ export function TicketPanel({
   abonneSelectionne,
   formuleSelectionnee,
   kitSelectionne,
+  optionsCompatibles,
+  idsOptionsSelectionnees,
+  onChangerOptionsSelectionnees,
   numeroAbonnementARenouveler,
   peutMigrerFormule,
   comptesPartagesDisponibles,
@@ -65,7 +82,17 @@ export function TicketPanel({
     kitSelectionne && formuleSelectionnee
       ? calculerPrixKit(kitSelectionne, { idFormule: formuleSelectionnee.idFormule, prix: formuleSelectionnee.prix })
       : 0;
-  const total = (formuleSelectionnee?.prix ?? 0) - remise + prixKit;
+  const optionsSelectionnees = optionsCompatibles.filter((o) => idsOptionsSelectionnees.includes(o.idOption));
+  const prixOptions = optionsSelectionnees.reduce((somme, o) => somme + o.prixApplique, 0);
+  const total = (formuleSelectionnee?.prix ?? 0) - remise + prixKit + prixOptions;
+
+  function basculerOption(idOption: number) {
+    onChangerOptionsSelectionnees(
+      idsOptionsSelectionnees.includes(idOption)
+        ? idsOptionsSelectionnees.filter((id) => id !== idOption)
+        : [...idsOptionsSelectionnees, idOption]
+    );
+  }
 
   const [modePaiement, setModePaiement] = useState<"CASH" | "CHEQUE" | "VIREMENT" | "MOBILE_MONEY">("CASH");
   const [montant, setMontant] = useState(total);
@@ -159,7 +186,29 @@ export function TicketPanel({
               <span className="tabular-nums font-medium text-card-foreground">{formateurFcfa.format(prixKit)} FCFA</span>
             </li>
           )}
+          {optionsSelectionnees.map((o) => (
+            <li key={o.idOption} className="flex items-center justify-between text-sm">
+              <span className="text-card-foreground">{o.libelle}</span>
+              <span className="tabular-nums font-medium text-card-foreground">{formateurFcfa.format(o.prixApplique)} FCFA</span>
+            </li>
+          ))}
         </ul>
+
+        {/* 3.2.2, 5.4.2 : options complémentaires compatibles avec la formule (ex. Option English Plus) */}
+        {optionsCompatibles.length > 0 && (
+          <div className="mt-3 space-y-2">
+            <p className="text-sm font-normal text-muted-foreground">Options</p>
+            {optionsCompatibles.map((o) => (
+              <label key={o.idOption} className="flex items-center justify-between gap-2 text-sm text-foreground">
+                <span className="flex items-center gap-2">
+                  <Checkbox checked={idsOptionsSelectionnees.includes(o.idOption)} onCheckedChange={() => basculerOption(o.idOption)} />
+                  {o.libelle}
+                </span>
+                <span className="tabular-nums text-muted-foreground">{formateurFcfa.format(o.prixApplique)} FCFA</span>
+              </label>
+            ))}
+          </div>
+        )}
 
         {/* 6.4 : "remise ponctuelle" ou "tarif préférentiel apporteur" — montant en FCFA déduit du prix de la formule */}
         {formuleSelectionnee && (

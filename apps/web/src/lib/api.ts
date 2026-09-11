@@ -416,6 +416,8 @@ export interface ChangerFormulePayload {
   siteId: number;
   userId: number;
   idNouvelleFormule: number;
+  // 3.2.2, 5.4.2, 7.4 : "ajuster ses options" lors de la migration
+  idsOptions?: number[];
   montantEncaisse: number;
   modePaiement?: ModePaiementEncaissement;
   banque?: string;

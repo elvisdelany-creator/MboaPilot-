@@ -125,3 +125,34 @@ describe("changerFormule (7.4)", () => {
     expect(() => changerFormule(db, { siteId, userId, numeroAbonnement: 999999, idNouvelleFormule: idEvasion, montantEncaisse: 0 })).toThrow(/introuvable/);
   });
 });
+
+// 3.2.2, 5.4.2, 7.4 : "l'historique du changement de formule (et des
+// compléments associés) est conservé" — mêmes règles de compatibilité et de
+// tarif différencié que pour le recrutement/réabonnement, vis-à-vis de la
+// formule cible (nouvelle formule)
+describe("changerFormule — options complémentaires (3.2.2, 5.4.2, 7.4)", () => {
+  let optionEnglishPlus: number;
+
+  beforeEach(() => {
+    optionEnglishPlus = db.insert(schema.optionComplement).values({ libelle: "Option English Plus", prix: 5000 }).returning().get().idOption;
+    db.insert(schema.formuleOptionCompat).values({ idFormule: idEvasion, idOption: optionEnglishPlus, prixSurcharge: 2000 }).run();
+  });
+
+  it("ajuste ses options lors d'une migration, au tarif différencié de la nouvelle formule", () => {
+    const resultat = changerFormule(db, { siteId, userId, numeroAbonnement, idNouvelleFormule: idEvasion, idsOptions: [optionEnglishPlus], montantEncaisse: 7500 });
+
+    const facture = db.select().from(schema.facture).where(eq(schema.facture.idFacture, resultat.idFacture)).get();
+    expect(facture?.montantTotal).toBe(7500); // 5500 (différentiel 10500-5000) + 2000 (option)
+
+    const lignes = db.select().from(schema.ligneVente).where(eq(schema.ligneVente.idFacture, resultat.idFacture)).all();
+    const ligneOption = lignes.find((l) => l.idOption === optionEnglishPlus);
+    expect(ligneOption?.prixApplique).toBe(2000);
+    expect(ligneOption?.numeroAbonnement).toBe(numeroAbonnement);
+  });
+
+  it("rejette une option incompatible avec la nouvelle formule", () => {
+    expect(() =>
+      changerFormule(db, { siteId, userId, numeroAbonnement, idNouvelleFormule: idToutCanalplus, idsOptions: [optionEnglishPlus], montantEncaisse: 0 })
+    ).toThrow(/compatible/i);
+  });
+});

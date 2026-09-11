@@ -1428,6 +1428,40 @@ describe("Module changement de formule / migration (7.4)", () => {
     expect(migration.json().statutFacture).toBe("VALIDEE");
   });
 
+  // 3.2.2, 5.4.2, 7.4 : "l'historique du changement de formule (et des compléments associés) est conservé"
+  it("3.2.2, 5.4.2, 7.4 : ajuste ses options lors d'une migration, au tarif différencié de la nouvelle formule", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const token = await connecter(app);
+
+    const idFamilleDstv = db.select().from(schema.formule).where(eq(schema.formule.idFormule, idFormule)).get()!.idFamille;
+    const idFormuleSuperieure = db
+      .insert(schema.formule)
+      .values({ idFamille: idFamilleDstv, libelle: "PREMIUM", prix: 28000, rang: 5 })
+      .returning()
+      .get().idFormule;
+    const option = db.insert(schema.optionComplement).values({ libelle: "French Plus", prix: 13000 }).returning().get();
+    db.insert(schema.formuleOptionCompat).values({ idFormule: idFormuleSuperieure, idOption: option.idOption, prixSurcharge: 6000 }).run();
+
+    const recrutement = await app.inject({
+      method: "POST",
+      url: "/api/v1/recrutements",
+      headers: authHeader(token),
+      payload: { siteId, userId, aujourdHui: "2025-11-16", abonne: { nom: "Nga", prenom: "Paul", telephone: "690000000" }, idFormule, montantEncaisse: 13000 },
+    });
+    const { numeroAbonnement } = recrutement.json();
+
+    const migration = await app.inject({
+      method: "POST",
+      url: `/api/v1/abonnements/${numeroAbonnement}/changement-formule`,
+      headers: authHeader(token),
+      payload: { siteId, userId, idNouvelleFormule: idFormuleSuperieure, idsOptions: [option.idOption], montantEncaisse: 21000 },
+    });
+
+    expect(migration.statusCode).toBe(200);
+    const facture = db.select().from(schema.facture).where(eq(schema.facture.idFacture, migration.json().idFacture)).get();
+    expect(facture?.montantTotal).toBe(21000); // 15000 (différentiel) + 6000 (tarif différencié de l'option)
+  });
+
   it("rejette une migration vers une formule de rang inférieur (400)", async () => {
     const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
     const token = await connecter(app);

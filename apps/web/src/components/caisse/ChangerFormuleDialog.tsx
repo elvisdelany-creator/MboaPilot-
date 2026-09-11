@@ -13,9 +13,10 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { changerFormuleRequete, ErreurAuthentification, type ModePaiementEncaissement } from "@/lib/api";
+import { Checkbox } from "@/components/ui/checkbox";
+import { changerFormuleRequete, chargerOptions, ErreurAuthentification, type ModePaiementEncaissement } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
-import type { Formule } from "@/lib/types";
+import type { Formule, OptionCatalogue } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 interface Props {
@@ -40,6 +41,9 @@ export function ChangerFormuleDialog({ numeroAbonnement, formuleActuelle, formul
   const [idFormuleChoisie, setIdFormuleChoisie] = useState<number | null>(null);
   const [montantEncaisse, setMontantEncaisse] = useState(0);
   const [enCours, setEnCours] = useState(false);
+  // 3.2.2, 5.4.2, 7.4 : "ajuster ses options" lors de la migration
+  const [options, setOptions] = useState<OptionCatalogue[]>([]);
+  const [idsOptionsSelectionnees, setIdsOptionsSelectionnees] = useState<number[]>([]);
 
   // 6.5 : moyen de paiement de l'encaissement
   const [modePaiement, setModePaiement] = useState<ModePaiementEncaissement>("CASH");
@@ -59,22 +63,43 @@ export function ChangerFormuleDialog({ numeroAbonnement, formuleActuelle, formul
 
   const choix = candidats.find((c) => c.formule.idFormule === idFormuleChoisie) ?? null;
 
+  // 3.2.2, 5.4.2 : options compatibles avec la formule cible, avec leur tarif différencié éventuel
+  const optionsCompatibles = choix
+    ? options
+        .map((o) => ({ option: o, compat: o.formulesCompatibles.find((c) => c.idFormule === choix.formule.idFormule) }))
+        .filter((o): o is { option: OptionCatalogue; compat: { idFormule: number; prixSurcharge: number | null } } => o.compat !== undefined)
+        .map(({ option, compat }) => ({ ...option, prixApplique: compat.prixSurcharge ?? option.prix }))
+    : [];
+  const optionsSelectionnees = optionsCompatibles.filter((o) => idsOptionsSelectionnees.includes(o.idOption));
+  const prixOptions = optionsSelectionnees.reduce((total, o) => total + o.prixApplique, 0);
+  const montantDu = (choix?.validation.montantDifferentiel ?? 0) + prixOptions;
+
   useEffect(() => {
     if (!ouvert) {
       setIdFormuleChoisie(null);
       setMontantEncaisse(0);
+      setIdsOptionsSelectionnees([]);
       setModePaiement("CASH");
       setBanque("");
       setNumeroCheque("");
       setTitulaireCheque("");
       setDateCheque("");
       setReferenceVirement("");
+      return;
     }
-  }, [ouvert]);
+    chargerOptions(token)
+      .then(setOptions)
+      .catch(() => setOptions([]));
+  }, [ouvert, token]);
 
   useEffect(() => {
-    setMontantEncaisse(choix?.validation.montantDifferentiel ?? 0);
-  }, [choix]);
+    setIdsOptionsSelectionnees([]);
+  }, [idFormuleChoisie]);
+
+  useEffect(() => {
+    setMontantEncaisse(montantDu);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [choix, idsOptionsSelectionnees]);
 
   async function valider() {
     if (!numeroAbonnement || !choix) return;
@@ -84,6 +109,7 @@ export function ChangerFormuleDialog({ numeroAbonnement, formuleActuelle, formul
         siteId: utilisateur.siteId,
         userId: utilisateur.idUser,
         idNouvelleFormule: choix.formule.idFormule,
+        idsOptions: idsOptionsSelectionnees.length > 0 ? idsOptionsSelectionnees : undefined,
         montantEncaisse,
         modePaiement,
         banque: modePaiement === "CHEQUE" || modePaiement === "VIREMENT" ? banque : undefined,
@@ -94,7 +120,7 @@ export function ChangerFormuleDialog({ numeroAbonnement, formuleActuelle, formul
       });
       toast.success(
         resultat.statutFacture === "VALIDEE"
-          ? `Migration vers « ${choix.formule.libelle} » — ${formateurFcfa.format(resultat.montantDifferentiel)} FCFA encaissés.`
+          ? `Migration vers « ${choix.formule.libelle} » — ${formateurFcfa.format(montantDu)} FCFA encaissés.`
           : `Migration vers « ${choix.formule.libelle} » — facture en attente d'encaissement.`
       );
       onSucces();
@@ -144,6 +170,29 @@ export function ChangerFormuleDialog({ numeroAbonnement, formuleActuelle, formul
             ))}
           </div>
 
+          {/* 3.2.2, 5.4.2, 7.4 : "ajuster ses options" lors de la migration */}
+          {choix && optionsCompatibles.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-sm font-normal text-muted-foreground">Options</p>
+              {optionsCompatibles.map((o) => (
+                <label key={o.idOption} className="flex items-center justify-between gap-2 text-sm text-foreground">
+                  <span className="flex items-center gap-2">
+                    <Checkbox
+                      checked={idsOptionsSelectionnees.includes(o.idOption)}
+                      onCheckedChange={() =>
+                        setIdsOptionsSelectionnees((ids) =>
+                          ids.includes(o.idOption) ? ids.filter((id) => id !== o.idOption) : [...ids, o.idOption]
+                        )
+                      }
+                    />
+                    {o.libelle}
+                  </span>
+                  <span className="tabular-nums text-muted-foreground">{formateurFcfa.format(o.prixApplique)} FCFA</span>
+                </label>
+              ))}
+            </div>
+          )}
+
           {choix && (
             <div>
               <Label htmlFor="mode-paiement-migration">Mode de paiement</Label>
@@ -171,9 +220,15 @@ export function ChangerFormuleDialog({ numeroAbonnement, formuleActuelle, formul
                 onChange={(e) => setMontantEncaisse(Number(e.target.value))}
                 className="mt-1 h-11 text-base tabular-nums"
               />
-              {montantEncaisse > 0 && montantEncaisse < choix.validation.montantDifferentiel && (
+              {montantEncaisse > 0 && montantEncaisse < montantDu && (
                 <p className="mt-1 text-sm text-alert-j3-fg">
-                  Encaissement partiel — solde de {formateurFcfa.format(choix.validation.montantDifferentiel - montantEncaisse)} FCFA restant dû.
+                  Encaissement partiel — solde de {formateurFcfa.format(montantDu - montantEncaisse)} FCFA restant dû.
+                </p>
+              )}
+              {/* 8.5, 9.2 : "calcul automatique des totaux et de la monnaie rendue" */}
+              {modePaiement === "CASH" && montantEncaisse > montantDu && (
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Monnaie à rendre : <span className="font-medium text-card-foreground">{formateurFcfa.format(montantEncaisse - montantDu)} FCFA</span>
                 </p>
               )}
             </div>

@@ -1198,3 +1198,70 @@ export async function chargerFicheComptePartage(token: string, idComptePartage: 
   const reponse = await fetch(`${BASE}/comptes-partages/${idComptePartage}/fiche`, { headers: headersAuth(token) });
   return lireJson<FicheComptePartage>(reponse);
 }
+
+// 13.1 : clôture de caisse quotidienne — fond d'ouverture, comptage de
+// fermeture, écart théorique/réel par mode de paiement
+export type ModePaiementCloture = "CASH" | "CHEQUE" | "VIREMENT" | "MOBILE_MONEY";
+
+export interface ClotureCaisse {
+  idCloture: number;
+  siteId: number;
+  fondOuverture: number;
+  ouvertPar: number;
+  dateOuverture: string;
+  statut: "OUVERTE" | "FERMEE";
+  fermePar: number | null;
+  dateFermeture: string | null;
+  ecartTotal: number | null;
+}
+
+export interface ComptageCloture {
+  idComptage: number;
+  idCloture: number;
+  mode: ModePaiementCloture;
+  montantTheorique: number;
+  montantCompte: number;
+  ecart: number;
+}
+
+export async function chargerClotureOuverte(token: string, siteId: number): Promise<ClotureCaisse | null> {
+  const reponse = await fetch(`${BASE}/cloture-caisse/ouverte?siteId=${siteId}`, { headers: headersAuth(token) });
+  return lireJson<ClotureCaisse | null>(reponse);
+}
+
+export async function chargerClotures(token: string, siteId: number): Promise<ClotureCaisse[]> {
+  const reponse = await fetch(`${BASE}/cloture-caisse?siteId=${siteId}`, { headers: headersAuth(token) });
+  return lireJson<ClotureCaisse[]>(reponse);
+}
+
+export async function chargerComptagesCloture(token: string, idCloture: number): Promise<ComptageCloture[]> {
+  const reponse = await fetch(`${BASE}/cloture-caisse/${idCloture}/comptages`, { headers: headersAuth(token) });
+  return lireJson<ComptageCloture[]>(reponse);
+}
+
+export async function ouvrirCaisseRequete(token: string, payload: { siteId: number; userId: number; fondOuverture: number }): Promise<ClotureCaisse> {
+  const reponse = await fetch(`${BASE}/cloture-caisse/ouvrir`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headersAuth(token) },
+    body: JSON.stringify(payload),
+  });
+  return lireJson<ClotureCaisse>(reponse);
+}
+
+export interface FermerCaisseResultat {
+  cloture: ClotureCaisse;
+  comptages: { mode: ModePaiementCloture; montantTheorique: number; montantCompte: number; ecart: number }[];
+}
+
+export async function fermerCaisseRequete(
+  token: string,
+  idCloture: number,
+  payload: { userId: number; comptages: { mode: ModePaiementCloture; montantCompte: number }[] }
+): Promise<FermerCaisseResultat> {
+  const reponse = await fetch(`${BASE}/cloture-caisse/${idCloture}/fermer`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headersAuth(token) },
+    body: JSON.stringify(payload),
+  });
+  return lireJson<FermerCaisseResultat>(reponse);
+}

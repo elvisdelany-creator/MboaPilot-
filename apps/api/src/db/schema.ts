@@ -493,3 +493,31 @@ export const journalAudit = sqliteTable("journal_audit", {
 }, (t) => ({
   cibleIdx: index("idx_audit_cible").on(t.tableCible, t.idCible),
 }));
+
+// 13.1 : clôture de caisse quotidienne — non demandée explicitement mais
+// "indispensable en pratique... l'un des premiers contrôles qu'un gérant
+// réclamera à l'usage" : fond d'ouverture, comptage de fermeture et écart
+// théorique/réel par mode de paiement, avec validation par un rôle habilité.
+export const clotureCaisse = sqliteTable("cloture_caisse", {
+  idCloture: integer("id_cloture").primaryKey({ autoIncrement: true }),
+  siteId: integer("site_id").notNull().references(() => site.idSite),
+  fondOuverture: integer("fond_ouverture").notNull(),
+  ouvertPar: integer("ouvert_par").notNull().references(() => utilisateur.idUser),
+  dateOuverture: text("date_ouverture").notNull().default(now),
+  statut: text("statut", { enum: ["OUVERTE", "FERMEE"] }).notNull().default("OUVERTE"),
+  // validation par un rôle habilité (13.1) : encadrement uniquement (cf. exigerRole en app.ts)
+  fermePar: integer("ferme_par").references(() => utilisateur.idUser),
+  dateFermeture: text("date_fermeture"),
+  ecartTotal: integer("ecart_total"),
+});
+
+// écart théorique (calculé depuis les paiements encaissés) / réel (comptage
+// physique déclaré) par mode de paiement, figé à la fermeture de la session
+export const clotureCaisseComptage = sqliteTable("cloture_caisse_comptage", {
+  idComptage: integer("id_comptage").primaryKey({ autoIncrement: true }),
+  idCloture: integer("id_cloture").notNull().references(() => clotureCaisse.idCloture),
+  mode: text("mode", { enum: ["CASH", "CHEQUE", "VIREMENT", "MOBILE_MONEY"] }).notNull(),
+  montantTheorique: integer("montant_theorique").notNull(),
+  montantCompte: integer("montant_compte").notNull(),
+  ecart: integer("ecart").notNull(),
+});

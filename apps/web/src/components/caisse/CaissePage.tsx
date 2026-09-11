@@ -37,6 +37,7 @@ import { TicketProduitsPanel, type LignePanier } from "./TicketProduitsPanel";
 import { EchangeMaterielDialog } from "./EchangeMaterielDialog";
 import { PaiementMobileMoneyDialog } from "./PaiementMobileMoneyDialog";
 import { ChangerFormuleDialog } from "./ChangerFormuleDialog";
+import { ClotureCaissePanel } from "./ClotureCaissePanel";
 import { RecuVentePrintable, type LigneRecu, type RecuVente } from "./RecuVentePrintable";
 import { FactureProFormaPrintable } from "./FactureProFormaPrintable";
 
@@ -469,6 +470,7 @@ export function CaissePage({ onNaviguer, abonneInitial, idFamilleInitiale }: Pro
       <div className="no-print">
         <AppHeader vueActive="caisse" onNaviguer={onNaviguer}>
           <RechercheAbonne siteId={utilisateur.siteId} abonneSelectionne={abonneSelectionne} onSelectionner={setAbonneSelectionne} />
+          <ClotureCaissePanel />
         </AppHeader>
       </div>
 

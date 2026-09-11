@@ -22,6 +22,7 @@ import { registerSauvegardeRoutes } from "./modules/sauvegarde/sauvegarde.routes
 import { registerAvoirRoutes } from "./modules/factures/avoir.routes.js";
 import { registerLicenceRoutes } from "./modules/licence/licence.routes.js";
 import { obtenirOuCreerLicence, calculerEtatLicence } from "./modules/licence/licence.service.js";
+import { registerClotureCaisseRoutes } from "./modules/caisse/cloture-caisse.routes.js";
 
 export interface BuildAppOptions {
   jwtSecret: string;
@@ -89,6 +90,8 @@ export function buildApp(db: Db, options: BuildAppOptions) {
   const gestionComptesPartages = exigerRole("ADMINISTRATEUR", "GERANT");
   // 6.4 : émission d'un avoir — correction financière, réservée à l'encadrement
   const gestionAvoirs = exigerRole("ADMINISTRATEUR", "GERANT");
+  // 13.1 : "validation par un rôle habilité" pour la fermeture de caisse — encadrement uniquement
+  const validationCloture = exigerRole("ADMINISTRATEUR", "GERANT");
 
   registerAbonnementsRoutes(app, db, { authRequis, ventes });
   // 11.3 : anonymisation (droit de suppression) réservée à l'Administrateur seul
@@ -112,6 +115,8 @@ export function buildApp(db: Db, options: BuildAppOptions) {
   registerAvoirRoutes(app, db, { authRequis, ventes, gestionAvoirs });
   // 10.4 : état de la licence éditeur, consultable par tout utilisateur connecté
   registerLicenceRoutes(app, db, { authRequis });
+  // 13.1 : clôture de caisse quotidienne (fond d'ouverture, comptage, écart théorique/réel)
+  registerClotureCaisseRoutes(app, db, { authRequis, ventes, validationCloture });
 
   return app;
 }

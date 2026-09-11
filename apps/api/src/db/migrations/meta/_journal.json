@@ -162,6 +162,13 @@
       "when": 1789031358331,
       "tag": "0022_dark_silver_sable",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "6",
+      "when": 1789117949435,
+      "tag": "0023_chemical_genesis",
+      "breakpoints": true
     }
   ]
 }

@@ -2754,3 +2754,80 @@ describe("Sauvegarde et export des données (2.6)", () => {
     expect(liste.statusCode).toBe(403);
   });
 });
+
+// 13.1 : "fond de caisse d'ouverture, comptage de fermeture, écart
+// théorique/réel par mode de paiement, avec validation par un rôle habilité"
+describe("Clôture de caisse quotidienne (13.1)", () => {
+  it("un caissier ouvre la caisse, encaisse une vente, puis un gérant clôture avec l'écart théorique/réel", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const tokenCaissier = await connecter(app);
+    creerUtilisateur(db, { siteId, nom: "Ger", prenom: "F", identifiant: "gerant1", motDePasse: "motdepasse-secret", role: "GERANT" });
+    const tokenGerant = await connecter(app, "gerant1");
+
+    const ouverture = await app.inject({
+      method: "POST",
+      url: "/api/v1/cloture-caisse/ouvrir",
+      headers: authHeader(tokenCaissier),
+      payload: { siteId, userId, fondOuverture: 20000 },
+    });
+    expect(ouverture.statusCode).toBe(201);
+    const { idCloture } = ouverture.json();
+
+    const vente = await app.inject({
+      method: "POST",
+      url: "/api/v1/recrutements",
+      headers: authHeader(tokenCaissier),
+      payload: { siteId, userId, aujourdHui: "2025-11-16", abonne: { nom: "Nga", prenom: "Paul", telephone: "690000000" }, idFormule, montantEncaisse: 13000 },
+    });
+    expect(vente.statusCode).toBe(201);
+
+    const fermeture = await app.inject({
+      method: "POST",
+      url: `/api/v1/cloture-caisse/${idCloture}/fermer`,
+      headers: authHeader(tokenGerant),
+      payload: { userId, comptages: [{ mode: "CASH", montantCompte: 33000 }] },
+    });
+
+    expect(fermeture.statusCode).toBe(200);
+    const corps = fermeture.json();
+    expect(corps.cloture.statut).toBe("FERMEE");
+    expect(corps.cloture.ecartTotal).toBe(0); // 20000 (fond) + 13000 (vente) = 33000 compté
+    const cash = corps.comptages.find((c: { mode: string }) => c.mode === "CASH");
+    expect(cash.montantTheorique).toBe(33000);
+  });
+
+  it("un caissier ne peut pas clôturer la caisse (403) — validation réservée à l'encadrement", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const token = await connecter(app);
+
+    const ouverture = await app.inject({
+      method: "POST",
+      url: "/api/v1/cloture-caisse/ouvrir",
+      headers: authHeader(token),
+      payload: { siteId, userId, fondOuverture: 20000 },
+    });
+    const { idCloture } = ouverture.json();
+
+    const fermeture = await app.inject({
+      method: "POST",
+      url: `/api/v1/cloture-caisse/${idCloture}/fermer`,
+      headers: authHeader(token),
+      payload: { userId, comptages: [{ mode: "CASH", montantCompte: 20000 }] },
+    });
+    expect(fermeture.statusCode).toBe(403);
+  });
+
+  it("refuse d'ouvrir une deuxième session tant que la précédente n'est pas fermée (400)", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const token = await connecter(app);
+
+    await app.inject({ method: "POST", url: "/api/v1/cloture-caisse/ouvrir", headers: authHeader(token), payload: { siteId, userId, fondOuverture: 20000 } });
+    const deuxieme = await app.inject({
+      method: "POST",
+      url: "/api/v1/cloture-caisse/ouvrir",
+      headers: authHeader(token),
+      payload: { siteId, userId, fondOuverture: 10000 },
+    });
+    expect(deuxieme.statusCode).toBe(400);
+  });
+});

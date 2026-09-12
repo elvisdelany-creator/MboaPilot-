@@ -62,6 +62,20 @@ export async function actualiserStatutTransaction(db: Db, fournisseur: Fournisse
   if (!transaction) throw new Error(`Transaction ${idTransaction} introuvable`);
 
   if (transaction.statut !== "EN_ATTENTE" && transaction.statut !== "INITIEE") return transaction;
+
+  // 6.6 : "EXPIRÉE : Délai de validation dépassé (OTP non saisi à temps) :
+  // la transaction est annulée" — vérifié avant toute consultation du
+  // fournisseur, qui peut ne jamais se prononcer sur une transaction
+  // abandonnée par le client (ex. USSD fermé sans saisir l'OTP).
+  if (new Date(transaction.dateExpiration).getTime() <= Date.now()) {
+    return db
+      .update(schema.transactionMobileMoney)
+      .set({ statut: "EXPIREE" })
+      .where(eq(schema.transactionMobileMoney.idTransaction, idTransaction))
+      .returning()
+      .get();
+  }
+
   if (!transaction.referenceTransaction) return transaction;
 
   const statutFournisseur = await fournisseur.consulterStatut(transaction.referenceTransaction);

@@ -1483,6 +1483,37 @@ describe("Module paiement mobile Orange Money (6.6)", () => {
     const reponse = await app.inject({ method: "GET", url: "/api/v1/paiements-mobiles/999999", headers: authHeader(token) });
     expect(reponse.statusCode).toBe(404);
   });
+
+  // 6.6 : "EXPIRÉE : Délai de validation dépassé (OTP non saisi à temps) :
+  // la transaction est annulée et doit être relancée"
+  it("6.6 : une transaction dont le délai de validation est dépassé expire, même si le client ne se prononce jamais", async () => {
+    const fournisseur = new FournisseurPaiementMobileFactice();
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST, fournisseurPaiementMobile: fournisseur });
+    const token = await connecter(app);
+    const facture = db.insert(schema.facture).values({ siteId, montantTotal: 5000, creePar: userId }).returning().get();
+
+    const initiation = await app.inject({
+      method: "POST",
+      url: "/api/v1/paiements-mobiles",
+      headers: authHeader(token),
+      payload: { idFacture: facture.idFacture, numeroTelephone: "690000000", montant: 5000, parcours: "USSD_CLIENT" },
+    });
+    const idTransaction = initiation.json().idTransaction;
+    db.update(schema.transactionMobileMoney)
+      .set({ dateExpiration: "2020-01-01T00:00:00.000Z" })
+      .where(eq(schema.transactionMobileMoney.idTransaction, idTransaction))
+      .run();
+
+    const actualisation = await app.inject({
+      method: "POST",
+      url: `/api/v1/paiements-mobiles/${idTransaction}/actualiser`,
+      headers: authHeader(token),
+    });
+
+    expect(actualisation.json().statut).toBe("EXPIREE");
+    const factureApres = db.select().from(schema.facture).where(eq(schema.facture.idFacture, facture.idFacture)).get();
+    expect(factureApres?.statut).toBe("BROUILLON");
+  });
 });
 
 describe("Module changement de formule / migration (7.4)", () => {

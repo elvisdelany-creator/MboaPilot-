@@ -2708,6 +2708,63 @@ describe("GET /api/v1/entreprise (6.7)", () => {
 
     expect(reponse.statusCode).toBe(400);
   });
+
+  // 3.2.1, 13.2 : "personnalisation par entreprise (logo...)" sur les documents commerciaux
+  it("3.2.1, 13.2 : un administrateur envoie le logo de l'entreprise, retrouvé dans l'en-tête et téléchargeable", async () => {
+    const dossierTemp = mkdtempSync(join(tmpdir(), "mboapilot-test-logo-app-"));
+    try {
+      const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST, dossierLogos: dossierTemp });
+      creerUtilisateur(db, { siteId, nom: "Admin", prenom: "D", identifiant: "admin1", motDePasse: "motdepasse-secret", role: "ADMINISTRATEUR" });
+      const tokenAdmin = await connecter(app, "admin1");
+
+      const frontiere = "----mboapilot-test-boundary";
+      const corpsMultipart = Buffer.concat([
+        Buffer.from(`--${frontiere}\r\nContent-Disposition: form-data; name="file"; filename="logo.png"\r\nContent-Type: image/png\r\n\r\n`),
+        Buffer.from("contenu-logo-factice"),
+        Buffer.from(`\r\n--${frontiere}--\r\n`),
+      ]);
+
+      const upload = await app.inject({
+        method: "POST",
+        url: "/api/v1/entreprise/logo",
+        headers: { ...authHeader(tokenAdmin), "content-type": `multipart/form-data; boundary=${frontiere}` },
+        payload: corpsMultipart,
+      });
+      expect(upload.statusCode).toBe(201);
+      expect(upload.json().logoUrl).toMatch(/\.png$/);
+
+      const infos = await app.inject({ method: "GET", url: "/api/v1/entreprise", headers: authHeader(tokenAdmin) });
+      expect(infos.json().entreprise.logoUrl).toBe(upload.json().logoUrl);
+
+      const fichier = await app.inject({ method: "GET", url: "/api/v1/entreprise/logo", headers: authHeader(tokenAdmin) });
+      expect(fichier.statusCode).toBe(200);
+      expect(fichier.headers["content-type"]).toBe("image/png");
+      expect(fichier.rawPayload.toString()).toBe("contenu-logo-factice");
+    } finally {
+      rmSync(dossierTemp, { recursive: true, force: true });
+    }
+  });
+
+  it("un caissier ne peut pas envoyer le logo de l'entreprise (403)", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const token = await connecter(app);
+
+    const frontiere = "----mboapilot-test-boundary";
+    const corpsMultipart = Buffer.concat([
+      Buffer.from(`--${frontiere}\r\nContent-Disposition: form-data; name="file"; filename="logo.png"\r\nContent-Type: image/png\r\n\r\n`),
+      Buffer.from("x"),
+      Buffer.from(`\r\n--${frontiere}--\r\n`),
+    ]);
+
+    const upload = await app.inject({
+      method: "POST",
+      url: "/api/v1/entreprise/logo",
+      headers: { ...authHeader(token), "content-type": `multipart/form-data; boundary=${frontiere}` },
+      payload: corpsMultipart,
+    });
+
+    expect(upload.statusCode).toBe(403);
+  });
 });
 
 describe("Comptes partagés streaming (5.9)", () => {

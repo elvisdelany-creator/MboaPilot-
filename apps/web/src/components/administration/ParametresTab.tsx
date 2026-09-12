@@ -1,12 +1,14 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Download } from "lucide-react";
+import { Download, ImagePlus } from "lucide-react";
 import {
   chargerInfosEntreprise,
   chargerSauvegardes,
+  chargerUrlLogoEntreprise,
   exporterDonneesRequete,
   ErreurAuthentification,
   modifierEntrepriseRequete,
+  televerserLogoEntreprise,
   type Sauvegarde,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
@@ -51,6 +53,10 @@ export function ParametresTab() {
   const [enCoursTauxGarantie, setEnCoursTauxGarantie] = useState(false);
   const [sauvegardes, setSauvegardes] = useState<Sauvegarde[]>([]);
   const [exportEnCours, setExportEnCours] = useState(false);
+  // 3.2.1, 13.2 : "personnalisation par entreprise (logo...)" sur les documents commerciaux
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const [logoEnCours, setLogoEnCours] = useState(false);
+  const logoInputRef = useRef<HTMLInputElement>(null);
 
   function gererErreur(erreur: unknown, messageParDefaut: string) {
     if (erreur instanceof ErreurAuthentification) {
@@ -84,6 +90,28 @@ export function ParametresTab() {
   }
 
   useEffect(rechargerEntreprise, [token]);
+
+  function rechargerLogo() {
+    chargerUrlLogoEntreprise(token).then(setLogoUrl);
+  }
+
+  useEffect(rechargerLogo, [token, entreprise?.logoUrl]);
+
+  async function televerserLogo(e: React.ChangeEvent<HTMLInputElement>) {
+    const fichier = e.target.files?.[0];
+    e.target.value = "";
+    if (!fichier) return;
+    setLogoEnCours(true);
+    try {
+      await televerserLogoEntreprise(token, fichier);
+      toast.success("Logo enregistré.");
+      rechargerEntreprise();
+    } catch (erreur) {
+      gererErreur(erreur, "Échec de l'envoi du logo.");
+    } finally {
+      setLogoEnCours(false);
+    }
+  }
 
   function rechargerSauvegardes() {
     chargerSauvegardes(token)
@@ -221,6 +249,27 @@ export function ParametresTab() {
 
   return (
     <div className="space-y-4">
+      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Logo de l'entreprise</p>
+      <Card className="max-w-xl gap-3 p-4">
+        <div className="flex items-center gap-4">
+          {logoUrl ? (
+            <img src={logoUrl} alt="Logo de l'entreprise" className="size-16 rounded-md border border-border object-contain" />
+          ) : (
+            <div className="flex size-16 items-center justify-center rounded-md border border-dashed border-border text-xs text-muted-foreground">
+              Aucun
+            </div>
+          )}
+          <div>
+            <Button variant="outline" size="sm" className="cursor-pointer gap-1" disabled={logoEnCours} onClick={() => logoInputRef.current?.click()}>
+              <ImagePlus className="size-4" />
+              {logoEnCours ? "Envoi…" : "Changer le logo"}
+            </Button>
+            <input ref={logoInputRef} type="file" accept="image/*" hidden onChange={televerserLogo} />
+            <p className="mt-1 text-xs text-muted-foreground">Affiché en en-tête du ticket de caisse et de la facture pro-forma.</p>
+          </div>
+        </div>
+      </Card>
+
       <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Taxes, mentions légales et commissions</p>
       <Card className="max-w-xl gap-4 p-4">
         <div>

@@ -1129,6 +1129,27 @@ export async function chargerInfosEntreprise(token: string): Promise<InfosEntrep
   return lireJson<InfosEntreprise>(reponse);
 }
 
+// 3.2.1, 13.2 : "personnalisation par entreprise (logo...)" sur les documents commerciaux
+export async function televerserLogoEntreprise(token: string, fichier: File): Promise<InfosEntreprise["entreprise"]> {
+  const corps = new FormData();
+  corps.append("file", fichier);
+  const reponse = await fetch(`${BASE}/entreprise/logo`, {
+    method: "POST",
+    headers: headersAuth(token), // pas de Content-Type explicite : le navigateur pose la frontière multipart
+    body: corps,
+  });
+  return lireJson<InfosEntreprise["entreprise"]>(reponse);
+}
+
+// l'endpoint du logo exige une authentification (Bearer) — une balise <img
+// src> classique ne peut pas la porter, on récupère donc le fichier en blob
+// puis on crée une URL locale temporaire (même approche que les photos SAV)
+export async function chargerUrlLogoEntreprise(token: string): Promise<string | null> {
+  const reponse = await fetch(`${BASE}/entreprise/logo`, { headers: headersAuth(token) });
+  if (!reponse.ok) return null;
+  return URL.createObjectURL(await reponse.blob());
+}
+
 // 6.1, 6.2, 4.4, 8.8 : taux de TVA (le cas échéant), mentions légales des
 // documents commerciaux, taux de commission vendeur par défaut et jalons d'alerte
 export async function modifierEntrepriseRequete(

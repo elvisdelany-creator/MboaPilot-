@@ -6,6 +6,9 @@ import type { LigneRecu } from "./RecuVentePrintable";
 
 interface Props {
   infosEntreprise: InfosEntreprise | null;
+  // 3.2.1, 13.2 : logo de l'entreprise, déjà résolu en URL locale (blob) par
+  // l'appelant — l'endpoint qui le sert exige une authentification Bearer
+  logoUrl: string | null;
   nomClient: string;
   lignes: LigneRecu[];
   total: number;
@@ -19,7 +22,7 @@ const formateurDateHeure = new Intl.DateTimeFormat("fr-FR", { dateStyle: "short"
 // d'encaissement, édité AVANT paiement pour donner au client une estimation
 // engageante. Se distingue visuellement et textuellement de la facture
 // BROUILLON, qui existe déjà en base et porte une valeur comptable en attente.
-export function FactureProFormaPrintable({ infosEntreprise, nomClient, lignes, total, onRetour }: Props) {
+export function FactureProFormaPrintable({ infosEntreprise, logoUrl, nomClient, lignes, total, onRetour }: Props) {
   // 6.1, 8.8 : mention informative de la composition du total, comme sur le ticket (6.7)
   const tauxTva = infosEntreprise?.entreprise.tauxTva ?? null;
   const montantHT = tauxTva !== null ? Math.round((total * 10000) / (10000 + tauxTva)) : total;
@@ -35,6 +38,7 @@ export function FactureProFormaPrintable({ infosEntreprise, nomClient, lignes, t
         </div>
 
         <div>
+          {logoUrl && <img src={logoUrl} alt="" className="mb-1 max-h-12 object-contain" />}
           <p className="font-semibold text-card-foreground">{infosEntreprise?.entreprise.nom ?? "—"}</p>
           <p className="text-xs text-muted-foreground">{infosEntreprise?.site.nom}</p>
           {infosEntreprise?.site.adresse && <p className="text-xs text-muted-foreground">{infosEntreprise.site.adresse}</p>}

@@ -34,6 +34,8 @@ export interface BuildAppOptions {
   dossierSauvegardes?: string;
   // 5.10 : dossier de stockage des photos jointes aux dossiers SAV
   dossierPhotosSav?: string;
+  // 3.2.1, 13.2 : dossier de stockage du logo de l'entreprise
+  dossierLogos?: string;
 }
 
 // 10.4 : préfixes toujours autorisés en écriture même en mode dégradé —
@@ -105,7 +107,7 @@ export function buildApp(db: Db, options: BuildAppOptions) {
   registerPaiementMobileRoutes(app, db, fournisseurPaiementMobile, { authRequis, ventes });
   registerTableauBordRoutes(app, db, { authRequis, ventes, pilotage });
   registerUtilisateursRoutes(app, db, { authRequis, admin });
-  registerEntrepriseRoutes(app, db, { authRequis, admin });
+  registerEntrepriseRoutes(app, db, options.dossierLogos ?? "./data/logos", { authRequis, admin });
   registerComptesPartagesRoutes(app, db, { authRequis, ventes, gestionComptesPartages });
   // 5.2, 5.3, 8.5 : vente rapide de produits/services hors abonnement
   registerVentesRoutes(app, db, { authRequis, ventes });

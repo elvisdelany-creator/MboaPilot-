@@ -8,6 +8,7 @@ import {
   chargerInfosEntreprise,
   chargerOptions,
   chargerProduits,
+  chargerUrlLogoEntreprise,
   creerVenteRequete,
   ErreurAuthentification,
   reabonnerRequete,
@@ -83,6 +84,8 @@ export function CaissePage({ onNaviguer, abonneInitial, idFamilleInitiale }: Pro
     recuBase: Omit<RecuVente, "montantEncaisse">;
   } | null>(null);
   const [infosEntreprise, setInfosEntreprise] = useState<InfosEntreprise | null>(null);
+  // 3.2.1, 13.2 : logo affiché en en-tête du ticket de caisse et de la facture pro-forma
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [recu, setRecu] = useState<RecuVente | null>(null);
   const [proFormaVisible, setProFormaVisible] = useState(false);
 
@@ -115,6 +118,7 @@ export function CaissePage({ onNaviguer, abonneInitial, idFamilleInitiale }: Pro
     chargerInfosEntreprise(token)
       .then(setInfosEntreprise)
       .catch(() => setInfosEntreprise(null));
+    chargerUrlLogoEntreprise(token).then(setLogoUrl);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
@@ -475,10 +479,11 @@ export function CaissePage({ onNaviguer, abonneInitial, idFamilleInitiale }: Pro
       </div>
 
       {recu ? (
-        <RecuVentePrintable infosEntreprise={infosEntreprise} recu={recu} onNouvelleVente={() => setRecu(null)} />
+        <RecuVentePrintable infosEntreprise={infosEntreprise} logoUrl={logoUrl} recu={recu} onNouvelleVente={() => setRecu(null)} />
       ) : proFormaVisible ? (
         <FactureProFormaPrintable
           infosEntreprise={infosEntreprise}
+          logoUrl={logoUrl}
           nomClient={nomClientTicket}
           lignes={modeProduits ? lignesTicketProduits : lignesTicket}
           total={modeProduits ? totalTicketProduits : totalTicket}

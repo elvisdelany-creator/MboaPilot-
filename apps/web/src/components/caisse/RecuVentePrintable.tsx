@@ -20,6 +20,9 @@ export interface RecuVente {
 
 interface Props {
   infosEntreprise: InfosEntreprise | null;
+  // 3.2.1, 13.2 : logo de l'entreprise, déjà résolu en URL locale (blob) par
+  // l'appelant — l'endpoint qui le sert exige une authentification Bearer
+  logoUrl: string | null;
   recu: RecuVente;
   onNouvelleVente: () => void;
 }
@@ -37,7 +40,7 @@ const LIBELLE_MODE_PAIEMENT: Record<"CASH" | "CHEQUE" | "VIREMENT" | "MOBILE_MON
 // encaissement. Mise en page pensée pour une imprimante thermique 80mm
 // (window.print(), comme l'export PDF de la fiche 360°, 8.1) mais lisible à
 // l'écran en attendant l'intégration matérielle.
-export function RecuVentePrintable({ infosEntreprise, recu, onNouvelleVente }: Props) {
+export function RecuVentePrintable({ infosEntreprise, logoUrl, recu, onNouvelleVente }: Props) {
   const monnaieRendue = recu.modePaiement === "CASH" ? Math.max(0, recu.montantEncaisse - recu.total) : 0;
   const soldeDu = Math.max(0, recu.total - recu.montantEncaisse);
 
@@ -53,6 +56,7 @@ export function RecuVentePrintable({ infosEntreprise, recu, onNouvelleVente }: P
 
       <div className="w-full max-w-xs space-y-3 border border-border bg-card p-4 font-mono text-sm text-card-foreground print:border-none">
         <div className="text-center">
+          {logoUrl && <img src={logoUrl} alt="" className="mx-auto mb-1 max-h-12 object-contain" />}
           <p className="font-semibold">{infosEntreprise?.entreprise.nom ?? "—"}</p>
           <p className="text-xs text-muted-foreground">{infosEntreprise?.site.nom}</p>
           {infosEntreprise?.site.adresse && <p className="text-xs text-muted-foreground">{infosEntreprise.site.adresse}</p>}

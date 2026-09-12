@@ -1,0 +1,1 @@
+ALTER TABLE `produit` ADD `code_barres` text;

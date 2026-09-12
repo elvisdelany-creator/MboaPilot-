@@ -188,8 +188,8 @@ describe("changerStatutSav — cycle de vie (5.10)", () => {
     expect(notifications[0]).toMatchObject({ canal: "SMS", evenement: "SAV_PRET", statutEnvoi: "ENVOYEE", idDossierSav: idDossierAvecAbonne });
   });
 
-  it("8.4 : n'envoie aucune notification pour un dossier sans abonné rattaché (client non-abonné)", () => {
-    // idDossierSav (fixture par défaut) n'a pas d'abonné rattaché
+  it("8.4 : n'envoie aucune notification pour un dossier sans abonné ni téléphone de client ponctuel", () => {
+    // idDossierSav (fixture par défaut) n'a ni abonné ni téléphone renseigné
     changerStatutSav(db, { idDossierSav, nouveauStatut: "DIAGNOSTIC", userId });
     changerStatutSav(db, { idDossierSav, nouveauStatut: "REPARATION", userId });
 
@@ -197,6 +197,33 @@ describe("changerStatutSav — cycle de vie (5.10)", () => {
 
     const notifications = db.select().from(schema.notification).all();
     expect(notifications).toHaveLength(0);
+  });
+
+  // 5.10, 8.4 : "Notification au client lorsque l'appareil passe au statut « Prêt »"
+  // — s'applique aussi à un client ponctuel non-abonné, dès lors qu'un téléphone a été saisi
+  it("8.4 : notifie par SMS un client ponctuel (sans abonné) dont le téléphone a été renseigné", () => {
+    const idDossierPonctuel = creerDossierSav(db, {
+      siteId,
+      descriptionPanne: "Téléviseur en panne",
+      sousGarantie: false,
+      userId,
+      clientNom: "Mendo Luc",
+      clientTelephone: "677889900",
+    }).idDossierSav;
+    changerStatutSav(db, { idDossierSav: idDossierPonctuel, nouveauStatut: "DIAGNOSTIC", userId });
+    changerStatutSav(db, { idDossierSav: idDossierPonctuel, nouveauStatut: "REPARATION", userId });
+
+    changerStatutSav(db, { idDossierSav: idDossierPonctuel, nouveauStatut: "PRET", userId });
+
+    const notifications = db.select().from(schema.notification).where(eq(schema.notification.idDossierSav, idDossierPonctuel)).all();
+    expect(notifications).toHaveLength(1);
+    expect(notifications[0]).toMatchObject({
+      idAbonne: null,
+      canal: "SMS",
+      evenement: "SAV_PRET",
+      destinataire: "677889900",
+      statutEnvoi: "ENVOYEE",
+    });
   });
 
   it("8.4 : accepte un fournisseur de notification injecté (testabilité)", () => {

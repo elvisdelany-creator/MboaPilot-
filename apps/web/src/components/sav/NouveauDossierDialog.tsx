@@ -24,6 +24,10 @@ export function NouveauDossierDialog({ ouvert, onFerme, onSucces }: Props) {
   const [termeAbonne, setTermeAbonne] = useState("");
   const [resultatsAbonne, setResultatsAbonne] = useState<Abonne[]>([]);
   const [abonneSelectionne, setAbonneSelectionne] = useState<Abonne | null>(null);
+  // 5.10, 8.4 : identité du client ponctuel — pour la restitution et la
+  // notification au passage en « Prêt », faute d'abonné rattaché
+  const [clientNom, setClientNom] = useState("");
+  const [clientTelephone, setClientTelephone] = useState("");
   const [descriptionPanne, setDescriptionPanne] = useState("");
   const [etatReception, setEtatReception] = useState("");
   const [sousGarantie, setSousGarantie] = useState(false);
@@ -44,6 +48,8 @@ export function NouveauDossierDialog({ ouvert, onFerme, onSucces }: Props) {
     setTermeAbonne("");
     setResultatsAbonne([]);
     setAbonneSelectionne(null);
+    setClientNom("");
+    setClientTelephone("");
     setDescriptionPanne("");
     setEtatReception("");
     setSousGarantie(false);
@@ -56,6 +62,8 @@ export function NouveauDossierDialog({ ouvert, onFerme, onSucces }: Props) {
       await ouvrirDossierSav(token, {
         siteId: utilisateur.siteId,
         idAbonne: abonneSelectionne?.idAbonne,
+        clientNom: abonneSelectionne ? undefined : clientNom.trim() || undefined,
+        clientTelephone: abonneSelectionne ? undefined : clientTelephone.trim() || undefined,
         descriptionPanne,
         etatReception: etatReception || undefined,
         sousGarantie,
@@ -101,13 +109,18 @@ export function NouveauDossierDialog({ ouvert, onFerme, onSucces }: Props) {
                 </button>
               </div>
             ) : (
-              <Input
-                id="sav-abonne"
-                value={termeAbonne}
-                onChange={(e) => setTermeAbonne(e.target.value)}
-                placeholder="Nom, téléphone, n° abonné…"
-                className="mt-1"
-              />
+              <>
+                <Input
+                  id="sav-abonne"
+                  value={termeAbonne}
+                  onChange={(e) => setTermeAbonne(e.target.value)}
+                  placeholder="Nom, téléphone, n° abonné…"
+                  className="mt-1"
+                />
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Un téléphone de client ponctuel permet de le notifier quand l'appareil sera prêt.
+                </p>
+              </>
             )}
             {resultatsAbonne.length > 0 && (
               <ul className="absolute z-20 mt-1 w-full overflow-hidden rounded-md border border-border bg-popover shadow-lg">
@@ -128,6 +141,21 @@ export function NouveauDossierDialog({ ouvert, onFerme, onSucces }: Props) {
               </ul>
             )}
           </div>
+
+          {/* 5.10, 8.4 : identité du client ponctuel, pour la restitution et sa
+              notification au passage en « Prêt » — sans objet si un abonné est rattaché */}
+          {!abonneSelectionne && (
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label htmlFor="sav-client-nom">Nom du client (optionnel)</Label>
+                <Input id="sav-client-nom" value={clientNom} onChange={(e) => setClientNom(e.target.value)} className="mt-1" />
+              </div>
+              <div>
+                <Label htmlFor="sav-client-telephone">Téléphone du client (optionnel)</Label>
+                <Input id="sav-client-telephone" value={clientTelephone} onChange={(e) => setClientTelephone(e.target.value)} className="mt-1" />
+              </div>
+            </div>
+          )}
 
           <div>
             <Label htmlFor="sav-panne">Panne annoncée par le client</Label>

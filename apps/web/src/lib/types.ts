@@ -225,6 +225,7 @@ export interface Produit {
   type: TypeProduit;
   libelle: string;
   categorie: string | null;
+  codeBarres: string | null;
   prixVente: number;
   coutRevient: number;
   margeType: MargeType;
@@ -264,6 +265,8 @@ export interface DossierSav {
   idDossierSav: number;
   siteId: number;
   idAbonne: number | null;
+  clientNom: string | null;
+  clientTelephone: string | null;
   descriptionPanne: string;
   etatReception: string | null;
   diagnostic: string | null;

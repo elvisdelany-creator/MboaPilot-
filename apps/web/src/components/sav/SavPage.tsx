@@ -163,6 +163,9 @@ export function SavPage({ onNaviguer }: Props) {
                     <span className="font-medium text-foreground">Dossier n° {d.idDossierSav}</span>
                     <Badge variant={VARIANTE_STATUT[d.statut]}>{LIBELLES_STATUT[d.statut]}</Badge>
                   </div>
+                  {d.idAbonne === null && (
+                    <span className="text-xs text-muted-foreground">{d.clientNom || "Client ponctuel"}</span>
+                  )}
                   <span className="line-clamp-1 text-sm text-muted-foreground">{d.descriptionPanne}</span>
                 </button>
               </li>
@@ -191,6 +194,15 @@ export function SavPage({ onNaviguer }: Props) {
               </div>
 
               <Card className="gap-3 p-4">
+                {detail.idAbonne === null && (detail.clientNom || detail.clientTelephone) && (
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Client ponctuel</p>
+                    <p className="text-sm text-card-foreground">
+                      {detail.clientNom || "—"}
+                      {detail.clientTelephone && ` — ${detail.clientTelephone}`}
+                    </p>
+                  </div>
+                )}
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Panne annoncée</p>
                   <p className="text-sm text-card-foreground">{detail.descriptionPanne}</p>

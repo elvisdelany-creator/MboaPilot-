@@ -36,6 +36,22 @@ describe("creerDossierSav (5.10, 8.4)", () => {
     expect(historique[0].statutApres).toBe("RECU");
   });
 
+  // 5.10, 8.4 : identité du client ponctuel — pour la restitution et la notification
+  it("enregistre le nom et le téléphone d'un client ponctuel", () => {
+    const dossier = creerDossierSav(db, {
+      siteId,
+      descriptionPanne: "Écran cassé",
+      sousGarantie: false,
+      userId,
+      clientNom: "Mendo Luc",
+      clientTelephone: "677889900",
+    });
+
+    expect(dossier.idAbonne).toBeNull();
+    expect(dossier.clientNom).toBe("Mendo Luc");
+    expect(dossier.clientTelephone).toBe("677889900");
+  });
+
   it("rattache un abonné existant quand fourni", () => {
     const abonne = db.insert(schema.abonne).values({ siteId, nom: "N", prenom: "P", telephone: "690000000" }).returning().get();
 

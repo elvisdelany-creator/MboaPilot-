@@ -44,6 +44,7 @@ export function ArticleDialog({ ouvert, produit, onFerme, onSucces }: Props) {
   const [type, setType] = useState<TypeProduit>("BIEN");
   const [libelle, setLibelle] = useState("");
   const [categorie, setCategorie] = useState("");
+  const [codeBarres, setCodeBarres] = useState("");
   const [prixVente, setPrixVente] = useState("");
   const [coutRevient, setCoutRevient] = useState("");
   const [margeType, setMargeType] = useState<MargeType>("VALEUR");
@@ -59,6 +60,7 @@ export function ArticleDialog({ ouvert, produit, onFerme, onSucces }: Props) {
       setType(produit.type);
       setLibelle(produit.libelle);
       setCategorie(produit.categorie ?? "");
+      setCodeBarres(produit.codeBarres ?? "");
       setPrixVente(String(produit.prixVente));
       setCoutRevient(String(produit.coutRevient));
       setMargeType(produit.margeType);
@@ -70,6 +72,7 @@ export function ArticleDialog({ ouvert, produit, onFerme, onSucces }: Props) {
       setType("BIEN");
       setLibelle("");
       setCategorie("");
+      setCodeBarres("");
       setPrixVente("");
       setCoutRevient("");
       setMargeType("VALEUR");
@@ -95,6 +98,7 @@ export function ArticleDialog({ ouvert, produit, onFerme, onSucces }: Props) {
       const champsCommuns = {
         libelle: libelle.trim(),
         categorie: categorie.trim() || undefined,
+        codeBarres: codeBarres.trim() || undefined,
         prixVente: Number(prixVente),
         coutRevient: coutRevientNum,
         margeType,
@@ -157,6 +161,11 @@ export function ArticleDialog({ ouvert, produit, onFerme, onSucces }: Props) {
           <div>
             <Label htmlFor="article-libelle">Libellé</Label>
             <Input id="article-libelle" value={libelle} onChange={(e) => setLibelle(e.target.value)} className="mt-1" />
+          </div>
+
+          <div>
+            <Label htmlFor="article-code-barres">Code interne / code-barres (optionnel)</Label>
+            <Input id="article-code-barres" value={codeBarres} onChange={(e) => setCodeBarres(e.target.value)} className="mt-1" />
           </div>
 
           <div className="grid grid-cols-2 gap-3">

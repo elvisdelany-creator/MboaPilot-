@@ -273,6 +273,7 @@ export interface CreerProduitPayload {
   type: TypeProduit;
   libelle: string;
   categorie?: string;
+  codeBarres?: string;
   prixVente: number;
   coutRevient?: number;
   margeType?: MargeType;
@@ -294,6 +295,7 @@ export async function creerProduitRequete(token: string, payload: CreerProduitPa
 export interface ModifierProduitPayload {
   libelle?: string;
   categorie?: string;
+  codeBarres?: string;
   prixVente?: number;
   coutRevient?: number;
   margeType?: MargeType;
@@ -454,6 +456,8 @@ export async function chargerDossierSav(token: string, idDossierSav: number): Pr
 export interface OuvrirDossierSavPayload {
   siteId: number;
   idAbonne?: number;
+  clientNom?: string;
+  clientTelephone?: string;
   descriptionPanne: string;
   etatReception?: string;
   sousGarantie: boolean;

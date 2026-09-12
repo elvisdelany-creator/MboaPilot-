@@ -54,6 +54,19 @@ describe("creerProduit (8.2 : création d'une fiche article)", () => {
     expect(produit.quantiteStock).toBe(0); // le stock ne se remplit que par réception d'achat (5.2)
   });
 
+  // 5.2 : "code interne/code-barres optionnel"
+  it("enregistre le code interne/code-barres optionnel", () => {
+    const produit = creerProduit(db, { siteId, type: "BIEN", libelle: "Câble HDMI", prixVente: 2500, codeBarres: "3700123456789" });
+
+    expect(produit.codeBarres).toBe("3700123456789");
+  });
+
+  it("le code-barres reste nul quand il n'est pas renseigné", () => {
+    const produit = creerProduit(db, { siteId, type: "BIEN", libelle: "Câble HDMI", prixVente: 2500 });
+
+    expect(produit.codeBarres).toBeNull();
+  });
+
   it("mode POURCENTAGE : calcule le montant de marge équivalent", () => {
     const produit = creerProduit(db, {
       siteId,
@@ -101,5 +114,13 @@ describe("modifierProduit (8.2 : édition d'une fiche article, historique des pr
 
   it("rejette un produit inconnu", () => {
     expect(() => modifierProduit(db, 999999, { prixVente: 1000, userId })).toThrow(/introuvable/);
+  });
+
+  it("modifie le code interne/code-barres d'un article existant", () => {
+    const cree = creerProduit(db, { siteId, type: "BIEN", libelle: "Décodeur", prixVente: 15000 });
+
+    const modifie = modifierProduit(db, cree.idProduit, { codeBarres: "3700987654321", userId });
+
+    expect(modifie.codeBarres).toBe("3700987654321");
   });
 });

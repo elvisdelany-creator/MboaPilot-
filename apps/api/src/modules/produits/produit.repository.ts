@@ -17,6 +17,7 @@ export interface CreerProduitInput {
   type: "BIEN" | "SERVICE" | "SAV" | "KIT";
   libelle: string;
   categorie?: string;
+  codeBarres?: string;
   prixVente: number;
   coutRevient?: number;
   margeType?: MargeType;
@@ -46,6 +47,7 @@ export function creerProduit(db: Db, input: CreerProduitInput) {
       type: input.type,
       libelle: input.libelle,
       categorie: input.categorie,
+      codeBarres: input.codeBarres,
       prixVente: input.prixVente,
       coutRevient,
       margeType,
@@ -61,6 +63,7 @@ export function creerProduit(db: Db, input: CreerProduitInput) {
 export interface ModifierProduitInput {
   libelle?: string;
   categorie?: string;
+  codeBarres?: string;
   prixVente?: number;
   coutRevient?: number;
   margeType?: MargeType;
@@ -104,6 +107,7 @@ export function modifierProduit(db: Db, idProduit: number, input: ModifierProdui
     .set({
       libelle: input.libelle ?? avant.libelle,
       categorie: input.categorie ?? avant.categorie,
+      codeBarres: input.codeBarres ?? avant.codeBarres,
       prixVente,
       coutRevient,
       margeType,

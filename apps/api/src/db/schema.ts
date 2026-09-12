@@ -283,7 +283,9 @@ export const alerteEcheance = sqliteTable("alerte_echeance", {
 // (rattachée à sav_dossier), avec statut d'envoi par canal.
 export const notification = sqliteTable("notification", {
   idNotification: integer("id_notification").primaryKey({ autoIncrement: true }),
-  idAbonne: integer("id_abonne").notNull().references(() => abonne.idAbonne),
+  // 8.4 : nullable — une notification SAV_PRET peut cibler un client ponctuel
+  // non-abonné (sav_dossier.client_telephone), sans aucun abonné rattaché.
+  idAbonne: integer("id_abonne").references(() => abonne.idAbonne),
   canal: text("canal", { enum: ["SMS", "EMAIL"] }).notNull(),
   evenement: text("evenement", { enum: ["ALERTE_ECHEANCE", "SAV_PRET"] }).notNull(),
   destinataire: text("destinataire").notNull(), // numéro ou e-mail au moment de l'envoi
@@ -302,6 +304,7 @@ export const produit = sqliteTable("produit", {
   type: text("type", { enum: ["BIEN", "SERVICE", "SAV", "KIT"] }).notNull(),
   libelle: text("libelle").notNull(),
   categorie: text("categorie"), // 5.2, 8.2 : catégorie ouverte, non limitative (texte libre)
+  codeBarres: text("code_barres"), // 5.2 : "code interne/code-barres optionnel"
   prixVente: integer("prix_vente").notNull(),
   coutRevient: integer("cout_revient").notNull().default(0),
   margeType: text("marge_type", { enum: ["VALEUR", "POURCENTAGE"] }).notNull().default("VALEUR"), // 6.1
@@ -436,6 +439,11 @@ export const savDossier = sqliteTable("sav_dossier", {
   idDossierSav: integer("id_dossier_sav").primaryKey({ autoIncrement: true }),
   siteId: integer("site_id").notNull().references(() => site.idSite),
   idAbonne: integer("id_abonne").references(() => abonne.idAbonne), // nullable : client non-abonné
+  // 5.10 : "rattachement... à un client ponctuel non-abonné" — identité
+  // saisie librement quand idAbonne est absent, pour la restitution et la
+  // notification (8.4) de ce client.
+  clientNom: text("client_nom"),
+  clientTelephone: text("client_telephone"),
   descriptionPanne: text("description_panne").notNull(),
   etatReception: text("etat_reception"),
   diagnostic: text("diagnostic"),

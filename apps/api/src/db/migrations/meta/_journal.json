@@ -169,6 +169,20 @@
       "when": 1789117949435,
       "tag": "0023_chemical_genesis",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "6",
+      "when": 1789119872256,
+      "tag": "0024_dusty_ben_urich",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "6",
+      "when": 1789233876962,
+      "tag": "0025_lyrical_mikhail_rasputin",
+      "breakpoints": true
     }
   ]
 }

@@ -1,5 +1,7 @@
+import { useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import type { Produit } from "@/lib/types";
 
 interface Props {
@@ -12,8 +14,28 @@ const formateurFcfa = new Intl.NumberFormat("fr-FR");
 // 5.2, 5.3, 9.2 : grille des produits physiques et services, hors catalogue
 // d'abonnement — un clic ajoute une unité au panier (7.2, GrilleArticles)
 export function GrilleProduits({ produits, onAjouter }: Props) {
-  const biens = produits.filter((p) => p.type === "BIEN");
-  const services = produits.filter((p) => p.type === "SERVICE");
+  // 5.2, 9.2 : "recherche unifiée article/abonné" — filtre par libellé ou
+  // code interne/code-barres ; une scanette termine sa frappe par Entrée,
+  // ce qui ajoute directement l'article au ticket sur une correspondance exacte.
+  const [recherche, setRecherche] = useState("");
+  const rechercheNormalisee = recherche.trim().toLowerCase();
+  const produitsFiltres = rechercheNormalisee
+    ? produits.filter(
+        (p) => p.libelle.toLowerCase().includes(rechercheNormalisee) || p.codeBarres?.toLowerCase().includes(rechercheNormalisee)
+      )
+    : produits;
+
+  function surEntree(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key !== "Enter") return;
+    const correspondance = produits.find((p) => p.codeBarres?.toLowerCase() === rechercheNormalisee);
+    if (correspondance) {
+      onAjouter(correspondance);
+      setRecherche("");
+    }
+  }
+
+  const biens = produitsFiltres.filter((p) => p.type === "BIEN");
+  const services = produitsFiltres.filter((p) => p.type === "SERVICE");
 
   if (produits.length === 0) {
     return (
@@ -58,6 +80,16 @@ export function GrilleProduits({ produits, onAjouter }: Props) {
 
   return (
     <div className="flex-1 overflow-y-auto p-4">
+      <Input
+        value={recherche}
+        onChange={(e) => setRecherche(e.target.value)}
+        onKeyDown={surEntree}
+        placeholder="Rechercher un article (libellé ou code-barres)…"
+        className="mb-4"
+      />
+      {produitsFiltres.length === 0 && (
+        <p className="text-center text-muted-foreground">Aucun article ne correspond à « {recherche} ».</p>
+      )}
       {grille("Produits", biens)}
       {grille("Services", services)}
     </div>

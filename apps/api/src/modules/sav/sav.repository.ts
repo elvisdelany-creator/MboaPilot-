@@ -5,6 +5,10 @@ import * as schema from "../../db/schema.js";
 export interface OuvrirDossierInput {
   siteId: number;
   idAbonne?: number;
+  // 5.10, 8.4 : identité du client ponctuel (non-abonné) — libre, pour la
+  // restitution et la notification au passage en PRET (voir sav.service.ts)
+  clientNom?: string;
+  clientTelephone?: string;
   descriptionPanne: string;
   etatReception?: string;
   sousGarantie: boolean;
@@ -18,6 +22,8 @@ export function creerDossierSav(db: Db, input: OuvrirDossierInput) {
     .values({
       siteId: input.siteId,
       idAbonne: input.idAbonne,
+      clientNom: input.clientNom,
+      clientTelephone: input.clientTelephone,
       descriptionPanne: input.descriptionPanne,
       etatReception: input.etatReception,
       sousGarantie: input.sousGarantie ? 1 : 0,

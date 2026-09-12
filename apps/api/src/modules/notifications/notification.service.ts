@@ -44,6 +44,34 @@ export function envoyerNotificationAbonne(db: Db, fournisseur: FournisseurNotifi
   });
 }
 
+export interface EnvoyerNotificationClientPonctuelParams {
+  telephone: string;
+  evenement: "SAV_PRET";
+  message: string;
+  idDossierSav: number;
+}
+
+// 5.10, 8.4 : "Notification au client lorsque l'appareil passe au statut «
+// Prêt »" s'applique aussi à un client ponctuel non-abonné (sav_dossier),
+// via le seul canal disponible pour lui (SMS, pas de fiche e-mail) —
+// idAbonne reste NULL, contrairement à envoyerNotificationAbonne ci-dessus.
+export function envoyerNotificationClientPonctuel(db: Db, fournisseur: FournisseurNotification, params: EnvoyerNotificationClientPonctuelParams) {
+  const { reussi } = fournisseur.envoyer("SMS", { destinataire: params.telephone, message: params.message });
+  return db
+    .insert(schema.notification)
+    .values({
+      idAbonne: null,
+      canal: "SMS",
+      evenement: params.evenement,
+      destinataire: params.telephone,
+      message: params.message,
+      statutEnvoi: reussi ? "ENVOYEE" : "ECHOUEE",
+      idDossierSav: params.idDossierSav,
+    })
+    .returning()
+    .get();
+}
+
 // 8.3 : journal des notifications d'un abonné, consultable (statut d'envoi par canal)
 export function listerNotificationsAbonne(db: Db, idAbonne: number) {
   return db

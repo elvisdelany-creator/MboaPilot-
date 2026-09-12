@@ -3,7 +3,7 @@ import { peutTransitionnerSav, type StatutSav } from "@mboapilot/shared";
 import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
 import { enregistrerMouvement } from "../stock/stock.repository.js";
-import { envoyerNotificationAbonne } from "../notifications/notification.service.js";
+import { envoyerNotificationAbonne, envoyerNotificationClientPonctuel } from "../notifications/notification.service.js";
 import { SimulateurNotification } from "../notifications/simulateur-notification.js";
 import type { FournisseurNotification } from "../notifications/fournisseur.js";
 import { trouverTauxGarantieEntreprise } from "../entreprise/entreprise.repository.js";
@@ -130,10 +130,18 @@ export function changerStatutSav(
       .run();
 
     // 8.4 : notification au client lorsque l'appareil passe au statut « Prêt »
-    // — uniquement possible pour un dossier rattaché à un abonné (nullable, client non-abonné)
+    // — pour un abonné comme pour un client ponctuel (sav_dossier.client_telephone),
+    // dès lors qu'un canal de contact est disponible.
     if (dossier.idAbonne !== null) {
       envoyerNotificationAbonne(db, fournisseurNotification, {
         idAbonne: dossier.idAbonne,
+        evenement: "SAV_PRET",
+        message: "Votre appareil est prêt à être récupéré.",
+        idDossierSav: dossier.idDossierSav,
+      });
+    } else if (dossier.clientTelephone) {
+      envoyerNotificationClientPonctuel(db, fournisseurNotification, {
+        telephone: dossier.clientTelephone,
         evenement: "SAV_PRET",
         message: "Votre appareil est prêt à être récupéré.",
         idDossierSav: dossier.idDossierSav,

@@ -682,6 +682,33 @@ describe("Module SAV (5.10, 8.4)", () => {
     expect(reponse.statusCode).toBe(403);
   });
 
+  // 5.10, 8.4 : "rattachement... à un client ponctuel non-abonné" + "notification
+  // au client lorsque l'appareil passe au statut « Prêt »" — s'applique aussi
+  // à ce client ponctuel, dès lors qu'un téléphone a été saisi à l'ouverture.
+  it("5.10, 8.4 : ouvre un dossier pour un client ponctuel et le notifie au passage en Prêt", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const token = await connecter(app);
+
+    const ouverture = await app.inject({
+      method: "POST",
+      url: "/api/v1/sav/dossiers",
+      headers: authHeader(token),
+      payload: { siteId, descriptionPanne: "Téléviseur en panne", sousGarantie: false, userId, clientNom: "Mendo Luc", clientTelephone: "677889900" },
+    });
+    expect(ouverture.statusCode).toBe(201);
+    const { idDossierSav } = ouverture.json();
+    expect(ouverture.json().clientNom).toBe("Mendo Luc");
+
+    await app.inject({ method: "POST", url: `/api/v1/sav/dossiers/${idDossierSav}/statut`, headers: authHeader(token), payload: { nouveauStatut: "DIAGNOSTIC", userId } });
+    await app.inject({ method: "POST", url: `/api/v1/sav/dossiers/${idDossierSav}/statut`, headers: authHeader(token), payload: { nouveauStatut: "REPARATION", userId } });
+    const pret = await app.inject({ method: "POST", url: `/api/v1/sav/dossiers/${idDossierSav}/statut`, headers: authHeader(token), payload: { nouveauStatut: "PRET", userId } });
+    expect(pret.statusCode).toBe(200);
+
+    const notifications = db.select().from(schema.notification).where(eq(schema.notification.idDossierSav, idDossierSav)).all();
+    expect(notifications).toHaveLength(1);
+    expect(notifications[0]).toMatchObject({ idAbonne: null, canal: "SMS", evenement: "SAV_PRET", destinataire: "677889900" });
+  });
+
   // 5.10 : "photos optionnelles" du dossier SAV
   it("5.10 : téléverse une photo jointe au dossier SAV, puis la retrouve dans le détail et via son URL directe", async () => {
     const dossierTemp = mkdtempSync(join(tmpdir(), "mboapilot-test-sav-photos-app-"));
@@ -1216,6 +1243,7 @@ describe("Module gestion du catalogue (8.2)", () => {
     const liste = await app.inject({ method: "GET", url: `/api/v1/produits?siteId=${siteId}`, headers: authHeader(tokenCaissier) });
     expect(liste.statusCode).toBe(200);
     expect(liste.json()).toHaveLength(1);
+    expect(liste.json()[0].categorie).toBe("Accessoires");
 
     const refusCreation = await app.inject({
       method: "POST",
@@ -1224,6 +1252,31 @@ describe("Module gestion du catalogue (8.2)", () => {
       payload: { siteId, type: "BIEN", libelle: "Autre", prixVente: 1000 },
     });
     expect(refusCreation.statusCode).toBe(403);
+  });
+
+  // 5.2 : "code interne/code-barres optionnel"
+  it("enregistre et modifie le code interne/code-barres optionnel d'un article", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    creerUtilisateur(db, { siteId, nom: "Admin", prenom: "D", identifiant: "admin1", motDePasse: "motdepasse-secret", role: "ADMINISTRATEUR" });
+    const tokenAdmin = await connecter(app, "admin1");
+
+    const creation = await app.inject({
+      method: "POST",
+      url: "/api/v1/produits",
+      headers: authHeader(tokenAdmin),
+      payload: { siteId, type: "BIEN", libelle: "Câble HDMI", prixVente: 2500, codeBarres: "3700123456789" },
+    });
+    expect(creation.statusCode).toBe(201);
+    expect(creation.json().codeBarres).toBe("3700123456789");
+
+    const edition = await app.inject({
+      method: "PATCH",
+      url: `/api/v1/produits/${creation.json().idProduit}`,
+      headers: authHeader(tokenAdmin),
+      payload: { codeBarres: "3700999999999", userId },
+    });
+    expect(edition.statusCode).toBe(200);
+    expect(edition.json().codeBarres).toBe("3700999999999");
   });
 
   it("l'édition d'un article journalise l'historique de prix, consultable par tout rôle authentifié", async () => {

@@ -122,6 +122,34 @@ export async function emettreAvoirRequete(token: string, idFacture: number, payl
   return lireJson<AvoirResultat>(reponse);
 }
 
+// 6.4 point 5, 9.4 : encaissement complémentaire sur le solde restant dû d'une facture
+export interface EncaisserSoldePayload {
+  userId: number;
+  montant: number;
+  modePaiement?: ModePaiementEncaissement;
+  banque?: string;
+  numeroCheque?: string;
+  titulaireCheque?: string;
+  dateCheque?: string;
+  referenceVirement?: string;
+}
+
+export interface EncaisserSoldeResultat {
+  idFacture: number;
+  montantEncaisse: number;
+  soldeRestant: number;
+  statutFacture: "VALIDEE";
+}
+
+export async function encaisserSoldeFactureRequete(token: string, idFacture: number, payload: EncaisserSoldePayload): Promise<EncaisserSoldeResultat> {
+  const reponse = await fetch(`${BASE}/factures/${idFacture}/paiements`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headersAuth(token) },
+    body: JSON.stringify(payload),
+  });
+  return lireJson<EncaisserSoldeResultat>(reponse);
+}
+
 export interface ModifierAbonnePayload {
   nom?: string;
   prenom?: string;

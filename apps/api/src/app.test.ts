@@ -1224,6 +1224,42 @@ describe("Émission d'un avoir (6.4)", () => {
   });
 });
 
+// 6.4 point 5, 9.4 : "un solde restant dû reste visible et peut faire l'objet
+// d'encaissements complémentaires ultérieurs"
+describe("Encaissement complémentaire sur solde restant dû (6.4, 9.4)", () => {
+  it("un caissier encaisse le solde d'une facture BROUILLON en attente, qui passe VALIDEE", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const token = await connecter(app);
+    const facture = db.insert(schema.facture).values({ siteId, statut: "BROUILLON", montantTotal: 10000, creePar: userId }).returning().get();
+
+    const encaissement = await app.inject({
+      method: "POST",
+      url: `/api/v1/factures/${facture.idFacture}/paiements`,
+      headers: authHeader(token),
+      payload: { userId, montant: 10000 },
+    });
+
+    expect(encaissement.statusCode).toBe(201);
+    expect(encaissement.json()).toMatchObject({ soldeRestant: 0, statutFacture: "VALIDEE" });
+  });
+
+  it("rejette un encaissement sur une facture déjà intégralement payée (400)", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const token = await connecter(app);
+    const facture = db.insert(schema.facture).values({ siteId, statut: "VALIDEE", montantTotal: 5000, creePar: userId }).returning().get();
+    db.insert(schema.paiement).values({ idFacture: facture.idFacture, mode: "CASH", montant: 5000, utilisateurId: userId }).run();
+
+    const encaissement = await app.inject({
+      method: "POST",
+      url: `/api/v1/factures/${facture.idFacture}/paiements`,
+      headers: authHeader(token),
+      payload: { userId, montant: 1000 },
+    });
+
+    expect(encaissement.statusCode).toBe(400);
+  });
+});
+
 describe("Module gestion du catalogue (8.2)", () => {
   it("un administrateur crée un article, un caissier peut le consulter mais pas le créer", async () => {
     const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });

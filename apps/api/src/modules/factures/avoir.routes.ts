@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import type { Db } from "../../db/types.js";
 import type { RouteGuards, Guard } from "../auth/auth.plugin.js";
 import { creerAvoir, listerLignesFacture, type LigneAvoirInput } from "./avoir.service.js";
+import { encaisserSoldeFacture, type EncaisserSoldeParams } from "./paiement-complementaire.service.js";
 
 function envoyerErreur(reply: import("fastify").FastifyReply, erreur: unknown) {
   const message = erreur instanceof Error ? erreur.message : "Erreur inconnue";
@@ -33,6 +34,20 @@ export function registerAvoirRoutes(app: FastifyInstance, db: Db, guards: RouteG
             userId: request.body.userId,
           })
         );
+      } catch (erreur) {
+        envoyerErreur(reply, erreur);
+      }
+    }
+  );
+
+  // 6.4 point 5, 9.4 : encaissement complémentaire sur le solde restant dû
+  // d'une facture — mêmes rôles que pour un encaissement initial (2.5.1)
+  app.post<{ Params: { idFacture: string }; Body: Omit<EncaisserSoldeParams, "idFacture"> }>(
+    "/api/v1/factures/:idFacture/paiements",
+    { preHandler: [guards.authRequis, guards.ventes] },
+    async (request, reply) => {
+      try {
+        reply.code(201).send(encaisserSoldeFacture(db, { ...request.body, idFacture: Number(request.params.idFacture) }));
       } catch (erreur) {
         envoyerErreur(reply, erreur);
       }

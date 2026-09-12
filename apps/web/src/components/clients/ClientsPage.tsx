@@ -14,6 +14,7 @@ import {
   ShieldAlert,
   Users,
   UserSquare2,
+  Wallet,
   Wrench,
 } from "lucide-react";
 import { peutTransitionnerSav, validerMigrationFormule, type StatutSav } from "@mboapilot/shared";
@@ -34,6 +35,7 @@ import { ModifierAbonneDialog } from "./ModifierAbonneDialog";
 import { FusionDoublonsDialog } from "./FusionDoublonsDialog";
 import { AnonymiserAbonneDialog } from "./AnonymiserAbonneDialog";
 import { EmettreAvoirDialog } from "./EmettreAvoirDialog";
+import { EncaisserSoldeDialog } from "./EncaisserSoldeDialog";
 import type { Abonne, AbonnementAvecFormule, CatalogueFamille, DossierSavDetaille, Facture, Fiche360 } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -102,6 +104,8 @@ export function ClientsPage({ onNaviguer, onReabonnerDepuisFiche }: Props) {
   const [filtreFacture, setFiltreFacture] = useState<"toutes" | "impayees">("toutes");
   // 6.4 : facture à créditer par avoir — depuis l'onglet Facturation
   const [avoirCible, setAvoirCible] = useState<Facture | null>(null);
+  // 6.4 point 5, 9.4 : facture dont le solde restant dû est encaissé — depuis l'onglet Facturation
+  const [soldeCible, setSoldeCible] = useState<Facture | null>(null);
   // 9.4 : actions contextuelles SAV — le dossier déplié récupère son détail
   // complet (pièces, historique, facture) via l'API SAV existante, la fiche
   // 360° elle-même n'exposant que la forme « plate » des dossiers
@@ -444,9 +448,22 @@ export function ClientsPage({ onNaviguer, onReabonnerDepuisFiche }: Props) {
                                   </p>
                                 ))}
                                 {solde > 0 && (
-                                  <p className={cn("pl-3 text-xs font-medium", impayee ? "text-alert-j1-fg" : "text-alert-j3-fg")}>
-                                    Solde dû : {formateurFcfa.format(solde)} FCFA
-                                  </p>
+                                  <div className="flex items-center justify-between gap-2 pl-3">
+                                    <p className={cn("text-xs font-medium", impayee ? "text-alert-j1-fg" : "text-alert-j3-fg")}>
+                                      Solde dû : {formateurFcfa.format(solde)} FCFA
+                                    </p>
+                                    {f.type === "VENTE" && (
+                                      <Button
+                                        variant="link"
+                                        size="sm"
+                                        className="no-print h-auto w-fit cursor-pointer gap-1 p-0 text-xs"
+                                        onClick={() => setSoldeCible(f)}
+                                      >
+                                        <Wallet className="size-3" />
+                                        Encaisser le solde
+                                      </Button>
+                                    )}
+                                  </div>
                                 )}
                                 {peutEmettreAvoir && f.type === "VENTE" && f.statut === "VALIDEE" && (
                                   <Button
@@ -621,6 +638,16 @@ export function ClientsPage({ onNaviguer, onReabonnerDepuisFiche }: Props) {
         onFerme={() => setAvoirCible(null)}
         onSucces={() => {
           setAvoirCible(null);
+          if (idSelectionne !== null) rechargerFiche(idSelectionne);
+        }}
+      />
+
+      <EncaisserSoldeDialog
+        facture={soldeCible}
+        solde={soldeCible ? soldeFacture(soldeCible) : 0}
+        onFerme={() => setSoldeCible(null)}
+        onSucces={() => {
+          setSoldeCible(null);
           if (idSelectionne !== null) rechargerFiche(idSelectionne);
         }}
       />

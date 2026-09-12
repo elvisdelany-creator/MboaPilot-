@@ -1260,6 +1260,46 @@ describe("Encaissement complémentaire sur solde restant dû (6.4, 9.4)", () => 
   });
 });
 
+// 9.1, 11.5 : "Aucune opération destructrice (suppression de vente,
+// annulation de paiement) sans confirmation et sans traçabilité"
+describe("Annulation d'un paiement mal saisi (9.1, 11.5)", () => {
+  it("un gérant annule un paiement, la facture repasse BROUILLON et la suppression est journalisée", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    creerUtilisateur(db, { siteId, nom: "Gerant", prenom: "G", identifiant: "gerant1", motDePasse: "motdepasse-secret", role: "GERANT" });
+    const token = await connecter(app, "gerant1");
+    const facture = db.insert(schema.facture).values({ siteId, statut: "VALIDEE", montantTotal: 5000, creePar: userId }).returning().get();
+    const paiement = db.insert(schema.paiement).values({ idFacture: facture.idFacture, mode: "CASH", montant: 5000, utilisateurId: userId }).returning().get();
+
+    const annulation = await app.inject({
+      method: "DELETE",
+      url: `/api/v1/paiements/${paiement.idPaiement}?userId=${userId}`,
+      headers: authHeader(token),
+    });
+
+    expect(annulation.statusCode).toBe(200);
+    expect(annulation.json()).toMatchObject({ statutFacture: "BROUILLON", totalPaye: 0 });
+    expect(db.select().from(schema.paiement).where(eq(schema.paiement.idPaiement, paiement.idPaiement)).get()).toBeUndefined();
+    const audit = db.select().from(schema.journalAudit).where(eq(schema.journalAudit.tableCible, "paiement")).all();
+    expect(audit).toHaveLength(1);
+    expect(audit[0].action).toBe("SUPPRESSION");
+  });
+
+  it("un caissier ne peut pas annuler un paiement (403)", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const token = await connecter(app);
+    const facture = db.insert(schema.facture).values({ siteId, statut: "VALIDEE", montantTotal: 5000, creePar: userId }).returning().get();
+    const paiement = db.insert(schema.paiement).values({ idFacture: facture.idFacture, mode: "CASH", montant: 5000, utilisateurId: userId }).returning().get();
+
+    const annulation = await app.inject({
+      method: "DELETE",
+      url: `/api/v1/paiements/${paiement.idPaiement}?userId=${userId}`,
+      headers: authHeader(token),
+    });
+
+    expect(annulation.statusCode).toBe(403);
+  });
+});
+
 describe("Module gestion du catalogue (8.2)", () => {
   it("un administrateur crée un article, un caissier peut le consulter mais pas le créer", async () => {
     const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });

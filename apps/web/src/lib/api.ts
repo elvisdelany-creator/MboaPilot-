@@ -150,6 +150,22 @@ export async function encaisserSoldeFactureRequete(token: string, idFacture: num
   return lireJson<EncaisserSoldeResultat>(reponse);
 }
 
+// 9.1, 11.5 : annulation d'un paiement mal saisi (mauvais mode, mauvais
+// montant) — opération destructrice, journalisée côté serveur
+export interface AnnulerPaiementResultat {
+  idFacture: number;
+  totalPaye: number;
+  statutFacture: "BROUILLON" | "VALIDEE";
+}
+
+export async function annulerPaiementRequete(token: string, idPaiement: number, userId: number): Promise<AnnulerPaiementResultat> {
+  const reponse = await fetch(`${BASE}/paiements/${idPaiement}?userId=${userId}`, {
+    method: "DELETE",
+    headers: headersAuth(token),
+  });
+  return lireJson<AnnulerPaiementResultat>(reponse);
+}
+
 export interface ModifierAbonnePayload {
   nom?: string;
   prenom?: string;

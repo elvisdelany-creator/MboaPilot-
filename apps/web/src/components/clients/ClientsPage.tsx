@@ -36,7 +36,8 @@ import { FusionDoublonsDialog } from "./FusionDoublonsDialog";
 import { AnonymiserAbonneDialog } from "./AnonymiserAbonneDialog";
 import { EmettreAvoirDialog } from "./EmettreAvoirDialog";
 import { EncaisserSoldeDialog } from "./EncaisserSoldeDialog";
-import type { Abonne, AbonnementAvecFormule, CatalogueFamille, DossierSavDetaille, Facture, Fiche360 } from "@/lib/types";
+import { AnnulerPaiementDialog } from "./AnnulerPaiementDialog";
+import type { Abonne, AbonnementAvecFormule, CatalogueFamille, DossierSavDetaille, Facture, Fiche360, Paiement } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 interface Props {
@@ -106,6 +107,8 @@ export function ClientsPage({ onNaviguer, onReabonnerDepuisFiche }: Props) {
   const [avoirCible, setAvoirCible] = useState<Facture | null>(null);
   // 6.4 point 5, 9.4 : facture dont le solde restant dû est encaissé — depuis l'onglet Facturation
   const [soldeCible, setSoldeCible] = useState<Facture | null>(null);
+  // 9.1, 11.5 : paiement mal saisi à annuler — depuis l'onglet Facturation
+  const [paiementCible, setPaiementCible] = useState<Paiement | null>(null);
   // 9.4 : actions contextuelles SAV — le dossier déplié récupère son détail
   // complet (pièces, historique, facture) via l'API SAV existante, la fiche
   // 360° elle-même n'exposant que la forme « plate » des dossiers
@@ -443,9 +446,20 @@ export function ClientsPage({ onNaviguer, onReabonnerDepuisFiche }: Props) {
                                   </span>
                                 </div>
                                 {paiementsFacture.map((p) => (
-                                  <p key={p.idPaiement} className="pl-3 text-xs text-muted-foreground">
-                                    {formateurDateHeure.format(new Date(p.datePaiement))} — {LIBELLE_MODE_PAIEMENT[p.mode]} — {formateurFcfa.format(p.montant)} FCFA
-                                  </p>
+                                  <div key={p.idPaiement} className="flex items-center justify-between gap-2 pl-3">
+                                    <p className="text-xs text-muted-foreground">
+                                      {formateurDateHeure.format(new Date(p.datePaiement))} — {LIBELLE_MODE_PAIEMENT[p.mode]} — {formateurFcfa.format(p.montant)} FCFA
+                                    </p>
+                                    {peutEmettreAvoir && (
+                                      <button
+                                        type="button"
+                                        className="no-print cursor-pointer text-xs text-muted-foreground underline-offset-2 hover:text-destructive hover:underline"
+                                        onClick={() => setPaiementCible(p)}
+                                      >
+                                        Annuler
+                                      </button>
+                                    )}
+                                  </div>
                                 ))}
                                 {solde > 0 && (
                                   <div className="flex items-center justify-between gap-2 pl-3">
@@ -648,6 +662,15 @@ export function ClientsPage({ onNaviguer, onReabonnerDepuisFiche }: Props) {
         onFerme={() => setSoldeCible(null)}
         onSucces={() => {
           setSoldeCible(null);
+          if (idSelectionne !== null) rechargerFiche(idSelectionne);
+        }}
+      />
+
+      <AnnulerPaiementDialog
+        paiement={paiementCible}
+        onFerme={() => setPaiementCible(null)}
+        onSucces={() => {
+          setPaiementCible(null);
           if (idSelectionne !== null) rechargerFiche(idSelectionne);
         }}
       />

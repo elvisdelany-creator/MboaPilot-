@@ -3,6 +3,7 @@ import type { Db } from "../../db/types.js";
 import type { RouteGuards, Guard } from "../auth/auth.plugin.js";
 import { creerAvoir, listerLignesFacture, type LigneAvoirInput } from "./avoir.service.js";
 import { encaisserSoldeFacture, type EncaisserSoldeParams } from "./paiement-complementaire.service.js";
+import { annulerPaiement } from "./annulation-paiement.service.js";
 
 function envoyerErreur(reply: import("fastify").FastifyReply, erreur: unknown) {
   const message = erreur instanceof Error ? erreur.message : "Erreur inconnue";
@@ -48,6 +49,21 @@ export function registerAvoirRoutes(app: FastifyInstance, db: Db, guards: RouteG
     async (request, reply) => {
       try {
         reply.code(201).send(encaisserSoldeFacture(db, { ...request.body, idFacture: Number(request.params.idFacture) }));
+      } catch (erreur) {
+        envoyerErreur(reply, erreur);
+      }
+    }
+  );
+
+  // 9.1, 11.5 : "Aucune opération destructrice (suppression de vente,
+  // annulation de paiement) sans confirmation et sans traçabilité" —
+  // réservée à l'encadrement, comme l'émission d'un avoir (correction financière)
+  app.delete<{ Params: { idPaiement: string }; Querystring: { userId: string } }>(
+    "/api/v1/paiements/:idPaiement",
+    { preHandler: [guards.authRequis, guards.gestionAvoirs] },
+    async (request, reply) => {
+      try {
+        reply.code(200).send(annulerPaiement(db, { idPaiement: Number(request.params.idPaiement), userId: Number(request.query.userId) }));
       } catch (erreur) {
         envoyerErreur(reply, erreur);
       }

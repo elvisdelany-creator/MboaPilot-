@@ -18,8 +18,16 @@ export function registerApporteursRoutes(
   db: Db,
   guards: RouteGuards & { gestionApporteurs: Guard; consultationApporteurs: Guard }
 ) {
-  app.get("/api/v1/apporteurs", { preHandler: [guards.authRequis, guards.consultationApporteurs] }, async (_request, reply) => {
-    reply.code(200).send(listerApporteurs(db));
+  app.get("/api/v1/apporteurs", { preHandler: [guards.authRequis, guards.consultationApporteurs] }, async (request, reply) => {
+    const apporteurs = listerApporteurs(db);
+    // 2.5.1 : "Apporteur d'affaires (lecture restreinte à ses propres
+    // abonnés référés)" — un compte APPORTEUR ne doit jamais voir la liste
+    // des autres apporteurs (noms, téléphones, taux de commission négociés)
+    if (request.user.role === "APPORTEUR") {
+      reply.code(200).send(apporteurs.filter((a) => a.idApporteur === request.user.idApporteur));
+      return;
+    }
+    reply.code(200).send(apporteurs);
   });
 
   app.post<{ Body: CreerApporteurInput }>(

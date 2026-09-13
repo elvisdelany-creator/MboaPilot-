@@ -935,6 +935,36 @@ describe("Module apporteur d'affaires (6.3)", () => {
     expect(ficheAutrui.statusCode).toBe(403);
   });
 
+  // 2.5.1 : "Apporteur d'affaires (lecture restreinte à ses propres abonnés
+  // référés)" — déjà appliqué à /fiche, mais pas au listing complet
+  it("2.5.1 : un apporteur ne voit que sa propre fiche dans le listing, jamais les autres apporteurs", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    creerUtilisateur(db, { siteId, nom: "Admin", prenom: "D", identifiant: "admin1", motDePasse: "motdepasse-secret", role: "ADMINISTRATEUR" });
+    const tokenAdmin = await connecter(app, "admin1");
+
+    const apporteurA = (
+      await app.inject({ method: "POST", url: "/api/v1/apporteurs", headers: authHeader(tokenAdmin), payload: { nom: "Apporteur A", tauxCommissionDefaut: 500 } })
+    ).json();
+    await app.inject({ method: "POST", url: "/api/v1/apporteurs", headers: authHeader(tokenAdmin), payload: { nom: "Apporteur B" } });
+
+    creerUtilisateur(db, {
+      siteId,
+      nom: "Compte",
+      prenom: "ApporteurA",
+      identifiant: "apporteurA",
+      motDePasse: "motdepasse-secret",
+      role: "APPORTEUR",
+      idApporteur: apporteurA.idApporteur,
+    });
+    const tokenApporteurA = await connecter(app, "apporteurA");
+
+    const liste = await app.inject({ method: "GET", url: "/api/v1/apporteurs", headers: authHeader(tokenApporteurA) });
+
+    expect(liste.statusCode).toBe(200);
+    expect(liste.json()).toHaveLength(1);
+    expect(liste.json()[0].idApporteur).toBe(apporteurA.idApporteur);
+  });
+
   it("un recrutement CANAL+ calcule automatiquement la commission à partir du taux vendeur par défaut (6.2, 8.8)", async () => {
     const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
     creerUtilisateur(db, { siteId, nom: "Admin", prenom: "D", identifiant: "admin1", motDePasse: "motdepasse-secret", role: "ADMINISTRATEUR" });

@@ -2780,6 +2780,53 @@ describe("GET /api/v1/entreprise (6.7)", () => {
     expect(reponse.statusCode).toBe(403);
   });
 
+  // 8.8 : "Paramétrage (formules, tarifs, kits, options, taxes)" regroupe le
+  // paramétrage catalogue (déjà ouvert au Gérant, gestionCatalogue) et le
+  // paramétrage des taxes/mentions légales — le cahier ne distingue pas les
+  // deux, contrairement à l'anonymisation RGPD ou à la licence éditeur qui
+  // restent, elles, réservées à l'Administrateur seul.
+  it("8.8 : un gérant peut aussi définir le taux de TVA et les mentions légales, comme le paramétrage catalogue", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    creerUtilisateur(db, { siteId, nom: "Gerant", prenom: "G", identifiant: "gerant1", motDePasse: "motdepasse-secret", role: "GERANT" });
+    const tokenGerant = await connecter(app, "gerant1");
+
+    const modification = await app.inject({
+      method: "PATCH",
+      url: "/api/v1/entreprise",
+      headers: authHeader(tokenGerant),
+      payload: { tauxTva: 1925, mentionsLegales: "RC/DLA/2024/B/1234" },
+    });
+
+    expect(modification.statusCode).toBe(200);
+    expect(modification.json().tauxTva).toBe(1925);
+  });
+
+  it("8.8 : un gérant peut envoyer le logo de l'entreprise", async () => {
+    const dossierTemp = mkdtempSync(join(tmpdir(), "mboapilot-test-logo-gerant-"));
+    try {
+      const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST, dossierLogos: dossierTemp });
+      creerUtilisateur(db, { siteId, nom: "Gerant", prenom: "G", identifiant: "gerant1", motDePasse: "motdepasse-secret", role: "GERANT" });
+      const tokenGerant = await connecter(app, "gerant1");
+
+      const frontiere = "----mboapilot-test-boundary";
+      const corpsMultipart = Buffer.concat([
+        Buffer.from(`--${frontiere}\r\nContent-Disposition: form-data; name="file"; filename="logo.png"\r\nContent-Type: image/png\r\n\r\n`),
+        Buffer.from("contenu-logo-factice"),
+        Buffer.from(`\r\n--${frontiere}--\r\n`),
+      ]);
+
+      const upload = await app.inject({
+        method: "POST",
+        url: "/api/v1/entreprise/logo",
+        headers: { ...authHeader(tokenGerant), "content-type": `multipart/form-data; boundary=${frontiere}` },
+        payload: corpsMultipart,
+      });
+      expect(upload.statusCode).toBe(201);
+    } finally {
+      rmSync(dossierTemp, { recursive: true, force: true });
+    }
+  });
+
   it("8.8 : un administrateur configure des jalons d'alerte personnalisés, reflétés dans la liste d'échéance", async () => {
     const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
     creerUtilisateur(db, { siteId, nom: "Admin", prenom: "D", identifiant: "admin1", motDePasse: "motdepasse-secret", role: "ADMINISTRATEUR" });

@@ -84,7 +84,7 @@ export function AppHeader({ vueActive, onNaviguer, children }: Props) {
             Catalogue
           </Button>
         )}
-        {utilisateur.role === "ADMINISTRATEUR" && (
+        {(utilisateur.role === "ADMINISTRATEUR" || utilisateur.role === "GERANT") && (
           <Button
             variant={vueActive === "administration" ? "default" : "ghost"}
             className="h-9 cursor-pointer"

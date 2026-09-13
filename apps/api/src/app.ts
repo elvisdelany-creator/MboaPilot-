@@ -94,6 +94,10 @@ export function buildApp(db: Db, options: BuildAppOptions) {
   const gestionAvoirs = exigerRole("ADMINISTRATEUR", "GERANT");
   // 13.1 : "validation par un rôle habilité" pour la fermeture de caisse — encadrement uniquement
   const validationCloture = exigerRole("ADMINISTRATEUR", "GERANT");
+  // 8.8 : "Paramétrage (formules, tarifs, kits, options, taxes)" — le cahier
+  // ne distingue pas taxes/mentions légales/logo du reste du paramétrage
+  // catalogue, déjà ouvert au Gérant (gestionCatalogue)
+  const gestionParametres = exigerRole("ADMINISTRATEUR", "GERANT");
   // 2.5.1 : "Comptable (lecture financière)" — consultation des fiches
   // clients et de leurs factures, sans droit de saisie/vente
   const lectureFinanciere = exigerRole("ADMINISTRATEUR", "GERANT", "CAISSIER", "COMPTABLE");
@@ -110,7 +114,7 @@ export function buildApp(db: Db, options: BuildAppOptions) {
   registerPaiementMobileRoutes(app, db, fournisseurPaiementMobile, { authRequis, ventes });
   registerTableauBordRoutes(app, db, { authRequis, ventes, pilotage });
   registerUtilisateursRoutes(app, db, { authRequis, admin });
-  registerEntrepriseRoutes(app, db, options.dossierLogos ?? "./data/logos", { authRequis, admin });
+  registerEntrepriseRoutes(app, db, options.dossierLogos ?? "./data/logos", { authRequis, gestionParametres });
   registerComptesPartagesRoutes(app, db, { authRequis, ventes, gestionComptesPartages });
   // 5.2, 5.3, 8.5 : vente rapide de produits/services hors abonnement
   registerVentesRoutes(app, db, { authRequis, ventes });

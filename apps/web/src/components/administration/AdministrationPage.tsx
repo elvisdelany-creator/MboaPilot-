@@ -44,10 +44,14 @@ const formateurDateHeure = new Intl.DateTimeFormat("fr-FR", { dateStyle: "short"
 // consultation du journal d'audit (11.5) — réservé à l'Administrateur. La
 // bascule de supervision entre plusieurs sites (2.5.2) est différée en V2
 // (12.1) ; ici chaque administrateur gère le site auquel il est rattaché.
+// 8.8 : le paramétrage (catalogue, comptes streaming, taxes/mentions
+// légales/logo) reste, lui, ouvert au Gérant — ces onglets ne sont donc pas
+// restreints comme les comptes/sites/audit ci-dessus.
 export function AdministrationPage({ onNaviguer }: Props) {
   const { session, deconnecter } = useAuth();
   const token = session!.token;
   const utilisateur = session!.utilisateur;
+  const estAdministrateur = utilisateur.role === "ADMINISTRATEUR";
 
   const [comptes, setComptes] = useState<CompteUtilisateur[] | null>(null);
   const [sites, setSites] = useState<Site[]>([]);
@@ -83,9 +87,16 @@ export function AdministrationPage({ onNaviguer }: Props) {
       .catch((e) => gererErreur(e, "Impossible de charger le journal d'audit."));
   }
 
-  useEffect(rechargerComptes, [token]);
-  useEffect(rechargerSites, [token]);
   useEffect(() => {
+    if (estAdministrateur) rechargerComptes();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token]);
+  useEffect(() => {
+    if (estAdministrateur) rechargerSites();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token]);
+  useEffect(() => {
+    if (!estAdministrateur) return;
     const identifiant = setTimeout(rechargerJournal, 200);
     return () => clearTimeout(identifiant);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -129,20 +140,24 @@ export function AdministrationPage({ onNaviguer }: Props) {
             <ShieldCheck className="size-8 text-muted-foreground" aria-hidden="true" />
             <div>
               <h1 className="font-heading text-lg font-semibold text-foreground">Administration</h1>
-              <p className="text-sm text-muted-foreground">Comptes utilisateurs, sites et journal d'audit (8.7).</p>
+              <p className="text-sm text-muted-foreground">
+                {estAdministrateur ? "Comptes utilisateurs, sites, catalogue et paramètres (8.7, 8.8)." : "Catalogue, comptes streaming et paramètres (8.8)."}
+              </p>
             </div>
           </div>
 
-          <Tabs defaultValue="utilisateurs">
+          <Tabs defaultValue={estAdministrateur ? "utilisateurs" : "catalogue"}>
             <TabsList>
-              <TabsTrigger value="utilisateurs">Utilisateurs</TabsTrigger>
-              <TabsTrigger value="sites">Sites</TabsTrigger>
+              {estAdministrateur && <TabsTrigger value="utilisateurs">Utilisateurs</TabsTrigger>}
+              {estAdministrateur && <TabsTrigger value="sites">Sites</TabsTrigger>}
               <TabsTrigger value="catalogue">Catalogue</TabsTrigger>
               <TabsTrigger value="comptes-partages">Comptes streaming</TabsTrigger>
               <TabsTrigger value="parametres">Paramètres</TabsTrigger>
-              <TabsTrigger value="audit">Journal d'audit</TabsTrigger>
+              {estAdministrateur && <TabsTrigger value="audit">Journal d'audit</TabsTrigger>}
             </TabsList>
 
+            {estAdministrateur && (
+              <>
             <TabsContent value="utilisateurs" className="space-y-3">
               <div className="flex items-center justify-between">
                 <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Comptes ({comptes?.length ?? 0})</p>
@@ -222,6 +237,8 @@ export function AdministrationPage({ onNaviguer }: Props) {
                 ))}
               </ul>
             </TabsContent>
+              </>
+            )}
 
             <TabsContent value="catalogue">
               <CatalogueTab />
@@ -235,6 +252,7 @@ export function AdministrationPage({ onNaviguer }: Props) {
               <ParametresTab />
             </TabsContent>
 
+            {estAdministrateur && (
             <TabsContent value="audit" className="space-y-3">
               <div className="flex items-center justify-between gap-2">
                 <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Entrées ({journal?.length ?? 0})</p>
@@ -264,6 +282,7 @@ export function AdministrationPage({ onNaviguer }: Props) {
                 ))}
               </ul>
             </TabsContent>
+            )}
           </Tabs>
         </div>
       </div>

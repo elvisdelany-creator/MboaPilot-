@@ -555,6 +555,20 @@ describe("GET /api/v1/abonnements-expires (4.4, 8.8)", () => {
     expect(reponse.statusCode).toBe(200);
     expect(reponse.json()).toHaveLength(0);
   });
+
+  // 2.5.1 : "Comptable (lecture financière)" — consulte le même tableau de
+  // bord (pilotage) que Gérant/Administrateur, échéances comprises
+  it("2.5.1 : un comptable consulte les échéances et les abonnements expirés du tableau de bord", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    creerUtilisateur(db, { siteId, nom: "Comptable", prenom: "C", identifiant: "compta1", motDePasse: "motdepasse-secret", role: "COMPTABLE" });
+    const tokenComptable = await connecter(app, "compta1");
+
+    const echeances = await app.inject({ method: "GET", url: `/api/v1/alertes-echeance?siteId=${siteId}`, headers: authHeader(tokenComptable) });
+    expect(echeances.statusCode).toBe(200);
+
+    const expires = await app.inject({ method: "GET", url: `/api/v1/abonnements-expires?siteId=${siteId}`, headers: authHeader(tokenComptable) });
+    expect(expires.statusCode).toBe(200);
+  });
 });
 
 describe("POST /api/v1/abonnements/:numeroAbonnement/echange-materiel (7.3)", () => {
@@ -1716,6 +1730,44 @@ describe("Fiche client 360° et fusion de doublons (8.1)", () => {
     expect(fiche.json().abonne.nom).toBe("Nga Ndongo");
     expect(fiche.json().abonnements).toHaveLength(1);
     expect(fiche.json().factures).toHaveLength(1);
+  });
+
+  // 2.5.1 : "Comptable (lecture financière)" — un rôle prédéfini dont la
+  // seule raison d'être est de consulter les données financières des clients
+  it("2.5.1 : un comptable consulte la recherche client, la fiche 360° et les lignes de facture (lecture financière)", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const token = await connecter(app);
+    const { idAbonne, numeroAbonnement } = await creerAbonneViaRecrutement(app, token, "Nga Ndongo", "690000000");
+    void numeroAbonnement;
+    creerUtilisateur(db, { siteId, nom: "Comptable", prenom: "C", identifiant: "compta1", motDePasse: "motdepasse-secret", role: "COMPTABLE" });
+    const tokenComptable = await connecter(app, "compta1");
+
+    const recherche = await app.inject({ method: "GET", url: `/api/v1/abonnes?siteId=${siteId}&q=690000000`, headers: authHeader(tokenComptable) });
+    expect(recherche.statusCode).toBe(200);
+
+    const fiche = await app.inject({ method: "GET", url: `/api/v1/abonnes/${idAbonne}/fiche-360`, headers: authHeader(tokenComptable) });
+    expect(fiche.statusCode).toBe(200);
+    const idFacture = fiche.json().factures[0].idFacture;
+
+    const lignes = await app.inject({ method: "GET", url: `/api/v1/factures/${idFacture}/lignes`, headers: authHeader(tokenComptable) });
+    expect(lignes.statusCode).toBe(200);
+  });
+
+  it("un comptable ne peut pas modifier une fiche client (403)", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const token = await connecter(app);
+    const { idAbonne } = await creerAbonneViaRecrutement(app, token, "Nga Ndongo", "690000000");
+    creerUtilisateur(db, { siteId, nom: "Comptable", prenom: "C", identifiant: "compta1", motDePasse: "motdepasse-secret", role: "COMPTABLE" });
+    const tokenComptable = await connecter(app, "compta1");
+
+    const modification = await app.inject({
+      method: "PATCH",
+      url: `/api/v1/abonnes/${idAbonne}`,
+      headers: authHeader(tokenComptable),
+      payload: { email: "x@example.cm" },
+    });
+
+    expect(modification.statusCode).toBe(403);
   });
 
   it("modifie les coordonnées d'un abonné", async () => {

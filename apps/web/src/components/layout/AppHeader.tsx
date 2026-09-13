@@ -51,7 +51,10 @@ export function AppHeader({ vueActive, onNaviguer, children }: Props) {
         >
           SAV
         </Button>
-        {(utilisateur.role === "ADMINISTRATEUR" || utilisateur.role === "GERANT" || utilisateur.role === "CAISSIER") && (
+        {(utilisateur.role === "ADMINISTRATEUR" ||
+          utilisateur.role === "GERANT" ||
+          utilisateur.role === "CAISSIER" ||
+          utilisateur.role === "COMPTABLE") && (
           <Button
             variant={vueActive === "clients" ? "default" : "ghost"}
             className="h-9 cursor-pointer"

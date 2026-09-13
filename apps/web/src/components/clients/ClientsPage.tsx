@@ -184,6 +184,8 @@ export function ClientsPage({ onNaviguer, onReabonnerDepuisFiche }: Props) {
   const peutAnonymiser = utilisateur.role === "ADMINISTRATEUR";
   // 6.4 : émission d'un avoir — correction financière, réservée à l'encadrement
   const peutEmettreAvoir = utilisateur.role === "ADMINISTRATEUR" || utilisateur.role === "GERANT";
+  // 2.5.1 : "Comptable (lecture financière)" — aucune action de vente/encaissement
+  const lectureSeule = utilisateur.role === "COMPTABLE";
 
   function trouverFormule(idFamille: number, idFormule: number) {
     return catalogue.find((f) => f.idFamille === idFamille)?.formules.find((fo) => fo.idFormule === idFormule) ?? null;
@@ -288,10 +290,12 @@ export function ClientsPage({ onNaviguer, onReabonnerDepuisFiche }: Props) {
                     <Printer className="size-4" />
                     Exporter (PDF)
                   </Button>
-                  <Button variant="outline" size="sm" className="cursor-pointer gap-1" onClick={() => setModifierOuvert(true)}>
-                    <Pencil className="size-4" />
-                    Modifier
-                  </Button>
+                  {!lectureSeule && (
+                    <Button variant="outline" size="sm" className="cursor-pointer gap-1" onClick={() => setModifierOuvert(true)}>
+                      <Pencil className="size-4" />
+                      Modifier
+                    </Button>
+                  )}
                   {peutFusionner && (
                     <Button variant="outline" size="sm" className="cursor-pointer" onClick={() => setFusionPrincipal(fiche.abonne)}>
                       Fusionner un doublon
@@ -352,7 +356,7 @@ export function ClientsPage({ onNaviguer, onReabonnerDepuisFiche }: Props) {
                               <Badge variant={VARIANTE_STATUT_ABONNEMENT[a.statut]}>{LIBELLE_STATUT_ABONNEMENT[a.statut]}</Badge>
                             </div>
 
-                            {a.statut !== "RESILIE" && (
+                            {a.statut !== "RESILIE" && !lectureSeule && (
                               <div className="no-print flex flex-wrap gap-2 border-t border-border pt-2">
                                 <Button
                                   variant="outline"
@@ -466,7 +470,7 @@ export function ClientsPage({ onNaviguer, onReabonnerDepuisFiche }: Props) {
                                     <p className={cn("text-xs font-medium", impayee ? "text-alert-j1-fg" : "text-alert-j3-fg")}>
                                       Solde dû : {formateurFcfa.format(solde)} FCFA
                                     </p>
-                                    {f.type === "VENTE" && (
+                                    {f.type === "VENTE" && !lectureSeule && (
                                       <Button
                                         variant="link"
                                         size="sm"

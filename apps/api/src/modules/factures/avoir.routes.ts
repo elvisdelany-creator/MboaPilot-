@@ -13,10 +13,11 @@ function envoyerErreur(reply: import("fastify").FastifyReply, erreur: unknown) {
 
 // 6.4 : émission d'un avoir — correction d'une facture VALIDEE, réservée à
 // l'encadrement (opération financière correctrice, comme la fusion de doublons).
-export function registerAvoirRoutes(app: FastifyInstance, db: Db, guards: RouteGuards & { gestionAvoirs: Guard }) {
+// 2.5.1 : la consultation des lignes reste ouverte au Comptable (lecture financière).
+export function registerAvoirRoutes(app: FastifyInstance, db: Db, guards: RouteGuards & { gestionAvoirs: Guard; lectureFinanciere: Guard }) {
   app.get<{ Params: { idFacture: string } }>(
     "/api/v1/factures/:idFacture/lignes",
-    { preHandler: [guards.authRequis, guards.ventes] },
+    { preHandler: [guards.authRequis, guards.lectureFinanciere] },
     async (request, reply) => {
       reply.code(200).send(listerLignesFacture(db, Number(request.params.idFacture)));
     }

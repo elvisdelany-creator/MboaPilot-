@@ -17,10 +17,17 @@ function envoyerErreur(reply: import("fastify").FastifyReply, erreur: unknown) {
 // anonymisation (droit de suppression), opérations destructrices, réservées
 // respectivement à l'encadrement et, pour l'anonymisation, à l'Administrateur
 // seul (sensibilité plus élevée — données personnelles, 11.3).
-export function registerAbonnesRoutes(app: FastifyInstance, db: Db, guards: RouteGuards & { fusionAbonnes: Guard; anonymisationAbonne: Guard }) {
+// 2.5.1 : "Comptable (lecture financière)" — la recherche, la fiche et la
+// fiche 360° (factures, paiements, solde) restent en lecture seule pour ce
+// rôle, qui n'a aucun droit de modification/vente.
+export function registerAbonnesRoutes(
+  app: FastifyInstance,
+  db: Db,
+  guards: RouteGuards & { fusionAbonnes: Guard; anonymisationAbonne: Guard; lectureFinanciere: Guard }
+) {
   app.get<{ Querystring: { siteId: string; q: string } }>(
     "/api/v1/abonnes",
-    { preHandler: [guards.authRequis, guards.ventes] },
+    { preHandler: [guards.authRequis, guards.lectureFinanciere] },
     async (request, reply) => {
       const { siteId, q } = request.query;
       const resultats = rechercherAbonnes(db, Number(siteId), q);
@@ -42,7 +49,7 @@ export function registerAbonnesRoutes(app: FastifyInstance, db: Db, guards: Rout
 
   app.get<{ Params: { idAbonne: string } }>(
     "/api/v1/abonnes/:idAbonne",
-    { preHandler: [guards.authRequis, guards.ventes] },
+    { preHandler: [guards.authRequis, guards.lectureFinanciere] },
     async (request, reply) => {
       const abonne = trouverAbonne(db, Number(request.params.idAbonne));
       if (!abonne) {
@@ -72,7 +79,7 @@ export function registerAbonnesRoutes(app: FastifyInstance, db: Db, guards: Rout
 
   app.get<{ Params: { idAbonne: string } }>(
     "/api/v1/abonnes/:idAbonne/fiche-360",
-    { preHandler: [guards.authRequis, guards.ventes] },
+    { preHandler: [guards.authRequis, guards.lectureFinanciere] },
     async (request, reply) => {
       try {
         reply.code(200).send(construireFiche360(db, Number(request.params.idAbonne)));

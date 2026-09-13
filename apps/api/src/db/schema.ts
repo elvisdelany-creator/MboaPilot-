@@ -73,6 +73,12 @@ export const site = sqliteTable("site", {
   idEntreprise: integer("id_entreprise").notNull().references(() => entreprise.idEntreprise),
   nom: text("nom").notNull(),
   adresse: text("adresse"),
+  // 11.4, 6.7 : "Compatibilité imprimante thermique 80mm (protocole ESC/POS)
+  // pour les tickets de caisse" — imprimante réseau (TCP brut, port 9100
+  // standard "RAW/JetDirect") rattachée à ce site ; non configurée par
+  // défaut (repli sur l'impression navigateur existante, window.print()).
+  imprimanteHote: text("imprimante_hote"),
+  imprimantePort: integer("imprimante_port"),
   actif: integer("actif").notNull().default(1),
 });
 

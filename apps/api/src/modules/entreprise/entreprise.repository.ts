@@ -24,7 +24,7 @@ export interface InfosEntreprise {
     delaiGraceReabonnementJours: number;
     tauxGarantiePourcent: number;
   };
-  site: { idSite: number; nom: string; adresse: string | null };
+  site: { idSite: number; nom: string; adresse: string | null; imprimanteHote: string | null; imprimantePort: number | null };
 }
 
 // 6.7 : identification de l'entreprise/site — en-tête du ticket de caisse,
@@ -56,7 +56,7 @@ export function trouverInfosEntrepriseParSite(db: Db, siteId: number): InfosEntr
       delaiGraceReabonnementJours: entreprise.delaiGraceReabonnementJours,
       tauxGarantiePourcent: entreprise.tauxGarantiePourcent,
     },
-    site: { idSite: site.idSite, nom: site.nom, adresse: site.adresse },
+    site: { idSite: site.idSite, nom: site.nom, adresse: site.adresse, imprimanteHote: site.imprimanteHote, imprimantePort: site.imprimantePort },
   };
 }
 

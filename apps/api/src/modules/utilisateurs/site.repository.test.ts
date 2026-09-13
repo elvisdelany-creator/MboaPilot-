@@ -49,6 +49,35 @@ describe("modifierSite (8.7)", () => {
   });
 });
 
+// 11.4, 6.7 : "Compatibilité imprimante thermique 80mm (protocole ESC/POS)"
+describe("modifierSite — imprimante réseau (11.4, 6.7)", () => {
+  it("configure l'hôte et le port de l'imprimante réseau du site", () => {
+    const site = creerSite(db, { idEntreprise, nom: "Site A" });
+
+    const modifie = modifierSite(db, site.idSite, { imprimanteHote: "192.168.1.50", imprimantePort: 9100 });
+
+    expect(modifie?.imprimanteHote).toBe("192.168.1.50");
+    expect(modifie?.imprimantePort).toBe(9100);
+  });
+
+  it("aucune imprimante configurée par défaut", () => {
+    const site = creerSite(db, { idEntreprise, nom: "Site A" });
+
+    expect(site.imprimanteHote).toBeNull();
+    expect(site.imprimantePort).toBeNull();
+  });
+
+  it("efface la configuration en passant une chaîne vide", () => {
+    const site = creerSite(db, { idEntreprise, nom: "Site A" });
+    modifierSite(db, site.idSite, { imprimanteHote: "192.168.1.50", imprimantePort: 9100 });
+
+    const efface = modifierSite(db, site.idSite, { imprimanteHote: "" });
+
+    expect(efface?.imprimanteHote).toBeNull();
+    expect(efface?.imprimantePort).toBeNull();
+  });
+});
+
 describe("trouverSite (8.7)", () => {
   it("renvoie undefined pour un site inconnu", () => {
     expect(trouverSite(db, 999999)).toBeUndefined();

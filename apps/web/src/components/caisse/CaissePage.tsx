@@ -11,6 +11,7 @@ import {
   chargerUrlLogoEntreprise,
   creerVenteRequete,
   ErreurAuthentification,
+  imprimerTicketEscPosRequete,
   reabonnerRequete,
   recruter,
 } from "@/lib/api";
@@ -121,6 +122,25 @@ export function CaissePage({ onNaviguer, abonneInitial, idFamilleInitiale }: Pro
     chargerUrlLogoEntreprise(token).then(setLogoUrl);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
+
+  // 11.4, 6.7 : imprime le ticket sur l'imprimante ESC/POS du site dès son
+  // édition, en plus du bouton "Imprimer le ticket" (impression navigateur,
+  // toujours disponible) — silencieux si aucune imprimante n'est configurée
+  // (repli attendu), un échec réseau ne bloque jamais la vente déjà encaissée.
+  useEffect(() => {
+    if (!recu) return;
+    imprimerTicketEscPosRequete(token, {
+      operation: recu.operation,
+      numeroAbonnement: recu.numeroAbonnement,
+      lignes: recu.lignes,
+      total: recu.total,
+      montantTaxe: recu.montantTaxe,
+      modePaiement: recu.modePaiement,
+      montantEncaisse: recu.montantEncaisse,
+      dateHeure: recu.dateHeure,
+    }).catch(() => toast.error("Échec de l'impression réseau — utilisez le bouton « Imprimer le ticket »."));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recu]);
 
   // 3.2.2, 5.4.2 : options complémentaires, filtrées par compatibilité avec
   // la formule sélectionnée côté TicketPanel

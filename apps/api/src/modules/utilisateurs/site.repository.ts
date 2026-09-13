@@ -28,15 +28,24 @@ export interface ModifierSiteInput {
   nom?: string;
   adresse?: string;
   actif?: boolean;
+  // 11.4, 6.7 : "Compatibilité imprimante thermique 80mm (protocole
+  // ESC/POS)" — chaîne vide pour imprimanteHote efface la configuration
+  // (retour au repli sur l'impression navigateur, impression.service.ts)
+  imprimanteHote?: string;
+  imprimantePort?: number;
 }
 
 export function modifierSite(db: Db, idSite: number, input: ModifierSiteInput) {
+  const efface = input.imprimanteHote === "";
   return db
     .update(schema.site)
     .set({
       ...(input.nom !== undefined && { nom: input.nom }),
       ...(input.adresse !== undefined && { adresse: input.adresse }),
       ...(input.actif !== undefined && { actif: input.actif ? 1 : 0 }),
+      ...(efface && { imprimanteHote: null, imprimantePort: null }),
+      ...(!efface && input.imprimanteHote !== undefined && { imprimanteHote: input.imprimanteHote }),
+      ...(!efface && input.imprimantePort !== undefined && { imprimantePort: input.imprimantePort }),
     })
     .where(eq(schema.site.idSite, idSite))
     .returning()

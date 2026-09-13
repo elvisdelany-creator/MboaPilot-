@@ -5,6 +5,7 @@ import {
   chargerInfosEntreprise,
   chargerSauvegardes,
   chargerUrlLogoEntreprise,
+  configurerImprimanteRequete,
   exporterDonneesRequete,
   ErreurAuthentification,
   modifierEntrepriseRequete,
@@ -31,6 +32,9 @@ export function ParametresTab() {
   const token = session!.token;
 
   const [entreprise, setEntreprise] = useState<InfosEntreprise["entreprise"] | null>(null);
+  const [imprimanteHote, setImprimanteHote] = useState("");
+  const [imprimantePort, setImprimantePort] = useState("9100");
+  const [enCoursImprimante, setEnCoursImprimante] = useState(false);
   const [tauxTva, setTauxTva] = useState("");
   const [mentionsLegales, setMentionsLegales] = useState("");
   const [tauxCommission, setTauxCommission] = useState("");
@@ -85,6 +89,8 @@ export function ParametresTab() {
         setDureeConservationDonnees(String(infos.entreprise.dureeConservationDonneesJours));
         setDelaiGrace(String(infos.entreprise.delaiGraceReabonnementJours));
         setTauxGarantie(String(infos.entreprise.tauxGarantiePourcent));
+        setImprimanteHote(infos.site.imprimanteHote ?? "");
+        setImprimantePort(String(infos.site.imprimantePort ?? 9100));
       })
       .catch((e) => gererErreur(e, "Impossible de charger les paramètres de l'entreprise."));
   }
@@ -242,6 +248,25 @@ export function ParametresTab() {
       gererErreur(erreur, "Échec de l'enregistrement du taux de garantie.");
     } finally {
       setEnCoursTauxGarantie(false);
+    }
+  }
+
+  // 11.4, 6.7 : "Compatibilité imprimante thermique 80mm (protocole
+  // ESC/POS)" — une chaîne vide efface la configuration (repli sur
+  // l'impression navigateur existante).
+  async function enregistrerImprimante() {
+    setEnCoursImprimante(true);
+    try {
+      await configurerImprimanteRequete(token, {
+        imprimanteHote: imprimanteHote.trim(),
+        ...(imprimanteHote.trim() !== "" && { imprimantePort: Number(imprimantePort) }),
+      });
+      toast.success(imprimanteHote.trim() ? "Imprimante enregistrée." : "Configuration d'imprimante effacée.");
+      rechargerEntreprise();
+    } catch (erreur) {
+      gererErreur(erreur, "Échec de l'enregistrement de l'imprimante.");
+    } finally {
+      setEnCoursImprimante(false);
     }
   }
 
@@ -404,6 +429,40 @@ export function ParametresTab() {
         </div>
         <Button className="w-fit cursor-pointer" disabled={enCoursTauxGarantie} onClick={enregistrerTauxGarantie}>
           {enCoursTauxGarantie ? "Enregistrement…" : "Enregistrer"}
+        </Button>
+      </Card>
+
+      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Imprimante de tickets (ESC/POS)</p>
+      <Card className="max-w-xl gap-4 p-4">
+        <p className="text-sm text-muted-foreground">
+          Imprimante thermique 80mm réseau (11.4) rattachée à ce site — le ticket de caisse est alors envoyé directement à
+          l'imprimante après l'encaissement. Laisser l'hôte vide pour continuer à utiliser l'impression du navigateur.
+        </p>
+        <div className="grid grid-cols-[1fr_auto] gap-3">
+          <div>
+            <Label htmlFor="parametres-imprimante-hote">Adresse IP de l'imprimante</Label>
+            <Input
+              id="parametres-imprimante-hote"
+              value={imprimanteHote}
+              onChange={(e) => setImprimanteHote(e.target.value)}
+              placeholder="Ex. 192.168.1.50"
+              className="mt-1"
+            />
+          </div>
+          <div>
+            <Label htmlFor="parametres-imprimante-port">Port</Label>
+            <Input
+              id="parametres-imprimante-port"
+              type="number"
+              min={1}
+              value={imprimantePort}
+              onChange={(e) => setImprimantePort(e.target.value)}
+              className="mt-1 w-24"
+            />
+          </div>
+        </div>
+        <Button className="w-fit cursor-pointer" disabled={enCoursImprimante} onClick={enregistrerImprimante}>
+          {enCoursImprimante ? "Enregistrement…" : "Enregistrer"}
         </Button>
       </Card>
 

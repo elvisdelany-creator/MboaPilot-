@@ -7,6 +7,7 @@ import { join } from "node:path";
 import { creerDbTest, type Db } from "./test-utils/db.js";
 import { buildApp } from "./app.js";
 import { creerUtilisateur } from "./modules/utilisateurs/utilisateur.repository.js";
+import { SimulateurImpression } from "./modules/impression/simulateur-impression.js";
 import * as schema from "./db/schema.js";
 
 const JWT_SECRET_TEST = "secret-de-test-ne-jamais-utiliser-en-prod";
@@ -3281,5 +3282,82 @@ describe("Clôture de caisse quotidienne (13.1)", () => {
       payload: { siteId, userId, fondOuverture: 10000 },
     });
     expect(deuxieme.statusCode).toBe(400);
+  });
+});
+
+// 11.4, 6.7 : "Compatibilité imprimante thermique 80mm (protocole ESC/POS)
+// pour les tickets de caisse"
+describe("Impression ESC/POS du ticket de caisse (11.4, 6.7)", () => {
+  it("un gérant configure l'imprimante réseau du site", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    creerUtilisateur(db, { siteId, nom: "Gerant", prenom: "G", identifiant: "gerant1", motDePasse: "motdepasse-secret", role: "GERANT" });
+    const token = await connecter(app, "gerant1");
+
+    const config = await app.inject({
+      method: "PATCH",
+      url: "/api/v1/site/imprimante",
+      headers: authHeader(token),
+      payload: { imprimanteHote: "192.168.1.50", imprimantePort: 9100 },
+    });
+
+    expect(config.statusCode).toBe(200);
+    expect(config.json()).toMatchObject({ imprimanteHote: "192.168.1.50", imprimantePort: 9100 });
+  });
+
+  it("un caissier ne peut pas configurer l'imprimante (403)", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const token = await connecter(app);
+
+    const config = await app.inject({
+      method: "PATCH",
+      url: "/api/v1/site/imprimante",
+      headers: authHeader(token),
+      payload: { imprimanteHote: "192.168.1.50" },
+    });
+
+    expect(config.statusCode).toBe(403);
+  });
+
+  it("imprime le ticket sur l'imprimante configurée, sans erreur si aucune ne l'est", async () => {
+    const fournisseur = new SimulateurImpression();
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST, fournisseurImpression: fournisseur });
+    const token = await connecter(app);
+
+    const ticketPayload = {
+      operation: "Vente",
+      numeroAbonnement: null,
+      lignes: [{ libelle: "Installation à domicile", montant: 5000 }],
+      total: 5000,
+      montantTaxe: 0,
+      modePaiement: "CASH",
+      montantEncaisse: 5000,
+      dateHeure: "2026-09-13T12:00:00.000Z",
+    };
+
+    const sansImprimante = await app.inject({ method: "POST", url: "/api/v1/impression/ticket", headers: authHeader(token), payload: ticketPayload });
+    expect(sansImprimante.json()).toEqual({ imprime: false });
+    expect(fournisseur.envois).toHaveLength(0);
+
+    await db.update(schema.site).set({ imprimanteHote: "192.168.1.50", imprimantePort: 9100 }).where(eq(schema.site.idSite, siteId)).run();
+
+    const avecImprimante = await app.inject({ method: "POST", url: "/api/v1/impression/ticket", headers: authHeader(token), payload: ticketPayload });
+    expect(avecImprimante.json()).toEqual({ imprime: true });
+    expect(fournisseur.envois).toHaveLength(1);
+    expect(fournisseur.envois[0].hote).toBe("192.168.1.50");
+  });
+
+  it("un technicien SAV ne peut pas déclencher l'impression (403)", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    creerUtilisateur(db, { siteId, nom: "Tech", prenom: "T", identifiant: "tech1", motDePasse: "motdepasse-secret", role: "TECHNICIEN_SAV" });
+    const token = await connecter(app, "tech1");
+
+    const impression = await app.inject({
+      method: "POST",
+      url: "/api/v1/impression/ticket",
+      headers: authHeader(token),
+      payload: { operation: "Vente", numeroAbonnement: null, lignes: [], total: 0, montantTaxe: 0, modePaiement: "CASH", montantEncaisse: 0, dateHeure: "2026-09-13T12:00:00.000Z" },
+    });
+
+    expect(impression.statusCode).toBe(403);
   });
 });

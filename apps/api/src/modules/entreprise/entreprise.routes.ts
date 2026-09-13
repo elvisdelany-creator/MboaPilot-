@@ -5,6 +5,7 @@ import type { Db } from "../../db/types.js";
 import type { Guard } from "../auth/auth.plugin.js";
 import { modifierEntreprise, trouverInfosEntrepriseParSite, type ModifierEntrepriseInput } from "./entreprise.repository.js";
 import { enregistrerLogoEntreprise, resoudreTypeMimeLogo } from "./logo.service.js";
+import { modifierSite } from "../utilisateurs/site.repository.js";
 
 function envoyerErreur(reply: FastifyReply, erreur: unknown) {
   const message = erreur instanceof Error ? erreur.message : "Erreur inconnue";
@@ -79,4 +80,20 @@ export function registerEntrepriseRoutes(app: FastifyInstance, db: Db, dossierLo
     }
     reply.code(200).header("Content-Type", resoudreTypeMimeLogo(infos.entreprise.logoUrl)).send(readFileSync(join(dossierLogos, infos.entreprise.logoUrl)));
   });
+
+  // 11.4, 6.7 : "Compatibilité imprimante thermique 80mm (protocole
+  // ESC/POS)" — configuration de l'imprimante réseau du site de l'appelant,
+  // même encadrement que le reste du paramétrage (8.8)
+  app.patch<{ Body: { imprimanteHote?: string; imprimantePort?: number } }>(
+    "/api/v1/site/imprimante",
+    { preHandler: [guards.authRequis, guards.gestionParametres] },
+    async (request, reply) => {
+      const site = modifierSite(db, request.user.siteId, request.body);
+      if (!site) {
+        reply.code(404).send({ erreur: "Site introuvable" });
+        return;
+      }
+      reply.code(200).send(site);
+    }
+  );
 }

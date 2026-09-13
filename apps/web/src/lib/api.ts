@@ -1206,6 +1206,39 @@ export async function modifierEntrepriseRequete(
   return lireJson<InfosEntreprise["entreprise"]>(reponse);
 }
 
+// 11.4, 6.7 : configure l'imprimante réseau ESC/POS du site de l'appelant
+// — chaîne vide pour imprimanteHote efface la configuration.
+export async function configurerImprimanteRequete(token: string, payload: { imprimanteHote?: string; imprimantePort?: number }): Promise<InfosEntreprise["site"]> {
+  const reponse = await fetch(`${BASE}/site/imprimante`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...headersAuth(token) },
+    body: JSON.stringify(payload),
+  });
+  return lireJson<InfosEntreprise["site"]>(reponse);
+}
+
+// 11.4, 6.7 : déclenche l'impression ESC/POS du ticket — imprime:false si
+// aucune imprimante n'est configurée pour le site (repli sur window.print())
+export interface TicketImpressionPayload {
+  operation: string;
+  numeroAbonnement: number | null;
+  lignes: { libelle: string; montant: number }[];
+  total: number;
+  montantTaxe: number;
+  modePaiement: "CASH" | "CHEQUE" | "VIREMENT" | "MOBILE_MONEY";
+  montantEncaisse: number;
+  dateHeure: string;
+}
+
+export async function imprimerTicketEscPosRequete(token: string, payload: TicketImpressionPayload): Promise<{ imprime: boolean }> {
+  const reponse = await fetch(`${BASE}/impression/ticket`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headersAuth(token) },
+    body: JSON.stringify(payload),
+  });
+  return lireJson<{ imprime: boolean }>(reponse);
+}
+
 // 2.6 : sauvegardes automatiques et export manuel des données
 export interface Sauvegarde {
   nomFichier: string;

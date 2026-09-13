@@ -23,6 +23,9 @@ import { registerAvoirRoutes } from "./modules/factures/avoir.routes.js";
 import { registerLicenceRoutes } from "./modules/licence/licence.routes.js";
 import { obtenirOuCreerLicence, calculerEtatLicence } from "./modules/licence/licence.service.js";
 import { registerClotureCaisseRoutes } from "./modules/caisse/cloture-caisse.routes.js";
+import { registerImpressionRoutes } from "./modules/impression/impression.routes.js";
+import { ImprimanteReseauTcp } from "./modules/impression/imprimante-reseau-tcp.js";
+import type { FournisseurImpression } from "./modules/impression/fournisseur.js";
 
 export interface BuildAppOptions {
   jwtSecret: string;
@@ -36,6 +39,10 @@ export interface BuildAppOptions {
   dossierPhotosSav?: string;
   // 3.2.1, 13.2 : dossier de stockage du logo de l'entreprise
   dossierLogos?: string;
+  // 11.4 : injectable pour brancher un double de test (aucune imprimante
+  // réelle nécessaire) — par défaut l'implémentation réseau réelle, inerte
+  // tant qu'aucun site ne configure d'hôte d'imprimante.
+  fournisseurImpression?: FournisseurImpression;
 }
 
 // 10.4 : préfixes toujours autorisés en écriture même en mode dégradé —
@@ -51,6 +58,7 @@ export function buildApp(db: Db, options: BuildAppOptions) {
   app.register(multipart);
   registerAuthRoutes(app, db);
   const fournisseurPaiementMobile = options.fournisseurPaiementMobile ?? new SimulateurOrangeMoney();
+  const fournisseurImpression = options.fournisseurImpression ?? new ImprimanteReseauTcp();
 
   // 10.3, 10.4 : un abonnement éditeur expiré ou une revalidation périodique
   // non réussie au-delà du délai de grâce hors ligne bascule l'application
@@ -129,6 +137,8 @@ export function buildApp(db: Db, options: BuildAppOptions) {
   registerLicenceRoutes(app, db, { authRequis });
   // 13.1 : clôture de caisse quotidienne (fond d'ouverture, comptage, écart théorique/réel)
   registerClotureCaisseRoutes(app, db, { authRequis, ventes, validationCloture });
+  // 11.4, 6.7 : impression ESC/POS du ticket sur l'imprimante réseau du site, si configurée
+  registerImpressionRoutes(app, db, fournisseurImpression, { authRequis, ventes });
 
   return app;
 }

@@ -4,6 +4,7 @@ import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
 import { enregistrerMouvement } from "../stock/stock.repository.js";
 import { trouverTauxGarantieEntreprise, trouverTauxTvaParSite } from "../entreprise/entreprise.repository.js";
+import { creerPaiement } from "../factures/paiement.repository.js";
 
 export interface EchangerMaterielParams {
   siteId: number;
@@ -121,19 +122,17 @@ export function echangerMateriel(db: Db, params: EchangerMaterielParams): Echang
     db.update(schema.facture).set({ statut: "VALIDEE" }).where(eq(schema.facture.idFacture, facture.idFacture)).run();
     statutFacture = "VALIDEE";
   } else if (params.montantEncaisse > 0) {
-    db.insert(schema.paiement)
-      .values({
-        idFacture: facture.idFacture,
-        mode: params.modePaiement ?? "CASH",
-        montant: params.montantEncaisse,
-        utilisateurId: params.userId,
-        banque: params.banque,
-        numeroCheque: params.numeroCheque,
-        titulaireCheque: params.titulaireCheque,
-        dateCheque: params.dateCheque,
-        referenceVirement: params.referenceVirement,
-      })
-      .run();
+    creerPaiement(db, {
+      idFacture: facture.idFacture,
+      mode: params.modePaiement ?? "CASH",
+      montant: params.montantEncaisse,
+      utilisateurId: params.userId,
+      banque: params.banque,
+      numeroCheque: params.numeroCheque,
+      titulaireCheque: params.titulaireCheque,
+      dateCheque: params.dateCheque,
+      referenceVirement: params.referenceVirement,
+    });
     db.update(schema.facture).set({ statut: "VALIDEE" }).where(eq(schema.facture.idFacture, facture.idFacture)).run();
     statutFacture = "VALIDEE";
   }

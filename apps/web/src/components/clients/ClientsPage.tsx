@@ -37,6 +37,7 @@ import { AnonymiserAbonneDialog } from "./AnonymiserAbonneDialog";
 import { EmettreAvoirDialog } from "./EmettreAvoirDialog";
 import { EncaisserSoldeDialog } from "./EncaisserSoldeDialog";
 import { AnnulerPaiementDialog } from "./AnnulerPaiementDialog";
+import { ConfirmerRapprochementDialog } from "./ConfirmerRapprochementDialog";
 import type { Abonne, AbonnementAvecFormule, CatalogueFamille, DossierSavDetaille, Facture, Fiche360, Paiement } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -109,6 +110,7 @@ export function ClientsPage({ onNaviguer, onReabonnerDepuisFiche }: Props) {
   const [soldeCible, setSoldeCible] = useState<Facture | null>(null);
   // 9.1, 11.5 : paiement mal saisi à annuler — depuis l'onglet Facturation
   const [paiementCible, setPaiementCible] = useState<Paiement | null>(null);
+  const [rapprochementCible, setRapprochementCible] = useState<Paiement | null>(null);
   // 9.4 : actions contextuelles SAV — le dossier déplié récupère son détail
   // complet (pièces, historique, facture) via l'API SAV existante, la fiche
   // 360° elle-même n'exposant que la forme « plate » des dossiers
@@ -184,6 +186,10 @@ export function ClientsPage({ onNaviguer, onReabonnerDepuisFiche }: Props) {
   const peutAnonymiser = utilisateur.role === "ADMINISTRATEUR";
   // 6.4 : émission d'un avoir — correction financière, réservée à l'encadrement
   const peutEmettreAvoir = utilisateur.role === "ADMINISTRATEUR" || utilisateur.role === "GERANT";
+  // 6.5 : confirmation du rapprochement bancaire — mêmes rôles que le
+  // pilotage financier (8.6, 9.3), Comptable inclus contrairement à
+  // l'émission d'un avoir ci-dessus
+  const peutGererRapprochement = utilisateur.role === "ADMINISTRATEUR" || utilisateur.role === "GERANT" || utilisateur.role === "COMPTABLE";
   // 2.5.1 : "Comptable (lecture financière)" — aucune action de vente/encaissement
   const lectureSeule = utilisateur.role === "COMPTABLE";
 
@@ -453,16 +459,32 @@ export function ClientsPage({ onNaviguer, onReabonnerDepuisFiche }: Props) {
                                   <div key={p.idPaiement} className="flex items-center justify-between gap-2 pl-3">
                                     <p className="text-xs text-muted-foreground">
                                       {formateurDateHeure.format(new Date(p.datePaiement))} — {LIBELLE_MODE_PAIEMENT[p.mode]} — {formateurFcfa.format(p.montant)} FCFA
+                                      {p.statutRapprochement && (
+                                        <Badge variant={p.statutRapprochement === "RAPPROCHE" ? "outline" : "secondary"} className="ml-2 align-middle">
+                                          {p.statutRapprochement === "RAPPROCHE" ? "Rapproché" : "En attente de rapprochement"}
+                                        </Badge>
+                                      )}
                                     </p>
-                                    {peutEmettreAvoir && (
-                                      <button
-                                        type="button"
-                                        className="no-print cursor-pointer text-xs text-muted-foreground underline-offset-2 hover:text-destructive hover:underline"
-                                        onClick={() => setPaiementCible(p)}
-                                      >
-                                        Annuler
-                                      </button>
-                                    )}
+                                    <span className="flex items-center gap-2">
+                                      {peutGererRapprochement && p.statutRapprochement === "EN_ATTENTE" && (
+                                        <button
+                                          type="button"
+                                          className="no-print cursor-pointer text-xs text-muted-foreground underline-offset-2 hover:text-card-foreground hover:underline"
+                                          onClick={() => setRapprochementCible(p)}
+                                        >
+                                          Confirmer le rapprochement
+                                        </button>
+                                      )}
+                                      {peutEmettreAvoir && (
+                                        <button
+                                          type="button"
+                                          className="no-print cursor-pointer text-xs text-muted-foreground underline-offset-2 hover:text-destructive hover:underline"
+                                          onClick={() => setPaiementCible(p)}
+                                        >
+                                          Annuler
+                                        </button>
+                                      )}
+                                    </span>
                                   </div>
                                 ))}
                                 {solde > 0 && (
@@ -675,6 +697,15 @@ export function ClientsPage({ onNaviguer, onReabonnerDepuisFiche }: Props) {
         onFerme={() => setPaiementCible(null)}
         onSucces={() => {
           setPaiementCible(null);
+          if (idSelectionne !== null) rechargerFiche(idSelectionne);
+        }}
+      />
+
+      <ConfirmerRapprochementDialog
+        paiement={rapprochementCible}
+        onFerme={() => setRapprochementCible(null)}
+        onSucces={() => {
+          setRapprochementCible(null);
           if (idSelectionne !== null) rechargerFiche(idSelectionne);
         }}
       />

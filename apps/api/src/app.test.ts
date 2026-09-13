@@ -1373,6 +1373,83 @@ describe("Annulation d'un paiement mal saisi (9.1, 11.5)", () => {
   });
 });
 
+// 6.5 : "Virement bancaire — Différée (rapprochement)", contrairement au
+// comptant et au chèque qui sont "Immédiate"
+describe("Rapprochement bancaire d'un virement (6.5)", () => {
+  it("un virement encaissé démarre EN_ATTENTE de rapprochement", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const token = await connecter(app);
+    const facture = db.insert(schema.facture).values({ siteId, statut: "BROUILLON", montantTotal: 10000, creePar: userId }).returning().get();
+
+    const encaissement = await app.inject({
+      method: "POST",
+      url: `/api/v1/factures/${facture.idFacture}/paiements`,
+      headers: authHeader(token),
+      payload: { userId, montant: 10000, modePaiement: "VIREMENT", banque: "Afriland", referenceVirement: "VIR-001" },
+    });
+    expect(encaissement.statusCode).toBe(201);
+
+    const paiement = db.select().from(schema.paiement).where(eq(schema.paiement.idFacture, facture.idFacture)).get();
+    expect(paiement?.statutRapprochement).toBe("EN_ATTENTE");
+  });
+
+  it("un comptable confirme le rapprochement d'un virement", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    creerUtilisateur(db, { siteId, nom: "Compta", prenom: "C", identifiant: "comptable1", motDePasse: "motdepasse-secret", role: "COMPTABLE" });
+    const tokenComptable = await connecter(app, "comptable1");
+    const facture = db.insert(schema.facture).values({ siteId, statut: "VALIDEE", montantTotal: 10000, creePar: userId }).returning().get();
+    const paiement = db
+      .insert(schema.paiement)
+      .values({ idFacture: facture.idFacture, mode: "VIREMENT", montant: 10000, utilisateurId: userId, statutRapprochement: "EN_ATTENTE" })
+      .returning()
+      .get();
+
+    const rapprochement = await app.inject({
+      method: "PATCH",
+      url: `/api/v1/paiements/${paiement.idPaiement}/rapprochement`,
+      headers: authHeader(tokenComptable),
+    });
+
+    expect(rapprochement.statusCode).toBe(200);
+    expect(rapprochement.json().statutRapprochement).toBe("RAPPROCHE");
+  });
+
+  it("un caissier ne peut pas confirmer un rapprochement (403)", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const token = await connecter(app);
+    const facture = db.insert(schema.facture).values({ siteId, statut: "VALIDEE", montantTotal: 10000, creePar: userId }).returning().get();
+    const paiement = db
+      .insert(schema.paiement)
+      .values({ idFacture: facture.idFacture, mode: "VIREMENT", montant: 10000, utilisateurId: userId, statutRapprochement: "EN_ATTENTE" })
+      .returning()
+      .get();
+
+    const rapprochement = await app.inject({
+      method: "PATCH",
+      url: `/api/v1/paiements/${paiement.idPaiement}/rapprochement`,
+      headers: authHeader(token),
+    });
+
+    expect(rapprochement.statusCode).toBe(403);
+  });
+
+  it("rejette la confirmation d'un paiement qui n'est pas un virement (400)", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    creerUtilisateur(db, { siteId, nom: "Compta", prenom: "C", identifiant: "comptable1", motDePasse: "motdepasse-secret", role: "COMPTABLE" });
+    const tokenComptable = await connecter(app, "comptable1");
+    const facture = db.insert(schema.facture).values({ siteId, statut: "VALIDEE", montantTotal: 10000, creePar: userId }).returning().get();
+    const paiement = db.insert(schema.paiement).values({ idFacture: facture.idFacture, mode: "CASH", montant: 10000, utilisateurId: userId }).returning().get();
+
+    const rapprochement = await app.inject({
+      method: "PATCH",
+      url: `/api/v1/paiements/${paiement.idPaiement}/rapprochement`,
+      headers: authHeader(tokenComptable),
+    });
+
+    expect(rapprochement.statusCode).toBe(400);
+  });
+});
+
 describe("Module gestion du catalogue (8.2)", () => {
   it("un administrateur crée un article, un caissier peut le consulter mais pas le créer", async () => {
     const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });

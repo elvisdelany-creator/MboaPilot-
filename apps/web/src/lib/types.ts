@@ -431,6 +431,9 @@ export interface Paiement {
   mode: "CASH" | "CHEQUE" | "VIREMENT" | "MOBILE_MONEY";
   montant: number;
   referenceTransaction: string | null;
+  // 6.5 : "Virement bancaire — Différée (rapprochement)" — EN_ATTENTE puis
+  // RAPPROCHE une fois confirmé ; null pour les autres modes (non applicable)
+  statutRapprochement: "EN_ATTENTE" | "RAPPROCHE" | null;
   datePaiement: string;
 }
 

@@ -418,6 +418,10 @@ export const paiement = sqliteTable("paiement", {
   // contrainte d'unicité pour l'idempotence des callbacks) et de banque
   // ci-dessus (réutilisée comme "banque émettrice" pour un virement)
   referenceVirement: text("reference_virement"),
+  // 6.5 : "Virement bancaire — Différée (rapprochement)", contrairement au
+  // comptant et au chèque qui sont "Immédiate" — seul un virement démarre
+  // en attente ; les autres modes n'ont pas de notion de rapprochement (null).
+  statutRapprochement: text("statut_rapprochement", { enum: ["EN_ATTENTE", "RAPPROCHE"] }),
   datePaiement: text("date_paiement").notNull().default(now),
 }, (t) => ({
   // idempotence des callbacks Orange Money : un même événement ne doit jamais créer deux paiements

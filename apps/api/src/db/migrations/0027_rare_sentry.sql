@@ -1,0 +1,1 @@
+ALTER TABLE `paiement` ADD `statut_rapprochement` text;

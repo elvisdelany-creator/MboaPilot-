@@ -101,6 +101,9 @@ export function buildApp(db: Db, options: BuildAppOptions) {
   // 2.5.1 : "Comptable (lecture financière)" — consultation des fiches
   // clients et de leurs factures, sans droit de saisie/vente
   const lectureFinanciere = exigerRole("ADMINISTRATEUR", "GERANT", "CAISSIER", "COMPTABLE");
+  // 6.5 : confirmation du rapprochement bancaire d'un virement — tâche
+  // financière, mêmes rôles que le pilotage financier (8.6, 9.3)
+  const gestionRapprochement = exigerRole("ADMINISTRATEUR", "GERANT", "COMPTABLE");
 
   registerAbonnementsRoutes(app, db, { authRequis, ventes });
   // 11.3 : anonymisation (droit de suppression) réservée à l'Administrateur seul
@@ -121,7 +124,7 @@ export function buildApp(db: Db, options: BuildAppOptions) {
   // 2.6 : sauvegardes et export manuel des données
   registerSauvegardeRoutes(app, db, options.dossierSauvegardes ?? "./data/backups", { authRequis, admin });
   // 6.4 : correction d'une facture VALIDEE par avoir
-  registerAvoirRoutes(app, db, { authRequis, ventes, gestionAvoirs, lectureFinanciere });
+  registerAvoirRoutes(app, db, { authRequis, ventes, gestionAvoirs, lectureFinanciere, gestionRapprochement });
   // 10.4 : état de la licence éditeur, consultable par tout utilisateur connecté
   registerLicenceRoutes(app, db, { authRequis });
   // 13.1 : clôture de caisse quotidienne (fond d'ouverture, comptage, écart théorique/réel)

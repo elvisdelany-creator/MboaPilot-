@@ -27,6 +27,7 @@ import type {
   MargeType,
   NouvelAbonne,
   OptionCatalogue,
+  Paiement,
   ParcoursPaiementMobile,
   PointEvolutionCA,
   Produit,
@@ -164,6 +165,15 @@ export async function annulerPaiementRequete(token: string, idPaiement: number, 
     headers: headersAuth(token),
   });
   return lireJson<AnnulerPaiementResultat>(reponse);
+}
+
+// 6.5 : confirmation manuelle du rapprochement bancaire d'un virement
+export async function confirmerRapprochementRequete(token: string, idPaiement: number): Promise<Paiement> {
+  const reponse = await fetch(`${BASE}/paiements/${idPaiement}/rapprochement`, {
+    method: "PATCH",
+    headers: headersAuth(token),
+  });
+  return lireJson<Paiement>(reponse);
 }
 
 export interface ModifierAbonnePayload {

@@ -8,6 +8,7 @@ import { compterEcransOccupes, trouverComptePartage } from "../comptes-partages/
 import { trouverApporteur } from "../apporteurs/apporteur.repository.js";
 import { trouverTauxCommissionVendeurParSite, trouverTauxTvaParSite } from "../entreprise/entreprise.repository.js";
 import { decrementerComposantsKit } from "../stock/stock.service.js";
+import { creerPaiement } from "../factures/paiement.repository.js";
 
 export interface RecruterAbonneParams {
   siteId: number;
@@ -175,19 +176,17 @@ export function recruterAbonne(db: Db, params: RecruterAbonneParams): Recrutemen
 
   // 6.4 : dès qu'un encaissement (même partiel) est enregistré, la facture devient VALIDEE
   if (params.montantEncaisse > 0) {
-    db.insert(schema.paiement)
-      .values({
-        idFacture: facture.idFacture,
-        mode: params.modePaiement ?? "CASH",
-        montant: params.montantEncaisse,
-        utilisateurId: params.userId,
-        banque: params.banque,
-        numeroCheque: params.numeroCheque,
-        titulaireCheque: params.titulaireCheque,
-        dateCheque: params.dateCheque,
-        referenceVirement: params.referenceVirement,
-      })
-      .run();
+    creerPaiement(db, {
+      idFacture: facture.idFacture,
+      mode: params.modePaiement ?? "CASH",
+      montant: params.montantEncaisse,
+      utilisateurId: params.userId,
+      banque: params.banque,
+      numeroCheque: params.numeroCheque,
+      titulaireCheque: params.titulaireCheque,
+      dateCheque: params.dateCheque,
+      referenceVirement: params.referenceVirement,
+    });
     db.update(schema.facture).set({ statut: "VALIDEE" }).where(eq(schema.facture.idFacture, facture.idFacture)).run();
     statutFacture = "VALIDEE";
 

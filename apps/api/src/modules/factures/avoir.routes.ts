@@ -4,6 +4,7 @@ import type { RouteGuards, Guard } from "../auth/auth.plugin.js";
 import { creerAvoir, listerLignesFacture, type LigneAvoirInput } from "./avoir.service.js";
 import { encaisserSoldeFacture, type EncaisserSoldeParams } from "./paiement-complementaire.service.js";
 import { annulerPaiement } from "./annulation-paiement.service.js";
+import { confirmerRapprochementVirement } from "./paiement.repository.js";
 
 function envoyerErreur(reply: import("fastify").FastifyReply, erreur: unknown) {
   const message = erreur instanceof Error ? erreur.message : "Erreur inconnue";
@@ -14,7 +15,7 @@ function envoyerErreur(reply: import("fastify").FastifyReply, erreur: unknown) {
 // 6.4 : émission d'un avoir — correction d'une facture VALIDEE, réservée à
 // l'encadrement (opération financière correctrice, comme la fusion de doublons).
 // 2.5.1 : la consultation des lignes reste ouverte au Comptable (lecture financière).
-export function registerAvoirRoutes(app: FastifyInstance, db: Db, guards: RouteGuards & { gestionAvoirs: Guard; lectureFinanciere: Guard }) {
+export function registerAvoirRoutes(app: FastifyInstance, db: Db, guards: RouteGuards & { gestionAvoirs: Guard; lectureFinanciere: Guard; gestionRapprochement: Guard }) {
   app.get<{ Params: { idFacture: string } }>(
     "/api/v1/factures/:idFacture/lignes",
     { preHandler: [guards.authRequis, guards.lectureFinanciere] },
@@ -65,6 +66,21 @@ export function registerAvoirRoutes(app: FastifyInstance, db: Db, guards: RouteG
     async (request, reply) => {
       try {
         reply.code(200).send(annulerPaiement(db, { idPaiement: Number(request.params.idPaiement), userId: Number(request.query.userId) }));
+      } catch (erreur) {
+        envoyerErreur(reply, erreur);
+      }
+    }
+  );
+
+  // 6.5 : "Virement bancaire — Différée (rapprochement)" — confirmation
+  // manuelle une fois le relevé bancaire vérifié, réservée aux rôles
+  // financiers (comme le pilotage financier du tableau de bord, 8.6/9.3)
+  app.patch<{ Params: { idPaiement: string } }>(
+    "/api/v1/paiements/:idPaiement/rapprochement",
+    { preHandler: [guards.authRequis, guards.gestionRapprochement] },
+    async (request, reply) => {
+      try {
+        reply.code(200).send(confirmerRapprochementVirement(db, Number(request.params.idPaiement)));
       } catch (erreur) {
         envoyerErreur(reply, erreur);
       }

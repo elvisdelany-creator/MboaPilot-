@@ -1,6 +1,7 @@
 import { eq, sql } from "drizzle-orm";
 import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
+import { creerPaiement } from "./paiement.repository.js";
 
 export interface EncaisserSoldeParams {
   idFacture: number;
@@ -42,19 +43,17 @@ export function encaisserSoldeFacture(db: Db, params: EncaisserSoldeParams): Enc
   const solde = facture.montantTotal - totalPaye;
   if (solde <= 0) throw new Error("Cette facture est déjà intégralement encaissée");
 
-  db.insert(schema.paiement)
-    .values({
-      idFacture: params.idFacture,
-      mode: params.modePaiement ?? "CASH",
-      montant: params.montant,
-      utilisateurId: params.userId,
-      banque: params.banque,
-      numeroCheque: params.numeroCheque,
-      titulaireCheque: params.titulaireCheque,
-      dateCheque: params.dateCheque,
-      referenceVirement: params.referenceVirement,
-    })
-    .run();
+  creerPaiement(db, {
+    idFacture: params.idFacture,
+    mode: params.modePaiement ?? "CASH",
+    montant: params.montant,
+    utilisateurId: params.userId,
+    banque: params.banque,
+    numeroCheque: params.numeroCheque,
+    titulaireCheque: params.titulaireCheque,
+    dateCheque: params.dateCheque,
+    referenceVirement: params.referenceVirement,
+  });
 
   if (facture.statut === "BROUILLON") {
     db.update(schema.facture).set({ statut: "VALIDEE" }).where(eq(schema.facture.idFacture, params.idFacture)).run();

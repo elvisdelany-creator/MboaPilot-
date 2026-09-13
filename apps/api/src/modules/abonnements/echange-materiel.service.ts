@@ -1,8 +1,9 @@
 import { eq } from "drizzle-orm";
+import { extraireTaxeDuTTC } from "@mboapilot/shared";
 import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
 import { enregistrerMouvement } from "../stock/stock.repository.js";
-import { trouverTauxGarantieEntreprise } from "../entreprise/entreprise.repository.js";
+import { trouverTauxGarantieEntreprise, trouverTauxTvaParSite } from "../entreprise/entreprise.repository.js";
 
 export interface EchangerMaterielParams {
   siteId: number;
@@ -29,6 +30,7 @@ export interface EchangeMaterielResultat {
   idFacture: number;
   montantFacture: number;
   statutFacture: "BROUILLON" | "VALIDEE";
+  montantTaxe: number;
 }
 
 // 7.3 : remplacement du matériel d'un abonné (panne/vol). Le numéro
@@ -94,10 +96,13 @@ export function echangerMateriel(db: Db, params: EchangerMaterielParams): Echang
   // 7.3, 8.8 : "sous garantie (gratuit ou tarif réduit selon la politique)"
   // — tauxGarantiePourcent à 0 (gratuit) par défaut
   const montantFacture = params.sousGarantie ? Math.round((produit.prixVente * trouverTauxGarantieEntreprise(db)) / 100) : produit.prixVente;
+  // 3.2.3, 6.1, 8.8 : "porte le total, la TVA/taxes le cas échéant" — figée
+  // au taux en vigueur à cet instant, jamais recalculée après coup
+  const montantTaxe = extraireTaxeDuTTC(montantFacture, trouverTauxTvaParSite(db, params.siteId));
 
   const facture = db
     .insert(schema.facture)
-    .values({ siteId: params.siteId, idAbonne: abonnement.idAbonne, creePar: params.userId, montantTotal: montantFacture })
+    .values({ siteId: params.siteId, idAbonne: abonnement.idAbonne, creePar: params.userId, montantTotal: montantFacture, montantTaxe })
     .returning()
     .get();
 
@@ -133,5 +138,5 @@ export function echangerMateriel(db: Db, params: EchangerMaterielParams): Echang
     statutFacture = "VALIDEE";
   }
 
-  return { idMateriel: nouveauMateriel.idMateriel, idFacture: facture.idFacture, montantFacture, statutFacture };
+  return { idMateriel: nouveauMateriel.idMateriel, idFacture: facture.idFacture, montantFacture, statutFacture, montantTaxe };
 }

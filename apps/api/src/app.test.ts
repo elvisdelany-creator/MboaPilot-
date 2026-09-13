@@ -189,6 +189,35 @@ describe("POST /api/v1/recrutements", () => {
     expect(reponse.statusCode).toBe(404);
   });
 
+  // 3.2.3, 6.1, 8.8 : "porte le total, la TVA/taxes le cas échéant" — figée
+  // à la création, jamais recalculée si le taux change ensuite
+  it("3.2.3, 6.1, 8.8 : renvoie le montant de taxe figé, insensible à un changement ultérieur du taux", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const token = await connecter(app);
+    db.update(schema.entreprise).set({ tauxTva: 2000 }).run(); // 20 %
+
+    const reponse = await app.inject({
+      method: "POST",
+      url: "/api/v1/recrutements",
+      headers: authHeader(token),
+      payload: {
+        siteId,
+        userId,
+        aujourdHui: "2025-11-16",
+        abonne: { nom: "Nga Ndongo", prenom: "Valentin", telephone: "690000000" },
+        idFormule,
+        montantEncaisse: 13000,
+      },
+    });
+
+    expect(reponse.json().montantTaxe).toBe(2167); // 13000 TTC -> HT 10833, taxe 2167
+
+    db.update(schema.entreprise).set({ tauxTva: 500 }).run(); // le taux change après coup
+
+    const facture = db.select().from(schema.facture).where(eq(schema.facture.idFacture, reponse.json().idFacture)).get();
+    expect(facture?.montantTaxe).toBe(2167);
+  });
+
   // 3.2.2, 5.4.2 : options complémentaires, avec tarif différencié selon la formule
   it("3.2.2, 5.4.2 : facture une option complémentaire à son tarif différencié pour la formule choisie", async () => {
     const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });

@@ -600,3 +600,55 @@ describe("recruterAbonne — matériel installé (3.2.2, 7.1)", () => {
     expect(materiels).toHaveLength(0);
   });
 });
+
+// 3.2.3, 6.1, 8.8 : "porte le total, la TVA/taxes le cas échéant" — figée au
+// taux en vigueur à la création, jamais recalculée après coup
+describe("recruterAbonne — TVA figée sur la facture (3.2.3, 6.1, 8.8)", () => {
+  it("persiste le montant de taxe calculé au taux en vigueur à la création", () => {
+    db.update(schema.entreprise).set({ tauxTva: 2000 }).run(); // 20 %
+
+    const resultat = recruterAbonne(db, {
+      siteId,
+      userId,
+      aujourdHui: "2025-11-16",
+      abonne: { nom: "Nga Ndongo", prenom: "Valentin", telephone: "690000000" },
+      idFormule: formuleDstvCompaq,
+      montantEncaisse: 13000,
+    });
+
+    const facture = db.select().from(schema.facture).where(eq(schema.facture.idFacture, resultat.idFacture)).get();
+    expect(facture?.montantTaxe).toBe(2167); // 13000 TTC -> HT 10833.33, taxe 2166.67 arrondi
+  });
+
+  it("un changement du taux de TVA après coup ne modifie jamais une facture déjà créée", () => {
+    db.update(schema.entreprise).set({ tauxTva: 2000 }).run();
+    const resultat = recruterAbonne(db, {
+      siteId,
+      userId,
+      aujourdHui: "2025-11-16",
+      abonne: { nom: "Nga Ndongo", prenom: "Valentin", telephone: "690000000" },
+      idFormule: formuleDstvCompaq,
+      montantEncaisse: 13000,
+    });
+    const montantTaxeAvant = db.select().from(schema.facture).where(eq(schema.facture.idFacture, resultat.idFacture)).get()?.montantTaxe;
+
+    db.update(schema.entreprise).set({ tauxTva: 500 }).run(); // le taux change après la vente
+
+    const factureApres = db.select().from(schema.facture).where(eq(schema.facture.idFacture, resultat.idFacture)).get();
+    expect(factureApres?.montantTaxe).toBe(montantTaxeAvant);
+  });
+
+  it("aucune taxe persistée quand aucun taux n'est configuré", () => {
+    const resultat = recruterAbonne(db, {
+      siteId,
+      userId,
+      aujourdHui: "2025-11-16",
+      abonne: { nom: "Nga Ndongo", prenom: "Valentin", telephone: "690000000" },
+      idFormule: formuleDstvCompaq,
+      montantEncaisse: 13000,
+    });
+
+    const facture = db.select().from(schema.facture).where(eq(schema.facture.idFacture, resultat.idFacture)).get();
+    expect(facture?.montantTaxe).toBe(0);
+  });
+});

@@ -300,6 +300,7 @@ export interface VenteResultat {
   idFacture: number;
   statutFacture: "BROUILLON" | "VALIDEE";
   montantTotal: number;
+  montantTaxe: number;
 }
 
 // 5.2, 5.3, 8.5 : vente rapide de produits physiques et services hors abonnement

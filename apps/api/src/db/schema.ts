@@ -363,6 +363,10 @@ export const facture = sqliteTable("facture", {
   type: text("type", { enum: ["VENTE", "AVOIR"] }).notNull().default("VENTE"),
   factureOrigineId: integer("facture_origine_id").references((): AnySQLiteColumn => facture.idFacture),
   montantTotal: integer("montant_total").notNull().default(0),
+  // 3.2.3, 6.1, 8.8 : "porte le total, la TVA/taxes le cas échéant" — figé au
+  // taux en vigueur à la création (jamais recalculé après coup si le taux est
+  // modifié ultérieurement en paramétrage) ; 0 quand aucune taxe n'est configurée.
+  montantTaxe: integer("montant_taxe").notNull().default(0),
   creePar: integer("cree_par").notNull().references(() => utilisateur.idUser),
   dateCreation: text("date_creation").notNull().default(now),
 });

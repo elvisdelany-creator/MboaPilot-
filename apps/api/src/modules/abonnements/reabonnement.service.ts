@@ -1,8 +1,8 @@
 import { and, eq } from "drizzle-orm";
-import { calculerDateFin, joursAvantEcheance } from "@mboapilot/shared";
+import { calculerDateFin, extraireTaxeDuTTC, joursAvantEcheance } from "@mboapilot/shared";
 import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
-import { trouverDelaiGraceReabonnementEntreprise } from "../entreprise/entreprise.repository.js";
+import { trouverDelaiGraceReabonnementEntreprise, trouverTauxTvaParSite } from "../entreprise/entreprise.repository.js";
 
 export interface ReabonnerParams {
   siteId: number;
@@ -30,6 +30,7 @@ export interface ReabonnementResultat {
   numeroAbonnement: number;
   idFacture: number;
   statutFacture: "BROUILLON" | "VALIDEE";
+  montantTaxe: number;
 }
 
 // 7.2 : renouvellement d'un abonnement déjà existant pour un abonné déjà connu.
@@ -110,9 +111,13 @@ export function reabonner(db: Db, params: ReabonnerParams): ReabonnementResultat
   const prixApplique = formule.prix - remise;
   const montantTotal = prixApplique + prixOptions;
 
+  // 3.2.3, 6.1, 8.8 : "porte le total, la TVA/taxes le cas échéant" — figée
+  // au taux en vigueur à cet instant, jamais recalculée après coup
+  const montantTaxe = extraireTaxeDuTTC(montantTotal, trouverTauxTvaParSite(db, params.siteId));
+
   const facture = db
     .insert(schema.facture)
-    .values({ siteId: params.siteId, idAbonne: abonnementActuel.idAbonne, creePar: params.userId, montantTotal })
+    .values({ siteId: params.siteId, idAbonne: abonnementActuel.idAbonne, creePar: params.userId, montantTotal, montantTaxe })
     .returning()
     .get();
 
@@ -145,5 +150,5 @@ export function reabonner(db: Db, params: ReabonnerParams): ReabonnementResultat
     statutFacture = "VALIDEE";
   }
 
-  return { numeroAbonnement: params.numeroAbonnement, idFacture: facture.idFacture, statutFacture };
+  return { numeroAbonnement: params.numeroAbonnement, idFacture: facture.idFacture, statutFacture, montantTaxe };
 }

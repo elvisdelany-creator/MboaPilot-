@@ -1,12 +1,12 @@
 import { and, eq } from "drizzle-orm";
-import { calculerDateFin, calculerPrixKit, peutAffecterEcran } from "@mboapilot/shared";
+import { calculerDateFin, calculerPrixKit, extraireTaxeDuTTC, peutAffecterEcran } from "@mboapilot/shared";
 import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
 import { creerAbonne, type AbonneInput } from "../abonnes/abonne.repository.js";
 import { construireKitCalcul } from "../catalogue/kit-mapper.js";
 import { compterEcransOccupes, trouverComptePartage } from "../comptes-partages/compte-partage.repository.js";
 import { trouverApporteur } from "../apporteurs/apporteur.repository.js";
-import { trouverTauxCommissionVendeurParSite } from "../entreprise/entreprise.repository.js";
+import { trouverTauxCommissionVendeurParSite, trouverTauxTvaParSite } from "../entreprise/entreprise.repository.js";
 import { decrementerComposantsKit } from "../stock/stock.service.js";
 
 export interface RecruterAbonneParams {
@@ -46,6 +46,7 @@ export interface RecrutementResultat {
   numeroAbonnement: number;
   idFacture: number;
   statutFacture: "BROUILLON" | "VALIDEE";
+  montantTaxe: number;
 }
 
 const DUREE_PROBATION_CANALPLUS_CYCLES = 4; // 4 mois = 119 jours (6.2)
@@ -138,9 +139,13 @@ export function recruterAbonne(db: Db, params: RecruterAbonneParams): Recrutemen
   const prixFormuleApplique = formule.prix - remise;
   const montantTotal = prixFormuleApplique + prixKit + prixOptions;
 
+  // 3.2.3, 6.1, 8.8 : "porte le total, la TVA/taxes le cas échéant" — figée
+  // au taux en vigueur à cet instant, jamais recalculée après coup
+  const montantTaxe = extraireTaxeDuTTC(montantTotal, trouverTauxTvaParSite(db, params.siteId));
+
   const facture = db
     .insert(schema.facture)
-    .values({ siteId: params.siteId, idAbonne, creePar: params.userId, montantTotal })
+    .values({ siteId: params.siteId, idAbonne, creePar: params.userId, montantTotal, montantTaxe })
     .returning()
     .get();
 
@@ -209,5 +214,5 @@ export function recruterAbonne(db: Db, params: RecruterAbonneParams): Recrutemen
     }
   }
 
-  return { numeroAbonnement: abonnement.numeroAbonnement, idFacture: facture.idFacture, statutFacture };
+  return { numeroAbonnement: abonnement.numeroAbonnement, idFacture: facture.idFacture, statutFacture, montantTaxe };
 }

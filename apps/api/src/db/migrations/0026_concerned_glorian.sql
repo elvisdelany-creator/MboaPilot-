@@ -1,0 +1,1 @@
+ALTER TABLE `facture` ADD `montant_taxe` integer DEFAULT 0 NOT NULL;

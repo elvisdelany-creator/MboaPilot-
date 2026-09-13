@@ -214,6 +214,7 @@ export interface RecrutementResultat {
   numeroAbonnement: number;
   idFacture: number;
   statutFacture: "BROUILLON" | "VALIDEE";
+  montantTaxe: number;
 }
 
 export type TypeProduit = "BIEN" | "SERVICE" | "SAV" | "KIT";

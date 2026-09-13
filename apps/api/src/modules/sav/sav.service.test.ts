@@ -239,3 +239,18 @@ describe("changerStatutSav — cycle de vie (5.10)", () => {
     expect(notifications[0].statutEnvoi).toBe("ECHOUEE");
   });
 });
+
+// 3.2.3, 6.1, 8.8 : "porte le total, la TVA/taxes le cas échéant"
+describe("changerStatutSav — TVA figée sur la facture (3.2.3, 6.1, 8.8)", () => {
+  it("persiste le montant de taxe calculé au taux en vigueur à la création", () => {
+    db.update(schema.entreprise).set({ tauxTva: 2000 }).run(); // 20 %
+    changerStatutSav(db, { idDossierSav, nouveauStatut: "DIAGNOSTIC", userId });
+    affecterPieceSav(db, { idDossierSav, idProduit: idProduitPiece, quantite: 1, userId }); // 3000 FCFA
+    changerStatutSav(db, { idDossierSav, nouveauStatut: "REPARATION", userId });
+
+    const resultat = changerStatutSav(db, { idDossierSav, nouveauStatut: "PRET", montantMainOeuvre: 2000, userId }); // 5000 FCFA
+
+    const facture = db.select().from(schema.facture).where(eq(schema.facture.idFacture, resultat.idFacture!)).get();
+    expect(facture?.montantTaxe).toBe(833); // 5000 TTC -> HT 4167, taxe 833
+  });
+});

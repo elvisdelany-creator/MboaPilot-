@@ -13,6 +13,10 @@ export interface RecuVente {
   numeroAbonnement: number | null;
   lignes: LigneRecu[];
   total: number;
+  // 3.2.3, 6.1, 8.8 : montant de taxe déjà figé sur la facture au moment de
+  // sa création (jamais recalculé ici avec le taux courant, qui peut avoir
+  // changé depuis) — 0 si aucune taxe n'était configurée
+  montantTaxe: number;
   modePaiement: "CASH" | "CHEQUE" | "VIREMENT" | "MOBILE_MONEY";
   montantEncaisse: number;
   dateHeure: string;
@@ -44,11 +48,12 @@ export function RecuVentePrintable({ infosEntreprise, logoUrl, recu, onNouvelleV
   const monnaieRendue = recu.modePaiement === "CASH" ? Math.max(0, recu.montantEncaisse - recu.total) : 0;
   const soldeDu = Math.max(0, recu.total - recu.montantEncaisse);
 
-  // 6.1, 8.8 : taux configurable (le cas échéant) — le total facturé reste
-  // inchangé (TTC), la TVA n'est qu'une mention informative de sa composition
-  const tauxTva = infosEntreprise?.entreprise.tauxTva ?? null;
-  const montantHT = tauxTva !== null ? Math.round((recu.total * 10000) / (10000 + tauxTva)) : recu.total;
-  const montantTaxe = recu.total - montantHT;
+  // 3.2.3, 6.1, 8.8 : "porte le total, la TVA/taxes le cas échéant" — montant
+  // figé sur la facture à sa création, jamais recalculé ici avec le taux
+  // courant (qui peut avoir changé depuis l'émission de ce ticket)
+  const { montantTaxe } = recu;
+  const montantHT = recu.total - montantTaxe;
+  const taxeApplicable = montantTaxe !== 0;
 
   return (
     <div className="flex h-dvh flex-col items-center overflow-y-auto bg-background p-6">
@@ -80,20 +85,20 @@ export function RecuVentePrintable({ infosEntreprise, logoUrl, recu, onNouvelleV
 
         <Separator />
 
-        {tauxTva !== null && (
+        {taxeApplicable && (
           <>
             <div className="flex items-center justify-between text-xs text-muted-foreground">
               <span>Total HT</span>
               <span className="tabular-nums">{formateurFcfa.format(montantHT)}</span>
             </div>
             <div className="flex items-center justify-between text-xs text-muted-foreground">
-              <span>dont TVA {(tauxTva / 100).toString().replace(".", ",")} %</span>
+              <span>dont TVA</span>
               <span className="tabular-nums">{formateurFcfa.format(montantTaxe)}</span>
             </div>
           </>
         )}
         <div className="flex items-center justify-between font-semibold">
-          <span>TOTAL{tauxTva !== null ? " TTC" : ""}</span>
+          <span>TOTAL{taxeApplicable ? " TTC" : ""}</span>
           <span className="tabular-nums">{formateurFcfa.format(recu.total)} {infosEntreprise?.entreprise.devise ?? "FCFA"}</span>
         </div>
         <div className="flex items-center justify-between text-xs">

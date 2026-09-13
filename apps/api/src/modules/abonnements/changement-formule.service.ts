@@ -1,7 +1,8 @@
 import { and, eq } from "drizzle-orm";
-import { validerMigrationFormule } from "@mboapilot/shared";
+import { extraireTaxeDuTTC, validerMigrationFormule } from "@mboapilot/shared";
 import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
+import { trouverTauxTvaParSite } from "../entreprise/entreprise.repository.js";
 
 export interface ChangerFormuleParams {
   siteId: number;
@@ -28,6 +29,7 @@ export interface ChangerFormuleResultat {
   idFacture: number;
   montantDifferentiel: number;
   statutFacture: "BROUILLON" | "VALIDEE";
+  montantTaxe: number;
 }
 
 // 7.4 : changement de formule (migration) — ne s'applique qu'à un abonnement
@@ -82,9 +84,13 @@ export function changerFormule(db: Db, params: ChangerFormuleParams): ChangerFor
   const prixOptions = optionsAppliquees.reduce((total, o) => total + o.prixApplique, 0);
   const montantTotal = validation.montantDifferentiel + prixOptions;
 
+  // 3.2.3, 6.1, 8.8 : "porte le total, la TVA/taxes le cas échéant" — figée
+  // au taux en vigueur à cet instant, jamais recalculée après coup
+  const montantTaxe = extraireTaxeDuTTC(montantTotal, trouverTauxTvaParSite(db, params.siteId));
+
   const facture = db
     .insert(schema.facture)
-    .values({ siteId: params.siteId, idAbonne: abonnement.idAbonne, creePar: params.userId, montantTotal })
+    .values({ siteId: params.siteId, idAbonne: abonnement.idAbonne, creePar: params.userId, montantTotal, montantTaxe })
     .returning()
     .get();
 
@@ -117,5 +123,5 @@ export function changerFormule(db: Db, params: ChangerFormuleParams): ChangerFor
     statutFacture = "VALIDEE";
   }
 
-  return { numeroAbonnement: params.numeroAbonnement, idFacture: facture.idFacture, montantDifferentiel: validation.montantDifferentiel, statutFacture };
+  return { numeroAbonnement: params.numeroAbonnement, idFacture: facture.idFacture, montantDifferentiel: validation.montantDifferentiel, statutFacture, montantTaxe };
 }

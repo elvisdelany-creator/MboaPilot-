@@ -156,3 +156,15 @@ describe("changerFormule — options complémentaires (3.2.2, 5.4.2, 7.4)", () =
     ).toThrow(/compatible/i);
   });
 });
+
+// 3.2.3, 6.1, 8.8 : "porte le total, la TVA/taxes le cas échéant"
+describe("changerFormule — TVA figée sur la facture (3.2.3, 6.1, 8.8)", () => {
+  it("persiste le montant de taxe calculé au taux en vigueur à la création", () => {
+    db.update(schema.entreprise).set({ tauxTva: 2000 }).run(); // 20 %
+
+    const resultat = changerFormule(db, { siteId, userId, numeroAbonnement, idNouvelleFormule: idEvasion, montantEncaisse: 5500 });
+
+    const facture = db.select().from(schema.facture).where(eq(schema.facture.idFacture, resultat.idFacture)).get();
+    expect(facture?.montantTaxe).toBe(917); // 5500 TTC -> HT 4583, taxe 917
+  });
+});

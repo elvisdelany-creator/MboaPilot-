@@ -166,4 +166,14 @@ describe("creerVenteProduits (5.2, 5.3, 8.5)", () => {
       creerVenteProduits(db, { siteId, userId, lignes: [{ idProduit: idBien, quantite: 1, remise: -100 }], montantEncaisse: 0 })
     ).toThrow(/remise/i);
   });
+
+  // 3.2.3, 6.1, 8.8 : "porte le total, la TVA/taxes le cas échéant"
+  it("persiste le montant de taxe calculé au taux en vigueur à la création", () => {
+    db.update(schema.entreprise).set({ tauxTva: 2000 }).run(); // 20 %
+
+    const resultat = creerVenteProduits(db, { siteId, userId, lignes: [{ idProduit: idService, quantite: 1 }], montantEncaisse: 0 });
+
+    const facture = db.select().from(schema.facture).where(eq(schema.facture.idFacture, resultat.idFacture)).get();
+    expect(facture?.montantTaxe).toBe(833); // 5000 TTC -> HT 4167, taxe 833
+  });
 });

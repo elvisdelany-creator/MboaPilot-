@@ -1,12 +1,12 @@
 import { eq } from "drizzle-orm";
-import { peutTransitionnerSav, type StatutSav } from "@mboapilot/shared";
+import { extraireTaxeDuTTC, peutTransitionnerSav, type StatutSav } from "@mboapilot/shared";
 import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
 import { enregistrerMouvement } from "../stock/stock.repository.js";
 import { envoyerNotificationAbonne, envoyerNotificationClientPonctuel } from "../notifications/notification.service.js";
 import { SimulateurNotification } from "../notifications/simulateur-notification.js";
 import type { FournisseurNotification } from "../notifications/fournisseur.js";
-import { trouverTauxGarantieEntreprise } from "../entreprise/entreprise.repository.js";
+import { trouverTauxGarantieEntreprise, trouverTauxTvaParSite } from "../entreprise/entreprise.repository.js";
 
 export interface AffecterPieceParams {
   idDossierSav: number;
@@ -99,10 +99,13 @@ export function changerStatutSav(
     // politique)" — tauxGarantiePourcent à 0 (gratuit) par défaut
     const montantPlein = montantPieces + montantMainOeuvre;
     montantFacture = dossier.sousGarantie === 1 ? Math.round((montantPlein * trouverTauxGarantieEntreprise(db)) / 100) : montantPlein;
+    // 3.2.3, 6.1, 8.8 : "porte le total, la TVA/taxes le cas échéant" —
+    // figée au taux en vigueur à cet instant, jamais recalculée après coup
+    const montantTaxe = extraireTaxeDuTTC(montantFacture, trouverTauxTvaParSite(db, dossier.siteId));
 
     const facture = db
       .insert(schema.facture)
-      .values({ siteId: dossier.siteId, idAbonne: dossier.idAbonne, creePar: params.userId, montantTotal: montantFacture })
+      .values({ siteId: dossier.siteId, idAbonne: dossier.idAbonne, creePar: params.userId, montantTotal: montantFacture, montantTaxe })
       .returning()
       .get();
     idFacture = facture.idFacture;

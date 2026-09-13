@@ -164,4 +164,20 @@ describe("creerAvoir (6.4)", () => {
       creerAvoir(db, { idFactureOrigine: idFactureValidee, lignes: [{ idLigneOrigine: idLigneProduitSuivi, quantite: 0 }], restituerStock: false, userId })
     ).toThrow(/quantité/i);
   });
+
+  // 3.2.3, 6.1, 8.8 : "porte le total, la TVA/taxes le cas échéant" — le
+  // montant de taxe crédité est négatif, comme le montant total de l'avoir
+  it("persiste un montant de taxe négatif, proportionnel au montant crédité", () => {
+    db.update(schema.entreprise).set({ tauxTva: 2000 }).run(); // 20 %
+
+    const resultat = creerAvoir(db, {
+      idFactureOrigine: idFactureValidee,
+      lignes: [{ idLigneOrigine: idLigneProduitSuivi, quantite: 3 }],
+      restituerStock: false,
+      userId,
+    });
+
+    const factureAvoir = db.select().from(schema.facture).where(eq(schema.facture.idFacture, resultat.idFactureAvoir)).get();
+    expect(factureAvoir?.montantTaxe).toBe(-1250); // -7500 TTC -> HT -6250, taxe -1250
+  });
 });

@@ -245,3 +245,24 @@ describe("echangerMateriel (7.3)", () => {
     ).toThrow(/introuvable/);
   });
 });
+
+// 3.2.3, 6.1, 8.8 : "porte le total, la TVA/taxes le cas échéant"
+describe("echangerMateriel — TVA figée sur la facture (3.2.3, 6.1, 8.8)", () => {
+  it("persiste le montant de taxe calculé au taux en vigueur à la création", () => {
+    db.update(schema.entreprise).set({ tauxTva: 2000 }).run(); // 20 %
+
+    const resultat = echangerMateriel(db, {
+      siteId,
+      userId,
+      numeroAbonnement,
+      idProduit: idProduitDecodeur,
+      typeMateriel: "DECODEUR",
+      sousGarantie: false,
+      motif: "panne",
+      montantEncaisse: 15000,
+    });
+
+    const facture = db.select().from(schema.facture).where(eq(schema.facture.idFacture, resultat.idFacture)).get();
+    expect(facture?.montantTaxe).toBe(2500); // 15000 TTC -> HT 12500, taxe 2500
+  });
+});

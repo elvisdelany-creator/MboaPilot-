@@ -1,7 +1,9 @@
 import { eq } from "drizzle-orm";
+import { extraireTaxeDuTTC } from "@mboapilot/shared";
 import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
 import { enregistrerMouvement } from "../stock/stock.repository.js";
+import { trouverTauxTvaParSite } from "../entreprise/entreprise.repository.js";
 
 export interface LigneAvoirInput {
   idLigneOrigine: number;
@@ -18,6 +20,7 @@ export interface CreerAvoirParams {
 export interface AvoirResultat {
   idFactureAvoir: number;
   montantTotal: number; // négatif
+  montantTaxe: number; // négatif
 }
 
 // 6.4, 💡 Conseil d'architecte : correction d'une facture VALIDEE par un avoir
@@ -64,6 +67,9 @@ export function creerAvoir(db: Db, params: CreerAvoirParams): AvoirResultat {
   });
 
   const montantTotal = lignesAvoir.reduce((somme, l) => somme + l.prixApplique, 0);
+  // 3.2.3, 6.1, 8.8 : "porte le total, la TVA/taxes le cas échéant" — négatif,
+  // proportionnel au montant crédité, figé au taux en vigueur à cet instant
+  const montantTaxe = extraireTaxeDuTTC(montantTotal, trouverTauxTvaParSite(db, origine.siteId));
 
   const factureAvoir = db
     .insert(schema.facture)
@@ -74,6 +80,7 @@ export function creerAvoir(db: Db, params: CreerAvoirParams): AvoirResultat {
       type: "AVOIR",
       factureOrigineId: origine.idFacture,
       montantTotal,
+      montantTaxe,
       creePar: params.userId,
     })
     .returning()
@@ -106,7 +113,7 @@ export function creerAvoir(db: Db, params: CreerAvoirParams): AvoirResultat {
     }
   }
 
-  return { idFactureAvoir: factureAvoir.idFacture, montantTotal };
+  return { idFactureAvoir: factureAvoir.idFacture, montantTotal, montantTaxe };
 }
 
 // 6.4 : lignes d'une facture, enrichies du libellé de l'article/kit, pour

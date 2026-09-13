@@ -70,6 +70,16 @@ export function trouverTauxCommissionVendeurParSite(db: Db, siteId: number): num
   return entreprise?.tauxCommissionVendeurDefaut ?? null;
 }
 
+// 3.2.3, 6.1, 8.8 : taux de TVA en vigueur pour le site — lu au moment de la
+// création d'une facture pour y figer le montant de taxe correspondant
+// (facture.montant_taxe), jamais recalculé après coup si ce taux change.
+export function trouverTauxTvaParSite(db: Db, siteId: number): number | null {
+  const site = db.select().from(schema.site).where(eq(schema.site.idSite, siteId)).get();
+  if (!site) return null;
+  const entreprise = db.select().from(schema.entreprise).where(eq(schema.entreprise.idEntreprise, site.idEntreprise)).get();
+  return entreprise?.tauxTva ?? null;
+}
+
 // 4.4, 8.8 : jalons d'alerte configurés pour le site — les valeurs par
 // défaut (7/3/1) si le site est inconnu, pour que le job quotidien et la
 // liste vivante du tableau de bord (9.3) aient toujours un jeu de seuils

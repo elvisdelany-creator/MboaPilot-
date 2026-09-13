@@ -1,7 +1,9 @@
 import { eq } from "drizzle-orm";
+import { extraireTaxeDuTTC } from "@mboapilot/shared";
 import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
 import { enregistrerMouvement } from "../stock/stock.repository.js";
+import { trouverTauxTvaParSite } from "../entreprise/entreprise.repository.js";
 
 export interface LigneVenteProduitInput {
   idProduit: number;
@@ -30,6 +32,7 @@ export interface VenteResultat {
   idFacture: number;
   statutFacture: "BROUILLON" | "VALIDEE";
   montantTotal: number;
+  montantTaxe: number;
 }
 
 // 5.2, 5.3, 8.5, 9.2 : vente rapide de produits physiques et services hors
@@ -53,9 +56,13 @@ export function creerVenteProduits(db: Db, params: CreerVenteProduitsParams): Ve
 
   const montantTotal = lignesResolues.reduce((somme, l) => somme + l.prixApplique, 0);
 
+  // 3.2.3, 6.1, 8.8 : "porte le total, la TVA/taxes le cas échéant" — figée
+  // au taux en vigueur à cet instant, jamais recalculée après coup
+  const montantTaxe = extraireTaxeDuTTC(montantTotal, trouverTauxTvaParSite(db, params.siteId));
+
   const facture = db
     .insert(schema.facture)
-    .values({ siteId: params.siteId, idAbonne: params.idAbonne, creePar: params.userId, montantTotal })
+    .values({ siteId: params.siteId, idAbonne: params.idAbonne, creePar: params.userId, montantTotal, montantTaxe })
     .returning()
     .get();
 
@@ -102,5 +109,5 @@ export function creerVenteProduits(db: Db, params: CreerVenteProduitsParams): Ve
     statutFacture = "VALIDEE";
   }
 
-  return { idFacture: facture.idFacture, statutFacture, montantTotal };
+  return { idFacture: facture.idFacture, statutFacture, montantTotal, montantTaxe };
 }

@@ -12,14 +12,14 @@ import { ClientsPage } from "@/components/clients/ClientsPage";
 import { AdministrationPage } from "@/components/administration/AdministrationPage";
 import { LicenceBanner } from "@/components/layout/LicenceBanner";
 import type { Vue } from "@/components/layout/AppHeader";
-import type { Abonne, AbonnementExpire, AlerteEcheance } from "@/lib/types";
+import type { Abonne, AbonnementExpire, AlerteEcheance, Produit } from "@/lib/types";
 
 type EtatVue =
   | { nom: "dashboard" }
   | { nom: "caisse"; abonneInitial?: Abonne; idFamilleInitiale?: number }
   | { nom: "sav" }
   | { nom: "apporteurs" }
-  | { nom: "stock" }
+  | { nom: "stock"; idProduitInitial?: number; actionInitiale?: "achat" | "transfert" }
   | { nom: "clients" }
   | { nom: "administration" };
 
@@ -60,15 +60,29 @@ function Contenu() {
     setVue({ nom: "caisse", abonneInitial: abonne, idFamilleInitiale: idFamille });
   }
 
+  // 9.3 : "Liste des alertes de stock, avec accès direct à la commande
+  // fournisseur ou au transfert inter-site" — même principe que le
+  // réabonnement en un clic ci-dessus, pour les ruptures de stock
+  function gererStockDepuisAlerte(produit: Produit, action: "achat" | "transfert") {
+    setVue({ nom: "stock", idProduitInitial: produit.idProduit, actionInitiale: action });
+  }
+
   let contenuPage;
   if (vue.nom === "dashboard") {
-    contenuPage = <DashboardPage onNaviguer={naviguer} onReabonnerDepuisAlerte={reabonnerDepuisAlerte} onReabonnerDepuisExpire={reabonnerDepuisExpire} />;
+    contenuPage = (
+      <DashboardPage
+        onNaviguer={naviguer}
+        onReabonnerDepuisAlerte={reabonnerDepuisAlerte}
+        onReabonnerDepuisExpire={reabonnerDepuisExpire}
+        onGererStockDepuisAlerte={gererStockDepuisAlerte}
+      />
+    );
   } else if (vue.nom === "sav") {
     contenuPage = <SavPage onNaviguer={naviguer} />;
   } else if (vue.nom === "apporteurs") {
     contenuPage = <ApporteursPage onNaviguer={naviguer} />;
   } else if (vue.nom === "stock") {
-    contenuPage = <StockPage onNaviguer={naviguer} />;
+    contenuPage = <StockPage onNaviguer={naviguer} idProduitInitial={vue.idProduitInitial} actionInitiale={vue.actionInitiale} />;
   } else if (vue.nom === "clients") {
     contenuPage = <ClientsPage onNaviguer={naviguer} onReabonnerDepuisFiche={reabonnerDepuisFiche} />;
   } else if (vue.nom === "administration") {

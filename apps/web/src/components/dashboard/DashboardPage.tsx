@@ -44,6 +44,9 @@ interface Props {
   onNaviguer: (vue: Vue) => void;
   onReabonnerDepuisAlerte: (alerte: AlerteEcheance) => void;
   onReabonnerDepuisExpire: (abonnement: AbonnementExpire) => void;
+  // 9.3 : "Liste des alertes de stock, avec accès direct à la commande
+  // fournisseur ou au transfert inter-site"
+  onGererStockDepuisAlerte: (produit: Produit, action: "achat" | "transfert") => void;
 }
 
 // 4.4, 8.8 : le rang (1 = le plus urgent) pilote la couleur, indépendamment
@@ -73,11 +76,14 @@ const formateurDateCourte = new Intl.DateTimeFormat("fr-FR", { dateStyle: "short
 // par urgence (J-1 en premier), avec accès direct au réabonnement en un clic.
 // Section de pilotage (8.6) réservée à Administrateur/Gérant/Comptable :
 // KPI du jour, courbe de CA, encaissements, commissions CANAL+ en cours.
-export function DashboardPage({ onNaviguer, onReabonnerDepuisAlerte, onReabonnerDepuisExpire }: Props) {
+export function DashboardPage({ onNaviguer, onReabonnerDepuisAlerte, onReabonnerDepuisExpire, onGererStockDepuisAlerte }: Props) {
   const { session, deconnecter } = useAuth();
   const token = session!.token;
   const siteId = session!.utilisateur.siteId;
   const peutPiloter = ["ADMINISTRATEUR", "GERANT", "COMPTABLE"].includes(session!.utilisateur.role);
+  // 5.2 : mouvements correctifs de stock (achat, transfert) réservés à
+  // l'encadrement, comme sur la page Catalogue elle-même (gestionStock)
+  const peutGererStock = ["ADMINISTRATEUR", "GERANT"].includes(session!.utilisateur.role);
 
   const [alertes, setAlertes] = useState<AlerteEcheance[] | null>(null);
   // 4.4, 8.8 : liste dédiée « Abonnements expirés », filtrable par famille
@@ -474,12 +480,22 @@ export function DashboardPage({ onNaviguer, onReabonnerDepuisAlerte, onReabonner
                         <PackageX className="size-3.5" aria-hidden="true" />
                         Rupture
                       </span>
-                      <div>
+                      <div className="flex-1">
                         <p className="font-medium text-card-foreground">{p.libelle}</p>
                         <p className="text-sm text-muted-foreground">
                           {p.quantiteStock} en stock · seuil {p.seuilAlerte}
                         </p>
                       </div>
+                      {peutGererStock && (
+                        <div className="flex shrink-0 gap-2">
+                          <Button variant="outline" size="sm" className="cursor-pointer" onClick={() => onGererStockDepuisAlerte(p, "achat")}>
+                            Réceptionner
+                          </Button>
+                          <Button variant="outline" size="sm" className="cursor-pointer" onClick={() => onGererStockDepuisAlerte(p, "transfert")}>
+                            Transférer
+                          </Button>
+                        </div>
+                      )}
                     </Card>
                   </li>
                 ))}

@@ -25,6 +25,10 @@ import type { HistoriquePrixProduit, Produit, StockMouvement, TypeMouvementStock
 
 interface Props {
   onNaviguer: (vue: Vue) => void;
+  // 9.3 : "accès direct à la commande fournisseur ou au transfert
+  // inter-site" depuis une alerte de stock du tableau de bord
+  idProduitInitial?: number;
+  actionInitiale?: "achat" | "transfert";
 }
 
 const LIBELLE_MOUVEMENT: Record<TypeMouvementStock, string> = {
@@ -50,7 +54,7 @@ const formateurDateCourte = new Intl.DateTimeFormat("fr-FR", { dateStyle: "short
 
 // 5.2, 8.2, 8.6, 9.3 : catalogue — création/édition des fiches article, suivi
 // de stock (niveaux, seuils, mouvements) et historique des variations de prix.
-export function StockPage({ onNaviguer }: Props) {
+export function StockPage({ onNaviguer, idProduitInitial, actionInitiale }: Props) {
   const { session, deconnecter } = useAuth();
   const token = session!.token;
   const utilisateur = session!.utilisateur;
@@ -94,6 +98,18 @@ export function StockPage({ onNaviguer }: Props) {
   }
 
   useEffect(rechargerListe, [token, siteId]);
+
+  // 9.3 : "accès direct à la commande fournisseur ou au transfert
+  // inter-site" — pré-sélectionne le produit et ouvre le dialogue voulu dès
+  // que la liste est chargée, une seule fois par arrivée sur cette page
+  const deepLinkApplique = useRef(false);
+  useEffect(() => {
+    if (produits && idProduitInitial !== undefined && !deepLinkApplique.current) {
+      deepLinkApplique.current = true;
+      setIdSelectionne(idProduitInitial);
+      if (actionInitiale) setDialogueOuvert(actionInitiale);
+    }
+  }, [produits, idProduitInitial, actionInitiale]);
 
   useEffect(() => {
     if (idSelectionne !== null) rechargerDetail(idSelectionne);

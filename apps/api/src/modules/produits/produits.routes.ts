@@ -3,8 +3,11 @@ import type { Db } from "../../db/types.js";
 import type { Guard, RouteGuards } from "../auth/auth.plugin.js";
 import {
   creerProduit,
+  estRoleEncadrement,
   listerHistoriquePrixProduit,
   listerProduits,
+  masquerCoutHistoriquePrix,
+  masquerCoutMargeProduit,
   modifierProduit,
   type CreerProduitInput,
   type ModifierProduitInput,
@@ -20,12 +23,15 @@ function envoyerErreur(reply: import("fastify").FastifyReply, erreur: unknown) {
 // 8.2 : gestion du catalogue — consultation ouverte à tout utilisateur
 // authentifié (nécessaire à la caisse, au SAV, à l'échange de matériel),
 // création/édition des fiches article réservée à Administrateur/Gérant.
+// Coût de revient et marge, eux, restent "réservés à l'encadrement" (comme
+// l'export CSV ci-dessous) : masqués dans la réponse pour tout autre rôle.
 export function registerProduitsRoutes(app: FastifyInstance, db: Db, guards: RouteGuards & { gestionCatalogue: Guard }) {
   app.get<{ Querystring: { siteId: string } }>(
     "/api/v1/produits",
     { preHandler: [guards.authRequis] },
     async (request, reply) => {
-      reply.code(200).send(listerProduits(db, Number(request.query.siteId)));
+      const produits = listerProduits(db, Number(request.query.siteId));
+      reply.code(200).send(estRoleEncadrement(request.user.role) ? produits : produits.map(masquerCoutMargeProduit));
     }
   );
 
@@ -57,7 +63,8 @@ export function registerProduitsRoutes(app: FastifyInstance, db: Db, guards: Rou
     "/api/v1/produits/:idProduit/historique-prix",
     { preHandler: [guards.authRequis] },
     async (request, reply) => {
-      reply.code(200).send(listerHistoriquePrixProduit(db, Number(request.params.idProduit)));
+      const historique = listerHistoriquePrixProduit(db, Number(request.params.idProduit));
+      reply.code(200).send(estRoleEncadrement(request.user.role) ? historique : historique.map(masquerCoutHistoriquePrix));
     }
   );
 

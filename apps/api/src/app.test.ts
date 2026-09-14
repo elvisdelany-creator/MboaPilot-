@@ -426,6 +426,31 @@ describe("GET /api/v1/abonnes", () => {
     expect(resultats).toHaveLength(1);
     expect(resultats[0].nom).toBe("Nga Ndongo");
   });
+
+  // 2.5.1, 8.4 : un technicien SAV doit pouvoir rattacher un abonné existant
+  // à un nouveau dossier (NouveauDossierDialog.tsx appelle cette recherche),
+  // sans pour autant accéder à sa fiche financière (factures, paiements)
+  it("un technicien SAV peut rechercher un abonné, mais pas consulter sa fiche 360°", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const token = await connecter(app);
+    await app.inject({
+      method: "POST",
+      url: "/api/v1/recrutements",
+      headers: authHeader(token),
+      payload: { siteId, userId, aujourdHui: "2025-11-16", abonne: { nom: "Mballa", prenom: "Sylvie", telephone: "691111111" }, idFormule, montantEncaisse: 13000 },
+    });
+    const idAbonne = (await app.inject({ method: "GET", url: `/api/v1/abonnes?siteId=${siteId}&q=Mballa`, headers: authHeader(token) })).json()[0].idAbonne;
+
+    creerUtilisateur(db, { siteId, nom: "Tech", prenom: "T", identifiant: "tech1", motDePasse: "motdepasse-secret", role: "TECHNICIEN_SAV" });
+    const tokenTech = await connecter(app, "tech1");
+
+    const recherche = await app.inject({ method: "GET", url: `/api/v1/abonnes?siteId=${siteId}&q=Mballa`, headers: authHeader(tokenTech) });
+    expect(recherche.statusCode).toBe(200);
+    expect(recherche.json()).toHaveLength(1);
+
+    const fiche360 = await app.inject({ method: "GET", url: `/api/v1/abonnes/${idAbonne}/fiche-360`, headers: authHeader(tokenTech) });
+    expect(fiche360.statusCode).toBe(403);
+  });
 });
 
 describe("POST /api/v1/jobs/quotidien (4.3, 4.4, 6.2)", () => {
@@ -1492,6 +1517,96 @@ describe("Module gestion du catalogue (8.2)", () => {
       payload: { siteId, type: "BIEN", libelle: "Autre", prixVente: 1000 },
     });
     expect(refusCreation.statusCode).toBe(403);
+  });
+
+  // 8.2 : "réservé à l'encadrement (données de coût/marge)" — même principe
+  // que l'export CSV, appliqué à la consultation du produit brut ouverte à
+  // tout rôle (caisse, SAV, apporteur) : coût et marge masqués hors Administrateur/Gérant.
+  it("un caissier consulte le catalogue sans voir le coût de revient ni la marge, un gérant les voit", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    creerUtilisateur(db, { siteId, nom: "Admin", prenom: "D", identifiant: "admin1", motDePasse: "motdepasse-secret", role: "ADMINISTRATEUR" });
+    creerUtilisateur(db, { siteId, nom: "Gerant", prenom: "G", identifiant: "gerant1", motDePasse: "motdepasse-secret", role: "GERANT" });
+    const tokenAdmin = await connecter(app, "admin1");
+    const tokenGerant = await connecter(app, "gerant1");
+    const tokenCaissier = await connecter(app);
+
+    await app.inject({
+      method: "POST",
+      url: "/api/v1/produits",
+      headers: authHeader(tokenAdmin),
+      payload: { siteId, type: "BIEN", libelle: "Câble HDMI", prixVente: 2500, coutRevient: 1000, margeType: "VALEUR", margeValeur: 1500 },
+    });
+
+    const vueCaissier = await app.inject({ method: "GET", url: `/api/v1/produits?siteId=${siteId}`, headers: authHeader(tokenCaissier) });
+    expect(vueCaissier.json()[0].prixVente).toBe(2500);
+    expect(vueCaissier.json()[0].coutRevient).toBe(0);
+    expect(vueCaissier.json()[0].margeValeur).toBeNull();
+    expect(vueCaissier.json()[0].margePourcentage).toBeNull();
+
+    const vueGerant = await app.inject({ method: "GET", url: `/api/v1/produits?siteId=${siteId}`, headers: authHeader(tokenGerant) });
+    expect(vueGerant.json()[0].coutRevient).toBe(1000);
+    expect(vueGerant.json()[0].margeValeur).toBe(1500);
+  });
+
+  it("un caissier consulte l'historique de prix sans voir les coûts avant/après", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    creerUtilisateur(db, { siteId, nom: "Admin", prenom: "D", identifiant: "admin1", motDePasse: "motdepasse-secret", role: "ADMINISTRATEUR" });
+    const tokenAdmin = await connecter(app, "admin1");
+    const tokenCaissier = await connecter(app);
+
+    const produit = (
+      await app.inject({
+        method: "POST",
+        url: "/api/v1/produits",
+        headers: authHeader(tokenAdmin),
+        payload: { siteId, type: "BIEN", libelle: "Décodeur", prixVente: 15000, coutRevient: 8000 },
+      })
+    ).json();
+    await app.inject({
+      method: "PATCH",
+      url: `/api/v1/produits/${produit.idProduit}`,
+      headers: authHeader(tokenAdmin),
+      payload: { prixVente: 16000, coutRevient: 9000, userId },
+    });
+
+    const historique = await app.inject({
+      method: "GET",
+      url: `/api/v1/produits/${produit.idProduit}/historique-prix`,
+      headers: authHeader(tokenCaissier),
+    });
+    expect(historique.json()[0].prixVenteApres).toBe(16000);
+    expect(historique.json()[0].coutRevientAvant).toBe(0);
+    expect(historique.json()[0].coutRevientApres).toBe(0);
+  });
+
+  it("un caissier consulte les alertes de stock et les produits à rotation lente sans voir le coût de revient", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    creerUtilisateur(db, { siteId, nom: "Admin", prenom: "D", identifiant: "admin1", motDePasse: "motdepasse-secret", role: "ADMINISTRATEUR" });
+    const tokenAdmin = await connecter(app, "admin1");
+    const tokenCaissier = await connecter(app);
+
+    const produit = (
+      await app.inject({
+        method: "POST",
+        url: "/api/v1/produits",
+        headers: authHeader(tokenAdmin),
+        payload: { siteId, type: "BIEN", libelle: "Câble RCA", prixVente: 1500, coutRevient: 700, suiviStock: true, seuilAlerte: 5 },
+      })
+    ).json();
+    await app.inject({
+      method: "POST",
+      url: "/api/v1/stock/achats",
+      headers: authHeader(tokenAdmin),
+      payload: { idProduit: produit.idProduit, siteId, quantite: 2, coutUnitaire: 700, userId },
+    });
+
+    const alertes = await app.inject({ method: "GET", url: `/api/v1/stock/alertes?siteId=${siteId}`, headers: authHeader(tokenCaissier) });
+    expect(alertes.json()).toHaveLength(1);
+    expect(alertes.json()[0].coutRevient).toBe(0);
+
+    const rotationLente = await app.inject({ method: "GET", url: `/api/v1/stock/rotation-lente?siteId=${siteId}`, headers: authHeader(tokenCaissier) });
+    expect(rotationLente.json()).toHaveLength(1);
+    expect(rotationLente.json()[0].produit.coutRevient).toBe(0);
   });
 
   // 5.2 : "code interne/code-barres optionnel"

@@ -1,6 +1,14 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { creerDbTest, type Db } from "../../test-utils/db.js";
-import { creerProduit, listerHistoriquePrixProduit, listerProduits, modifierProduit } from "./produit.repository.js";
+import {
+  creerProduit,
+  estRoleEncadrement,
+  listerHistoriquePrixProduit,
+  listerProduits,
+  masquerCoutHistoriquePrix,
+  masquerCoutMargeProduit,
+  modifierProduit,
+} from "./produit.repository.js";
 import * as schema from "../../db/schema.js";
 
 let db: Db;
@@ -122,5 +130,52 @@ describe("modifierProduit (8.2 : édition d'une fiche article, historique des pr
     const modifie = modifierProduit(db, cree.idProduit, { codeBarres: "3700987654321", userId });
 
     expect(modifie.codeBarres).toBe("3700987654321");
+  });
+});
+
+// 8.2 : "réservé à l'encadrement (données de coût/marge)" — même principe
+// que l'export CSV du catalogue, appliqué à la consultation ouverte à tout
+// rôle (caisse, SAV) du produit brut : coût de revient et marge masqués
+// pour les rôles hors Administrateur/Gérant.
+describe("estRoleEncadrement (8.2)", () => {
+  it("Administrateur et Gérant sont de l'encadrement", () => {
+    expect(estRoleEncadrement("ADMINISTRATEUR")).toBe(true);
+    expect(estRoleEncadrement("GERANT")).toBe(true);
+  });
+
+  it("Caissier, Technicien SAV, Comptable et Apporteur n'en sont pas", () => {
+    expect(estRoleEncadrement("CAISSIER")).toBe(false);
+    expect(estRoleEncadrement("TECHNICIEN_SAV")).toBe(false);
+    expect(estRoleEncadrement("COMPTABLE")).toBe(false);
+    expect(estRoleEncadrement("APPORTEUR")).toBe(false);
+  });
+});
+
+describe("masquerCoutMargeProduit (8.2)", () => {
+  it("remplace le coût de revient et la marge, sans toucher au reste de la fiche", () => {
+    const produit = creerProduit(db, { siteId, type: "BIEN", libelle: "Décodeur", prixVente: 15000, coutRevient: 8000, margeType: "VALEUR", margeValeur: 7000 });
+
+    const masque = masquerCoutMargeProduit(produit);
+
+    expect(masque.coutRevient).toBe(0);
+    expect(masque.margeValeur).toBeNull();
+    expect(masque.margePourcentage).toBeNull();
+    expect(masque.libelle).toBe("Décodeur");
+    expect(masque.prixVente).toBe(15000);
+  });
+});
+
+describe("masquerCoutHistoriquePrix (8.2)", () => {
+  it("remplace le coût avant/après, sans toucher aux prix de vente", () => {
+    const cree = creerProduit(db, { siteId, type: "BIEN", libelle: "Décodeur", prixVente: 15000, coutRevient: 8000 });
+    modifierProduit(db, cree.idProduit, { prixVente: 16000, coutRevient: 9000, userId });
+    const [entree] = listerHistoriquePrixProduit(db, cree.idProduit);
+
+    const masque = masquerCoutHistoriquePrix(entree);
+
+    expect(masque.coutRevientAvant).toBe(0);
+    expect(masque.coutRevientApres).toBe(0);
+    expect(masque.prixVenteAvant).toBe(15000);
+    expect(masque.prixVenteApres).toBe(16000);
   });
 });

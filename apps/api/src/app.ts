@@ -112,10 +112,15 @@ export function buildApp(db: Db, options: BuildAppOptions) {
   // 6.5 : confirmation du rapprochement bancaire d'un virement — tâche
   // financière, mêmes rôles que le pilotage financier (8.6, 9.3)
   const gestionRapprochement = exigerRole("ADMINISTRATEUR", "GERANT", "COMPTABLE");
+  // 8.1, 8.4 : recherche d'abonné — mêmes rôles que la lecture financière,
+  // plus le Technicien SAV qui doit pouvoir rattacher un abonné existant à
+  // un nouveau dossier (NouveauDossierDialog.tsx), sans accès à sa fiche
+  // financière (fiche-360, factures) restée réservée à lectureFinanciere
+  const rechercheAbonnes = exigerRole("ADMINISTRATEUR", "GERANT", "CAISSIER", "COMPTABLE", "TECHNICIEN_SAV");
 
   registerAbonnementsRoutes(app, db, { authRequis, ventes });
   // 11.3 : anonymisation (droit de suppression) réservée à l'Administrateur seul
-  registerAbonnesRoutes(app, db, { authRequis, ventes, fusionAbonnes, anonymisationAbonne: admin, lectureFinanciere });
+  registerAbonnesRoutes(app, db, { authRequis, ventes, fusionAbonnes, anonymisationAbonne: admin, lectureFinanciere, rechercheAbonnes });
   registerCatalogueRoutes(app, db, { authRequis, gestionCatalogue });
   registerJobsRoutes(app, db, { authRequis, ventes, admin, lectureFinanciere });
   registerProduitsRoutes(app, db, { authRequis, ventes, gestionCatalogue });

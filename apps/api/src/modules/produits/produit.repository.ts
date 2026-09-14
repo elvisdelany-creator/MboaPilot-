@@ -128,3 +128,20 @@ export function listerHistoriquePrixProduit(db: Db, idProduit: number) {
     .orderBy(desc(schema.historiquePrixProduit.idHistoPrix))
     .all();
 }
+
+// 8.2 : "réservé à l'encadrement (données de coût/marge)" — même principe
+// que l'export CSV du catalogue (produits.routes.ts), appliqué à la
+// consultation du produit brut, ouverte à tout rôle authentifié (caisse, SAV).
+const ROLES_ENCADREMENT = ["ADMINISTRATEUR", "GERANT"];
+
+export function estRoleEncadrement(role: string): boolean {
+  return ROLES_ENCADREMENT.includes(role);
+}
+
+export function masquerCoutMargeProduit<T extends { coutRevient: number; margeValeur: number | null; margePourcentage: number | null }>(produit: T): T {
+  return { ...produit, coutRevient: 0, margeValeur: null, margePourcentage: null };
+}
+
+export function masquerCoutHistoriquePrix<T extends { coutRevientAvant: number; coutRevientApres: number }>(entree: T): T {
+  return { ...entree, coutRevientAvant: 0, coutRevientApres: 0 };
+}

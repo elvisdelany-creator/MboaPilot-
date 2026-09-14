@@ -17,17 +17,19 @@ function envoyerErreur(reply: import("fastify").FastifyReply, erreur: unknown) {
 // anonymisation (droit de suppression), opérations destructrices, réservées
 // respectivement à l'encadrement et, pour l'anonymisation, à l'Administrateur
 // seul (sensibilité plus élevée — données personnelles, 11.3).
-// 2.5.1 : "Comptable (lecture financière)" — la recherche, la fiche et la
-// fiche 360° (factures, paiements, solde) restent en lecture seule pour ce
-// rôle, qui n'a aucun droit de modification/vente.
+// 2.5.1 : "Comptable (lecture financière)" — la fiche et la fiche 360°
+// (factures, paiements, solde) restent en lecture seule pour ce rôle, qui
+// n'a aucun droit de modification/vente. La recherche elle-même (identité
+// seule, aucune donnée financière) est ouverte plus largement, au Technicien
+// SAV inclus (8.4, rattachement d'un abonné existant à un dossier).
 export function registerAbonnesRoutes(
   app: FastifyInstance,
   db: Db,
-  guards: RouteGuards & { fusionAbonnes: Guard; anonymisationAbonne: Guard; lectureFinanciere: Guard }
+  guards: RouteGuards & { fusionAbonnes: Guard; anonymisationAbonne: Guard; lectureFinanciere: Guard; rechercheAbonnes: Guard }
 ) {
   app.get<{ Querystring: { siteId: string; q: string } }>(
     "/api/v1/abonnes",
-    { preHandler: [guards.authRequis, guards.lectureFinanciere] },
+    { preHandler: [guards.authRequis, guards.rechercheAbonnes] },
     async (request, reply) => {
       const { siteId, q } = request.query;
       const resultats = rechercherAbonnes(db, Number(siteId), q);

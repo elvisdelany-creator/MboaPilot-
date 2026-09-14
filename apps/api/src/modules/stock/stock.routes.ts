@@ -13,6 +13,7 @@ import {
   type ReceptionnerAchatParams,
 } from "./stock.service.js";
 import { transfererStock, type TransfererStockParams } from "./transfert.service.js";
+import { estRoleEncadrement, masquerCoutMargeProduit } from "../produits/produit.repository.js";
 
 function envoyerErreur(reply: import("fastify").FastifyReply, erreur: unknown) {
   const message = erreur instanceof Error ? erreur.message : "Erreur inconnue";
@@ -28,7 +29,8 @@ export function registerStockRoutes(app: FastifyInstance, db: Db, guards: RouteG
     "/api/v1/stock/alertes",
     { preHandler: [guards.authRequis] },
     async (request, reply) => {
-      reply.code(200).send(listerAlertesStock(db, Number(request.query.siteId)));
+      const alertes = listerAlertesStock(db, Number(request.query.siteId));
+      reply.code(200).send(estRoleEncadrement(request.user.role) ? alertes : alertes.map(masquerCoutMargeProduit));
     }
   );
 
@@ -38,7 +40,14 @@ export function registerStockRoutes(app: FastifyInstance, db: Db, guards: RouteG
     { preHandler: [guards.authRequis] },
     async (request, reply) => {
       const aujourdHui = new Date().toISOString().slice(0, 10);
-      reply.code(200).send(listerProduitsRotationLente(db, Number(request.query.siteId), aujourdHui));
+      const rotationLente = listerProduitsRotationLente(db, Number(request.query.siteId), aujourdHui);
+      reply
+        .code(200)
+        .send(
+          estRoleEncadrement(request.user.role)
+            ? rotationLente
+            : rotationLente.map((r) => ({ ...r, produit: masquerCoutMargeProduit(r.produit) }))
+        );
     }
   );
 

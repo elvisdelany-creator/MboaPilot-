@@ -17,6 +17,8 @@ let userId: number;
 let idFamilleCanalplus: number;
 let idFormuleCanalplus: number;
 let idFormuleDstv: number;
+// 6.2 : "lorsqu'un kit CANAL+ est vendu" — condition du suivi de commission
+let idKitCanalplus: number;
 
 beforeEach(() => {
   db = creerDbTest();
@@ -33,6 +35,11 @@ beforeEach(() => {
   idFamilleCanalplus = canal.idFamille;
   idFormuleCanalplus = db.insert(schema.formule).values({ idFamille: canal.idFamille, libelle: "EVASION", prix: 10500, rang: 2 }).returning().get().idFormule;
   idFormuleDstv = db.insert(schema.formule).values({ idFamille: dstv.idFamille, libelle: "COMPAQ", prix: 13000, rang: 3 }).returning().get().idFormule;
+  idKitCanalplus = db
+    .insert(schema.kit)
+    .values({ idFamille: canal.idFamille, libelle: "KIT CANAL+", reglePrix: "PRIX_FIXE", prixFixe: 10000 })
+    .returning()
+    .get().idKit;
 });
 
 describe("construireFiche360 (8.1)", () => {
@@ -65,16 +72,17 @@ describe("construireFiche360 (8.1)", () => {
       aujourdHui: "2025-11-16",
       abonne: { idAbonne },
       idFormule: idFormuleCanalplus,
-      montantEncaisse: 10500,
+      idKit: idKitCanalplus,
+      montantEncaisse: 20500, // 10500 (formule) + 10000 (kit)
       apporteurId: apporteur.idApporteur,
     });
 
     const fiche = construireFiche360(db, idAbonne);
 
     expect(fiche.paiements).toHaveLength(1);
-    expect(fiche.paiements[0].montant).toBe(10500);
+    expect(fiche.paiements[0].montant).toBe(20500);
     expect(fiche.commissionsCanalplus).toHaveLength(1);
-    expect(fiche.commissionsCanalplus[0].montantCommission).toBe(1050); // 10 % de 10500
+    expect(fiche.commissionsCanalplus[0].montantCommission).toBe(2050); // 10 % de 20500
     expect(fiche.commissionsCanalplus[0].statut).toBe("EN_COURS");
   });
 

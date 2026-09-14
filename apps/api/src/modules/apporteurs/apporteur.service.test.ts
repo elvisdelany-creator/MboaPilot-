@@ -11,6 +11,9 @@ let siteId: number;
 let userId: number;
 let idFormuleCanal: number;
 let idFormuleDstv: number;
+// 6.2 : "lorsqu'un kit CANAL+ est vendu" — condition du suivi de commission,
+// nécessaire ici pour tout recrutement CANAL+ censé générer une commission
+let idKitCanal: number;
 
 beforeEach(() => {
   db = creerDbTest();
@@ -25,6 +28,11 @@ beforeEach(() => {
   const dstv = db.insert(schema.familleAbonnement).values({ libelle: "DSTV" }).returning().get();
   idFormuleCanal = db.insert(schema.formule).values({ idFamille: canal.idFamille, libelle: "EVASION", prix: 10500, rang: 2 }).returning().get().idFormule;
   idFormuleDstv = db.insert(schema.formule).values({ idFamille: dstv.idFamille, libelle: "COMPAQ", prix: 13000, rang: 3 }).returning().get().idFormule;
+  idKitCanal = db
+    .insert(schema.kit)
+    .values({ idFamille: canal.idFamille, libelle: "KIT CANAL+", reglePrix: "PRIX_FIXE", prixFixe: 10000 })
+    .returning()
+    .get().idKit;
 });
 
 describe("construireFicheApporteur (6.3)", () => {
@@ -37,7 +45,8 @@ describe("construireFicheApporteur (6.3)", () => {
       aujourdHui: "2025-11-16",
       abonne: { nom: "Nga Ndongo", prenom: "Valentin", telephone: "690000000" },
       idFormule: idFormuleCanal,
-      montantEncaisse: 10500,
+      idKit: idKitCanal,
+      montantEncaisse: 20500, // 10500 (formule) + 10000 (kit)
       apporteurId: apporteur.idApporteur,
     });
     recruterAbonne(db, {
@@ -63,10 +72,10 @@ describe("construireFicheApporteur (6.3)", () => {
 
     expect(fiche.apporteur.idApporteur).toBe(apporteur.idApporteur);
     expect(fiche.abonnes).toHaveLength(2);
-    expect(fiche.chiffreAffaires).toBe(23500); // 10500 + 13000
+    expect(fiche.chiffreAffaires).toBe(33500); // 20500 + 13000
     expect(fiche.commissionsCanalplus).toHaveLength(1);
     expect(fiche.commissionsCanalplus[0].statut).toBe("EN_COURS");
-    expect(fiche.commissionsCanalplus[0].montantCommission).toBe(5250); // 50 % (taux de l'apporteur) de 10500
+    expect(fiche.commissionsCanalplus[0].montantCommission).toBe(10250); // 50 % (taux de l'apporteur) de 20500
     // 6.3 : tant qu'aucune commission n'est CONFIRMEE, rien à régler
     expect(fiche.montantCommissionConfirmee).toBe(0);
     expect(fiche.montantCommissionRegle).toBe(0);
@@ -89,7 +98,8 @@ describe("enregistrerReglement (6.3)", () => {
       aujourdHui: "2025-11-16",
       abonne: { nom: "Nga Ndongo", prenom: "Valentin", telephone: "690000000" },
       idFormule: idFormuleCanal,
-      montantEncaisse: 10500,
+      idKit: idKitCanal,
+      montantEncaisse: 20500,
       apporteurId: apporteur.idApporteur,
     });
     // simule le passage à CONFIRMEE par le job quotidien (6.2), une fois la période probatoire écoulée
@@ -199,14 +209,15 @@ describe("listerResumesApporteurs (8.6, 6.3)", () => {
       aujourdHui: "2025-11-16",
       abonne: { nom: "Client", prenom: "A", telephone: "690000000" },
       idFormule: idFormuleCanal,
-      montantEncaisse: 10500,
+      idKit: idKitCanal,
+      montantEncaisse: 20500,
       apporteurId: apporteur.idApporteur,
     });
     db.update(schema.suiviCommissionCanalplus).set({ statut: "CONFIRMEE" }).where(eq(schema.suiviCommissionCanalplus.numeroAbonnement, resultat.numeroAbonnement)).run();
 
     const resumes = listerResumesApporteurs(db);
 
-    expect(resumes[0].montantCommissionConfirmee).toBe(5250);
-    expect(resumes[0].soldeCommissionDu).toBe(5250);
+    expect(resumes[0].montantCommissionConfirmee).toBe(10250);
+    expect(resumes[0].soldeCommissionDu).toBe(10250);
   });
 });

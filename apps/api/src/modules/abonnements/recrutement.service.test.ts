@@ -178,7 +178,8 @@ describe("recruterAbonne (7.1)", () => {
       aujourdHui: "2025-11-16",
       abonne: { nom: "Nga Ndongo", prenom: "Valentin", telephone: "690000000" },
       idFormule: formuleToutCanalPlus,
-      montantEncaisse: 28000,
+      idKit: kitGlobalZ, // 6.2 : "lorsqu'un kit CANAL+ est vendu" — condition du suivi de commission
+      montantEncaisse: 57000, // 28000 (formule) + 29000 (kit)
       apporteurId: apporteur.idApporteur,
     });
 
@@ -187,7 +188,7 @@ describe("recruterAbonne (7.1)", () => {
       .from(schema.suiviCommissionCanalplus)
       .where(eq(schema.suiviCommissionCanalplus.numeroAbonnement, resultat.numeroAbonnement))
       .get();
-    expect(suivi?.montantCommission).toBe(5600); // 20 % de 28000, pas 10 %
+    expect(suivi?.montantCommission).toBe(11400); // 20 % de 57000, pas 10 %
   });
 
   it("sans aucun taux configuré (ni apporteur, ni vendeur par défaut), la commission est nulle", () => {
@@ -197,7 +198,8 @@ describe("recruterAbonne (7.1)", () => {
       aujourdHui: "2025-11-16",
       abonne: { nom: "Nga Ndongo", prenom: "Valentin", telephone: "690000000" },
       idFormule: formuleToutCanalPlus,
-      montantEncaisse: 28000,
+      idKit: kitGlobalZ,
+      montantEncaisse: 57000,
     });
 
     const suivi = db
@@ -206,6 +208,29 @@ describe("recruterAbonne (7.1)", () => {
       .where(eq(schema.suiviCommissionCanalplus.numeroAbonnement, resultat.numeroAbonnement))
       .get();
     expect(suivi?.montantCommission).toBe(0);
+  });
+
+  // 6.2 : "lorsqu'un kit CANAL+ est vendu à l'occasion d'un recrutement...
+  // une commission est due" — un recrutement CANAL+ sans kit (simple
+  // activation sur un décodeur déjà possédé) ne crée aucun suivi
+  it("aucun suivi de commission créé pour un recrutement CANAL+ sans kit vendu", () => {
+    db.update(schema.entreprise).set({ tauxCommissionVendeurDefaut: 100 }).run();
+
+    const resultat = recruterAbonne(db, {
+      siteId,
+      userId,
+      aujourdHui: "2025-11-16",
+      abonne: { nom: "Nga Ndongo", prenom: "Valentin", telephone: "690000000" },
+      idFormule: formuleToutCanalPlus,
+      montantEncaisse: 28000,
+    });
+
+    const suivis = db
+      .select()
+      .from(schema.suiviCommissionCanalplus)
+      .where(eq(schema.suiviCommissionCanalplus.numeroAbonnement, resultat.numeroAbonnement))
+      .all();
+    expect(suivis).toHaveLength(0);
   });
 
   it("sans encaissement, la facture reste BROUILLON et aucun suivi de commission n'est créé", () => {
@@ -474,7 +499,8 @@ describe("recruterAbonne — compte partagé streaming (5.9)", () => {
       aujourdHui: "2025-11-16",
       abonne: { nom: "Nga", prenom: "Paul", telephone: "690000000" },
       idFormule: formuleToutCanalPlus,
-      montantEncaisse: 25000,
+      idKit: kitGlobalZ,
+      montantEncaisse: 54000, // 25000 (formule après remise) + 29000 (kit)
       remise: 3000, // 28000 -> 25000
     });
 
@@ -483,7 +509,7 @@ describe("recruterAbonne — compte partagé streaming (5.9)", () => {
       .from(schema.suiviCommissionCanalplus)
       .where(eq(schema.suiviCommissionCanalplus.numeroAbonnement, resultat.numeroAbonnement))
       .get();
-    expect(suivi?.montantCommission).toBe(2500); // 10 % de 25000, pas de 28000
+    expect(suivi?.montantCommission).toBe(5400); // 10 % de 54000 (25000 formule remisée + 29000 kit), pas de 57000
   });
 });
 

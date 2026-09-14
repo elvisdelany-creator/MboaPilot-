@@ -190,8 +190,12 @@ export function recruterAbonne(db: Db, params: RecruterAbonneParams): Recrutemen
     db.update(schema.facture).set({ statut: "VALIDEE" }).where(eq(schema.facture.idFacture, facture.idFacture)).run();
     statutFacture = "VALIDEE";
 
-    // 6.2 : uniquement sur un recrutement CANAL+ validé (encaissé), jamais un réabonnement
-    if (famille?.libelle === LIBELLE_FAMILLE_CANALPLUS) {
+    // 6.2 : "lorsqu'un kit CANAL+ est vendu à l'occasion d'un recrutement...
+    // une commission est due" — uniquement sur un recrutement CANAL+ validé
+    // (encaissé) avec un kit effectivement vendu, jamais un réabonnement ni
+    // un recrutement sans kit (simple activation d'une formule sur un
+    // décodeur déjà possédé par l'abonné, sans nouvel équipement facturé)
+    if (famille?.libelle === LIBELLE_FAMILLE_CANALPLUS && kitRow) {
       const dateFinProbatoire = calculerDateFin(dateDebut, DUREE_PROBATION_CANALPLUS_CYCLES, "STRICT_30J");
       // 6.2, 8.8 : montant_commission = calculer_commission(...) — taux de
       // l'apporteur référent s'il est renseigné (et configuré), sinon taux

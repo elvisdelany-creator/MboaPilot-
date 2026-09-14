@@ -843,6 +843,8 @@ describe("Module apporteur d'affaires (6.3)", () => {
 
     const famille = db.insert(schema.familleAbonnement).values({ libelle: "CANAL+" }).returning().get();
     const evasion = db.insert(schema.formule).values({ idFamille: famille.idFamille, libelle: "EVASION", prix: 10500, rang: 2 }).returning().get();
+    // 6.2 : "lorsqu'un kit CANAL+ est vendu" — condition du suivi de commission
+    const kit = db.insert(schema.kit).values({ idFamille: famille.idFamille, libelle: "KIT", reglePrix: "PRIX_FIXE", prixFixe: 10000 }).returning().get();
     const recrutement = await app.inject({
       method: "POST",
       url: "/api/v1/recrutements",
@@ -853,7 +855,8 @@ describe("Module apporteur d'affaires (6.3)", () => {
         aujourdHui: "2025-11-16",
         abonne: { nom: "Nga", prenom: "Paul", telephone: "690000000" },
         idFormule: evasion.idFormule,
-        montantEncaisse: 10500,
+        idKit: kit.idKit,
+        montantEncaisse: 20500, // 10500 (formule) + 10000 (kit)
         apporteurId: apporteur.idApporteur,
       },
     });
@@ -873,9 +876,9 @@ describe("Module apporteur d'affaires (6.3)", () => {
     expect(reglement.statusCode).toBe(201);
 
     const fiche = await app.inject({ method: "GET", url: `/api/v1/apporteurs/${apporteur.idApporteur}/fiche`, headers: authHeader(tokenAdmin) });
-    expect(fiche.json().montantCommissionConfirmee).toBe(5250); // 50 % de 10500
+    expect(fiche.json().montantCommissionConfirmee).toBe(10250); // 50 % de 20500
     expect(fiche.json().montantCommissionRegle).toBe(3000);
-    expect(fiche.json().soldeCommissionDu).toBe(2250);
+    expect(fiche.json().soldeCommissionDu).toBe(7250);
     expect(fiche.json().reglements).toHaveLength(1);
   });
 
@@ -972,6 +975,8 @@ describe("Module apporteur d'affaires (6.3)", () => {
     const tokenAdmin = await connecter(app, "admin1");
     const famille = db.insert(schema.familleAbonnement).values({ libelle: "CANAL+" }).returning().get();
     const evasion = db.insert(schema.formule).values({ idFamille: famille.idFamille, libelle: "EVASION", prix: 10500, rang: 2 }).returning().get();
+    // 6.2 : "lorsqu'un kit CANAL+ est vendu" — condition du suivi de commission
+    const kit = db.insert(schema.kit).values({ idFamille: famille.idFamille, libelle: "KIT", reglePrix: "PRIX_FIXE", prixFixe: 10000 }).returning().get();
 
     await app.inject({
       method: "PATCH",
@@ -984,7 +989,15 @@ describe("Module apporteur d'affaires (6.3)", () => {
       method: "POST",
       url: "/api/v1/recrutements",
       headers: authHeader(tokenAdmin),
-      payload: { siteId, userId, aujourdHui: "2025-11-16", abonne: { nom: "Nga", prenom: "Paul", telephone: "690000000" }, idFormule: evasion.idFormule, montantEncaisse: 10500 },
+      payload: {
+        siteId,
+        userId,
+        aujourdHui: "2025-11-16",
+        abonne: { nom: "Nga", prenom: "Paul", telephone: "690000000" },
+        idFormule: evasion.idFormule,
+        idKit: kit.idKit,
+        montantEncaisse: 20500, // 10500 (formule) + 10000 (kit)
+      },
     });
     expect(recrutement.statusCode).toBe(201);
 
@@ -993,7 +1006,7 @@ describe("Module apporteur d'affaires (6.3)", () => {
 
     const fiche = await app.inject({ method: "GET", url: `/api/v1/abonnes/${idAbonne}/fiche-360`, headers: authHeader(tokenAdmin) });
     expect(fiche.json().commissionsCanalplus).toHaveLength(1);
-    expect(fiche.json().commissionsCanalplus[0].montantCommission).toBe(1050); // 10 % de 10500
+    expect(fiche.json().commissionsCanalplus[0].montantCommission).toBe(2050); // 10 % de 20500
   });
 });
 

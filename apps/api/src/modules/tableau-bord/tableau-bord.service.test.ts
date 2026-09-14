@@ -27,6 +27,7 @@ let db: Db;
 let siteId: number;
 let userId: number;
 let idFormule: number;
+let idFamilleCanal: number;
 
 beforeEach(() => {
   db = creerDbTest();
@@ -38,6 +39,7 @@ beforeEach(() => {
     .returning()
     .get().idUser;
   const fam = db.insert(schema.familleAbonnement).values({ libelle: "CANAL+" }).returning().get();
+  idFamilleCanal = fam.idFamille;
   idFormule = db.insert(schema.formule).values({ idFamille: fam.idFamille, libelle: "EVASION", prix: 10500, rang: 2 }).returning().get().idFormule;
 });
 
@@ -121,13 +123,15 @@ describe("listerEncaissementsJour (8.6 : ventilation par mode de paiement)", () 
 describe("listerCommissionsCanalplusEnCours (8.6, 6.2)", () => {
   it("liste les commissions encore en période probatoire", () => {
     const apporteur = creerApporteur(db, { nom: "Jean Apporteur" });
+    const kit = db.insert(schema.kit).values({ idFamille: idFamilleCanal, libelle: "KIT", reglePrix: "PRIX_FIXE", prixFixe: 15000 }).returning().get();
     recruterAbonne(db, {
       siteId,
       userId,
       aujourdHui: AUJOURDHUI,
       abonne: { nom: "Nga", prenom: "Paul", telephone: "690000000" },
       idFormule,
-      montantEncaisse: 10500,
+      idKit: kit.idKit, // 6.2 : "lorsqu'un kit CANAL+ est vendu" — condition du suivi de commission
+      montantEncaisse: 25500,
       apporteurId: apporteur.idApporteur,
     });
 

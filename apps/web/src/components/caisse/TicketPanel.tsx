@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { ArrowUpCircle, FileText, Wrench } from "lucide-react";
-import { calculerPrixKit } from "@mboapilot/shared";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -8,6 +7,7 @@ import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
+import { calculerPrixKitSecurise } from "@/lib/prix-kit";
 import type { Abonne, CatalogueKit, ComptePartage, Formule, NouvelAbonne, ParcoursPaiementMobile } from "@/lib/types";
 
 // 3.2.2, 5.4.2 : option complémentaire compatible avec la formule
@@ -86,11 +86,12 @@ export function TicketPanel({
 }: Props) {
   const prixKit =
     kitSelectionne && formuleSelectionnee
-      ? calculerPrixKit(kitSelectionne, { idFormule: formuleSelectionnee.idFormule, prix: formuleSelectionnee.prix })
+      ? calculerPrixKitSecurise(kitSelectionne, { idFormule: formuleSelectionnee.idFormule, prix: formuleSelectionnee.prix })
       : 0;
+  const prixKitNonConfigure = kitSelectionne !== null && prixKit === null;
   const optionsSelectionnees = optionsCompatibles.filter((o) => idsOptionsSelectionnees.includes(o.idOption));
   const prixOptions = optionsSelectionnees.reduce((somme, o) => somme + o.prixApplique, 0);
-  const total = (formuleSelectionnee?.prix ?? 0) - remise + prixKit + prixOptions;
+  const total = (formuleSelectionnee?.prix ?? 0) - remise + (prixKit ?? 0) + prixOptions;
 
   function basculerOption(idOption: number) {
     onChangerOptionsSelectionnees(
@@ -115,6 +116,7 @@ export function TicketPanel({
 
   const pretAValider =
     Boolean(abonneSelectionne && formuleSelectionnee) &&
+    !prixKitNonConfigure &&
     !enCours &&
     (modePaiement === "CASH" ||
       (modePaiement === "CHEQUE" && banque.trim() && numeroCheque.trim() && titulaireCheque.trim() && dateCheque) ||
@@ -189,8 +191,15 @@ export function TicketPanel({
           {kitSelectionne && (
             <li className="flex items-center justify-between text-sm">
               <span className="text-card-foreground">{kitSelectionne.libelle}</span>
-              <span className="tabular-nums font-medium text-card-foreground">{formateurFcfa.format(prixKit)} FCFA</span>
+              <span className="tabular-nums font-medium text-card-foreground">
+                {prixKit !== null ? `${formateurFcfa.format(prixKit)} FCFA` : "Prix non configuré"}
+              </span>
             </li>
+          )}
+          {prixKitNonConfigure && (
+            <p className="text-xs text-destructive">
+              Prix non configuré pour ce kit sur cette formule — contactez un administrateur.
+            </p>
           )}
           {optionsSelectionnees.map((o) => (
             <li key={o.idOption} className="flex items-center justify-between text-sm">

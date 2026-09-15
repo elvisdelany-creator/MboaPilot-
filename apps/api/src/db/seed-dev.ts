@@ -22,9 +22,18 @@ const dstv = db.insert(schema.familleAbonnement).values({ libelle: "DSTV" }).ret
 
 const access = db.insert(schema.formule).values({ idFamille: canal.idFamille, libelle: "ACCESS", prix: 5000, rang: 1 }).returning().get();
 const evasion = db.insert(schema.formule).values({ idFamille: canal.idFamille, libelle: "EVASION", prix: 10500, rang: 2 }).returning().get();
+const accessPlus = db.insert(schema.formule).values({ idFamille: canal.idFamille, libelle: "ACCESS+", prix: 15000, rang: 3 }).returning().get();
 const tout = db.insert(schema.formule).values({ idFamille: canal.idFamille, libelle: "TOUT CANAL+", prix: 28000, rang: 4 }).returning().get();
 db.insert(schema.formule).values({ idFamille: dstv.idFamille, libelle: "YANGA", prix: 5000, rang: 1 }).run();
 db.insert(schema.formule).values({ idFamille: dstv.idFamille, libelle: "COMPAQ", prix: 13000, rang: 3 }).run();
+
+// 5.4.2 : "Option English Plus (formules ACCESS, EVASION) 5 000 FCFA" /
+// "(formule ACCESS+) 2 000 FCFA" — prix par défaut 5 000, surchargé à 2 000
+// sur ACCESS+ seulement.
+const englishPlus = db.insert(schema.optionComplement).values({ libelle: "Option English Plus", prix: 5000 }).returning().get();
+db.insert(schema.formuleOptionCompat).values({ idFormule: access.idFormule, idOption: englishPlus.idOption, prixSurcharge: null }).run();
+db.insert(schema.formuleOptionCompat).values({ idFormule: evasion.idFormule, idOption: englishPlus.idOption, prixSurcharge: null }).run();
+db.insert(schema.formuleOptionCompat).values({ idFormule: accessPlus.idFormule, idOption: englishPlus.idOption, prixSurcharge: 2000 }).run();
 
 const globalz = db
   .insert(schema.kit)

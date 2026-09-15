@@ -1,7 +1,7 @@
-import { calculerPrixKit } from "@mboapilot/shared";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { calculerPrixKitSecurise } from "@/lib/prix-kit";
 import type { CatalogueFamille, Formule } from "@/lib/types";
 
 interface Props {
@@ -84,25 +84,32 @@ export function GrilleArticles({
           <div className="grid grid-cols-2 gap-3 xl:grid-cols-3">
             {famille.kits.map((kit) => {
               const actif = kit.idKit === idKitSelectionne;
-              const prix = formuleSelectionnee ? calculerPrixKit(kit, { idFormule: formuleSelectionnee.idFormule, prix: formuleSelectionnee.prix }) : null;
+              const prix = formuleSelectionnee ? calculerPrixKitSecurise(kit, { idFormule: formuleSelectionnee.idFormule, prix: formuleSelectionnee.prix }) : null;
+              const nonConfigure = formuleSelectionnee !== null && prix === null;
               return (
                 <Card
                   key={kit.idKit}
                   role="button"
-                  tabIndex={0}
-                  onClick={() => onSelectionnerKit(actif ? null : kit.idKit)}
+                  tabIndex={nonConfigure ? -1 : 0}
+                  aria-disabled={nonConfigure}
+                  onClick={() => !nonConfigure && onSelectionnerKit(actif ? null : kit.idKit)}
                   onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") onSelectionnerKit(actif ? null : kit.idKit);
+                    if (!nonConfigure && (e.key === "Enter" || e.key === " ")) onSelectionnerKit(actif ? null : kit.idKit);
                   }}
                   className={cn(
-                    "min-h-20 cursor-pointer justify-center gap-1 border-2 p-4 text-center transition-colors",
+                    "min-h-20 justify-center gap-1 border-2 p-4 text-center transition-colors",
+                    nonConfigure ? "cursor-not-allowed opacity-50" : "cursor-pointer",
                     actif ? "border-accent bg-accent/5" : "border-transparent hover:border-border"
                   )}
                   aria-pressed={actif}
                 >
                   <span className="font-heading font-semibold text-card-foreground">{kit.libelle}</span>
                   <span className="text-lg font-semibold tabular-nums text-accent">
-                    {prix !== null ? `${formateurFcfa.format(prix)} FCFA` : "Choisir une formule"}
+                    {prix !== null
+                      ? `${formateurFcfa.format(prix)} FCFA`
+                      : formuleSelectionnee
+                        ? "Prix non configuré"
+                        : "Choisir une formule"}
                   </span>
                 </Card>
               );

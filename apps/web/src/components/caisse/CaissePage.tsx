@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { calculerPrixKit } from "@mboapilot/shared";
+import { calculerPrixKitSecurise } from "@/lib/prix-kit";
 import {
   chargerAbonnementsAbonne,
   chargerCatalogue,
@@ -260,13 +260,13 @@ export function CaissePage({ onNaviguer, abonneInitial, idFamilleInitiale }: Pro
   // ici pour que CaissePage puisse construire le récapitulatif imprimable
   const prixKit =
     kitSelectionne && formuleSelectionnee
-      ? calculerPrixKit(kitSelectionne, { idFormule: formuleSelectionnee.idFormule, prix: formuleSelectionnee.prix })
+      ? calculerPrixKitSecurise(kitSelectionne, { idFormule: formuleSelectionnee.idFormule, prix: formuleSelectionnee.prix })
       : 0;
   const remiseEffective = formuleSelectionnee ? Math.min(remise, formuleSelectionnee.prix) : 0;
-  const totalTicket = (formuleSelectionnee?.prix ?? 0) - remiseEffective + prixKit + prixOptions;
+  const totalTicket = (formuleSelectionnee?.prix ?? 0) - remiseEffective + (prixKit ?? 0) + prixOptions;
   const lignesTicket: LigneRecu[] = [
     ...(formuleSelectionnee ? [{ libelle: formuleSelectionnee.libelle, montant: formuleSelectionnee.prix - remiseEffective }] : []),
-    ...(kitSelectionne ? [{ libelle: kitSelectionne.libelle, montant: prixKit }] : []),
+    ...(kitSelectionne ? [{ libelle: kitSelectionne.libelle, montant: prixKit ?? 0 }] : []),
     ...optionsSelectionnees.map((o) => ({ libelle: o.libelle, montant: o.prixApplique })),
   ];
 

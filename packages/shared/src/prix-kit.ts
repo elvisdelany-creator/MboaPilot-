@@ -31,6 +31,9 @@ export function calculerPrixKit(kit: Kit, formuleChoisie: FormuleReference): num
       return kit.prixFixe;
     case "PRIX_DECODEUR_VARIABLE_SELON_FORMULE": {
       const prixDecodeur = kit.prixDecodeurParFormule[formuleChoisie.idFormule];
+      if (prixDecodeur === undefined) {
+        throw new Error(`Prix décodeur non configuré pour la formule ${formuleChoisie.idFormule}`);
+      }
       return prixDecodeur + kit.prixParaboleAccessoires + formuleChoisie.prix;
     }
     case "PRIX_KIT_FIXE_PAR_DIFFERENTIEL":

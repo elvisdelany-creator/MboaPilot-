@@ -3489,3 +3489,38 @@ describe("Impression ESC/POS du ticket de caisse (11.4, 6.7)", () => {
     expect(impression.statusCode).toBe(403);
   });
 });
+
+// 13.1 : "QR code de vérification sur factures et tickets... renvoyant vers
+// la fiche numérique de la facture (authenticité, état du dossier SAV)"
+describe("Fiche de vérification publique d'une facture (13.1)", () => {
+  it("consultable sans authentification avec le bon jeton", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const facture = db.insert(schema.facture).values({ siteId, statut: "VALIDEE", montantTotal: 7500, creePar: userId }).returning().get();
+
+    const reponse = await app.inject({ method: "GET", url: `/api/v1/verification/factures/${facture.idFacture}/${facture.jetonVerification}` });
+
+    expect(reponse.statusCode).toBe(200);
+    expect(reponse.json()).toMatchObject({ valide: true, facture: { idFacture: facture.idFacture, montantTotal: 7500 }, dossierSav: null });
+  });
+
+  it("rejette un jeton incorrect (404), sans jamais exposer la facture", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const facture = db.insert(schema.facture).values({ siteId, statut: "VALIDEE", montantTotal: 7500, creePar: userId }).returning().get();
+
+    const reponse = await app.inject({ method: "GET", url: `/api/v1/verification/factures/${facture.idFacture}/jeton-invente` });
+
+    expect(reponse.statusCode).toBe(404);
+    expect(reponse.json()).toEqual({ valide: false });
+  });
+
+  it("inclut le statut du dossier SAV quand la facture y est rattachée", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const facture = db.insert(schema.facture).values({ siteId, statut: "VALIDEE", montantTotal: 3000, creePar: userId }).returning().get();
+    const abonne = db.insert(schema.abonne).values({ siteId, nom: "Client", prenom: "Test", telephone: "690000000" }).returning().get();
+    db.insert(schema.savDossier).values({ siteId, idAbonne: abonne.idAbonne, descriptionPanne: "Panne", statut: "PRET", idFacture: facture.idFacture }).run();
+
+    const reponse = await app.inject({ method: "GET", url: `/api/v1/verification/factures/${facture.idFacture}/${facture.jetonVerification}` });
+
+    expect(reponse.json().dossierSav).toEqual({ statut: "PRET" });
+  });
+});

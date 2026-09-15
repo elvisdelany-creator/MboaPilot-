@@ -372,6 +372,8 @@ export function CaissePage({ onNaviguer, abonneInitial, idFamilleInitiale }: Pro
             montantTaxe: resultat.montantTaxe,
             modePaiement: "MOBILE_MONEY",
             dateHeure: new Date().toISOString(),
+            idFacture: resultat.idFacture,
+            jetonVerification: resultat.jetonVerification,
           },
         });
         return;
@@ -387,6 +389,8 @@ export function CaissePage({ onNaviguer, abonneInitial, idFamilleInitiale }: Pro
         modePaiement: paiement.mode,
         montantEncaisse: paiement.montant,
         dateHeure: new Date().toISOString(),
+        idFacture: resultat.idFacture,
+        jetonVerification: resultat.jetonVerification,
       });
       reinitialiserTicketProduits();
       // 5.2 : le stock vient peut-être d'être décrémenté — rafraîchit les quantités affichées
@@ -463,6 +467,8 @@ export function CaissePage({ onNaviguer, abonneInitial, idFamilleInitiale }: Pro
             montantTaxe: resultat.montantTaxe,
             modePaiement: "MOBILE_MONEY",
             dateHeure: new Date().toISOString(),
+            idFacture: resultat.idFacture,
+            jetonVerification: resultat.jetonVerification,
           },
         });
         return;
@@ -482,6 +488,8 @@ export function CaissePage({ onNaviguer, abonneInitial, idFamilleInitiale }: Pro
         modePaiement: paiement.mode,
         montantEncaisse: paiement.montant,
         dateHeure: new Date().toISOString(),
+        idFacture: resultat.idFacture,
+        jetonVerification: resultat.jetonVerification,
       });
       reinitialiserTicket();
     } catch (erreur) {

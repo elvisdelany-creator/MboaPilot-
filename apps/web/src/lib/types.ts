@@ -214,6 +214,8 @@ export interface NouvelAbonne {
 export interface RecrutementResultat {
   numeroAbonnement: number;
   idFacture: number;
+  // 13.1 : "QR code de vérification sur factures et tickets"
+  jetonVerification: string;
   statutFacture: "BROUILLON" | "VALIDEE";
   montantTaxe: number;
 }
@@ -252,6 +254,7 @@ export interface HistoriquePrixProduit {
 export interface EchangeMaterielResultat {
   idMateriel: number;
   idFacture: number;
+  jetonVerification: string;
   montantFacture: number;
   statutFacture: "BROUILLON" | "VALIDEE";
 }
@@ -259,6 +262,7 @@ export interface EchangeMaterielResultat {
 export interface ChangerFormuleResultat {
   numeroAbonnement: number;
   idFacture: number;
+  jetonVerification: string;
   montantDifferentiel: number;
   statutFacture: "BROUILLON" | "VALIDEE";
 }
@@ -317,6 +321,7 @@ export interface ChangerStatutSavResultat {
   idDossierSav: number;
   statut: StatutSav;
   idFacture: number | null;
+  jetonVerification: string | null;
   montantFacture: number | null;
   statutFacture: "BROUILLON" | "VALIDEE" | null;
 }
@@ -489,4 +494,20 @@ export interface CommissionCanalplusEnCours {
   commission: SuiviCommissionCanalplus;
   abonnement: Abonnement;
   abonne: Abonne;
+}
+
+// 13.1 : "QR code de vérification sur factures et tickets" — fiche publique
+// minimale (aucune donnée personnelle du client, aucun détail des lignes)
+export interface VerificationFacture {
+  valide: true;
+  facture: {
+    idFacture: number;
+    dateCreation: string;
+    type: "VENTE" | "AVOIR";
+    statut: "BROUILLON" | "VALIDEE";
+    montantTotal: number;
+  };
+  entreprise: { nom: string; devise: string };
+  site: { nom: string };
+  dossierSav: { statut: string } | null;
 }

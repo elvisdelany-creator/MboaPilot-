@@ -46,6 +46,9 @@ export interface RecruterAbonneParams {
 export interface RecrutementResultat {
   numeroAbonnement: number;
   idFacture: number;
+  // 13.1 : "QR code de vérification sur factures et tickets" — jeton de la
+  // facture nouvellement créée, transmis au ticket imprimé (RecuVentePrintable.tsx)
+  jetonVerification: string;
   statutFacture: "BROUILLON" | "VALIDEE";
   montantTaxe: number;
 }
@@ -217,5 +220,5 @@ export function recruterAbonne(db: Db, params: RecruterAbonneParams): Recrutemen
     }
   }
 
-  return { numeroAbonnement: abonnement.numeroAbonnement, idFacture: facture.idFacture, statutFacture, montantTaxe };
+  return { numeroAbonnement: abonnement.numeroAbonnement, idFacture: facture.idFacture, jetonVerification: facture.jetonVerification, statutFacture, montantTaxe };
 }

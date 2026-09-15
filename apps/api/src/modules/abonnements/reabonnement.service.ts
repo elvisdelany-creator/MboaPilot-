@@ -30,6 +30,8 @@ export interface ReabonnerParams {
 export interface ReabonnementResultat {
   numeroAbonnement: number;
   idFacture: number;
+  // 13.1 : "QR code de vérification" — voir recrutement.service.ts
+  jetonVerification: string;
   statutFacture: "BROUILLON" | "VALIDEE";
   montantTaxe: number;
 }
@@ -149,5 +151,5 @@ export function reabonner(db: Db, params: ReabonnerParams): ReabonnementResultat
     statutFacture = "VALIDEE";
   }
 
-  return { numeroAbonnement: params.numeroAbonnement, idFacture: facture.idFacture, statutFacture, montantTaxe };
+  return { numeroAbonnement: params.numeroAbonnement, idFacture: facture.idFacture, jetonVerification: facture.jetonVerification, statutFacture, montantTaxe };
 }

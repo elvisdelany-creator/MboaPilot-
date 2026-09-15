@@ -57,6 +57,9 @@ export interface ChangerStatutSavResultat {
   idDossierSav: number;
   statut: StatutSav;
   idFacture: number | null;
+  // 13.1 : "QR code de vérification" — voir recrutement.service.ts ; null
+  // tant qu'aucune facture n'a encore été générée (avant passage à PRET)
+  jetonVerification: string | null;
   montantFacture: number | null;
   statutFacture: "BROUILLON" | "VALIDEE" | null;
 }
@@ -83,6 +86,7 @@ export function changerStatutSav(
   }
 
   let idFacture = dossier.idFacture;
+  let jetonVerification: string | null = null;
   let montantFacture: number | null = null;
   let statutFacture: "BROUILLON" | "VALIDEE" | null = null;
 
@@ -110,6 +114,7 @@ export function changerStatutSav(
       .returning()
       .get();
     idFacture = facture.idFacture;
+    jetonVerification = facture.jetonVerification;
 
     for (const piece of pieces) {
       const produit = db.select().from(schema.produit).where(eq(schema.produit.idProduit, piece.idProduit)).get();
@@ -155,6 +160,7 @@ export function changerStatutSav(
 
   if (params.nouveauStatut === "LIVRE") {
     const facture = idFacture ? db.select().from(schema.facture).where(eq(schema.facture.idFacture, idFacture)).get() : undefined;
+    if (facture) jetonVerification = facture.jetonVerification;
     if (facture && facture.statut === "BROUILLON") {
       if (!params.montantEncaisse || params.montantEncaisse <= 0) {
         throw new Error("Un encaissement est requis pour restituer l'appareil (6.4)");
@@ -191,5 +197,5 @@ export function changerStatutSav(
     })
     .run();
 
-  return { idDossierSav: dossier.idDossierSav, statut: params.nouveauStatut, idFacture, montantFacture, statutFacture };
+  return { idDossierSav: dossier.idDossierSav, statut: params.nouveauStatut, idFacture, jetonVerification, montantFacture, statutFacture };
 }

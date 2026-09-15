@@ -11,6 +11,7 @@ import { StockPage } from "@/components/stock/StockPage";
 import { ClientsPage } from "@/components/clients/ClientsPage";
 import { AdministrationPage } from "@/components/administration/AdministrationPage";
 import { LicenceBanner } from "@/components/layout/LicenceBanner";
+import { VerificationFacturePage } from "@/components/verification/VerificationFacturePage";
 import type { Vue } from "@/components/layout/AppHeader";
 import type { Abonne, AbonnementExpire, AlerteEcheance, Produit } from "@/lib/types";
 
@@ -108,6 +109,12 @@ function ContenuAvecReset() {
 }
 
 function App() {
+  // 13.1 : fiche de vérification publique d'une facture (QR code) — en
+  // dehors du flux authentifié, avant tout accès à AuthProvider/la session
+  if (window.location.pathname.startsWith("/verification/")) {
+    return <VerificationFacturePage />;
+  }
+
   return (
     <AuthProvider>
       <ContenuAvecReset />

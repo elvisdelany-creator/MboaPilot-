@@ -2,6 +2,12 @@ import { sqliteTable, text, integer, primaryKey, index, uniqueIndex, type AnySQL
 import { sql } from "drizzle-orm";
 
 const now = sql`(datetime('now'))`;
+// 13.1 : "QR code de vérification sur factures et tickets" — jeton opaque
+// (128 bits) généré à la création de chaque facture, pour que la fiche de
+// vérification publique (verification.routes.ts) exige à la fois le numéro
+// de facture ET ce jeton, empêchant qu'une simple suite d'entiers (id_facture)
+// suffise à consulter la fiche de vérification d'une autre facture.
+const jetonAleatoire = sql`(lower(hex(randomblob(16))))`;
 
 // --- 3.2.1 Référentiel entreprise, sites et utilisateurs ---
 
@@ -375,6 +381,7 @@ export const facture = sqliteTable("facture", {
   montantTaxe: integer("montant_taxe").notNull().default(0),
   creePar: integer("cree_par").notNull().references(() => utilisateur.idUser),
   dateCreation: text("date_creation").notNull().default(now),
+  jetonVerification: text("jeton_verification").notNull().default(jetonAleatoire),
 });
 
 export const ligneVente = sqliteTable("ligne_vente", {

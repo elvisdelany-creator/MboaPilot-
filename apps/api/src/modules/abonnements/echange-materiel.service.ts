@@ -29,6 +29,8 @@ export interface EchangerMaterielParams {
 export interface EchangeMaterielResultat {
   idMateriel: number;
   idFacture: number;
+  // 13.1 : "QR code de vérification" — voir recrutement.service.ts
+  jetonVerification: string;
   montantFacture: number;
   statutFacture: "BROUILLON" | "VALIDEE";
   montantTaxe: number;
@@ -137,5 +139,12 @@ export function echangerMateriel(db: Db, params: EchangerMaterielParams): Echang
     statutFacture = "VALIDEE";
   }
 
-  return { idMateriel: nouveauMateriel.idMateriel, idFacture: facture.idFacture, montantFacture, statutFacture, montantTaxe };
+  return {
+    idMateriel: nouveauMateriel.idMateriel,
+    idFacture: facture.idFacture,
+    jetonVerification: facture.jetonVerification,
+    montantFacture,
+    statutFacture,
+    montantTaxe,
+  };
 }

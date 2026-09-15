@@ -1,6 +1,7 @@
 import { Printer, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import { QrCode } from "@/components/ui/qr-code";
 import type { InfosEntreprise } from "@/lib/types";
 
 export interface LigneRecu {
@@ -20,6 +21,10 @@ export interface RecuVente {
   modePaiement: "CASH" | "CHEQUE" | "VIREMENT" | "MOBILE_MONEY";
   montantEncaisse: number;
   dateHeure: string;
+  // 13.1 : "QR code de vérification sur factures et tickets" — identifiant
+  // et jeton de la facture réellement créée, pour construire l'URL publique
+  idFacture: number;
+  jetonVerification: string;
 }
 
 interface Props {
@@ -117,6 +122,13 @@ export function RecuVentePrintable({ infosEntreprise, logoUrl, recu, onNouvelleV
             <span className="tabular-nums">{formateurFcfa.format(soldeDu)}</span>
           </div>
         )}
+
+        <Separator />
+
+        <div className="flex flex-col items-center gap-1">
+          <QrCode valeur={`${window.location.origin}/verification/${recu.idFacture}/${recu.jetonVerification}`} taille={80} />
+          <p className="text-[10px] text-muted-foreground">Scanner pour vérifier ce document</p>
+        </div>
 
         <Separator />
 

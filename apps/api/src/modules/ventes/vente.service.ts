@@ -31,6 +31,8 @@ export interface CreerVenteProduitsParams {
 
 export interface VenteResultat {
   idFacture: number;
+  // 13.1 : "QR code de vérification" — voir recrutement.service.ts
+  jetonVerification: string;
   statutFacture: "BROUILLON" | "VALIDEE";
   montantTotal: number;
   montantTaxe: number;
@@ -108,5 +110,5 @@ export function creerVenteProduits(db: Db, params: CreerVenteProduitsParams): Ve
     statutFacture = "VALIDEE";
   }
 
-  return { idFacture: facture.idFacture, statutFacture, montantTotal, montantTaxe };
+  return { idFacture: facture.idFacture, jetonVerification: facture.jetonVerification, statutFacture, montantTotal, montantTaxe };
 }

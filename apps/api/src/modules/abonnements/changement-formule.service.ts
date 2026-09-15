@@ -28,6 +28,8 @@ export interface ChangerFormuleParams {
 export interface ChangerFormuleResultat {
   numeroAbonnement: number;
   idFacture: number;
+  // 13.1 : "QR code de vérification" — voir recrutement.service.ts
+  jetonVerification: string;
   montantDifferentiel: number;
   statutFacture: "BROUILLON" | "VALIDEE";
   montantTaxe: number;
@@ -122,5 +124,12 @@ export function changerFormule(db: Db, params: ChangerFormuleParams): ChangerFor
     statutFacture = "VALIDEE";
   }
 
-  return { numeroAbonnement: params.numeroAbonnement, idFacture: facture.idFacture, montantDifferentiel: validation.montantDifferentiel, statutFacture, montantTaxe };
+  return {
+    numeroAbonnement: params.numeroAbonnement,
+    idFacture: facture.idFacture,
+    jetonVerification: facture.jetonVerification,
+    montantDifferentiel: validation.montantDifferentiel,
+    statutFacture,
+    montantTaxe,
+  };
 }

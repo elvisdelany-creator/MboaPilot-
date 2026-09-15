@@ -24,6 +24,7 @@ import { registerLicenceRoutes } from "./modules/licence/licence.routes.js";
 import { obtenirOuCreerLicence, calculerEtatLicence } from "./modules/licence/licence.service.js";
 import { registerClotureCaisseRoutes } from "./modules/caisse/cloture-caisse.routes.js";
 import { registerImpressionRoutes } from "./modules/impression/impression.routes.js";
+import { registerVerificationRoutes } from "./modules/verification/verification.routes.js";
 import { ImprimanteReseauTcp } from "./modules/impression/imprimante-reseau-tcp.js";
 import type { FournisseurImpression } from "./modules/impression/fournisseur.js";
 
@@ -144,6 +145,8 @@ export function buildApp(db: Db, options: BuildAppOptions) {
   registerClotureCaisseRoutes(app, db, { authRequis, ventes, validationCloture });
   // 11.4, 6.7 : impression ESC/POS du ticket sur l'imprimante réseau du site, si configurée
   registerImpressionRoutes(app, db, fournisseurImpression, { authRequis, ventes });
+  // 13.1 : fiche de vérification publique d'une facture (QR code) — sans authentification
+  registerVerificationRoutes(app, db);
 
   return app;
 }

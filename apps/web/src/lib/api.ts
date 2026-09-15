@@ -41,6 +41,7 @@ import type {
   TypeProduit,
   Utilisateur,
   VentilationPaiement,
+  VerificationFacture,
 } from "./types";
 
 const BASE = "/api/v1";
@@ -308,6 +309,7 @@ export interface CreerVentePayload {
 
 export interface VenteResultat {
   idFacture: number;
+  jetonVerification: string;
   statutFacture: "BROUILLON" | "VALIDEE";
   montantTotal: number;
   montantTaxe: number;
@@ -1377,4 +1379,11 @@ export async function fermerCaisseRequete(
     body: JSON.stringify(payload),
   });
   return lireJson<FermerCaisseResultat>(reponse);
+}
+
+// 13.1 : fiche de vérification publique d'une facture (QR code) — aucune
+// authentification, appelée depuis VerificationFacturePage
+export async function chargerVerificationFacture(idFacture: number, jeton: string): Promise<VerificationFacture> {
+  const reponse = await fetch(`${BASE}/verification/factures/${idFacture}/${jeton}`);
+  return lireJson<VerificationFacture>(reponse);
 }

@@ -106,6 +106,7 @@ export function AdministrationPage({ onNaviguer }: Props) {
     try {
       await modifierCompteUtilisateurRequete(token, compte.idUser, { role });
       rechargerComptes();
+      rechargerJournal();
     } catch (erreur) {
       gererErreur(erreur, "Échec du changement de rôle.");
     }
@@ -116,6 +117,7 @@ export function AdministrationPage({ onNaviguer }: Props) {
       await modifierCompteUtilisateurRequete(token, compte.idUser, { actif: compte.actif !== 1 });
       toast.success(compte.actif === 1 ? `Compte « ${compte.identifiant} » désactivé.` : `Compte « ${compte.identifiant} » réactivé.`);
       rechargerComptes();
+      rechargerJournal();
     } catch (erreur) {
       gererErreur(erreur, "Échec de la mise à jour du compte.");
     }
@@ -291,7 +293,7 @@ export function AdministrationPage({ onNaviguer }: Props) {
         ouvert={nouveauCompteOuvert}
         sites={sites}
         onFerme={() => setNouveauCompteOuvert(false)}
-        onSucces={() => { setNouveauCompteOuvert(false); rechargerComptes(); }}
+        onSucces={() => { setNouveauCompteOuvert(false); rechargerComptes(); rechargerJournal(); }}
       />
 
       <NouveauSiteDialog

@@ -211,6 +211,13 @@
       "when": 1789424145296,
       "tag": "0029_awesome_oracle",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "6",
+      "when": 1789466846200,
+      "tag": "0030_chunky_crusher_hogan",
+      "breakpoints": true
     }
   ]
 }

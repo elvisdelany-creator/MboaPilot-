@@ -238,7 +238,7 @@ export function SavPage({ onNaviguer }: Props) {
                   <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Pièces affectées</p>
                   <ul className="space-y-1 text-sm text-card-foreground">
                     {detail.pieces.map((p) => (
-                      <li key={p.idPieceUtilisee}>Produit n° {p.idProduit} × {p.quantite}</li>
+                      <li key={p.idPieceUtilisee}>{p.libelleProduit ?? `Produit n° ${p.idProduit}`} × {p.quantite}</li>
                     ))}
                   </ul>
                 </div>

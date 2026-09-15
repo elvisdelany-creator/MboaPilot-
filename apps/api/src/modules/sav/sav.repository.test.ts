@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { creerDbTest, type Db } from "../../test-utils/db.js";
-import { creerDossierSav, listerDossiersSav, listerHistoriqueSav, trouverDossierSav } from "./sav.repository.js";
+import { creerDossierSav, listerDossiersSav, listerHistoriqueSav, listerPiecesUtilisees, trouverDossierSav } from "./sav.repository.js";
 import * as schema from "../../db/schema.js";
 
 let db: Db;
@@ -74,5 +74,25 @@ describe("listerDossiersSav / trouverDossierSav", () => {
 
     expect(listerDossiersSav(db, siteId)).toHaveLength(1);
     expect(trouverDossierSav(db, dossier.idDossierSav)?.idDossierSav).toBe(dossier.idDossierSav);
+  });
+});
+
+// 5.10 : "Pièces affectées" doit afficher le libellé de l'article, pas son id brut
+describe("listerPiecesUtilisees", () => {
+  it("retourne le libellé du produit affecté à chaque pièce", () => {
+    const dossier = creerDossierSav(db, { siteId, descriptionPanne: "Panne", sousGarantie: false, userId });
+    const produit = db
+      .insert(schema.produit)
+      .values({ siteId, type: "BIEN", libelle: "Télécommande universelle", prixVente: 2500 })
+      .returning()
+      .get();
+    db.insert(schema.savPieceUtilisee).values({ idDossierSav: dossier.idDossierSav, idProduit: produit.idProduit, quantite: 2 }).run();
+
+    const pieces = listerPiecesUtilisees(db, dossier.idDossierSav);
+
+    expect(pieces).toHaveLength(1);
+    expect(pieces[0].idProduit).toBe(produit.idProduit);
+    expect(pieces[0].quantite).toBe(2);
+    expect(pieces[0].libelleProduit).toBe("Télécommande universelle");
   });
 });

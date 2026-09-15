@@ -9,6 +9,7 @@ import { trouverApporteur } from "../apporteurs/apporteur.repository.js";
 import { trouverTauxCommissionVendeurParSite, trouverTauxTvaParSite } from "../entreprise/entreprise.repository.js";
 import { decrementerComposantsKit } from "../stock/stock.service.js";
 import { creerPaiement } from "../factures/paiement.repository.js";
+import { creerSuiviCommissionCanalplus } from "./suivi-commission-canalplus.repository.js";
 
 export interface RecruterAbonneParams {
   siteId: number;
@@ -177,6 +178,27 @@ export function recruterAbonne(db: Db, params: RecruterAbonneParams): Recrutemen
 
   let statutFacture: "BROUILLON" | "VALIDEE" = "BROUILLON";
 
+  // 6.2 : "lorsqu'un kit CANAL+ est vendu à l'occasion d'un recrutement...
+  // une commission est due" — uniquement un recrutement CANAL+ avec un kit
+  // effectivement vendu, jamais un réabonnement ni un recrutement sans kit
+  // (simple activation d'une formule sur un décodeur déjà possédé). Calculée
+  // dès maintenant (taux/montant ne dépendent pas du mode de paiement), mais
+  // seulement suivie "à la validation" de la facture — ci-dessous si
+  // l'encaissement est immédiat, ou plus tard via commission_canalplus_en_attente
+  // si différé (6.6, Mobile Money) : voir paiement-mobile.service.ts.
+  let commissionCanalplus: { montantCommission: number; dateFinProbatoire: string } | null = null;
+  if (famille?.libelle === LIBELLE_FAMILLE_CANALPLUS && kitRow) {
+    const dateFinProbatoire = calculerDateFin(dateDebut, DUREE_PROBATION_CANALPLUS_CYCLES, "STRICT_30J");
+    // 6.2, 8.8 : montant_commission = calculer_commission(...) — taux de
+    // l'apporteur référent s'il est renseigné (et configuré), sinon taux
+    // vendeur par défaut de l'entreprise ; 0 si rien n'est paramétré
+    const tauxPourMille =
+      (apporteurIdEffectif !== undefined ? trouverApporteur(db, apporteurIdEffectif)?.tauxCommissionDefaut : undefined) ??
+      trouverTauxCommissionVendeurParSite(db, params.siteId) ??
+      0;
+    commissionCanalplus = { montantCommission: Math.round((montantTotal * tauxPourMille) / 1000), dateFinProbatoire };
+  }
+
   // 6.4 : dès qu'un encaissement (même partiel) est enregistré, la facture devient VALIDEE
   if (params.montantEncaisse > 0) {
     creerPaiement(db, {
@@ -193,31 +215,30 @@ export function recruterAbonne(db: Db, params: RecruterAbonneParams): Recrutemen
     db.update(schema.facture).set({ statut: "VALIDEE" }).where(eq(schema.facture.idFacture, facture.idFacture)).run();
     statutFacture = "VALIDEE";
 
-    // 6.2 : "lorsqu'un kit CANAL+ est vendu à l'occasion d'un recrutement...
-    // une commission est due" — uniquement sur un recrutement CANAL+ validé
-    // (encaissé) avec un kit effectivement vendu, jamais un réabonnement ni
-    // un recrutement sans kit (simple activation d'une formule sur un
-    // décodeur déjà possédé par l'abonné, sans nouvel équipement facturé)
-    if (famille?.libelle === LIBELLE_FAMILLE_CANALPLUS && kitRow) {
-      const dateFinProbatoire = calculerDateFin(dateDebut, DUREE_PROBATION_CANALPLUS_CYCLES, "STRICT_30J");
-      // 6.2, 8.8 : montant_commission = calculer_commission(...) — taux de
-      // l'apporteur référent s'il est renseigné (et configuré), sinon taux
-      // vendeur par défaut de l'entreprise ; 0 si rien n'est paramétré
-      const tauxPourMille =
-        (apporteurIdEffectif !== undefined ? trouverApporteur(db, apporteurIdEffectif)?.tauxCommissionDefaut : undefined) ??
-        trouverTauxCommissionVendeurParSite(db, params.siteId) ??
-        0;
-      const montantCommission = Math.round((montantTotal * tauxPourMille) / 1000);
-      db.insert(schema.suiviCommissionCanalplus)
-        .values({
-          numeroAbonnement: abonnement.numeroAbonnement,
-          vendeurId: params.userId,
-          apporteurId: apporteurIdEffectif,
-          montantCommission,
-          dateFinProbatoire,
-        })
-        .run();
+    if (commissionCanalplus) {
+      creerSuiviCommissionCanalplus(db, {
+        numeroAbonnement: abonnement.numeroAbonnement,
+        vendeurId: params.userId,
+        apporteurId: apporteurIdEffectif,
+        montantCommission: commissionCanalplus.montantCommission,
+        dateFinProbatoire: commissionCanalplus.dateFinProbatoire,
+      });
     }
+  } else if (commissionCanalplus) {
+    // 6.6 : paiement différé (Mobile Money) — la facture reste BROUILLON
+    // pour l'instant ; le suivi réel n'est créé qu'à la confirmation du
+    // paiement (paiement-mobile.service.ts), jamais avant, pour ne jamais
+    // suivre une commission sur une vente qui ne s'est pas concrétisée.
+    db.insert(schema.commissionCanalplusEnAttente)
+      .values({
+        idFacture: facture.idFacture,
+        numeroAbonnement: abonnement.numeroAbonnement,
+        vendeurId: params.userId,
+        apporteurId: apporteurIdEffectif,
+        montantCommission: commissionCanalplus.montantCommission,
+        dateFinProbatoire: commissionCanalplus.dateFinProbatoire,
+      })
+      .run();
   }
 
   return { numeroAbonnement: abonnement.numeroAbonnement, idFacture: facture.idFacture, jetonVerification: facture.jetonVerification, statutFacture, montantTaxe };

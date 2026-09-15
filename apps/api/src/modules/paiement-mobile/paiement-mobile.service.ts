@@ -3,6 +3,7 @@ import { peutTransitionnerPaiementMobile } from "@mboapilot/shared";
 import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
 import type { FournisseurPaiementMobile, ParcoursPaiementMobile } from "./fournisseur.js";
+import { creerSuiviCommissionCanalplus } from "../abonnements/suivi-commission-canalplus.repository.js";
 
 const DELAI_EXPIRATION_MINUTES = 5; // délai de saisie de l'OTP (6.6)
 
@@ -99,6 +100,25 @@ export async function actualiserStatutTransaction(db: Db, fournisseur: Fournisse
         })
         .run();
       db.update(schema.facture).set({ statut: "VALIDEE" }).where(eq(schema.facture.idFacture, transaction.idFacture)).run();
+
+      // 6.2, 6.6 : promeut la commission CANAL+ calculée au recrutement
+      // (mise en attente car le paiement était différé) en un vrai suivi,
+      // maintenant que la facture est réellement VALIDEE.
+      const enAttente = db
+        .select()
+        .from(schema.commissionCanalplusEnAttente)
+        .where(eq(schema.commissionCanalplusEnAttente.idFacture, transaction.idFacture))
+        .get();
+      if (enAttente) {
+        creerSuiviCommissionCanalplus(db, {
+          numeroAbonnement: enAttente.numeroAbonnement,
+          vendeurId: enAttente.vendeurId,
+          apporteurId: enAttente.apporteurId ?? undefined,
+          montantCommission: enAttente.montantCommission,
+          dateFinProbatoire: enAttente.dateFinProbatoire,
+        });
+        db.delete(schema.commissionCanalplusEnAttente).where(eq(schema.commissionCanalplusEnAttente.idFacture, transaction.idFacture)).run();
+      }
     }
   }
 

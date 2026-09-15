@@ -233,6 +233,40 @@ describe("recruterAbonne (7.1)", () => {
     expect(suivis).toHaveLength(0);
   });
 
+  // 6.2, 6.6 : un paiement mobile n'encaisse rien à l'appel initial
+  // (montant_encaisse=0, la facture reste BROUILLON en attendant la
+  // confirmation asynchrone) — le suivi de commission ne doit donc pas être
+  // créé immédiatement (la vente n'est pas encore concrétisée), mais les
+  // éléments nécessaires à sa création différée doivent être conservés.
+  it("recrutement CANAL+ avec kit sans encaissement immédiat — commission mise en attente, pas créée directement", () => {
+    db.update(schema.entreprise).set({ tauxCommissionVendeurDefaut: 100 }).run(); // 10 %
+
+    const resultat = recruterAbonne(db, {
+      siteId,
+      userId,
+      aujourdHui: "2025-11-16",
+      abonne: { nom: "Nga Ndongo", prenom: "Valentin", telephone: "690000000" },
+      idFormule: formuleToutCanalPlus,
+      idKit: kitGlobalZ,
+      montantEncaisse: 0, // 6.6 : Mobile Money — encaissé plus tard, hors de cet appel
+    });
+
+    const suivis = db
+      .select()
+      .from(schema.suiviCommissionCanalplus)
+      .where(eq(schema.suiviCommissionCanalplus.numeroAbonnement, resultat.numeroAbonnement))
+      .all();
+    expect(suivis).toHaveLength(0);
+
+    const enAttente = db
+      .select()
+      .from(schema.commissionCanalplusEnAttente)
+      .where(eq(schema.commissionCanalplusEnAttente.idFacture, resultat.idFacture))
+      .get();
+    expect(enAttente?.montantCommission).toBe(5700); // 10 % de 57000 (montant_total)
+    expect(enAttente?.numeroAbonnement).toBe(resultat.numeroAbonnement);
+  });
+
   it("sans encaissement, la facture reste BROUILLON et aucun suivi de commission n'est créé", () => {
     const resultat = recruterAbonne(db, {
       siteId,

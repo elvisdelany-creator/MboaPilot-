@@ -288,6 +288,7 @@ export interface SavPieceUtilisee {
   idDossierSav: number;
   idProduit: number;
   quantite: number;
+  libelleProduit: string | null;
 }
 
 export interface SavHistoriqueEntree {

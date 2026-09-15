@@ -262,6 +262,22 @@ export const suiviCommissionCanalplus = sqliteTable("suivi_commission_canalplus"
   statut: text("statut", { enum: ["EN_COURS", "CONFIRMEE", "ANNULEE"] }).notNull().default("EN_COURS"),
 });
 
+// 6.2, 6.6 : "À la validation d'un recrutement CANAL+... le système crée
+// automatiquement un enregistrement de suivi de commission" — pour un
+// paiement différé (Mobile Money), la facture n'est pas encore VALIDEE au
+// moment du recrutement (montant_encaisse=0 à cet instant) ; ces éléments
+// calculés à cet instant patientent ici jusqu'à la confirmation du paiement
+// (paiement-mobile.service.ts), qui crée alors le vrai suivi_commission_canalplus
+// et supprime cette ligne. Jamais suivi si le paiement échoue/expire.
+export const commissionCanalplusEnAttente = sqliteTable("commission_canalplus_en_attente", {
+  idFacture: integer("id_facture").primaryKey().references(() => facture.idFacture),
+  numeroAbonnement: integer("numero_abonnement").notNull().references(() => abonnement.numeroAbonnement),
+  vendeurId: integer("vendeur_id").notNull().references(() => utilisateur.idUser),
+  apporteurId: integer("apporteur_id").references(() => sousDistributeur.idApporteur),
+  montantCommission: integer("montant_commission").notNull(),
+  dateFinProbatoire: text("date_fin_probatoire").notNull(),
+});
+
 // 6.3 : "historique de règlement de ses commissions" — trace les paiements
 // effectivement versés à l'apporteur, distincts du suivi CONFIRMEE/ANNULEE
 // (6.2) qui ne fait que constater qu'une commission est due. Le solde restant

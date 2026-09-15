@@ -46,8 +46,20 @@ export function listerDossiersSav(db: Db, siteId: number) {
   return db.select().from(schema.savDossier).where(eq(schema.savDossier.siteId, siteId)).all();
 }
 
+// 5.10 : enrichie du libellé du produit, affiché tel quel dans "Pièces affectées"
 export function listerPiecesUtilisees(db: Db, idDossierSav: number) {
-  return db.select().from(schema.savPieceUtilisee).where(eq(schema.savPieceUtilisee.idDossierSav, idDossierSav)).all();
+  return db
+    .select({
+      idPieceUtilisee: schema.savPieceUtilisee.idPieceUtilisee,
+      idDossierSav: schema.savPieceUtilisee.idDossierSav,
+      idProduit: schema.savPieceUtilisee.idProduit,
+      quantite: schema.savPieceUtilisee.quantite,
+      libelleProduit: schema.produit.libelle,
+    })
+    .from(schema.savPieceUtilisee)
+    .leftJoin(schema.produit, eq(schema.savPieceUtilisee.idProduit, schema.produit.idProduit))
+    .where(eq(schema.savPieceUtilisee.idDossierSav, idDossierSav))
+    .all();
 }
 
 export function listerHistoriqueSav(db: Db, idDossierSav: number) {

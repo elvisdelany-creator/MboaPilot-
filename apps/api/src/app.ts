@@ -4,7 +4,7 @@ import type { Db } from "./db/types.js";
 import { registerAbonnementsRoutes } from "./modules/abonnements/abonnements.routes.js";
 import { registerAbonnesRoutes } from "./modules/abonnes/abonnes.routes.js";
 import { registerCatalogueRoutes } from "./modules/catalogue/catalogue.routes.js";
-import { registerAuthPlugin, registerAuthRoutes, authRequis, exigerRole } from "./modules/auth/index.js";
+import { registerAuthPlugin, registerAuthRoutes, creerAuthRequis, exigerRole } from "./modules/auth/index.js";
 import { registerJobsRoutes } from "./modules/jobs/jobs.routes.js";
 import { registerProduitsRoutes } from "./modules/produits/produits.routes.js";
 import { registerSavRoutes } from "./modules/sav/sav.routes.js";
@@ -55,6 +55,7 @@ const PREFIXES_ECRITURE_TOUJOURS_AUTORISES = ["/api/v1/auth", "/api/v1/licence",
 export function buildApp(db: Db, options: BuildAppOptions) {
   const app = Fastify();
   registerAuthPlugin(app, options.jwtSecret);
+  const authRequis = creerAuthRequis(db);
   // 5.10 : téléversement des photos optionnelles du dossier SAV (multipart/form-data)
   app.register(multipart);
   registerAuthRoutes(app, db);

@@ -142,6 +142,45 @@ describe("Garde d'authentification (11.2 : RBAC de bout en bout, jamais uniqueme
 
     expect(reponse.statusCode).toBe(403);
   });
+
+  // 11.2 : "Désactiver" un compte (Administration) doit couper l'accès
+  // immédiatement — pas seulement empêcher une future connexion. Un jeton
+  // émis avant la désactivation ne doit plus jamais passer les gardes.
+  it("rejette un jeton dont le compte a été désactivé après son émission (401)", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const token = await connecter(app);
+
+    db.update(schema.utilisateur).set({ actif: 0 }).where(eq(schema.utilisateur.idUser, userId)).run();
+
+    const reponse = await app.inject({ method: "GET", url: "/api/v1/catalogue", headers: authHeader(token) });
+
+    expect(reponse.statusCode).toBe(401);
+  });
+
+  // 11.2 : un changement de rôle doit aussi s'appliquer immédiatement — le
+  // jeton ne doit jamais faire foi sur un rôle désormais périmé en base.
+  it("applique le rôle courant en base, pas celui figé dans le jeton, après un changement de rôle (403)", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const token = await connecter(app); // caissier1, rôle CAISSIER au moment de la connexion
+
+    db.update(schema.utilisateur).set({ role: "TECHNICIEN_SAV" }).where(eq(schema.utilisateur.idUser, userId)).run();
+
+    const reponse = await app.inject({
+      method: "POST",
+      url: "/api/v1/recrutements",
+      headers: authHeader(token),
+      payload: {
+        siteId,
+        userId,
+        aujourdHui: "2025-11-16",
+        abonne: { nom: "Nga Ndongo", prenom: "Valentin", telephone: "690000000" },
+        idFormule,
+        montantEncaisse: 13000,
+      },
+    });
+
+    expect(reponse.statusCode).toBe(403);
+  });
 });
 
 describe("POST /api/v1/recrutements", () => {

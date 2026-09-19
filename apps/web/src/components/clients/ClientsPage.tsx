@@ -613,18 +613,19 @@ export function ClientsPage({ onNaviguer, onReabonnerDepuisFiche }: Props) {
                   <ul className="space-y-2">
                     {fiche.notifications.map((n) => (
                       <li key={n.idNotification}>
-                        <Card className="flex-row items-center justify-between gap-3 p-3">
-                          <div className="flex items-center gap-2">
+                        <Card className="flex-row items-start justify-between gap-3 p-3">
+                          <div className="flex items-start gap-2">
                             {n.canal === "SMS" ? (
-                              <MessageSquare className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                              <MessageSquare className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
                             ) : (
-                              <Mail className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                              <Mail className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
                             )}
                             <div>
                               <p className="text-sm font-medium text-card-foreground">{LIBELLE_EVENEMENT_NOTIFICATION[n.evenement]}</p>
                               <p className="text-xs text-muted-foreground">
                                 {n.destinataire} · {formateurDateHeure.format(new Date(n.dateEnvoi))}
                               </p>
+                              <p className="mt-1 text-xs italic text-muted-foreground">« {n.message} »</p>
                             </div>
                           </div>
                           <Badge variant={n.statutEnvoi === "ENVOYEE" ? "secondary" : "destructive"} className="shrink-0">

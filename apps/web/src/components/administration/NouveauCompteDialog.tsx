@@ -1,11 +1,12 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { POLITIQUE_MDP_PAR_DEFAUT, validerMotDePasse, type PolitiqueMotDePasse } from "@mboapilot/shared";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { creerCompteUtilisateurRequete, ErreurAuthentification } from "@/lib/api";
+import { chargerInfosEntreprise, creerCompteUtilisateurRequete, ErreurAuthentification } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import type { Role, Site } from "@/lib/types";
 
@@ -40,6 +41,30 @@ export function NouveauCompteDialog({ ouvert, sites, onFerme, onSucces }: Props)
   const [role, setRole] = useState<Role>("CAISSIER");
   const [siteId, setSiteId] = useState<string>("");
   const [enCours, setEnCours] = useState(false);
+  const [politique, setPolitique] = useState<PolitiqueMotDePasse>(POLITIQUE_MDP_PAR_DEFAUT);
+
+  // 11.2, 8.8 : la politique de mot de passe est paramétrable — le formulaire
+  // annonce et vérifie celle de l'entreprise, jamais un seuil figé.
+  useEffect(() => {
+    if (!ouvert) return;
+    chargerInfosEntreprise(token)
+      .then((infos) =>
+        setPolitique({
+          longueurMin: infos.entreprise.politiqueMdpLongueurMin,
+          exigerMajuscule: infos.entreprise.politiqueMdpExigerMajuscule,
+          exigerChiffre: infos.entreprise.politiqueMdpExigerChiffre,
+          exigerCaractereSpecial: infos.entreprise.politiqueMdpExigerCaractereSpecial,
+        })
+      )
+      .catch(() => setPolitique(POLITIQUE_MDP_PAR_DEFAUT));
+  }, [ouvert, token]);
+
+  const exigencesMdp = [
+    `${politique.longueurMin} caractères minimum`,
+    ...(politique.exigerMajuscule ? ["une majuscule"] : []),
+    ...(politique.exigerChiffre ? ["un chiffre"] : []),
+    ...(politique.exigerCaractereSpecial ? ["un caractère spécial"] : []),
+  ].join(", ");
 
   function reinitialiser() {
     setNom("");
@@ -50,7 +75,7 @@ export function NouveauCompteDialog({ ouvert, sites, onFerme, onSucces }: Props)
     setSiteId("");
   }
 
-  const pretAValider = nom.trim() && prenom.trim() && identifiant.trim() && motDePasse.length >= 8;
+  const pretAValider = nom.trim() && prenom.trim() && identifiant.trim() && validerMotDePasse(motDePasse, politique).length === 0;
 
   async function valider() {
     if (!pretAValider) return;
@@ -103,8 +128,9 @@ export function NouveauCompteDialog({ ouvert, sites, onFerme, onSucces }: Props)
             <Input id="compte-identifiant" value={identifiant} onChange={(e) => setIdentifiant(e.target.value)} className="mt-1" />
           </div>
           <div>
-            <Label htmlFor="compte-mot-de-passe">Mot de passe (8 caractères minimum)</Label>
+            <Label htmlFor="compte-mot-de-passe">Mot de passe</Label>
             <Input id="compte-mot-de-passe" type="password" value={motDePasse} onChange={(e) => setMotDePasse(e.target.value)} className="mt-1" />
+            <p className="mt-1 text-xs text-muted-foreground">Exigé : {exigencesMdp}.</p>
           </div>
           <div>
             <Label htmlFor="compte-role">Rôle</Label>

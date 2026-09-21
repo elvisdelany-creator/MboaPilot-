@@ -142,6 +142,19 @@ describe("executerJobQuotidien — alertes J-7/J-3/J-1 (4.4)", () => {
     expect(notifications[0]).toMatchObject({ canal: "SMS", evenement: "ALERTE_ECHEANCE", statutEnvoi: "ENVOYEE", idAlerte: alerte?.idAlerte });
   });
 
+  // 8.3 : le client lit ce SMS — la date d'échéance s'écrit à la française
+  // (30/10/2025), jamais au format technique ISO (2025-10-30).
+  it("8.3 : le message de l'alerte donne la date d'échéance au format français", () => {
+    const abonne = creerAbonne("690000012");
+    creerAbonnement(abonne.idAbonne, "2025-10-01", "2025-10-30");
+
+    executerJobQuotidien(db, "2025-10-29");
+
+    const notification = db.select().from(schema.notification).where(eq(schema.notification.idAbonne, abonne.idAbonne)).get();
+    expect(notification?.message).toContain("30/10/2025");
+    expect(notification?.message).not.toContain("2025-10-30");
+  });
+
   it("4.4 : journalise un échec d'envoi sans faire échouer le job quand le fournisseur est en panne", () => {
     const abonne = creerAbonne("690000011");
     creerAbonnement(abonne.idAbonne, "2025-10-01", "2025-10-30");

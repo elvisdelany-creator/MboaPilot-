@@ -9,6 +9,12 @@ import { envoyerNotificationAbonne } from "../notifications/notification.service
 import { SimulateurNotification } from "../notifications/simulateur-notification.js";
 import type { FournisseurNotification } from "../notifications/fournisseur.js";
 
+// 8.3 : le message est lu par le client — "2026-09-23" devient "23/09/2026"
+function formaterDateFrancaise(dateIso: string): string {
+  const [annee, mois, jour] = dateIso.split("-");
+  return `${jour}/${mois}/${annee}`;
+}
+
 export interface JobQuotidienResultat {
   abonnementsExpires: number;
   alertesCreees: number;
@@ -85,7 +91,7 @@ export function executerJobQuotidien(
         const notifications = envoyerNotificationAbonne(db, fournisseurNotification, {
           idAbonne: abonnement.idAbonne,
           evenement: "ALERTE_ECHEANCE",
-          message: `Votre abonnement n°${abonnement.numeroAbonnement} arrive à échéance le ${abonnement.dateFin}. Pensez à vous réabonner.`,
+          message: `Votre abonnement n°${abonnement.numeroAbonnement} arrive à échéance le ${formaterDateFrancaise(abonnement.dateFin)}. Pensez à vous réabonner.`,
           idAlerte: alerte.idAlerte,
         });
         resultat.notificationsTentees += notifications.length;

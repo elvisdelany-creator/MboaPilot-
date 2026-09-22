@@ -5,6 +5,16 @@ import { listerProduits, creerProduit, modifierProduit, type CreerProduitInput }
 const COLONNES = ["Type", "Libelle", "Categorie", "PrixVente", "CoutRevient", "SuiviStock", "SeuilAlerte"] as const;
 const TYPES_VALIDES = ["BIEN", "SERVICE", "SAV", "KIT"] as const;
 
+// 8.2 : un tableur perd souvent les accents (copier-coller, encodage) — le
+// rapprochement par libellé doit rester insensible à la casse ET aux accents,
+// sinon une ligne retapée sans accent crée un doublon au lieu d'une mise à jour.
+function normaliserLibelle(libelle: string): string {
+  return libelle
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase();
+}
+
 // 8.2 : export de catalogue (CSV) — pour initialisation ou mise à jour
 // tarifaire en masse dans un tableur, puis réimport (voir importerCatalogueCsv).
 export function exporterCatalogueCsv(db: Db, siteId: number): string {
@@ -46,7 +56,7 @@ export function importerCatalogueCsv(db: Db, siteId: number, contenuCsv: string,
   }
 
   const produitsExistants = listerProduits(db, siteId);
-  const parLibelleMinuscule = new Map(produitsExistants.map((p) => [p.libelle.toLowerCase(), p]));
+  const parLibelleMinuscule = new Map(produitsExistants.map((p) => [normaliserLibelle(p.libelle), p]));
 
   const resultat: ResultatImportCsv = { crees: 0, misAJour: 0, erreurs: [] };
 
@@ -54,7 +64,7 @@ export function importerCatalogueCsv(db: Db, siteId: number, contenuCsv: string,
     const numeroLigne = index + 2; // +1 pour l'en-tête, +1 pour l'index 1-based
     try {
       const input = analyserLigneCsv(ligne);
-      const existant = parLibelleMinuscule.get(input.libelle.toLowerCase());
+      const existant = parLibelleMinuscule.get(normaliserLibelle(input.libelle));
       if (existant) {
         modifierProduit(db, existant.idProduit, {
           categorie: input.categorie,
@@ -66,7 +76,7 @@ export function importerCatalogueCsv(db: Db, siteId: number, contenuCsv: string,
         resultat.misAJour++;
       } else {
         const cree = creerProduit(db, { siteId, ...input });
-        parLibelleMinuscule.set(cree.libelle.toLowerCase(), cree);
+        parLibelleMinuscule.set(normaliserLibelle(cree.libelle), cree);
         resultat.crees++;
       }
     } catch (erreur) {

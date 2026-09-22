@@ -85,6 +85,19 @@ describe("importerCatalogueCsv (8.2)", () => {
     expect(resultat.crees).toBe(0);
   });
 
+  // 8.2 : un tableur (Excel, copier-coller) perd fréquemment les accents —
+  // sans normalisation, "Télécommande" et "Telecommande" créent deux fiches
+  // au lieu de mettre à jour la même, un doublon silencieux en boutique
+  it("associe une ligne à l'article existant par libellé, insensible aux accents", () => {
+    creerProduit(db, { siteId, type: "BIEN", libelle: "Télécommande", prixVente: 2500 });
+    const csv = "Type,Libelle,Categorie,PrixVente,CoutRevient,SuiviStock,SeuilAlerte\nBIEN,Telecommande,,3000,,0,";
+
+    const resultat = importerCatalogueCsv(db, siteId, csv, userId);
+
+    expect(resultat.misAJour).toBe(1);
+    expect(resultat.crees).toBe(0);
+  });
+
   it("rapporte une erreur par ligne invalide sans interrompre l'import des lignes valides", () => {
     const csv = [
       "Type,Libelle,Categorie,PrixVente,CoutRevient,SuiviStock,SeuilAlerte",

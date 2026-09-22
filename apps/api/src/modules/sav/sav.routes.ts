@@ -14,6 +14,7 @@ import {
 } from "./sav.repository.js";
 import { affecterPieceSav, changerStatutSav, type AffecterPieceParams, type ChangerStatutSavParams } from "./sav.service.js";
 import { enregistrerPhotoSav, listerPhotosSav, trouverPhotoSav } from "./sav-photo.service.js";
+import { listerPaiementsFacture } from "../factures/paiement.repository.js";
 
 function envoyerErreur(reply: import("fastify").FastifyReply, erreur: unknown) {
   const message = erreur instanceof Error ? erreur.message : "Erreur inconnue";
@@ -47,6 +48,9 @@ export function registerSavRoutes(app: FastifyInstance, db: Db, dossierPhotos: s
         pieces: listerPiecesUtilisees(db, idDossierSav),
         historique: listerHistoriqueSav(db, idDossierSav),
         facture: dossier.idFacture ? (trouverFactureSav(db, dossier.idFacture) ?? null) : null,
+        // 6.4 point 5, 9.4 : nécessaire pour calculer le solde restant dû après
+        // un encaissement partiel au passage en LIVRE (voir sav.service.ts)
+        paiements: dossier.idFacture ? listerPaiementsFacture(db, dossier.idFacture) : [],
         photos: listerPhotosSav(db, idDossierSav),
       });
     }

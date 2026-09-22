@@ -775,6 +775,67 @@ describe("Module SAV (5.10, 8.4)", () => {
     expect(corps.facture).toEqual(expect.objectContaining({ statut: "VALIDEE", montantTotal: 4000 }));
   });
 
+  // 6.4 point 5, 9.4 : un encaissement partiel au passage en LIVRE valide la
+  // facture (geste standard) mais laisse un solde dû — le détail du dossier
+  // doit exposer les paiements déjà reçus pour que le solde restant soit
+  // calculable, sans quoi il est impossible de savoir combien reste à percevoir.
+  it("expose les paiements reçus sur le dossier, pour calculer le solde restant après un encaissement partiel", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const token = await connecter(app);
+
+    const ouverture = await app.inject({
+      method: "POST",
+      url: "/api/v1/sav/dossiers",
+      headers: authHeader(token),
+      payload: { siteId, clientNom: "Cliente ponctuelle", clientTelephone: "677000000", descriptionPanne: "Panne", sousGarantie: false, userId },
+    });
+    const { idDossierSav } = ouverture.json();
+
+    await app.inject({
+      method: "POST",
+      url: `/api/v1/sav/dossiers/${idDossierSav}/statut`,
+      headers: authHeader(token),
+      payload: { nouveauStatut: "DIAGNOSTIC", userId },
+    });
+    await app.inject({
+      method: "POST",
+      url: `/api/v1/sav/dossiers/${idDossierSav}/statut`,
+      headers: authHeader(token),
+      payload: { nouveauStatut: "REPARATION", userId },
+    });
+    await app.inject({
+      method: "POST",
+      url: `/api/v1/sav/dossiers/${idDossierSav}/statut`,
+      headers: authHeader(token),
+      payload: { nouveauStatut: "PRET", montantMainOeuvre: 4000, userId },
+    });
+
+    const livre = await app.inject({
+      method: "POST",
+      url: `/api/v1/sav/dossiers/${idDossierSav}/statut`,
+      headers: authHeader(token),
+      payload: { nouveauStatut: "LIVRE", montantEncaisse: 1500, userId },
+    });
+    expect(livre.statusCode).toBe(200);
+    const idFacture = livre.json().idFacture as number;
+
+    const detail = await app.inject({ method: "GET", url: `/api/v1/sav/dossiers/${idDossierSav}`, headers: authHeader(token) });
+    const corps = detail.json();
+    expect(corps.paiements).toHaveLength(1);
+    expect(corps.paiements[0]).toEqual(expect.objectContaining({ idFacture, montant: 1500 }));
+
+    // le solde restant dû (4000 - 1500 = 2500) doit rester encaissable via le
+    // même geste d'encaissement complémentaire que pour une facture abonné (9.4)
+    const complement = await app.inject({
+      method: "POST",
+      url: `/api/v1/factures/${idFacture}/paiements`,
+      headers: authHeader(token),
+      payload: { userId, montant: 2500 },
+    });
+    expect(complement.statusCode).toBe(201);
+    expect(complement.json().soldeRestant).toBe(0);
+  });
+
   it("rejette un rôle non habilité (Comptable)", async () => {
     const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
     creerUtilisateur(db, { siteId, nom: "C", prenom: "D", identifiant: "compta1", motDePasse: "motdepasse-secret", role: "COMPTABLE" });

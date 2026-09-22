@@ -39,6 +39,10 @@ export function creerPaiement(db: Db, params: CreerPaiementParams) {
     .get();
 }
 
+export function listerPaiementsFacture(db: Db, idFacture: number) {
+  return db.select().from(schema.paiement).where(eq(schema.paiement.idFacture, idFacture)).all();
+}
+
 // 6.5 : confirmation manuelle du rapprochement bancaire d'un virement, une
 // fois le relevé de banque vérifié — geste réservé à l'encadrement/finance
 // (guard gestionRapprochement, app.ts), jamais automatique.

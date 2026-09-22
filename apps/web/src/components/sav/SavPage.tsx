@@ -12,6 +12,7 @@ import { Separator } from "@/components/ui/separator";
 import { NouveauDossierDialog } from "./NouveauDossierDialog";
 import { ChangerStatutDialog } from "./ChangerStatutDialog";
 import { AjouterPieceDialog } from "./AjouterPieceDialog";
+import { EncaisserSoldeDialog } from "@/components/clients/EncaisserSoldeDialog";
 import type { DossierSav, DossierSavDetaille } from "@/lib/types";
 
 interface Props {
@@ -66,6 +67,7 @@ export function SavPage({ onNaviguer }: Props) {
   const [nouveauOuvert, setNouveauOuvert] = useState(false);
   const [pieceOuvert, setPieceOuvert] = useState(false);
   const [statutCible, setStatutCible] = useState<StatutSav | null>(null);
+  const [soldeDialogOuvert, setSoldeDialogOuvert] = useState(false);
   // 5.10 : "photos optionnelles" du dossier SAV
   const [photoUrls, setPhotoUrls] = useState<Record<number, string>>({});
   const [televersementEnCours, setTeleversementEnCours] = useState(false);
@@ -136,6 +138,11 @@ export function SavPage({ onNaviguer }: Props) {
     detail !== null ? TOUS_LES_STATUTS.filter((s) => peutTransitionnerSav(detail.statut, s)) : [];
   const estTerminal = detail !== null && prochainesTransitions.length === 0;
   const peutAjouterPiece = detail !== null && !estTerminal && detail.statut !== "PRET" && detail.statut !== "LIVRE";
+  // 6.4 point 5, 9.4 : un encaissement partiel au passage en LIVRE laisse un
+  // solde dû — jamais visible tel quel dans facture.statut (VALIDEE dès le
+  // premier franc perçu), donc recalculé ici à partir des paiements reçus.
+  const totalPaye = detail?.paiements.reduce((total, p) => total + p.montant, 0) ?? 0;
+  const soldeRestant = detail?.facture ? detail.facture.montantTotal - totalPaye : 0;
 
   return (
     <div className="flex h-dvh flex-col bg-background">
@@ -227,9 +234,19 @@ export function SavPage({ onNaviguer }: Props) {
                   <div className="flex items-center justify-between text-sm font-medium">
                     <span>Facture</span>
                     <span className="tabular-nums text-primary">
-                      {formateurFcfa.format(detail.facture.montantTotal)} FCFA — {detail.facture.statut === "VALIDEE" ? "encaissée" : "en attente"}
+                      {formateurFcfa.format(detail.facture.montantTotal)} FCFA —{" "}
+                      {soldeRestant <= 0
+                        ? "encaissée"
+                        : totalPaye > 0
+                          ? `encaissement partiel, solde ${formateurFcfa.format(soldeRestant)} FCFA`
+                          : "en attente"}
                     </span>
                   </div>
+                )}
+                {detail.facture && soldeRestant > 0 && (
+                  <Button variant="outline" size="sm" className="cursor-pointer self-start" onClick={() => setSoldeDialogOuvert(true)}>
+                    Encaisser le solde
+                  </Button>
                 )}
               </Card>
 
@@ -328,6 +345,12 @@ export function SavPage({ onNaviguer }: Props) {
             statutCible={statutCible}
             onFerme={() => setStatutCible(null)}
             onSucces={() => { setStatutCible(null); rechargerDetail(detail.idDossierSav); rechargerListe(); }}
+          />
+          <EncaisserSoldeDialog
+            facture={soldeDialogOuvert ? detail.facture : null}
+            solde={soldeRestant}
+            onFerme={() => setSoldeDialogOuvert(false)}
+            onSucces={() => { setSoldeDialogOuvert(false); rechargerDetail(detail.idDossierSav); }}
           />
         </>
       )}

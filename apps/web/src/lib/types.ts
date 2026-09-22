@@ -315,6 +315,9 @@ export interface DossierSavDetaille extends DossierSav {
   pieces: SavPieceUtilisee[];
   historique: SavHistoriqueEntree[];
   facture: { idFacture: number; statut: "BROUILLON" | "VALIDEE"; montantTotal: number } | null;
+  // 6.4 point 5, 9.4 : pour calculer le solde restant dû après un
+  // encaissement partiel au passage en LIVRE
+  paiements: Paiement[];
   photos: SavPhoto[];
 }
 

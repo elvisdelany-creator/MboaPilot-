@@ -8,10 +8,11 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { encaisserSoldeFactureRequete, ErreurAuthentification, type ModePaiementEncaissement } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
-import type { Facture } from "@/lib/types";
 
 interface Props {
-  facture: Facture | null;
+  // 6.4 point 5, 9.4 : réutilisé pour n'importe quelle facture (fiche client
+  // abonné comme dossier SAV client ponctuel) — seul idFacture est nécessaire.
+  facture: { idFacture: number } | null;
   solde: number;
   onFerme: () => void;
   onSucces: () => void;

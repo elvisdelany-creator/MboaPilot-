@@ -24,6 +24,21 @@ export interface KitDifferentiel {
 
 export type Kit = KitPrixFixe | KitDecodeurVariable | KitDifferentiel;
 
+// 5.1.1 : les kits à décodeur variable ou à différentiel embarquent leur
+// formule de départ ("prix_kit = ... + prix_formule_choisie") ; un kit à
+// PRIX_FIXE (StarTimes, 24H Sport, Moreplex) a un prix qui "n'évolue pas avec
+// la formule" et ne l'embarque donc pas.
+export function kitEmbarqueFormule(kit: Kit): boolean {
+  return kit.reglePrix !== "PRIX_FIXE";
+}
+
+// Part du prix du kit à facturer EN PLUS de la ligne formule : le matériel
+// seul, pour que formule + kit ne compte jamais la formule deux fois.
+export function calculerPrixKitHorsFormule(kit: Kit, formuleChoisie: FormuleReference): number {
+  const prixKit = calculerPrixKit(kit, formuleChoisie);
+  return kitEmbarqueFormule(kit) ? prixKit - formuleChoisie.prix : prixKit;
+}
+
 // 5.1.1 : le prix d'un kit dépend de la formule choisie selon la règle du kit
 export function calculerPrixKit(kit: Kit, formuleChoisie: FormuleReference): number {
   switch (kit.reglePrix) {

@@ -7,7 +7,7 @@ import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { calculerPrixKitSecurise } from "@/lib/prix-kit";
+import { calculerPrixKitHorsFormuleSecurise } from "@/lib/prix-kit";
 import type { Abonne, CatalogueKit, ComptePartage, Formule, NouvelAbonne, ParcoursPaiementMobile } from "@/lib/types";
 
 // 3.2.2, 5.4.2 : option complémentaire compatible avec la formule
@@ -84,14 +84,14 @@ export function TicketPanel({
   onChangerFormule,
   onImprimerProForma,
 }: Props) {
-  const prixKit =
+  const prixKitHorsFormule =
     kitSelectionne && formuleSelectionnee
-      ? calculerPrixKitSecurise(kitSelectionne, { idFormule: formuleSelectionnee.idFormule, prix: formuleSelectionnee.prix })
+      ? calculerPrixKitHorsFormuleSecurise(kitSelectionne, { idFormule: formuleSelectionnee.idFormule, prix: formuleSelectionnee.prix })
       : 0;
-  const prixKitNonConfigure = kitSelectionne !== null && prixKit === null;
+  const prixKitNonConfigure = kitSelectionne !== null && prixKitHorsFormule === null;
   const optionsSelectionnees = optionsCompatibles.filter((o) => idsOptionsSelectionnees.includes(o.idOption));
   const prixOptions = optionsSelectionnees.reduce((somme, o) => somme + o.prixApplique, 0);
-  const total = (formuleSelectionnee?.prix ?? 0) - remise + (prixKit ?? 0) + prixOptions;
+  const total = (formuleSelectionnee?.prix ?? 0) - remise + (prixKitHorsFormule ?? 0) + prixOptions;
 
   function basculerOption(idOption: number) {
     onChangerOptionsSelectionnees(
@@ -190,9 +190,9 @@ export function TicketPanel({
           )}
           {kitSelectionne && (
             <li className="flex items-center justify-between text-sm">
-              <span className="text-card-foreground">{kitSelectionne.libelle}</span>
+              <span className="text-card-foreground">{kitSelectionne.libelle} — matériel</span>
               <span className="tabular-nums font-medium text-card-foreground">
-                {prixKit !== null ? `${formateurFcfa.format(prixKit)} FCFA` : "Prix non configuré"}
+                {prixKitHorsFormule !== null ? `${formateurFcfa.format(prixKitHorsFormule)} FCFA` : "Prix non configuré"}
               </span>
             </li>
           )}

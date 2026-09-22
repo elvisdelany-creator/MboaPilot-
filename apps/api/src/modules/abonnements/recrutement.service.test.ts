@@ -83,7 +83,9 @@ describe("recruterAbonne (7.1)", () => {
       abonne: { nom: "Nga Ndongo", prenom: "Valentin", telephone: "690000000" },
       idFormule: formuleToutCanalPlus,
       idKit: kitGlobalZ,
-      montantEncaisse: 57000, // 28000 (formule) + 29000 (kit : 1000 + 0 + 28000)
+      // 5.1.1 : le kit embarque sa formule de départ — prix du kit = 1000 (décodeur)
+      // + 0 + 28000 (formule) = 29000, et c'est tout ce que le client paie
+      montantEncaisse: 29000,
     });
 
     expect(resultat.statutFacture).toBe("VALIDEE");
@@ -99,16 +101,18 @@ describe("recruterAbonne (7.1)", () => {
 
     const facture = db.select().from(schema.facture).where(eq(schema.facture.idFacture, resultat.idFacture)).get();
     expect(facture?.statut).toBe("VALIDEE");
-    expect(facture?.montantTotal).toBe(57000);
+    expect(facture?.montantTotal).toBe(29000);
 
+    // les lignes se répartissent sans double compte : formule 28000 + matériel
+    // du kit (prix du kit hors formule incluse) 1000 = total facture
     const lignes = db.select().from(schema.ligneVente).where(eq(schema.ligneVente.idFacture, resultat.idFacture)).all();
     expect(lignes).toHaveLength(2);
-    expect(lignes.some((l) => l.idKit === kitGlobalZ && l.prixApplique === 29000)).toBe(true);
+    expect(lignes.some((l) => l.idKit === kitGlobalZ && l.prixApplique === 1000)).toBe(true);
     expect(lignes.some((l) => l.numeroAbonnement === resultat.numeroAbonnement && l.prixApplique === 28000)).toBe(true);
 
     const paiements = db.select().from(schema.paiement).where(eq(schema.paiement.idFacture, resultat.idFacture)).all();
     expect(paiements).toHaveLength(1);
-    expect(paiements[0].montant).toBe(57000);
+    expect(paiements[0].montant).toBe(29000);
 
     const suivis = db
       .select()
@@ -117,7 +121,7 @@ describe("recruterAbonne (7.1)", () => {
       .all();
     expect(suivis).toHaveLength(1);
     expect(suivis[0].statut).toBe("EN_COURS");
-    expect(suivis[0].montantCommission).toBe(5700); // 10 % de 57000 (montant_total)
+    expect(suivis[0].montantCommission).toBe(2900); // 10 % de 29000 (montant_total)
     // 6.2 : période probatoire de 4 mois (119 jours) à partir du recrutement
     expect(suivis[0].dateFinProbatoire).toBe("2026-03-15");
   });
@@ -179,7 +183,7 @@ describe("recruterAbonne (7.1)", () => {
       abonne: { nom: "Nga Ndongo", prenom: "Valentin", telephone: "690000000" },
       idFormule: formuleToutCanalPlus,
       idKit: kitGlobalZ, // 6.2 : "lorsqu'un kit CANAL+ est vendu" — condition du suivi de commission
-      montantEncaisse: 57000, // 28000 (formule) + 29000 (kit)
+      montantEncaisse: 29000, // prix du kit (formule incluse)
       apporteurId: apporteur.idApporteur,
     });
 
@@ -188,7 +192,7 @@ describe("recruterAbonne (7.1)", () => {
       .from(schema.suiviCommissionCanalplus)
       .where(eq(schema.suiviCommissionCanalplus.numeroAbonnement, resultat.numeroAbonnement))
       .get();
-    expect(suivi?.montantCommission).toBe(11400); // 20 % de 57000, pas 10 %
+    expect(suivi?.montantCommission).toBe(5800); // 20 % de 29000, pas 10 %
   });
 
   it("sans aucun taux configuré (ni apporteur, ni vendeur par défaut), la commission est nulle", () => {
@@ -199,7 +203,7 @@ describe("recruterAbonne (7.1)", () => {
       abonne: { nom: "Nga Ndongo", prenom: "Valentin", telephone: "690000000" },
       idFormule: formuleToutCanalPlus,
       idKit: kitGlobalZ,
-      montantEncaisse: 57000,
+      montantEncaisse: 29000,
     });
 
     const suivi = db
@@ -263,7 +267,7 @@ describe("recruterAbonne (7.1)", () => {
       .from(schema.commissionCanalplusEnAttente)
       .where(eq(schema.commissionCanalplusEnAttente.idFacture, resultat.idFacture))
       .get();
-    expect(enAttente?.montantCommission).toBe(5700); // 10 % de 57000 (montant_total)
+    expect(enAttente?.montantCommission).toBe(2900); // 10 % de 29000 (montant_total)
     expect(enAttente?.numeroAbonnement).toBe(resultat.numeroAbonnement);
   });
 
@@ -296,16 +300,44 @@ describe("recruterAbonne (7.1)", () => {
       abonne: { nom: "Mballa", prenom: "Sylvie", telephone: "691111111" },
       idFormule: formuleDstvCompaq,
       idKit: kitDstvCompaq,
-      montantEncaisse: 68000, // 13000 (formule COMPAQ) + 55000 (kit, base COMPAQ = pas de différentiel)
+      montantEncaisse: 55000, // 5.5 : "décodeur + installation + formule COMPAQ" = 55000, formule incluse
     });
 
     expect(resultat.statutFacture).toBe("VALIDEE");
+    const facture = db.select().from(schema.facture).where(eq(schema.facture.idFacture, resultat.idFacture)).get();
+    expect(facture?.montantTotal).toBe(55000);
     const suivis = db
       .select()
       .from(schema.suiviCommissionCanalplus)
       .where(eq(schema.suiviCommissionCanalplus.numeroAbonnement, resultat.numeroAbonnement))
       .all();
     expect(suivis).toHaveLength(0);
+  });
+
+  // 5.1.1 : "PRIX_FIXE pour les kits StarTimes/24H Sport/Moreplex dont le prix
+  // n'évolue pas avec la formule" — il n'embarque pas la formule, qui se paie
+  // en plus (contrairement aux kits à décodeur variable ou à différentiel)
+  it("recrutement avec un kit à prix fixe : la formule se paie en plus du kit", () => {
+    const kitPrixFixe = db
+      .insert(schema.kit)
+      .values({ idFamille: familleCanalPlus, libelle: "KIT PRIX FIXE", reglePrix: "PRIX_FIXE", prixFixe: 18000 })
+      .returning()
+      .get().idKit;
+
+    const resultat = recruterAbonne(db, {
+      siteId,
+      userId,
+      aujourdHui: "2025-11-16",
+      abonne: { nom: "Mballa", prenom: "Sylvie", telephone: "691111111" },
+      idFormule: formuleToutCanalPlus,
+      idKit: kitPrixFixe,
+      montantEncaisse: 46000, // 28000 (formule) + 18000 (kit)
+    });
+
+    const facture = db.select().from(schema.facture).where(eq(schema.facture.idFacture, resultat.idFacture)).get();
+    expect(facture?.montantTotal).toBe(46000);
+    const lignes = db.select().from(schema.ligneVente).where(eq(schema.ligneVente.idFacture, resultat.idFacture)).all();
+    expect(lignes.some((l) => l.idKit === kitPrixFixe && l.prixApplique === 18000)).toBe(true);
   });
 
   it("recrutement pour un abonné déjà existant : aucune nouvelle fiche abonné créée", () => {
@@ -534,7 +566,7 @@ describe("recruterAbonne — compte partagé streaming (5.9)", () => {
       abonne: { nom: "Nga", prenom: "Paul", telephone: "690000000" },
       idFormule: formuleToutCanalPlus,
       idKit: kitGlobalZ,
-      montantEncaisse: 54000, // 25000 (formule après remise) + 29000 (kit)
+      montantEncaisse: 26000, // 29000 (kit, formule incluse) - 3000 de remise
       remise: 3000, // 28000 -> 25000
     });
 
@@ -543,7 +575,7 @@ describe("recruterAbonne — compte partagé streaming (5.9)", () => {
       .from(schema.suiviCommissionCanalplus)
       .where(eq(schema.suiviCommissionCanalplus.numeroAbonnement, resultat.numeroAbonnement))
       .get();
-    expect(suivi?.montantCommission).toBe(5400); // 10 % de 54000 (25000 formule remisée + 29000 kit), pas de 57000
+    expect(suivi?.montantCommission).toBe(2600); // 10 % de 26000 (29000 kit remisé de 3000), pas de 29000
   });
 });
 
@@ -636,7 +668,7 @@ describe("recruterAbonne — matériel installé (3.2.2, 7.1)", () => {
       idFormule: formuleToutCanalPlus,
       idKit: kitGlobalZ,
       numeroSerie: "SN-GLOBALZ-001",
-      montantEncaisse: 57000,
+      montantEncaisse: 29000,
     });
 
     const materiels = db.select().from(schema.materielAbonne).where(eq(schema.materielAbonne.numeroAbonnement, resultat.numeroAbonnement)).all();

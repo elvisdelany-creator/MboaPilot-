@@ -1,5 +1,5 @@
 import { and, eq } from "drizzle-orm";
-import { calculerDateFin, calculerPrixKit, extraireTaxeDuTTC, peutAffecterEcran } from "@mboapilot/shared";
+import { calculerDateFin, calculerPrixKitHorsFormule, extraireTaxeDuTTC, peutAffecterEcran } from "@mboapilot/shared";
 import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
 import { creerAbonne, type AbonneInput } from "../abonnes/abonne.repository.js";
@@ -117,11 +117,13 @@ export function recruterAbonne(db: Db, params: RecruterAbonneParams): Recrutemen
     .get();
 
   let kitRow: typeof schema.kit.$inferSelect | undefined;
-  let prixKit = 0;
+  // 5.1.1 : part matériel du kit — le kit embarque sa formule de départ (sauf
+  // PRIX_FIXE), qui figure déjà sur la ligne formule : jamais comptée deux fois
+  let prixKitHorsFormule = 0;
   if (params.idKit !== undefined) {
     kitRow = db.select().from(schema.kit).where(eq(schema.kit.idKit, params.idKit)).get();
     if (!kitRow) throw new Error(`Kit ${params.idKit} introuvable`);
-    prixKit = calculerPrixKit(construireKitCalcul(db, kitRow), { idFormule: formule.idFormule, prix: formule.prix });
+    prixKitHorsFormule = calculerPrixKitHorsFormule(construireKitCalcul(db, kitRow), { idFormule: formule.idFormule, prix: formule.prix });
   }
 
   // 3.2.2, 5.4.2 : "Complément payant rattachable à une ou plusieurs
@@ -141,8 +143,10 @@ export function recruterAbonne(db: Db, params: RecruterAbonneParams): Recrutemen
   });
   const prixOptions = optionsAppliquees.reduce((total, o) => total + o.prixApplique, 0);
 
+  // La ligne formule garde son prix (CA par famille, remise 6.4) et la ligne
+  // kit ne porte que le matériel : la somme des lignes égale le total facturé.
   const prixFormuleApplique = formule.prix - remise;
-  const montantTotal = prixFormuleApplique + prixKit + prixOptions;
+  const montantTotal = prixFormuleApplique + prixKitHorsFormule + prixOptions;
 
   // 3.2.3, 6.1, 8.8 : "porte le total, la TVA/taxes le cas échéant" — figée
   // au taux en vigueur à cet instant, jamais recalculée après coup
@@ -159,7 +163,7 @@ export function recruterAbonne(db: Db, params: RecruterAbonneParams): Recrutemen
     .run();
 
   if (kitRow) {
-    db.insert(schema.ligneVente).values({ idFacture: facture.idFacture, idKit: kitRow.idKit, prixApplique: prixKit }).run();
+    db.insert(schema.ligneVente).values({ idFacture: facture.idFacture, idKit: kitRow.idKit, prixApplique: prixKitHorsFormule }).run();
     // 5.1, 5.2 : le kit est un "produit composé" — décrémente le stock de chacun de ses composants
     decrementerComposantsKit(db, { idKit: kitRow.idKit, siteId: params.siteId, userId: params.userId });
     // 3.2.2, 7.1 : matériel effectivement installé (décodeur/carte d'accès)

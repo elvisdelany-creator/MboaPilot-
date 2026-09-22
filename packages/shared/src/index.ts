@@ -8,7 +8,7 @@ export {
   type JalonDetecte,
   type JalonsAlerte,
 } from "./alertes-echeance.js";
-export { calculerPrixKit, type Kit, type FormuleReference } from "./prix-kit.js";
+export { calculerPrixKit, calculerPrixKitHorsFormule, type Kit, type FormuleReference } from "./prix-kit.js";
 export { evaluerSuiviCommission, type StatutCommission } from "./suivi-commission.js";
 export { peutTransitionnerSav, type StatutSav } from "./statut-sav.js";
 export { calculerCoutMoyenPondere } from "./cout-moyen-pondere.js";

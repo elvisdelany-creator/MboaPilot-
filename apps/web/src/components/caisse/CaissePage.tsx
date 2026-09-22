@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { calculerPrixKitSecurise } from "@/lib/prix-kit";
+import { calculerPrixKitHorsFormuleSecurise } from "@/lib/prix-kit";
 import {
   chargerAbonnementsAbonne,
   chargerCatalogue,
@@ -258,15 +258,15 @@ export function CaissePage({ onNaviguer, abonneInitial, idFamilleInitiale }: Pro
 
   // 6.7 : base du ticket / pro-forma — même calcul que TicketPanel, dupliqué
   // ici pour que CaissePage puisse construire le récapitulatif imprimable
-  const prixKit =
+  const prixKitHorsFormule =
     kitSelectionne && formuleSelectionnee
-      ? calculerPrixKitSecurise(kitSelectionne, { idFormule: formuleSelectionnee.idFormule, prix: formuleSelectionnee.prix })
+      ? calculerPrixKitHorsFormuleSecurise(kitSelectionne, { idFormule: formuleSelectionnee.idFormule, prix: formuleSelectionnee.prix })
       : 0;
   const remiseEffective = formuleSelectionnee ? Math.min(remise, formuleSelectionnee.prix) : 0;
-  const totalTicket = (formuleSelectionnee?.prix ?? 0) - remiseEffective + (prixKit ?? 0) + prixOptions;
+  const totalTicket = (formuleSelectionnee?.prix ?? 0) - remiseEffective + (prixKitHorsFormule ?? 0) + prixOptions;
   const lignesTicket: LigneRecu[] = [
     ...(formuleSelectionnee ? [{ libelle: formuleSelectionnee.libelle, montant: formuleSelectionnee.prix - remiseEffective }] : []),
-    ...(kitSelectionne ? [{ libelle: kitSelectionne.libelle, montant: prixKit ?? 0 }] : []),
+    ...(kitSelectionne ? [{ libelle: `${kitSelectionne.libelle} — matériel`, montant: prixKitHorsFormule ?? 0 }] : []),
     ...optionsSelectionnees.map((o) => ({ libelle: o.libelle, montant: o.prixApplique })),
   ];
 

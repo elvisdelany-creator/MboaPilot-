@@ -194,8 +194,8 @@ export const kitPrixDecodeur = sqliteTable("kit_prix_decodeur", {
 // 5.9 : compte fournisseur mutualisé (Netflix, Prime Vidéo, IPTV…) — plusieurs
 // abonnés MboaPilot occupent chacun un « écran »/profil de ce même compte,
 // avec leur propre date d'expiration individuelle (portée par abonnement.dateFin).
-// Identifiants stockés en clair (pas de coffre-fort de secrets en mode local) —
-// visibilité restreinte aux rôles habilités à la vente au niveau applicatif (11.2).
+// Identifiants chiffrés au repos (AES-256-GCM, voir config/chiffrement.ts) —
+// visibilité en clair restreinte aux rôles habilités à la vente au niveau applicatif (11.2).
 export const comptePartageStreaming = sqliteTable("compte_partage_streaming", {
   idComptePartage: integer("id_compte_partage").primaryKey({ autoIncrement: true }),
   siteId: integer("site_id").notNull().references(() => site.idSite),

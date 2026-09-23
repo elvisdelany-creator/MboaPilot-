@@ -57,6 +57,14 @@ describe("enregistrerCasse (5.2)", () => {
   it("exige un motif", () => {
     expect(() => enregistrerCasse(db, { idProduit, siteId, quantite: 1, motif: "", userId })).toThrow(/motif/i);
   });
+
+  // 5.2 : CASSE est toujours une soustraction (signe -1 appliqué à la
+  // magnitude) — une quantité négative en entrée inverserait ce signe et
+  // augmenterait le stock au lieu de constater une perte
+  it("rejette une quantité négative ou nulle", () => {
+    expect(() => enregistrerCasse(db, { idProduit, siteId, quantite: -10, motif: "Chute pendant transport", userId })).toThrow(/positive/i);
+    expect(() => enregistrerCasse(db, { idProduit, siteId, quantite: 0, motif: "Chute pendant transport", userId })).toThrow(/positive/i);
+  });
 });
 
 describe("ajusterInventaire (5.2)", () => {

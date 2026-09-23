@@ -50,6 +50,10 @@ export interface EnregistrerCasseParams {
 // 5.2 : casse / perte / retour fournisseur — motif obligatoire, non rattaché à une vente
 export function enregistrerCasse(db: Db, params: EnregistrerCasseParams) {
   if (!params.motif.trim()) throw new Error("Un motif est obligatoire pour une casse ou une perte");
+  // 5.2 : CASSE applique toujours une soustraction (signe -1 sur la
+  // magnitude, stock.repository.ts) — une quantité négative inverserait ce
+  // signe et augmenterait le stock au lieu de constater une perte
+  if (params.quantite <= 0) throw new Error("La quantité de casse ou de perte doit être positive");
 
   return enregistrerMouvement(db, {
     idProduit: params.idProduit,

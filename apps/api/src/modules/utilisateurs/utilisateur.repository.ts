@@ -57,6 +57,38 @@ export function creerUtilisateur(db: Db, input: CreerUtilisateurInput, acteurId:
   return utilisateur;
 }
 
+// 8.7, 11.2 : réinitialisation du mot de passe d'un compte existant — même
+// politique de complexité qu'à la création, jamais journalisée en clair
+// (11.2), mais l'action elle-même l'est (11.5 : geste sensible sur un compte).
+export function reinitialiserMotDePasse(db: Db, idUser: number, nouveauMotDePasse: string, acteurId: number | null = null) {
+  const utilisateur = db.select().from(schema.utilisateur).where(eq(schema.utilisateur.idUser, idUser)).get();
+  if (!utilisateur) return undefined;
+
+  const politique = trouverPolitiqueMotDePasseParSite(db, utilisateur.siteId);
+  const erreurs = validerMotDePasse(nouveauMotDePasse, politique);
+  if (erreurs.length > 0) throw new Error(erreurs.join(" — "));
+
+  const motDePasseHash = bcrypt.hashSync(nouveauMotDePasse, TOURS_HACHAGE);
+  const apres = db
+    .update(schema.utilisateur)
+    .set({ motDePasseHash })
+    .where(eq(schema.utilisateur.idUser, idUser))
+    .returning(COLONNES_SANS_HASH)
+    .get();
+
+  db.insert(schema.journalAudit)
+    .values({
+      utilisateurId: acteurId,
+      action: "MODIFICATION",
+      tableCible: "utilisateur",
+      idCible: String(idUser),
+      valeurApres: JSON.stringify({ action: "reinitialisation_mot_de_passe" }),
+    })
+    .run();
+
+  return apres;
+}
+
 export function trouverUtilisateurParIdentifiant(db: Db, identifiant: string) {
   return db.select().from(schema.utilisateur).where(eq(schema.utilisateur.identifiant, identifiant)).get();
 }

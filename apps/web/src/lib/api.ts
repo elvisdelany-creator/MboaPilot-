@@ -916,6 +916,16 @@ export async function modifierCompteUtilisateurRequete(
   return lireJson<CompteUtilisateur>(reponse);
 }
 
+// 8.7, 11.2 : réinitialisation du mot de passe d'un compte existant
+export async function reinitialiserMotDePasseRequete(token: string, idUser: number, motDePasse: string): Promise<CompteUtilisateur> {
+  const reponse = await fetch(`${BASE}/utilisateurs/${idUser}/mot-de-passe`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headersAuth(token) },
+    body: JSON.stringify({ motDePasse }),
+  });
+  return lireJson<CompteUtilisateur>(reponse);
+}
+
 export async function chargerSites(token: string): Promise<Site[]> {
   const reponse = await fetch(`${BASE}/sites`, { headers: headersAuth(token) });
   return lireJson<Site[]>(reponse);

@@ -18,6 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { NouveauCompteDialog } from "./NouveauCompteDialog";
+import { ReinitialiserMotDePasseDialog } from "./ReinitialiserMotDePasseDialog";
 import { NouveauSiteDialog } from "./NouveauSiteDialog";
 import { CatalogueTab } from "./CatalogueTab";
 import { ComptesPartagesTab } from "./ComptesPartagesTab";
@@ -59,6 +60,7 @@ export function AdministrationPage({ onNaviguer }: Props) {
   const [filtreTable, setFiltreTable] = useState("");
   const [nouveauCompteOuvert, setNouveauCompteOuvert] = useState(false);
   const [nouveauSiteOuvert, setNouveauSiteOuvert] = useState(false);
+  const [compteReinitCible, setCompteReinitCible] = useState<CompteUtilisateur | null>(null);
 
   function gererErreur(erreur: unknown, messageParDefaut: string) {
     if (erreur instanceof ErreurAuthentification) {
@@ -194,6 +196,9 @@ export function AdministrationPage({ onNaviguer }: Props) {
                             </SelectContent>
                           </Select>
                           <Badge variant={c.actif === 1 ? "default" : "outline"}>{c.actif === 1 ? "Actif" : "Inactif"}</Badge>
+                          <Button variant="outline" size="sm" className="cursor-pointer" onClick={() => setCompteReinitCible(c)}>
+                            Réinitialiser le mot de passe
+                          </Button>
                           <Button
                             variant="outline"
                             size="sm"
@@ -300,6 +305,12 @@ export function AdministrationPage({ onNaviguer }: Props) {
         ouvert={nouveauSiteOuvert}
         onFerme={() => setNouveauSiteOuvert(false)}
         onSucces={() => { setNouveauSiteOuvert(false); rechargerSites(); }}
+      />
+
+      <ReinitialiserMotDePasseDialog
+        compte={compteReinitCible}
+        onFerme={() => setCompteReinitCible(null)}
+        onSucces={() => { setCompteReinitCible(null); rechargerJournal(); }}
       />
     </div>
   );

@@ -1,7 +1,14 @@
 import type { FastifyInstance, FastifyReply } from "fastify";
 import type { Db } from "../../db/types.js";
 import type { Guard } from "../auth/auth.plugin.js";
-import { creerUtilisateur, listerUtilisateurs, modifierUtilisateur, type CreerUtilisateurInput, type ModifierUtilisateurInput } from "./utilisateur.repository.js";
+import {
+  creerUtilisateur,
+  listerUtilisateurs,
+  modifierUtilisateur,
+  reinitialiserMotDePasse,
+  type CreerUtilisateurInput,
+  type ModifierUtilisateurInput,
+} from "./utilisateur.repository.js";
 import { creerSite, listerSites, modifierSite, trouverSite, type CreerSiteInput, type ModifierSiteInput } from "./site.repository.js";
 import { listerJournalAudit } from "./audit.repository.js";
 
@@ -53,6 +60,22 @@ export function registerUtilisateursRoutes(app: FastifyInstance, db: Db, guards:
       try {
         const utilisateur = modifierUtilisateur(db, idUser, request.body, request.user.idUser);
         if (!utilisateur) throw new Error(`Utilisateur ${idUser} introuvable`);
+        reply.code(200).send(utilisateur);
+      } catch (erreur) {
+        envoyerErreur(reply, erreur);
+      }
+    }
+  );
+
+  // 8.7, 11.2 : réinitialisation du mot de passe d'un compte — réservée à
+  // l'Administrateur, comme la création et la modification de compte.
+  app.post<{ Params: { idUser: string }; Body: { motDePasse: string } }>(
+    "/api/v1/utilisateurs/:idUser/mot-de-passe",
+    { preHandler: [guards.authRequis, guards.admin] },
+    async (request, reply) => {
+      try {
+        const utilisateur = reinitialiserMotDePasse(db, Number(request.params.idUser), request.body.motDePasse, request.user.idUser);
+        if (!utilisateur) throw new Error(`Utilisateur ${request.params.idUser} introuvable`);
         reply.code(200).send(utilisateur);
       } catch (erreur) {
         envoyerErreur(reply, erreur);

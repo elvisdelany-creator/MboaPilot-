@@ -2529,6 +2529,59 @@ describe("Module gestion des utilisateurs, rôles et sites (8.7)", () => {
     expect(modification.json().role).toBe("GERANT");
   });
 
+  // 8.7, 11.2 : aucun moyen n'existait de changer le mot de passe d'un
+  // compte existant — un employé qui l'oublie doit pouvoir en recevoir un
+  // nouveau sans que son compte (et son historique) soit recréé
+  it("un administrateur réinitialise le mot de passe d'un compte, qui peut alors se connecter avec le nouveau", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const tokenAdmin = await connecterAdmin(app);
+
+    const creation = await app.inject({
+      method: "POST",
+      url: "/api/v1/utilisateurs",
+      headers: authHeader(tokenAdmin),
+      payload: { nom: "Nga", prenom: "Valentin", identifiant: "vnga", motDePasse: "ancien-motdepasse", role: "CAISSIER" },
+    });
+    const idNouveau = creation.json().idUser;
+
+    const reinitialisation = await app.inject({
+      method: "POST",
+      url: `/api/v1/utilisateurs/${idNouveau}/mot-de-passe`,
+      headers: authHeader(tokenAdmin),
+      payload: { motDePasse: "nouveau-motdepasse" },
+    });
+    expect(reinitialisation.statusCode).toBe(200);
+    expect(reinitialisation.json()).not.toHaveProperty("motDePasseHash");
+
+    const ancienEchoue = await app.inject({ method: "POST", url: "/api/v1/auth/login", payload: { identifiant: "vnga", motDePasse: "ancien-motdepasse" } });
+    expect(ancienEchoue.statusCode).toBe(401);
+
+    const nouveauReussit = await app.inject({ method: "POST", url: "/api/v1/auth/login", payload: { identifiant: "vnga", motDePasse: "nouveau-motdepasse" } });
+    expect(nouveauReussit.statusCode).toBe(200);
+  });
+
+  it("un caissier ne peut pas réinitialiser un mot de passe (403)", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const tokenAdmin = await connecterAdmin(app);
+    const tokenCaissier = await connecter(app);
+    const idCible = (
+      await app.inject({
+        method: "POST",
+        url: "/api/v1/utilisateurs",
+        headers: authHeader(tokenAdmin),
+        payload: { nom: "Nga", prenom: "Valentin", identifiant: "vnga", motDePasse: "ancien-motdepasse", role: "CAISSIER" },
+      })
+    ).json().idUser;
+
+    const reponse = await app.inject({
+      method: "POST",
+      url: `/api/v1/utilisateurs/${idCible}/mot-de-passe`,
+      headers: authHeader(tokenCaissier),
+      payload: { motDePasse: "nouveau-motdepasse" },
+    });
+    expect(reponse.statusCode).toBe(403);
+  });
+
   it("11.2, 8.8 : un administrateur configure une politique de mot de passe stricte, appliquée aux créations de compte suivantes", async () => {
     const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
     const tokenAdmin = await connecterAdmin(app);

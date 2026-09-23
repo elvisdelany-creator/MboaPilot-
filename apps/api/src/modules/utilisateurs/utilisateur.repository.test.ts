@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { eq } from "drizzle-orm";
+import bcrypt from "bcryptjs";
 import { creerDbTest, type Db } from "../../test-utils/db.js";
-import { creerUtilisateur, listerUtilisateurs, modifierUtilisateur, trouverUtilisateurParIdentifiant } from "./utilisateur.repository.js";
+import { creerUtilisateur, listerUtilisateurs, modifierUtilisateur, reinitialiserMotDePasse, trouverUtilisateurParIdentifiant } from "./utilisateur.repository.js";
 import * as schema from "../../db/schema.js";
 
 let db: Db;
@@ -137,5 +138,50 @@ describe("modifierUtilisateur (8.7)", () => {
 
   it("renvoie undefined pour un utilisateur inconnu", () => {
     expect(modifierUtilisateur(db, 999999, { actif: false })).toBeUndefined();
+  });
+});
+
+// 8.7, 11.2 : aucun moyen n'existait de changer le mot de passe d'un compte
+// après sa création — un mot de passe oublié imposait de désactiver le
+// compte et d'en recréer un nouveau, fragmentant l'historique de l'employé
+// (factures, mouvements de stock… tous rattachés à utilisateur_id)
+describe("reinitialiserMotDePasse (8.7, 11.2)", () => {
+  it("remplace le hash du mot de passe — l'ancien mot de passe ne fonctionne plus, le nouveau oui", () => {
+    const u = creerUtilisateur(db, { siteId, nom: "Nga", prenom: "Valentin", identifiant: "vnga", motDePasse: "ancien-motdepasse", role: "CAISSIER" });
+
+    const modifie = reinitialiserMotDePasse(db, u.idUser, "nouveau-motdepasse");
+
+    const enBase = trouverUtilisateurParIdentifiant(db, "vnga");
+    expect(bcrypt.compareSync("ancien-motdepasse", enBase!.motDePasseHash)).toBe(false);
+    expect(bcrypt.compareSync("nouveau-motdepasse", enBase!.motDePasseHash)).toBe(true);
+    expect(modifie).not.toHaveProperty("motDePasseHash");
+  });
+
+  // 11.2, 8.8 : la même politique de complexité que pour la création s'applique
+  it("applique la politique de complexité du site — rejette un mot de passe trop court", () => {
+    const u = creerUtilisateur(db, { siteId, nom: "Nga", prenom: "Valentin", identifiant: "vnga", motDePasse: "ancien-motdepasse", role: "CAISSIER" });
+
+    expect(() => reinitialiserMotDePasse(db, u.idUser, "court1")).toThrow(/8 caractères/);
+
+    const enBase = trouverUtilisateurParIdentifiant(db, "vnga");
+    expect(bcrypt.compareSync("ancien-motdepasse", enBase!.motDePasseHash)).toBe(true);
+  });
+
+  // 11.5 : action sensible à journaliser, mais jamais la valeur du mot de passe (11.2)
+  it("journalise la réinitialisation avec l'auteur, jamais le mot de passe", () => {
+    const admin = creerUtilisateur(db, { siteId, nom: "Admin", prenom: "D", identifiant: "admin1", motDePasse: "motdepasse-secret", role: "ADMINISTRATEUR" });
+    const u = creerUtilisateur(db, { siteId, nom: "Nga", prenom: "Valentin", identifiant: "vnga", motDePasse: "ancien-motdepasse", role: "CAISSIER" });
+
+    reinitialiserMotDePasse(db, u.idUser, "nouveau-motdepasse", admin.idUser);
+
+    const audits = db.select().from(schema.journalAudit).where(eq(schema.journalAudit.tableCible, "utilisateur")).all();
+    const audit = audits.find((a) => a.idCible === String(u.idUser) && a.action === "MODIFICATION" && a.valeurAvant === null);
+    expect(audit).toBeDefined();
+    expect(audit?.utilisateurId).toBe(admin.idUser);
+    expect(JSON.stringify(audit)).not.toMatch(/nouveau-motdepasse|ancien-motdepasse/);
+  });
+
+  it("renvoie undefined pour un utilisateur inconnu", () => {
+    expect(reinitialiserMotDePasse(db, 999999, "nouveau-motdepasse")).toBeUndefined();
   });
 });

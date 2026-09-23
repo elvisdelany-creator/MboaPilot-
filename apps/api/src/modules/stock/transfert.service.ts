@@ -1,4 +1,5 @@
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
+import { normaliserLibelle } from "@mboapilot/shared";
 import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
 import { enregistrerMouvement } from "./stock.repository.js";
@@ -34,17 +35,15 @@ export function transfererStock(db: Db, params: TransfererStockParams): Transfer
 
   if (source.siteId === params.siteDestinationId) throw new Error("Le site de destination doit être différent du site source");
 
-  let destination = db
+  // 8.2 : même repère qu'à l'import CSV — un article retapé sans accent au
+  // site destination ne doit pas créer un doublon (comparaison en JS, la
+  // normalisation NFD n'a pas d'équivalent SQLite natif fiable)
+  const candidatsDestination = db
     .select()
     .from(schema.produit)
-    .where(
-      and(
-        eq(schema.produit.siteId, params.siteDestinationId),
-        eq(schema.produit.type, source.type),
-        sql`lower(trim(${schema.produit.libelle})) = lower(trim(${source.libelle}))`
-      )
-    )
-    .get();
+    .where(and(eq(schema.produit.siteId, params.siteDestinationId), eq(schema.produit.type, source.type)))
+    .all();
+  let destination = candidatsDestination.find((p) => normaliserLibelle(p.libelle) === normaliserLibelle(source.libelle));
 
   if (!destination) {
     destination = db

@@ -1,19 +1,9 @@
-import { analyserCsv, construireCsv } from "@mboapilot/shared";
+import { analyserCsv, construireCsv, normaliserLibelle } from "@mboapilot/shared";
 import type { Db } from "../../db/types.js";
 import { listerProduits, creerProduit, modifierProduit, type CreerProduitInput } from "./produit.repository.js";
 
 const COLONNES = ["Type", "Libelle", "Categorie", "PrixVente", "CoutRevient", "SuiviStock", "SeuilAlerte"] as const;
 const TYPES_VALIDES = ["BIEN", "SERVICE", "SAV", "KIT"] as const;
-
-// 8.2 : un tableur perd souvent les accents (copier-coller, encodage) — le
-// rapprochement par libellé doit rester insensible à la casse ET aux accents,
-// sinon une ligne retapée sans accent crée un doublon au lieu d'une mise à jour.
-function normaliserLibelle(libelle: string): string {
-  return libelle
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
-    .toLowerCase();
-}
 
 // 8.2 : export de catalogue (CSV) — pour initialisation ou mise à jour
 // tarifaire en masse dans un tableur, puis réimport (voir importerCatalogueCsv).

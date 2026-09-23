@@ -58,6 +58,23 @@ describe("transfererStock (5.2, 8.2)", () => {
     expect(produits).toHaveLength(1);
   });
 
+  // 5.2, 8.2 : même repère qu'à l'import CSV (catalogue-import-export.service.ts)
+  // — un article retapé sans accent au site destination ne doit pas créer un
+  // doublon au lieu d'être reconnu comme le même article
+  it("associe par libellé insensible aux accents, sans dupliquer l'article", () => {
+    const idProduitDestination = db
+      .insert(schema.produit)
+      .values({ siteId: siteDestination, type: "BIEN", libelle: "Decodeur GLOBALZ", prixVente: 15000, suiviStock: 1, quantiteStock: 0 })
+      .returning()
+      .get().idProduit;
+
+    const resultat = transfererStock(db, { idProduitSource, siteDestinationId: siteDestination, quantite: 1, userId });
+
+    expect(resultat.produitDestination.idProduit).toBe(idProduitDestination);
+    const produits = db.select().from(schema.produit).where(eq(schema.produit.siteId, siteDestination)).all();
+    expect(produits).toHaveLength(1);
+  });
+
   it("crée l'article au site destination s'il n'y existe pas encore, en reprenant la fiche article", () => {
     const resultat = transfererStock(db, { idProduitSource, siteDestinationId: siteDestination, quantite: 3, userId });
 

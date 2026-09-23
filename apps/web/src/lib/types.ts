@@ -193,9 +193,11 @@ export interface Site {
 
 export interface EntreeJournalAudit {
   idAudit: number;
-  utilisateurId: number;
-  utilisateurNom: string;
-  utilisateurPrenom: string;
+  // 11.3, 11.5 : NULL pour une action système (job quotidien — anonymisation
+  // automatique, expiration d'abonnement), jamais rattachée à un utilisateur humain
+  utilisateurId: number | null;
+  utilisateurNom: string | null;
+  utilisateurPrenom: string | null;
   action: "CREATION" | "MODIFICATION" | "SUPPRESSION";
   tableCible: string;
   idCible: string;

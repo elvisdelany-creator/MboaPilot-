@@ -22,9 +22,29 @@ describe("listerJournalAudit (11.5, 8.7)", () => {
 
     const journal = listerJournalAudit(db);
 
-    expect(journal).toHaveLength(2);
+    // + 1 : la création du compte "Nga" au beforeEach journalise déjà elle-même
+    expect(journal).toHaveLength(3);
     expect(journal[0].tableCible).toBe("produit");
     expect(journal[0].utilisateurNom).toBe("Nga");
+  });
+
+  // 11.3, 11.5 : une action système (ex. anonymisation automatique par le
+  // job quotidien, historique_abonnement.utilisateur_id = NULL) est bien
+  // journalisée mais utilisateur_id y reste NULL — un INNER JOIN sur
+  // utilisateur exclurait silencieusement ces entrées de la consultation,
+  // cachant précisément les actions les plus sensibles à tracer.
+  it("inclut les entrées d'une action système (auteur NULL, ex. anonymisation automatique)", () => {
+    db.insert(schema.journalAudit).values({ utilisateurId: null, action: "SUPPRESSION", tableCible: "abonne", idCible: "42" }).run();
+    db.insert(schema.journalAudit).values({ utilisateurId: userId, action: "MODIFICATION", tableCible: "produit", idCible: "5" }).run();
+
+    const journal = listerJournalAudit(db);
+
+    // + 1 : la création du compte "Nga" au beforeEach journalise déjà elle-même
+    expect(journal).toHaveLength(3);
+    const entreeSysteme = journal.find((e) => e.idCible === "42");
+    expect(entreeSysteme).toBeDefined();
+    expect(entreeSysteme?.utilisateurId).toBeNull();
+    expect(entreeSysteme?.utilisateurNom).toBeNull();
   });
 
   it("filtre par table cible", () => {

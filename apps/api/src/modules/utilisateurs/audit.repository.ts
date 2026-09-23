@@ -9,6 +9,10 @@ export interface JournalAuditFiltre {
 // 11.5, 8.7 : journal d'audit consultable, le plus récent en tête, avec
 // l'identité de l'auteur — la table journal_audit elle-même est immuable
 // (jamais de UPDATE/DELETE applicatif), cette fonction ne fait que la lire.
+// Jointure gauche, jamais interne : une action système (job quotidien —
+// anonymisation automatique 11.3, expiration d'abonnement) journalise avec
+// utilisateur_id NULL, et une jointure interne exclurait silencieusement
+// ces entrées, cachant précisément les actions les plus sensibles à tracer.
 export function listerJournalAudit(db: Db, filtre: JournalAuditFiltre = {}) {
   const requete = db
     .select({
@@ -24,7 +28,7 @@ export function listerJournalAudit(db: Db, filtre: JournalAuditFiltre = {}) {
       dateAction: schema.journalAudit.dateAction,
     })
     .from(schema.journalAudit)
-    .innerJoin(schema.utilisateur, eq(schema.journalAudit.utilisateurId, schema.utilisateur.idUser))
+    .leftJoin(schema.utilisateur, eq(schema.journalAudit.utilisateurId, schema.utilisateur.idUser))
     .orderBy(desc(schema.journalAudit.idAudit));
 
   const conditions = filtre.tableCible ? [eq(schema.journalAudit.tableCible, filtre.tableCible)] : [];

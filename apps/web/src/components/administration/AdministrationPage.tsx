@@ -282,7 +282,9 @@ export function AdministrationPage({ onNaviguer }: Props) {
                         <span className="text-xs text-muted-foreground">{formateurDateHeure.format(new Date(entree.dateAction))}</span>
                       </div>
                       <p className="text-sm text-muted-foreground">
-                        Par {entree.utilisateurPrenom} {entree.utilisateurNom}
+                        {entree.utilisateurId === null
+                          ? "Action système (tâche automatique quotidienne)"
+                          : `Par ${entree.utilisateurPrenom} ${entree.utilisateurNom}`}
                       </p>
                     </Card>
                   </li>

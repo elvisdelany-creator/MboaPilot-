@@ -72,6 +72,13 @@ describe("ajusterInventaire (5.2)", () => {
   it("exige un motif", () => {
     expect(() => ajusterInventaire(db, { idProduit, siteId, quantiteComptee: 7, motif: "", userId })).toThrow(/motif/i);
   });
+
+  // 5.2 : contrairement au stock théorique (qui peut légitimement devenir
+  // négatif — vente au-delà du stock disponible), un comptage physique
+  // négatif n'a aucun sens : on ne compte jamais "-5 articles" sur une étagère
+  it("rejette une quantité comptée négative", () => {
+    expect(() => ajusterInventaire(db, { idProduit, siteId, quantiteComptee: -5, motif: "Comptage mensuel", userId })).toThrow(/négative|positive|négatif/i);
+  });
 });
 
 describe("listerAlertesStock (8.6, 9.3)", () => {

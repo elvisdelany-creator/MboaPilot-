@@ -74,6 +74,10 @@ export interface AjusterInventaireParams {
 // route via RBAC, pas ici).
 export function ajusterInventaire(db: Db, params: AjusterInventaireParams) {
   if (!params.motif.trim()) throw new Error("Un motif est obligatoire pour un ajustement d'inventaire");
+  // 5.2 : contrairement au stock théorique (qui peut légitimement devenir
+  // négatif — vente au-delà du stock disponible), un comptage physique
+  // négatif n'a aucun sens : on ne compte jamais "-5 articles" sur une étagère
+  if (params.quantiteComptee < 0) throw new Error("La quantité comptée ne peut pas être négative");
 
   const produit = db.select().from(schema.produit).where(eq(schema.produit.idProduit, params.idProduit)).get();
   if (!produit) throw new Error(`Produit ${params.idProduit} introuvable`);

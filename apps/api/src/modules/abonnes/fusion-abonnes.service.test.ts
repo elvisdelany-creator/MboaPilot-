@@ -49,6 +49,25 @@ describe("fusionnerAbonnes (8.1 : fusion de doublons, conservation de l'historiq
     expect(trouverAbonne(db, doublon.idAbonne)).toBeUndefined();
   });
 
+  // 8.1, 11.5 : une notification (SMS d'échéance, SAV « Prêt »...) rattachée
+  // au doublon est monnaie courante — sans réassignation, la contrainte de
+  // clé étrangère bloque la suppression du doublon en fin de fusion
+  it("rattache aussi les notifications du doublon, sans quoi la suppression finale échoue", () => {
+    const principal = creerAbonne(db, { siteId, nom: "Nga Ndongo", prenom: "Valentin", telephone: "690000000" });
+    const doublon = creerAbonne(db, { siteId, nom: "Nga N.", prenom: "Val", telephone: "690000001" });
+    const notif = db
+      .insert(schema.notification)
+      .values({ idAbonne: doublon.idAbonne, canal: "SMS", evenement: "ALERTE_ECHEANCE", destinataire: "690000001", message: "Test", statutEnvoi: "ENVOYEE" })
+      .returning()
+      .get();
+
+    fusionnerAbonnes(db, { idAbonnePrincipal: principal.idAbonne, idAbonneDoublon: doublon.idAbonne, userId });
+
+    const notifApres = db.select().from(schema.notification).where(eq(schema.notification.idNotification, notif.idNotification)).get();
+    expect(notifApres?.idAbonne).toBe(principal.idAbonne);
+    expect(trouverAbonne(db, doublon.idAbonne)).toBeUndefined();
+  });
+
   it("journalise la fusion dans le journal d'audit (immuable)", () => {
     const principal = creerAbonne(db, { siteId, nom: "Nga Ndongo", prenom: "Valentin", telephone: "690000000" });
     const doublon = creerAbonne(db, { siteId, nom: "Nga N.", prenom: "Val", telephone: "690000001" });

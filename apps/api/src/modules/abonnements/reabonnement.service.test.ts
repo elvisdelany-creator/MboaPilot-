@@ -182,6 +182,24 @@ describe("reabonner — délai de grâce (4.3, 8.8)", () => {
     expect(abonnement?.dateDebut).toBe("2025-12-25");
   });
 
+  // 4.3, 4.4 : le job quotidien qui bascule le statut à EXPIRE ne tourne
+  // qu'une fois par jour — un client qui se réabonne avant son passage (même
+  // jour, ou job en retard) a un abonnement dont la date de fin est déjà
+  // dépassée mais dont le statut affiche encore ACTIF. Le délai de grâce doit
+  // s'appuyer sur les dates réelles, pas sur ce statut dont la mise à jour
+  // dépend d'un minutage indépendant de la volonté du client.
+  it("s'applique même si le statut n'a pas encore été basculé à EXPIRE par le job quotidien", () => {
+    db.update(schema.entreprise).set({ delaiGraceReabonnementJours: 5 }).where(eq(schema.entreprise.idEntreprise, idEntreprise)).run();
+    // contredit le beforeEach du describe : le job n'est pas encore passé
+    db.update(schema.abonnement).set({ statut: "ACTIF" }).where(eq(schema.abonnement.numeroAbonnement, numeroAbonnement)).run();
+
+    // 3 jours après la date_fin théorique (2025-12-15) — dans le délai de grâce de 5 jours
+    reabonner(db, { siteId, userId, aujourdHui: "2025-12-18", numeroAbonnement, montantEncaisse: 13000 });
+
+    const abonnement = db.select().from(schema.abonnement).where(eq(schema.abonnement.numeroAbonnement, numeroAbonnement)).get();
+    expect(abonnement?.dateDebut).toBe("2025-12-15");
+  });
+
   it("par défaut (délai de grâce à 0), un réabonnement tardif démarre toujours à la date réelle du paiement", () => {
     reabonner(db, { siteId, userId, aujourdHui: "2025-12-18", numeroAbonnement, montantEncaisse: 13000 });
 

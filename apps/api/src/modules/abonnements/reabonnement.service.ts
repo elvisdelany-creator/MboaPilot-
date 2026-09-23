@@ -58,9 +58,14 @@ export function reabonner(db: Db, params: ReabonnerParams): ReabonnementResultat
   // délai après la date_fin théorique précédente redémarre à compter de
   // cette date_fin plutôt que de la date réelle de paiement, pour ne pas
   // pénaliser un client en léger retard (paramétrable, 0 jour par défaut).
+  // Basé sur les dates réelles, jamais sur le statut stocké : le job
+  // quotidien qui bascule le statut à EXPIRE ne tourne qu'une fois par jour,
+  // et un client peut se réabonner avant son passage (statut encore ACTIF
+  // alors que la date de fin est déjà dépassée) — seule une résiliation
+  // explicite (RESILIE) est exclue du délai de grâce.
   const delaiGrace = trouverDelaiGraceReabonnementEntreprise(db);
   const joursDepuisExpiration = -joursAvantEcheance(abonnementActuel.dateFin, params.aujourdHui);
-  const dansLeDelaiDeGrace = abonnementActuel.statut === "EXPIRE" && joursDepuisExpiration > 0 && joursDepuisExpiration <= delaiGrace;
+  const dansLeDelaiDeGrace = abonnementActuel.statut !== "RESILIE" && joursDepuisExpiration > 0 && joursDepuisExpiration <= delaiGrace;
 
   const dateDebut = dansLeDelaiDeGrace ? abonnementActuel.dateFin : params.aujourdHui;
   const dateFin = calculerDateFin(dateDebut, formule.dureeCycles, formule.modeDuree);
@@ -70,7 +75,7 @@ export function reabonner(db: Db, params: ReabonnerParams): ReabonnementResultat
       .values({
         numeroAbonnement: params.numeroAbonnement,
         typeChangement: "STATUT",
-        valeurAvant: "EXPIRE",
+        valeurAvant: abonnementActuel.statut,
         valeurApres: "ACTIF",
         motif: `reabonnement_delai_grace (${joursDepuisExpiration} j après échéance)`,
         utilisateurId: params.userId,

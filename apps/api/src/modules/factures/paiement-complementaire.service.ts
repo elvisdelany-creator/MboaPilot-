@@ -40,7 +40,16 @@ export function encaisserSoldeFacture(db: Db, params: EncaisserSoldeParams): Enc
       .from(schema.paiement)
       .where(eq(schema.paiement.idFacture, params.idFacture))
       .get()?.total ?? 0;
-  const solde = facture.montantTotal - totalPaye;
+  // 6.4 : un avoir émis sur cette facture (montant négatif) corrige déjà le
+  // montant réellement dû — l'ignorer ferait payer au client une somme que
+  // l'avoir a précisément pour but d'annuler
+  const totalAvoirs =
+    db
+      .select({ total: sql<number>`coalesce(sum(${schema.facture.montantTotal}), 0)` })
+      .from(schema.facture)
+      .where(eq(schema.facture.factureOrigineId, params.idFacture))
+      .get()?.total ?? 0;
+  const solde = facture.montantTotal + totalAvoirs - totalPaye;
   if (solde <= 0) throw new Error("Cette facture est déjà intégralement encaissée");
 
   creerPaiement(db, {

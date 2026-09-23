@@ -116,6 +116,12 @@ export function creerAvoir(db: Db, params: CreerAvoirParams): AvoirResultat {
   return { idFactureAvoir: factureAvoir.idFacture, montantTotal, montantTaxe };
 }
 
+// 6.4 : avoirs déjà émis sur une facture — nécessaire pour calculer le solde
+// réellement dû (voir paiement-complementaire.service.ts et sav.routes.ts)
+export function listerAvoirsFacture(db: Db, idFacture: number) {
+  return db.select().from(schema.facture).where(eq(schema.facture.factureOrigineId, idFacture)).all();
+}
+
 // 6.4 : lignes d'une facture, enrichies du libellé de l'article/kit, pour
 // choisir quoi créditer lors de l'émission d'un avoir
 export function listerLignesFacture(db: Db, idFacture: number) {

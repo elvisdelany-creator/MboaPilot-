@@ -142,7 +142,9 @@ export function SavPage({ onNaviguer }: Props) {
   // solde dû — jamais visible tel quel dans facture.statut (VALIDEE dès le
   // premier franc perçu), donc recalculé ici à partir des paiements reçus.
   const totalPaye = detail?.paiements.reduce((total, p) => total + p.montant, 0) ?? 0;
-  const soldeRestant = detail?.facture ? detail.facture.montantTotal - totalPaye : 0;
+  // 6.4 : un avoir émis sur cette facture corrige déjà le montant dû
+  const totalAvoirs = detail?.avoirs.reduce((total, a) => total + a.montantTotal, 0) ?? 0;
+  const soldeRestant = detail?.facture ? detail.facture.montantTotal + totalAvoirs - totalPaye : 0;
 
   return (
     <div className="flex h-dvh flex-col bg-background">

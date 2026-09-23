@@ -62,6 +62,25 @@ describe("encaisserSoldeFacture (6.4, 9.4)", () => {
     expect(() => encaisserSoldeFacture(db, { idFacture: facture.idFacture, userId, montant: -500 })).toThrow();
   });
 
+  // 6.4 : un avoir corrige la facture d'origine (correction comptable) — le
+  // solde restant dû doit en tenir compte, sinon le complément d'encaissement
+  // fait payer au client une somme déjà annulée par l'avoir
+  it("déduit un avoir déjà émis sur la facture du solde restant dû", () => {
+    const facture = creerFacture(6400, "VALIDEE");
+    db.insert(schema.paiement).values({ idFacture: facture.idFacture, mode: "CASH", montant: 2000, utilisateurId: userId }).run();
+    db.insert(schema.facture)
+      .values({ siteId, idAbonne: null, creePar: userId, statut: "VALIDEE", type: "AVOIR", factureOrigineId: facture.idFacture, montantTotal: -3200 })
+      .run();
+
+    // solde réel = 6400 - 3200 (avoir) - 2000 (déjà payé) = 1200, pas 4400
+    const resultat = encaisserSoldeFacture(db, { idFacture: facture.idFacture, userId, montant: 1200 });
+    expect(resultat.soldeRestant).toBe(0);
+
+    // la facture est désormais intégralement soldée (avoir compris) — un
+    // encaissement complémentaire supplémentaire doit être refusé
+    expect(() => encaisserSoldeFacture(db, { idFacture: facture.idFacture, userId, montant: 100 })).toThrow(/intégralement/i);
+  });
+
   it("rejette un encaissement complémentaire sur un avoir", () => {
     const facture = creerFacture(-5000, "VALIDEE");
     db.update(schema.facture).set({ type: "AVOIR" }).where(eq(schema.facture.idFacture, facture.idFacture)).run();

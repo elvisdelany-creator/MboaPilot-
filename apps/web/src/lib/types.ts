@@ -318,6 +318,8 @@ export interface DossierSavDetaille extends DossierSav {
   // 6.4 point 5, 9.4 : pour calculer le solde restant dû après un
   // encaissement partiel au passage en LIVRE
   paiements: Paiement[];
+  // 6.4 : idem pour un avoir émis a posteriori sur cette facture
+  avoirs: Facture[];
   photos: SavPhoto[];
 }
 

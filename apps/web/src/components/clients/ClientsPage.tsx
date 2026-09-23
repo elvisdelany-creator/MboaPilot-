@@ -208,10 +208,16 @@ export function ClientsPage({ onNaviguer, onReabonnerDepuisFiche }: Props) {
   }
 
   // 9.4 : solde éventuel — montant restant dû sur une facture, quel que
-  // soit son statut (une facture VALIDÉE peut rester partiellement encaissée)
+  // soit son statut (une facture VALIDÉE peut rester partiellement encaissée).
+  // 6.4 : un avoir émis sur cette facture (montant négatif) corrige déjà le
+  // montant dû — l'ignorer ferait apparaître comme "impayé" un montant que
+  // l'avoir a précisément pour but d'annuler.
   function soldeFacture(f: Facture) {
     const totalPaye = (fiche?.paiements ?? []).filter((p) => p.idFacture === f.idFacture).reduce((total, p) => total + p.montant, 0);
-    return f.montantTotal - totalPaye;
+    const totalAvoirs = (fiche?.factures ?? [])
+      .filter((autre) => autre.factureOrigineId === f.idFacture)
+      .reduce((total, avoir) => total + avoir.montantTotal, 0);
+    return f.montantTotal + totalAvoirs - totalPaye;
   }
 
   return (

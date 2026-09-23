@@ -12,7 +12,10 @@ export interface AnonymiserAbonneParams {
 }
 
 const PLACEHOLDER_NOM = "Anonymisé";
-const PLACEHOLDER_TELEPHONE = "0000000000";
+// 11.3, 4.4 : téléphone non-NULL au niveau schéma — ce repère doit rester
+// reconnaissable comme "aucun canal de contact réel" par notification.service.ts,
+// sans quoi le job quotidien continuerait de "joindre" un client anonymisé
+export const PLACEHOLDER_TELEPHONE = "0000000000";
 
 // 11.3 : droit de suppression — efface l'identité et les coordonnées d'un
 // abonné (nom, prénom, téléphone, email, CNI, adresse) tout en conservant sa

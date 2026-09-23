@@ -2,6 +2,7 @@ import { desc, eq } from "drizzle-orm";
 import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
 import type { CanalNotification, FournisseurNotification } from "./fournisseur.js";
+import { PLACEHOLDER_TELEPHONE } from "../abonnes/anonymisation.service.js";
 
 export interface EnvoyerNotificationParams {
   idAbonne: number;
@@ -22,7 +23,8 @@ export function envoyerNotificationAbonne(db: Db, fournisseur: FournisseurNotifi
   if (!abonne) throw new Error(`Abonné ${params.idAbonne} introuvable`);
 
   const canaux: { canal: CanalNotification; destinataire: string }[] = [];
-  if (abonne.telephone) canaux.push({ canal: "SMS", destinataire: abonne.telephone });
+  // 11.3 : le repère laissé par une anonymisation n'est pas un vrai canal
+  if (abonne.telephone && abonne.telephone !== PLACEHOLDER_TELEPHONE) canaux.push({ canal: "SMS", destinataire: abonne.telephone });
   if (abonne.email) canaux.push({ canal: "EMAIL", destinataire: abonne.email });
 
   return canaux.map(({ canal, destinataire }) => {

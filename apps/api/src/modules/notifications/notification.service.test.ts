@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { creerDbTest, type Db } from "../../test-utils/db.js";
 import * as schema from "../../db/schema.js";
 import { envoyerNotificationAbonne, listerNotificationsAbonne } from "./notification.service.js";
+import { anonymiserAbonne } from "../abonnes/anonymisation.service.js";
 import type { FournisseurNotification } from "./fournisseur.js";
 
 let db: Db;
@@ -91,6 +92,19 @@ describe("envoyerNotificationAbonne (4.4, 8.3, 8.4)", () => {
     const fournisseur = new FournisseurFactice();
 
     const resultats = envoyerNotificationAbonne(db, fournisseur, { idAbonne: abonne.idAbonne, evenement: "SAV_PRET", message: "Votre appareil est prêt." });
+
+    expect(resultats).toEqual([]);
+  });
+
+  // 11.3 : le téléphone d'un abonné anonymisé est un repère factice, jamais
+  // un vrai canal de contact — le droit à l'effacement perdrait tout son
+  // sens si le job quotidien continuait de "joindre" le client via ce repère
+  it("ne tente aucun envoi SMS au repère de téléphone laissé par une anonymisation (11.3)", () => {
+    const abonne = db.insert(schema.abonne).values({ siteId, nom: "Ngo", prenom: "Alice", telephone: "690000001" }).returning().get();
+    anonymiserAbonne(db, { idAbonne: abonne.idAbonne });
+    const fournisseur = new FournisseurFactice();
+
+    const resultats = envoyerNotificationAbonne(db, fournisseur, { idAbonne: abonne.idAbonne, evenement: "ALERTE_ECHEANCE", message: "Votre abonnement arrive à échéance." });
 
     expect(resultats).toEqual([]);
   });

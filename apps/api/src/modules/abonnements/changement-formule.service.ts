@@ -1,5 +1,5 @@
 import { and, eq } from "drizzle-orm";
-import { extraireTaxeDuTTC, validerMigrationFormule } from "@mboapilot/shared";
+import { evaluerExpiration, extraireTaxeDuTTC, validerMigrationFormule } from "@mboapilot/shared";
 import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
 import { trouverTauxTvaParSite } from "../entreprise/entreprise.repository.js";
@@ -8,6 +8,10 @@ import { creerPaiement } from "../factures/paiement.repository.js";
 export interface ChangerFormuleParams {
   siteId: number;
   userId: number;
+  // 4.3, 7.4 : horloge injectée — nécessaire pour vérifier que l'abonnement
+  // n'est pas déjà expiré par la date, indépendamment du statut stocké (voir
+  // plus bas), sur le même modèle que recrutement/réabonnement.
+  aujourdHui: string;
   numeroAbonnement: number;
   idNouvelleFormule: number;
   // 3.2.2, 5.4.2, 7.4 : "l'historique du changement de formule (et des
@@ -42,7 +46,13 @@ export interface ChangerFormuleResultat {
 export function changerFormule(db: Db, params: ChangerFormuleParams): ChangerFormuleResultat {
   const abonnement = db.select().from(schema.abonnement).where(eq(schema.abonnement.numeroAbonnement, params.numeroAbonnement)).get();
   if (!abonnement) throw new Error(`Abonnement ${params.numeroAbonnement} introuvable`);
-  if (abonnement.statut !== "ACTIF") {
+  // 4.3, 7.4 : le job quotidien qui bascule le statut à EXPIRE ne tourne
+  // qu'une fois par jour — un abonnement dont la date de fin est déjà
+  // dépassée mais dont le statut affiche encore ACTIF ne doit pas pouvoir
+  // migrer comme s'il s'agissait d'une période toujours en cours. Réévalué
+  // ici avec la même logique que le job (evaluerExpiration), jamais en se
+  // fiant seulement au statut stocké.
+  if (evaluerExpiration(abonnement.statut, abonnement.dateFin, params.aujourdHui) !== "ACTIF") {
     throw new Error("Le changement de formule (migration) ne s'applique qu'à un abonnement actif (7.4)");
   }
 

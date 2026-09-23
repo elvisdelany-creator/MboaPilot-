@@ -5,6 +5,8 @@ import { recruterAbonne } from "./recrutement.service.js";
 import { changerFormule } from "./changement-formule.service.js";
 import * as schema from "../../db/schema.js";
 
+const aujourdHui = "2025-11-16";
+
 let db: Db;
 let siteId: number;
 let userId: number;
@@ -34,7 +36,7 @@ beforeEach(() => {
   numeroAbonnement = recruterAbonne(db, {
     siteId,
     userId,
-    aujourdHui: "2025-11-16",
+    aujourdHui,
     abonne: { nom: "Nga", prenom: "Paul", telephone: "690000000" },
     idFormule: idAccess,
     montantEncaisse: 5000,
@@ -45,7 +47,7 @@ describe("changerFormule (7.4)", () => {
   it("migration vers un rang supérieur : facture le différentiel et met à jour la formule sans toucher aux dates", () => {
     const abonnementAvant = db.select().from(schema.abonnement).where(eq(schema.abonnement.numeroAbonnement, numeroAbonnement)).get()!;
 
-    const resultat = changerFormule(db, { siteId, userId, numeroAbonnement, idNouvelleFormule: idEvasion, montantEncaisse: 5500 });
+    const resultat = changerFormule(db, { siteId, userId, aujourdHui, numeroAbonnement, idNouvelleFormule: idEvasion, montantEncaisse: 5500 });
 
     expect(resultat.montantDifferentiel).toBe(5500); // 10500 - 5000
     expect(resultat.statutFacture).toBe("VALIDEE");
@@ -64,6 +66,7 @@ describe("changerFormule (7.4)", () => {
     const resultat = changerFormule(db, {
       siteId,
       userId,
+      aujourdHui,
       numeroAbonnement,
       idNouvelleFormule: idEvasion,
       montantEncaisse: 5500,
@@ -84,7 +87,7 @@ describe("changerFormule (7.4)", () => {
   });
 
   it("sans encaissement, la facture reste BROUILLON mais la formule change immédiatement", () => {
-    const resultat = changerFormule(db, { siteId, userId, numeroAbonnement, idNouvelleFormule: idEvasion, montantEncaisse: 0 });
+    const resultat = changerFormule(db, { siteId, userId, aujourdHui, numeroAbonnement, idNouvelleFormule: idEvasion, montantEncaisse: 0 });
 
     expect(resultat.statutFacture).toBe("BROUILLON");
     const abonnement = db.select().from(schema.abonnement).where(eq(schema.abonnement.numeroAbonnement, numeroAbonnement)).get()!;
@@ -92,7 +95,7 @@ describe("changerFormule (7.4)", () => {
   });
 
   it("journalise le changement dans l'historique de l'abonnement", () => {
-    changerFormule(db, { siteId, userId, numeroAbonnement, idNouvelleFormule: idEvasion, montantEncaisse: 5500 });
+    changerFormule(db, { siteId, userId, aujourdHui, numeroAbonnement, idNouvelleFormule: idEvasion, montantEncaisse: 5500 });
 
     const histo = db.select().from(schema.historiqueAbonnement).where(eq(schema.historiqueAbonnement.numeroAbonnement, numeroAbonnement)).all();
     expect(histo).toHaveLength(1);
@@ -103,26 +106,41 @@ describe("changerFormule (7.4)", () => {
   });
 
   it("rejette une formule identique", () => {
-    expect(() => changerFormule(db, { siteId, userId, numeroAbonnement, idNouvelleFormule: idAccess, montantEncaisse: 0 })).toThrow(/identique/i);
+    expect(() => changerFormule(db, { siteId, userId, aujourdHui, numeroAbonnement, idNouvelleFormule: idAccess, montantEncaisse: 0 })).toThrow(/identique/i);
   });
 
   it("rejette une formule de rang inférieur ou égal", () => {
-    changerFormule(db, { siteId, userId, numeroAbonnement, idNouvelleFormule: idToutCanalplus, montantEncaisse: 23000 });
+    changerFormule(db, { siteId, userId, aujourdHui, numeroAbonnement, idNouvelleFormule: idToutCanalplus, montantEncaisse: 23000 });
     // désormais sur TOUT CANAL+ (rang 4) — retenter EVASION (rang 2) doit être refusé
-    expect(() => changerFormule(db, { siteId, userId, numeroAbonnement, idNouvelleFormule: idEvasion, montantEncaisse: 0 })).toThrow(/rang/i);
+    expect(() => changerFormule(db, { siteId, userId, aujourdHui, numeroAbonnement, idNouvelleFormule: idEvasion, montantEncaisse: 0 })).toThrow(/rang/i);
   });
 
   it("rejette une formule d'une autre famille", () => {
-    expect(() => changerFormule(db, { siteId, userId, numeroAbonnement, idNouvelleFormule: idDstvCompaq, montantEncaisse: 0 })).toThrow(/famille/i);
+    expect(() => changerFormule(db, { siteId, userId, aujourdHui, numeroAbonnement, idNouvelleFormule: idDstvCompaq, montantEncaisse: 0 })).toThrow(/famille/i);
   });
 
   it("rejette un abonnement non ACTIF (résilié)", () => {
     db.update(schema.abonnement).set({ statut: "RESILIE" }).where(eq(schema.abonnement.numeroAbonnement, numeroAbonnement)).run();
-    expect(() => changerFormule(db, { siteId, userId, numeroAbonnement, idNouvelleFormule: idEvasion, montantEncaisse: 0 })).toThrow(/actif/i);
+    expect(() => changerFormule(db, { siteId, userId, aujourdHui, numeroAbonnement, idNouvelleFormule: idEvasion, montantEncaisse: 0 })).toThrow(/actif/i);
+  });
+
+  // 4.3, 7.4 : le job quotidien qui bascule le statut à EXPIRE ne tourne
+  // qu'une fois par jour — un abonnement dont la date de fin est déjà
+  // dépassée mais dont le statut affiche encore ACTIF ne doit pas pouvoir
+  // migrer de formule comme s'il s'agissait d'une période toujours en cours.
+  it("rejette un abonnement dont la date de fin est dépassée, même si le statut affiche encore ACTIF (job pas encore passé)", () => {
+    const abonnement = db.select().from(schema.abonnement).where(eq(schema.abonnement.numeroAbonnement, numeroAbonnement)).get()!;
+    expect(abonnement.statut).toBe("ACTIF"); // jamais touché par ce test — c'est bien le job qui manque
+
+    expect(() =>
+      changerFormule(db, { siteId, userId, aujourdHui: "2026-02-01", numeroAbonnement, idNouvelleFormule: idEvasion, montantEncaisse: 0 })
+    ).toThrow(/actif/i);
   });
 
   it("rejette un abonnement inconnu", () => {
-    expect(() => changerFormule(db, { siteId, userId, numeroAbonnement: 999999, idNouvelleFormule: idEvasion, montantEncaisse: 0 })).toThrow(/introuvable/);
+    expect(() =>
+      changerFormule(db, { siteId, userId, aujourdHui, numeroAbonnement: 999999, idNouvelleFormule: idEvasion, montantEncaisse: 0 })
+    ).toThrow(/introuvable/);
   });
 });
 
@@ -139,7 +157,15 @@ describe("changerFormule — options complémentaires (3.2.2, 5.4.2, 7.4)", () =
   });
 
   it("ajuste ses options lors d'une migration, au tarif différencié de la nouvelle formule", () => {
-    const resultat = changerFormule(db, { siteId, userId, numeroAbonnement, idNouvelleFormule: idEvasion, idsOptions: [optionEnglishPlus], montantEncaisse: 7500 });
+    const resultat = changerFormule(db, {
+      siteId,
+      userId,
+      aujourdHui,
+      numeroAbonnement,
+      idNouvelleFormule: idEvasion,
+      idsOptions: [optionEnglishPlus],
+      montantEncaisse: 7500,
+    });
 
     const facture = db.select().from(schema.facture).where(eq(schema.facture.idFacture, resultat.idFacture)).get();
     expect(facture?.montantTotal).toBe(7500); // 5500 (différentiel 10500-5000) + 2000 (option)
@@ -152,7 +178,7 @@ describe("changerFormule — options complémentaires (3.2.2, 5.4.2, 7.4)", () =
 
   it("rejette une option incompatible avec la nouvelle formule", () => {
     expect(() =>
-      changerFormule(db, { siteId, userId, numeroAbonnement, idNouvelleFormule: idToutCanalplus, idsOptions: [optionEnglishPlus], montantEncaisse: 0 })
+      changerFormule(db, { siteId, userId, aujourdHui, numeroAbonnement, idNouvelleFormule: idToutCanalplus, idsOptions: [optionEnglishPlus], montantEncaisse: 0 })
     ).toThrow(/compatible/i);
   });
 });
@@ -162,7 +188,7 @@ describe("changerFormule — TVA figée sur la facture (3.2.3, 6.1, 8.8)", () =>
   it("persiste le montant de taxe calculé au taux en vigueur à la création", () => {
     db.update(schema.entreprise).set({ tauxTva: 2000 }).run(); // 20 %
 
-    const resultat = changerFormule(db, { siteId, userId, numeroAbonnement, idNouvelleFormule: idEvasion, montantEncaisse: 5500 });
+    const resultat = changerFormule(db, { siteId, userId, aujourdHui, numeroAbonnement, idNouvelleFormule: idEvasion, montantEncaisse: 5500 });
 
     const facture = db.select().from(schema.facture).where(eq(schema.facture.idFacture, resultat.idFacture)).get();
     expect(facture?.montantTaxe).toBe(917); // 5500 TTC -> HT 4583, taxe 917

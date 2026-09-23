@@ -1959,7 +1959,7 @@ describe("Module changement de formule / migration (7.4)", () => {
       method: "POST",
       url: `/api/v1/abonnements/${numeroAbonnement}/changement-formule`,
       headers: authHeader(token),
-      payload: { siteId, userId, idNouvelleFormule: idFormuleSuperieure, montantEncaisse: 15000 },
+      payload: { siteId, userId, aujourdHui: "2025-11-16", idNouvelleFormule: idFormuleSuperieure, montantEncaisse: 15000 },
     });
 
     expect(migration.statusCode).toBe(200);
@@ -1993,7 +1993,7 @@ describe("Module changement de formule / migration (7.4)", () => {
       method: "POST",
       url: `/api/v1/abonnements/${numeroAbonnement}/changement-formule`,
       headers: authHeader(token),
-      payload: { siteId, userId, idNouvelleFormule: idFormuleSuperieure, idsOptions: [option.idOption], montantEncaisse: 21000 },
+      payload: { siteId, userId, aujourdHui: "2025-11-16", idNouvelleFormule: idFormuleSuperieure, idsOptions: [option.idOption], montantEncaisse: 21000 },
     });
 
     expect(migration.statusCode).toBe(200);
@@ -2024,7 +2024,7 @@ describe("Module changement de formule / migration (7.4)", () => {
       method: "POST",
       url: `/api/v1/abonnements/${numeroAbonnement}/changement-formule`,
       headers: authHeader(token),
-      payload: { siteId, userId, idNouvelleFormule: idFormuleInferieure, montantEncaisse: 0 },
+      payload: { siteId, userId, aujourdHui: "2025-11-16", idNouvelleFormule: idFormuleInferieure, montantEncaisse: 0 },
     });
 
     expect(migration.statusCode).toBe(400);
@@ -2049,7 +2049,7 @@ describe("Module changement de formule / migration (7.4)", () => {
       method: "POST",
       url: `/api/v1/abonnements/${numeroAbonnement}/changement-formule`,
       headers: authHeader(tokenTech),
-      payload: { siteId, userId, idNouvelleFormule: idFormule, montantEncaisse: 0 },
+      payload: { siteId, userId, aujourdHui: "2025-11-16", idNouvelleFormule: idFormule, montantEncaisse: 0 },
     });
     expect(reponse.statusCode).toBe(403);
   });

@@ -108,6 +108,7 @@ export function ChangerFormuleDialog({ numeroAbonnement, formuleActuelle, formul
       const resultat = await changerFormuleRequete(token, numeroAbonnement, {
         siteId: utilisateur.siteId,
         userId: utilisateur.idUser,
+        aujourdHui: new Date().toISOString().slice(0, 10),
         idNouvelleFormule: choix.formule.idFormule,
         idsOptions: idsOptionsSelectionnees.length > 0 ? idsOptionsSelectionnees : undefined,
         montantEncaisse,

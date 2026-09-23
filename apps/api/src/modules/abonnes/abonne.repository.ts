@@ -1,5 +1,5 @@
-import { and, eq, like, or } from "drizzle-orm";
-import { joursAvantEcheance } from "@mboapilot/shared";
+import { and, eq } from "drizzle-orm";
+import { joursAvantEcheance, normaliserLibelle } from "@mboapilot/shared";
 import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
 
@@ -122,19 +122,16 @@ export function rechercherAbonnes(db: Db, siteId: number, terme: string) {
     if (parAbonnement.length > 0) return parAbonnement.map((r) => r.abonne);
   }
 
-  const motif = `%${terme}%`;
-  return db
-    .select()
-    .from(schema.abonne)
-    .where(
-      and(
-        eq(schema.abonne.siteId, siteId),
-        or(
-          like(schema.abonne.nom, motif),
-          like(schema.abonne.prenom, motif),
-          like(schema.abonne.telephone, motif)
-        )
-      )
-    )
-    .all();
+  // 4.5, 8.2 : même repère que l'import CSV et le transfert de stock — un
+  // caissier tape rarement les accents (clavier/téléphone basique), donc la
+  // recherche par nom/prénom reste en JS (normalisation NFD, sans équivalent
+  // SQLite natif fiable) ; le téléphone reste une simple sous-chaîne.
+  const termeNormalise = normaliserLibelle(terme);
+  const abonnesSite = db.select().from(schema.abonne).where(eq(schema.abonne.siteId, siteId)).all();
+  return abonnesSite.filter(
+    (a) =>
+      normaliserLibelle(a.nom).includes(termeNormalise) ||
+      normaliserLibelle(a.prenom).includes(termeNormalise) ||
+      a.telephone.includes(terme)
+  );
 }

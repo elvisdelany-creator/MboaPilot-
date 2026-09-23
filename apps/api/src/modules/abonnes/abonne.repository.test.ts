@@ -67,6 +67,18 @@ describe("rechercherAbonnes (4.5 : résolution unifiée id_abonne / numero_abonn
     expect(resultats[0].nom).toBe("Nga Ndongo");
   });
 
+  // 4.5, 8.2 : un caissier tape rarement les accents (clavier/téléphone basique)
+  // — même repère que l'import CSV et le transfert de stock, sinon "aucun
+  // résultat" pousse à recréer une fiche en double pour un client existant
+  it("trouve par correspondance partielle sur le nom, insensible aux accents", () => {
+    creerAbonne(db, { siteId, nom: "Ébé", prenom: "Élodie", telephone: "690000005" });
+
+    const resultats = rechercherAbonnes(db, siteId, "Ebe");
+
+    expect(resultats).toHaveLength(1);
+    expect(resultats[0].nom).toBe("Ébé");
+  });
+
   it("trouve par correspondance sur le téléphone", () => {
     creerAbonne(db, { siteId, nom: "Nga Ndongo", prenom: "Valentin", telephone: "690000000" });
 

@@ -95,6 +95,10 @@ export function recruterAbonne(db: Db, params: RecruterAbonneParams): Recrutemen
   if (params.idComptePartage !== undefined) {
     const comptePartage = trouverComptePartage(db, params.idComptePartage);
     if (!comptePartage) throw new Error(`Compte partagé ${params.idComptePartage} introuvable`);
+    // 5.9 : un compte désactivé n'apparaît déjà plus dans la liste de la
+    // caisse — vérifié aussi ici pour ne pas dépendre uniquement du filtrage
+    // côté client (page non rafraîchie, appel direct de l'API)
+    if (comptePartage.actif !== 1) throw new Error(`Le compte partagé "${comptePartage.libelle}" est désactivé`);
     const ecransOccupes = compterEcransOccupes(db, params.idComptePartage);
     if (!peutAffecterEcran(comptePartage.nombreEcransMax, ecransOccupes)) {
       throw new Error(`Capacité atteinte : ${comptePartage.libelle} n'a plus d'écran disponible (${ecransOccupes}/${comptePartage.nombreEcransMax})`);

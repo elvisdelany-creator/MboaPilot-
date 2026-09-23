@@ -510,6 +510,32 @@ describe("recruterAbonne — compte partagé streaming (5.9)", () => {
     ).toThrow(/capacité|écran/i);
   });
 
+  // 5.9 : un compte désactivé (ex. abonnement fournisseur résilié, identifiants
+  // révoqués) n'est déjà plus proposé dans la liste déroulante de la caisse,
+  // mais rien ne garantissait ce refus côté serveur (page non rafraîchie,
+  // appel direct de l'API) — même défense en profondeur que pour la capacité
+  it("refuse l'affectation à un compte partagé désactivé", () => {
+    const familleNetflix = db.insert(schema.familleAbonnement).values({ libelle: "NETFLIX" }).returning().get().idFamille;
+    const formuleNetflix = db.insert(schema.formule).values({ idFamille: familleNetflix, libelle: "PREMIUM", prix: 3500, rang: 1 }).returning().get().idFormule;
+    const compte = db
+      .insert(schema.comptePartageStreaming)
+      .values({ siteId, idFamille: familleNetflix, libelle: "Compte Netflix #1", nombreEcransMax: 4, actif: 0 })
+      .returning()
+      .get();
+
+    expect(() =>
+      recruterAbonne(db, {
+        siteId,
+        userId,
+        aujourdHui: "2025-11-16",
+        abonne: { nom: "Nga", prenom: "Paul", telephone: "690000000" },
+        idFormule: formuleNetflix,
+        montantEncaisse: 3500,
+        idComptePartage: compte.idComptePartage,
+      })
+    ).toThrow(/désactivé|actif/i);
+  });
+
   it("renvoie une erreur pour un compte partagé inconnu", () => {
     expect(() =>
       recruterAbonne(db, {

@@ -53,6 +53,7 @@ export function transfererStock(db: Db, params: TransfererStockParams): Transfer
         type: source.type,
         libelle: source.libelle,
         categorie: source.categorie,
+        codeBarres: source.codeBarres,
         prixVente: source.prixVente,
         coutRevient: source.coutRevient,
         margeType: source.margeType,

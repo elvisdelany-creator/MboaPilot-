@@ -90,6 +90,17 @@ describe("transfererStock (5.2, 8.2)", () => {
     });
   });
 
+  // 5.2 : le code-barres identifie l'objet physique déplacé — un article
+  // transféré doit rester scannable au site destination (recherche caisse
+  // "libellé ou code-barres"), pas seulement retrouvable par son libellé
+  it("reprend le code-barres de l'article source lors de la création au site destination", () => {
+    db.update(schema.produit).set({ codeBarres: "1234567890128" }).where(eq(schema.produit.idProduit, idProduitSource)).run();
+
+    const resultat = transfererStock(db, { idProduitSource, siteDestinationId: siteDestination, quantite: 3, userId });
+
+    expect(resultat.produitDestination.codeBarres).toBe("1234567890128");
+  });
+
   it("journalise un mouvement double : TRANSFERT_SORTIE au site source, TRANSFERT_ENTREE au site destination", () => {
     const resultat = transfererStock(db, { idProduitSource, siteDestinationId: siteDestination, quantite: 4, motif: "Réassort boutique B", userId });
 

@@ -17,6 +17,8 @@ export interface InitierPaiementMobileParams {
 // 6.6 : initie une transaction de paiement mobile sur une facture existante
 // (créée BROUILLON par le flux caisse/SAV concerné, avec montantEncaisse=0).
 export async function initierPaiementMobile(db: Db, fournisseur: FournisseurPaiementMobile, params: InitierPaiementMobileParams) {
+  if (params.montant <= 0) throw new Error("Le montant du paiement mobile doit être positif");
+
   const facture = db.select().from(schema.facture).where(eq(schema.facture.idFacture, params.idFacture)).get();
   if (!facture) throw new Error(`Facture ${params.idFacture} introuvable`);
   if (facture.statut === "VALIDEE") throw new Error("Cette facture est déjà validée");

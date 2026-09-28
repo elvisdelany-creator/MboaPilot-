@@ -65,6 +65,15 @@ describe("initierPaiementMobile (6.6)", () => {
     ).rejects.toThrow(/déjà validée/);
   });
 
+  it("rejette un montant nul ou négatif", async () => {
+    await expect(
+      initierPaiementMobile(db, fournisseur, { idFacture, numeroTelephone: "690000000", montant: -5000, parcours: "USSD_CLIENT" })
+    ).rejects.toThrow(/positif/i);
+    await expect(
+      initierPaiementMobile(db, fournisseur, { idFacture, numeroTelephone: "690000000", montant: 0, parcours: "USSD_CLIENT" })
+    ).rejects.toThrow(/positif/i);
+  });
+
   it("rejette une facture inconnue", async () => {
     await expect(
       initierPaiementMobile(db, fournisseur, { idFacture: 999999, numeroTelephone: "690000000", montant: 5000, parcours: "USSD_CLIENT" })

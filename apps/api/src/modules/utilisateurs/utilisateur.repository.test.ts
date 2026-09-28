@@ -47,6 +47,26 @@ describe("creerUtilisateur (2.5.1)", () => {
     expect(u.identifiant).toBe("vnga2");
   });
 
+  it("exige un nom, un prénom et un identifiant", () => {
+    expect(() =>
+      creerUtilisateur(db, { siteId, nom: "  ", prenom: "Valentin", identifiant: "vnga", motDePasse: "motdepasse-secret", role: "CAISSIER" })
+    ).toThrow(/nom/i);
+    expect(() =>
+      creerUtilisateur(db, { siteId, nom: "Nga", prenom: " ", identifiant: "vnga", motDePasse: "motdepasse-secret", role: "CAISSIER" })
+    ).toThrow(/prénom/i);
+    expect(() =>
+      creerUtilisateur(db, { siteId, nom: "Nga", prenom: "Valentin", identifiant: "  ", motDePasse: "motdepasse-secret", role: "CAISSIER" })
+    ).toThrow(/identifiant/i);
+  });
+
+  it("rejette un identifiant déjà utilisé avec un message clair, pas une erreur SQL brute", () => {
+    creerUtilisateur(db, { siteId, nom: "Nga", prenom: "Valentin", identifiant: "vnga", motDePasse: "motdepasse-secret", role: "CAISSIER" });
+
+    expect(() =>
+      creerUtilisateur(db, { siteId, nom: "Mballa", prenom: "Sylvie", identifiant: "vnga", motDePasse: "motdepasse-secret", role: "CAISSIER" })
+    ).toThrow(/identifiant.*déjà/i);
+  });
+
   // 11.5 : "création d'utilisateur" — action sensible à journaliser, avec l'auteur
   it("journalise la création d'un compte, avec l'auteur, mais jamais le mot de passe", () => {
     const admin = creerUtilisateur(db, { siteId, nom: "Admin", prenom: "D", identifiant: "admin1", motDePasse: "motdepasse-secret", role: "ADMINISTRATEUR" });

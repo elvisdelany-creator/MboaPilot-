@@ -25,6 +25,11 @@ export interface CreerUtilisateurInput {
 // action sensible à journaliser (auteur nullable — fixtures de test, sans
 // acteur humain identifié, sur le même modèle que le job automatique 11.3).
 export function creerUtilisateur(db: Db, input: CreerUtilisateurInput, acteurId: number | null = null) {
+  if (!input.nom.trim()) throw new Error("Le nom de l'utilisateur est obligatoire");
+  if (!input.prenom.trim()) throw new Error("Le prénom de l'utilisateur est obligatoire");
+  if (!input.identifiant.trim()) throw new Error("L'identifiant de l'utilisateur est obligatoire");
+  if (trouverUtilisateurParIdentifiant(db, input.identifiant)) throw new Error("Cet identifiant est déjà utilisé par un autre compte");
+
   const politique = trouverPolitiqueMotDePasseParSite(db, input.siteId);
   const erreurs = validerMotDePasse(input.motDePasse, politique);
   if (erreurs.length > 0) throw new Error(erreurs.join(" — "));

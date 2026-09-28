@@ -13,6 +13,8 @@ export interface CreerSiteInput {
 // chaque enregistrement porte un site_id) ; la bascule de supervision entre
 // sites pour un rôle multi-boutiques est différée en V2 (12.1).
 export function creerSite(db: Db, input: CreerSiteInput) {
+  if (!input.nom.trim()) throw new Error("Le nom du site est obligatoire");
+
   return db.insert(schema.site).values({ idEntreprise: input.idEntreprise, nom: input.nom, adresse: input.adresse }).returning().get();
 }
 

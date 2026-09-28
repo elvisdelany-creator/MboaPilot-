@@ -19,6 +19,10 @@ describe("creerSite (8.7)", () => {
     expect(site.nom).toBe("Site Bonamoussadi");
     expect(site.actif).toBe(1);
   });
+
+  it("exige un nom", () => {
+    expect(() => creerSite(db, { idEntreprise, nom: "  " })).toThrow(/nom/i);
+  });
 });
 
 describe("listerSites (8.7)", () => {

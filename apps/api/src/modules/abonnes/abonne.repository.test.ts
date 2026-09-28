@@ -15,6 +15,14 @@ beforeEach(() => {
   autreSiteId = db.insert(schema.site).values({ idEntreprise: ent.idEntreprise, nom: "Site B" }).returning().get().idSite;
 });
 
+describe("creerAbonne", () => {
+  it("exige un nom, un prénom et un téléphone", () => {
+    expect(() => creerAbonne(db, { siteId, nom: "  ", prenom: "Valentin", telephone: "690000000" })).toThrow(/nom/i);
+    expect(() => creerAbonne(db, { siteId, nom: "Nga", prenom: " ", telephone: "690000000" })).toThrow(/prénom/i);
+    expect(() => creerAbonne(db, { siteId, nom: "Nga", prenom: "Valentin", telephone: "  " })).toThrow(/téléphone/i);
+  });
+});
+
 describe("rechercherAbonnes (4.5 : résolution unifiée id_abonne / numero_abonnement / nom / téléphone)", () => {
   it("trouve un abonné par son numéro d'abonné exact", () => {
     const ab = creerAbonne(db, { siteId, nom: "Nga Ndongo", prenom: "Valentin", telephone: "690000000" });

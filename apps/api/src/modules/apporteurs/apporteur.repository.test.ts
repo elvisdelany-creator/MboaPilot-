@@ -32,6 +32,18 @@ describe("creerApporteur / trouverApporteur / listerApporteurs (6.3)", () => {
     expect(trouverApporteur(db, apporteur.idApporteur)?.nom).toBe("Jean Apporteur");
     expect(listerApporteurs(db)).toHaveLength(1);
   });
+
+  it("exige un nom", () => {
+    expect(() => creerApporteur(db, { nom: "" })).toThrow(/nom/i);
+    expect(() => creerApporteur(db, { nom: "   " })).toThrow(/nom/i);
+  });
+
+  // 6.2, 6.3 : un taux négatif produirait une commission négative (montant
+  // "dû" qui n'a aucun sens), venant fausser calculerSoldeCommission dès
+  // qu'un recrutement confirmé l'utilise
+  it("rejette un taux de commission par défaut négatif", () => {
+    expect(() => creerApporteur(db, { nom: "Jean Apporteur", tauxCommissionDefaut: -50 })).toThrow(/négatif|positif/i);
+  });
 });
 
 describe("modifierApporteur", () => {
@@ -43,6 +55,11 @@ describe("modifierApporteur", () => {
     const misAJour = trouverApporteur(db, apporteur.idApporteur);
     expect(misAJour?.actif).toBe(0);
     expect(misAJour?.tauxCommissionDefaut).toBe(1000);
+  });
+
+  it("rejette un taux de commission négatif", () => {
+    const apporteur = creerApporteur(db, { nom: "Jean Apporteur" });
+    expect(() => modifierApporteur(db, apporteur.idApporteur, { tauxCommissionDefaut: -10 })).toThrow(/négatif|positif/i);
   });
 });
 

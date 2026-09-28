@@ -10,6 +10,13 @@ export interface CreerApporteurInput {
 
 // 6.3 : sous-distributeurs et apporteurs d'affaires
 export function creerApporteur(db: Db, input: CreerApporteurInput) {
+  if (!input.nom.trim()) throw new Error("Le nom de l'apporteur est obligatoire");
+  // 6.2, 6.3 : un taux négatif produirait une commission négative (montant
+  // "dû" qui n'a aucun sens) dès qu'un recrutement confirmé l'utilise
+  if (input.tauxCommissionDefaut !== undefined && input.tauxCommissionDefaut < 0) {
+    throw new Error("Le taux de commission par défaut ne peut pas être négatif");
+  }
+
   return db
     .insert(schema.sousDistributeur)
     .values({ nom: input.nom, telephone: input.telephone, tauxCommissionDefaut: input.tauxCommissionDefaut })
@@ -31,6 +38,10 @@ export interface ModifierApporteurInput {
 }
 
 export function modifierApporteur(db: Db, idApporteur: number, input: ModifierApporteurInput) {
+  if (input.tauxCommissionDefaut !== undefined && input.tauxCommissionDefaut < 0) {
+    throw new Error("Le taux de commission par défaut ne peut pas être négatif");
+  }
+
   return db
     .update(schema.sousDistributeur)
     .set({

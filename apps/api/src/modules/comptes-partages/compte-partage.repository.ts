@@ -27,6 +27,9 @@ function dechiffrerCompte<T extends { identifiant: string | null; motDePasse: st
 // identifiant et mot de passe chiffrés au repos (chiffrement.ts) ; la
 // visibilité en clair reste restreinte au niveau des routes aux rôles de vente.
 export function creerComptePartage(db: Db, input: CreerComptePartageInput) {
+  if (!input.libelle.trim()) throw new Error("Le libellé du compte partagé est obligatoire");
+  if (input.nombreEcransMax <= 0) throw new Error("Le nombre d'écrans autorisés doit être positif");
+
   const compte = db
     .insert(schema.comptePartageStreaming)
     .values({
@@ -73,6 +76,9 @@ export interface ModifierComptePartageInput {
 }
 
 export function modifierComptePartage(db: Db, idComptePartage: number, input: ModifierComptePartageInput) {
+  if (input.libelle !== undefined && !input.libelle.trim()) throw new Error("Le libellé du compte partagé est obligatoire");
+  if (input.nombreEcransMax !== undefined && input.nombreEcransMax <= 0) throw new Error("Le nombre d'écrans autorisés doit être positif");
+
   const compte = db
     .update(schema.comptePartageStreaming)
     .set({

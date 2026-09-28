@@ -49,6 +49,12 @@ describe("creerComptePartage / listerComptesPartages (5.9)", () => {
     expect(comptes[0].nombreEcransMax).toBe(4);
   });
 
+  it("exige un libellé et un nombre d'écrans strictement positif", () => {
+    expect(() => creerComptePartage(db, { siteId, idFamille, libelle: "  ", nombreEcransMax: 4 })).toThrow(/libellé/i);
+    expect(() => creerComptePartage(db, { siteId, idFamille, libelle: "Compte Netflix #1", nombreEcransMax: -3 })).toThrow(/positif/i);
+    expect(() => creerComptePartage(db, { siteId, idFamille, libelle: "Compte Netflix #1", nombreEcransMax: 0 })).toThrow(/positif/i);
+  });
+
   // 11.2 : chiffrement des données sensibles au repos — l'identifiant et le
   // mot de passe du compte partagé sont déchiffrés de façon transparente à
   // la lecture, mais jamais stockés en clair dans la base.
@@ -110,6 +116,12 @@ describe("modifierComptePartage", () => {
 
   it("renvoie undefined pour un compte inconnu", () => {
     expect(modifierComptePartage(db, 999999, { nombreEcransMax: 5 })).toBeUndefined();
+  });
+
+  it("rejette un nombre d'écrans nul ou négatif", () => {
+    const compte = creerComptePartage(db, { siteId, idFamille, libelle: "Compte Netflix #1", nombreEcransMax: 4 });
+    expect(() => modifierComptePartage(db, compte.idComptePartage, { nombreEcransMax: 0 })).toThrow(/positif/i);
+    expect(() => modifierComptePartage(db, compte.idComptePartage, { nombreEcransMax: -1 })).toThrow(/positif/i);
   });
 });
 

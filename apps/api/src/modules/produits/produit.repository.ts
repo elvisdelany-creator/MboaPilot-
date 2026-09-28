@@ -31,6 +31,12 @@ export interface CreerProduitInput {
 // sont toujours calculées ensemble (6.1), le stock démarre à 0 et ne se
 // remplit que par réception d'achat (5.2), jamais saisi directement ici.
 export function creerProduit(db: Db, input: CreerProduitInput) {
+  if (!input.libelle.trim()) throw new Error("Le libellé de l'article est obligatoire");
+  // 5.2, 6.1 : un prix de vente négatif se propage tel quel dans les
+  // opérations qui l'utilisent directement (échange de matériel, pièce SAV),
+  // produisant une facture au montant négatif
+  if (input.prixVente < 0) throw new Error("Le prix de vente ne peut pas être négatif");
+
   const margeType = input.margeType ?? "VALEUR";
   const coutRevient = input.coutRevient ?? 0;
   const marge = calculerMarge({
@@ -78,6 +84,8 @@ export interface ModifierProduitInput {
 export function modifierProduit(db: Db, idProduit: number, input: ModifierProduitInput) {
   const avant = trouverProduit(db, idProduit);
   if (!avant) throw new Error(`Produit ${idProduit} introuvable`);
+  if (input.libelle !== undefined && !input.libelle.trim()) throw new Error("Le libellé de l'article est obligatoire");
+  if (input.prixVente !== undefined && input.prixVente < 0) throw new Error("Le prix de vente ne peut pas être négatif");
 
   const margeType = input.margeType ?? avant.margeType;
   const coutRevient = input.coutRevient ?? avant.coutRevient;

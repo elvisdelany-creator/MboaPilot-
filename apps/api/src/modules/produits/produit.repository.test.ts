@@ -62,6 +62,19 @@ describe("creerProduit (8.2 : création d'une fiche article)", () => {
     expect(produit.quantiteStock).toBe(0); // le stock ne se remplit que par réception d'achat (5.2)
   });
 
+  it("exige un libellé", () => {
+    expect(() => creerProduit(db, { siteId, type: "BIEN", libelle: "", prixVente: 2500 })).toThrow(/libellé/i);
+    expect(() => creerProduit(db, { siteId, type: "BIEN", libelle: "   ", prixVente: 2500 })).toThrow(/libellé/i);
+  });
+
+  // 5.2, 6.1 : un prix de vente négatif se propage tel quel dans les
+  // opérations qui l'utilisent directement sans garde-fou de leur côté
+  // (échange de matériel, pièce SAV) — vérifié : reproduit une facture
+  // d'échange de matériel à -5000 FCFA avec un article à ce prix.
+  it("rejette un prix de vente négatif", () => {
+    expect(() => creerProduit(db, { siteId, type: "BIEN", libelle: "Câble HDMI", prixVente: -2500 })).toThrow(/négatif|positif/i);
+  });
+
   // 5.2 : "code interne/code-barres optionnel"
   it("enregistre le code interne/code-barres optionnel", () => {
     const produit = creerProduit(db, { siteId, type: "BIEN", libelle: "Câble HDMI", prixVente: 2500, codeBarres: "3700123456789" });
@@ -98,6 +111,13 @@ describe("modifierProduit (8.2 : édition d'une fiche article, historique des pr
 
     expect(modifie.margeValeur).toBe(2000); // le montant en mode VALEUR ne bouge pas
     expect(modifie.margePourcentage).toBe(2000); // 2000/10000 = 20.00 %, recalculé
+  });
+
+  it("rejette un prix de vente négatif ou un libellé vide", () => {
+    const cree = creerProduit(db, { siteId, type: "BIEN", libelle: "Décodeur", prixVente: 15000 });
+
+    expect(() => modifierProduit(db, cree.idProduit, { prixVente: -100, userId })).toThrow(/négatif|positif/i);
+    expect(() => modifierProduit(db, cree.idProduit, { libelle: "  ", userId })).toThrow(/libellé/i);
   });
 
   it("journalise un changement de prix ou de coût dans l'historique", () => {

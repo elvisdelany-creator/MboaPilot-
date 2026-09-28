@@ -45,8 +45,20 @@ export function NouveauCompteDialog({ ouvert, sites, onFerme, onSucces }: Props)
 
   // 11.2, 8.8 : la politique de mot de passe est paramétrable — le formulaire
   // annonce et vérifie celle de l'entreprise, jamais un seuil figé.
+  // Les champs sont aussi réinitialisés à la fermeture (annulation ou échec
+  // laissé en l'état) : sans ça, une nouvelle saisie par-dessus une valeur
+  // restée en place (ex. l'identifiant refusé pour doublon) se concatène au
+  // lieu de la remplacer, créant un compte avec des valeurs involontaires.
   useEffect(() => {
-    if (!ouvert) return;
+    if (!ouvert) {
+      setNom("");
+      setPrenom("");
+      setIdentifiant("");
+      setMotDePasse("");
+      setRole("CAISSIER");
+      setSiteId("");
+      return;
+    }
     chargerInfosEntreprise(token)
       .then((infos) =>
         setPolitique({
@@ -66,15 +78,6 @@ export function NouveauCompteDialog({ ouvert, sites, onFerme, onSucces }: Props)
     ...(politique.exigerCaractereSpecial ? ["un caractère spécial"] : []),
   ].join(", ");
 
-  function reinitialiser() {
-    setNom("");
-    setPrenom("");
-    setIdentifiant("");
-    setMotDePasse("");
-    setRole("CAISSIER");
-    setSiteId("");
-  }
-
   const pretAValider = nom.trim() && prenom.trim() && identifiant.trim() && validerMotDePasse(motDePasse, politique).length === 0;
 
   async function valider() {
@@ -90,7 +93,6 @@ export function NouveauCompteDialog({ ouvert, sites, onFerme, onSucces }: Props)
         siteId: siteId ? Number(siteId) : undefined,
       });
       toast.success(`Compte « ${identifiant.trim()} » créé.`);
-      reinitialiser();
       onSucces();
     } catch (erreur) {
       if (erreur instanceof ErreurAuthentification) {

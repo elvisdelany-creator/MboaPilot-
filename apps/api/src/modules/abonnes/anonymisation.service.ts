@@ -31,13 +31,20 @@ export function anonymiserAbonne(db: Db, params: AnonymiserAbonneParams) {
   const abonne = trouverAbonne(db, params.idAbonne);
   if (!abonne) throw new Error(`Abonné ${params.idAbonne} introuvable`);
 
+  // 11.3, 11.5 : le journal d'audit trace QUE l'identité a été effacée,
+  // jamais l'identité elle-même — contrairement à la fusion de doublons
+  // (fusion-abonnes.service.ts), qui journalise la fiche complète du
+  // doublon supprimé à des fins de traçabilité d'un dédoublonnage, pas d'un
+  // droit à l'oubli. Journaliser ici les valeurs effacées viderait le droit
+  // de suppression de son sens : la fiche personnelle survivrait en clair,
+  // indéfiniment, dans une autre table consultable par l'encadrement (11.5).
   db.insert(schema.journalAudit)
     .values({
       utilisateurId: params.userId,
       action: "SUPPRESSION",
       tableCible: "abonne",
       idCible: String(params.idAbonne),
-      valeurAvant: JSON.stringify(abonne),
+      valeurAvant: JSON.stringify({ champsEffaces: ["nom", "prenom", "telephone", "email", "numeroCni", "adresse"] }),
     })
     .run();
 

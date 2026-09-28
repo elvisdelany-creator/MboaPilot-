@@ -49,8 +49,20 @@ describe("anonymiserAbonne (11.3)", () => {
     expect(facture?.idAbonne).toBe(abonne.idAbonne);
   });
 
-  it("journalise l'anonymisation dans le journal d'audit (immuable), avec l'identité d'origine", () => {
-    const abonne = creerAbonne(db, { siteId, nom: "Nga Ndongo", prenom: "Valentin", telephone: "690000000" });
+  // 11.3 : le journal d'audit trace QUE l'action a eu lieu, jamais les
+  // données personnelles effacées elles-mêmes — sans quoi le droit de
+  // suppression serait vidé de son sens (la fiche personnelle survivrait en
+  // clair, indéfiniment, dans une autre table consultable par l'encadrement).
+  it("journalise l'anonymisation sans jamais y conserver les données personnelles effacées", () => {
+    const abonne = creerAbonne(db, {
+      siteId,
+      nom: "Nga Ndongo",
+      prenom: "Valentin",
+      telephone: "690000000",
+      email: "v@example.cm",
+      numeroCni: "CM123",
+      adresse: "Douala",
+    });
 
     anonymiserAbonne(db, { idAbonne: abonne.idAbonne, userId });
 
@@ -59,7 +71,15 @@ describe("anonymiserAbonne (11.3)", () => {
     expect(audit[0].action).toBe("SUPPRESSION");
     expect(audit[0].idCible).toBe(String(abonne.idAbonne));
     expect(audit[0].utilisateurId).toBe(userId);
-    expect(audit[0].valeurAvant).toContain("Nga Ndongo");
+    expect(audit[0].valeurAvant).not.toContain("Nga Ndongo");
+    expect(audit[0].valeurAvant).not.toContain("Valentin");
+    expect(audit[0].valeurAvant).not.toContain("690000000");
+    expect(audit[0].valeurAvant).not.toContain("v@example.cm");
+    expect(audit[0].valeurAvant).not.toContain("CM123");
+    expect(audit[0].valeurAvant).not.toContain("Douala");
+    expect(JSON.parse(audit[0].valeurAvant!).champsEffaces).toEqual(
+      expect.arrayContaining(["nom", "prenom", "telephone", "email", "numeroCni", "adresse"])
+    );
   });
 
   it("rejette un abonné inconnu", () => {

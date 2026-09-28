@@ -35,8 +35,14 @@ export function TransfererStockDialog({ produit, onFerme, onSucces }: Props) {
   const [motif, setMotif] = useState("");
   const [enCours, setEnCours] = useState(false);
 
+  // les champs sont réinitialisés à la fermeture (annulation ou échec laissé
+  // en l'état) — sinon une nouvelle saisie par-dessus une valeur restée en
+  // place se concatène au lieu de la remplacer (NouveauCompteDialog, 8.7)
   useEffect(() => {
-    if (!produit) return;
+    if (!produit) {
+      reinitialiser();
+      return;
+    }
     chargerSites(token)
       .then((data) => setSites(data.filter((s) => s.idSite !== utilisateur.siteId && s.actif === 1)))
       .catch(() => setSites([]));

@@ -45,8 +45,14 @@ export function EchangeMaterielDialog({ numeroAbonnement, onFerme, onSucces }: P
 
   const ouvert = numeroAbonnement !== null;
 
+  // les champs sont réinitialisés à la fermeture (annulation ou échec laissé
+  // en l'état) — sinon une nouvelle saisie par-dessus une valeur restée en
+  // place se concatène au lieu de la remplacer (NouveauCompteDialog, 8.7)
   useEffect(() => {
-    if (!ouvert) return;
+    if (!ouvert) {
+      reinitialiser();
+      return;
+    }
     chargerProduits(token, utilisateur.siteId)
       .then((data) => {
         setProduits(data);

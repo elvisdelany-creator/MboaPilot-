@@ -55,6 +55,14 @@ export function NouveauDossierDialog({ ouvert, onFerme, onSucces }: Props) {
     setSousGarantie(false);
   }
 
+  // les champs sont réinitialisés à la fermeture (annulation ou échec laissé
+  // en l'état) — sinon une nouvelle saisie par-dessus une valeur restée en
+  // place se concatène au lieu de la remplacer (NouveauCompteDialog, 8.7)
+  useEffect(() => {
+    if (!ouvert) reinitialiser();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ouvert]);
+
   async function valider() {
     if (!descriptionPanne.trim()) return;
     setEnCours(true);

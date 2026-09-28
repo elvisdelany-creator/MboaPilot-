@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -27,6 +27,14 @@ export function NouveauSiteDialog({ ouvert, onFerme, onSucces }: Props) {
     setNom("");
     setAdresse("");
   }
+
+  // les champs sont réinitialisés à la fermeture (annulation ou échec laissé
+  // en l'état) — sinon une nouvelle saisie par-dessus une valeur restée en
+  // place se concatène au lieu de la remplacer (NouveauCompteDialog, 8.7)
+  useEffect(() => {
+    if (!ouvert) reinitialiser();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ouvert]);
 
   async function valider() {
     if (!nom.trim()) return;

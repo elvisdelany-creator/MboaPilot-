@@ -1417,6 +1417,49 @@ describe("Émission d'un avoir (6.4)", () => {
     expect(avoir.statusCode).toBe(403);
   });
 
+  // 2.5.2 : cloisonnement logique multi-site — un gérant ne doit jamais agir
+  // sur une facture d'un autre site que le sien (la bascule multi-site pour
+  // un rôle habilité est une vue dédiée, différée en V2).
+  it("un gérant ne peut pas consulter les lignes ni émettre d'avoir sur la facture d'un autre site (403)", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    creerUtilisateur(db, { siteId, nom: "Gerant", prenom: "G", identifiant: "gerant1", motDePasse: "motdepasse-secret", role: "GERANT" });
+    const token = await connecter(app, "gerant1");
+    const idEntreprise = db.select().from(schema.site).where(eq(schema.site.idSite, siteId)).get()!.idEntreprise;
+    const autreSite = db.insert(schema.site).values({ idEntreprise, nom: "Site B" }).returning().get().idSite;
+    const produit = db.insert(schema.produit).values({ siteId: autreSite, type: "BIEN", libelle: "Télécommande", prixVente: 2500 }).returning().get();
+    const facture = db.insert(schema.facture).values({ siteId: autreSite, statut: "VALIDEE", montantTotal: 2500, creePar: userId }).returning().get();
+    const ligne = db
+      .insert(schema.ligneVente)
+      .values({ idFacture: facture.idFacture, idProduit: produit.idProduit, quantite: 1, prixApplique: 2500 })
+      .returning()
+      .get();
+
+    const lignes = await app.inject({ method: "GET", url: `/api/v1/factures/${facture.idFacture}/lignes`, headers: authHeader(token) });
+    expect(lignes.statusCode).toBe(403);
+
+    const avoir = await app.inject({
+      method: "POST",
+      url: `/api/v1/factures/${facture.idFacture}/avoir`,
+      headers: authHeader(token),
+      payload: { lignes: [{ idLigneOrigine: ligne.idLigne, quantite: 1 }], restituerStock: false, userId },
+    });
+    expect(avoir.statusCode).toBe(403);
+  });
+
+  it("un administrateur consulte et émet un avoir sur la facture d'un autre site de son entreprise", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    creerUtilisateur(db, { siteId, nom: "Admin", prenom: "D", identifiant: "admin1", motDePasse: "motdepasse-secret", role: "ADMINISTRATEUR" });
+    const token = await connecter(app, "admin1");
+    const idEntreprise = db.select().from(schema.site).where(eq(schema.site.idSite, siteId)).get()!.idEntreprise;
+    const autreSite = db.insert(schema.site).values({ idEntreprise, nom: "Site B" }).returning().get().idSite;
+    const produit = db.insert(schema.produit).values({ siteId: autreSite, type: "BIEN", libelle: "Télécommande", prixVente: 2500 }).returning().get();
+    const facture = db.insert(schema.facture).values({ siteId: autreSite, statut: "VALIDEE", montantTotal: 2500, creePar: userId }).returning().get();
+    db.insert(schema.ligneVente).values({ idFacture: facture.idFacture, idProduit: produit.idProduit, quantite: 1, prixApplique: 2500 }).run();
+
+    const lignes = await app.inject({ method: "GET", url: `/api/v1/factures/${facture.idFacture}/lignes`, headers: authHeader(token) });
+    expect(lignes.statusCode).toBe(200);
+  });
+
   it("rejette un avoir sur une facture BROUILLON (400)", async () => {
     const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
     creerUtilisateur(db, { siteId, nom: "Gerant", prenom: "G", identifiant: "gerant1", motDePasse: "motdepasse-secret", role: "GERANT" });
@@ -1453,6 +1496,23 @@ describe("Encaissement complémentaire sur solde restant dû (6.4, 9.4)", () => 
 
     expect(encaissement.statusCode).toBe(201);
     expect(encaissement.json()).toMatchObject({ soldeRestant: 0, statutFacture: "VALIDEE" });
+  });
+
+  it("un caissier ne peut pas encaisser le solde d'une facture d'un autre site (403)", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const token = await connecter(app);
+    const idEntreprise = db.select().from(schema.site).where(eq(schema.site.idSite, siteId)).get()!.idEntreprise;
+    const autreSite = db.insert(schema.site).values({ idEntreprise, nom: "Site B" }).returning().get().idSite;
+    const facture = db.insert(schema.facture).values({ siteId: autreSite, statut: "BROUILLON", montantTotal: 10000, creePar: userId }).returning().get();
+
+    const encaissement = await app.inject({
+      method: "POST",
+      url: `/api/v1/factures/${facture.idFacture}/paiements`,
+      headers: authHeader(token),
+      payload: { userId, montant: 10000 },
+    });
+
+    expect(encaissement.statusCode).toBe(403);
   });
 
   it("rejette un encaissement sur une facture déjà intégralement payée (400)", async () => {
@@ -1500,6 +1560,24 @@ describe("Annulation d'un paiement mal saisi (9.1, 11.5)", () => {
     const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
     const token = await connecter(app);
     const facture = db.insert(schema.facture).values({ siteId, statut: "VALIDEE", montantTotal: 5000, creePar: userId }).returning().get();
+    const paiement = db.insert(schema.paiement).values({ idFacture: facture.idFacture, mode: "CASH", montant: 5000, utilisateurId: userId }).returning().get();
+
+    const annulation = await app.inject({
+      method: "DELETE",
+      url: `/api/v1/paiements/${paiement.idPaiement}?userId=${userId}`,
+      headers: authHeader(token),
+    });
+
+    expect(annulation.statusCode).toBe(403);
+  });
+
+  it("un gérant ne peut pas annuler un paiement d'un autre site (403)", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    creerUtilisateur(db, { siteId, nom: "Gerant", prenom: "G", identifiant: "gerant1", motDePasse: "motdepasse-secret", role: "GERANT" });
+    const token = await connecter(app, "gerant1");
+    const idEntreprise = db.select().from(schema.site).where(eq(schema.site.idSite, siteId)).get()!.idEntreprise;
+    const autreSite = db.insert(schema.site).values({ idEntreprise, nom: "Site B" }).returning().get().idSite;
+    const facture = db.insert(schema.facture).values({ siteId: autreSite, statut: "VALIDEE", montantTotal: 5000, creePar: userId }).returning().get();
     const paiement = db.insert(schema.paiement).values({ idFacture: facture.idFacture, mode: "CASH", montant: 5000, utilisateurId: userId }).returning().get();
 
     const annulation = await app.inject({
@@ -1567,6 +1645,28 @@ describe("Rapprochement bancaire d'un virement (6.5)", () => {
       method: "PATCH",
       url: `/api/v1/paiements/${paiement.idPaiement}/rapprochement`,
       headers: authHeader(token),
+    });
+
+    expect(rapprochement.statusCode).toBe(403);
+  });
+
+  it("un comptable ne peut pas confirmer le rapprochement d'un virement d'un autre site (403)", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    creerUtilisateur(db, { siteId, nom: "Compta", prenom: "C", identifiant: "comptable1", motDePasse: "motdepasse-secret", role: "COMPTABLE" });
+    const tokenComptable = await connecter(app, "comptable1");
+    const idEntreprise = db.select().from(schema.site).where(eq(schema.site.idSite, siteId)).get()!.idEntreprise;
+    const autreSite = db.insert(schema.site).values({ idEntreprise, nom: "Site B" }).returning().get().idSite;
+    const facture = db.insert(schema.facture).values({ siteId: autreSite, statut: "VALIDEE", montantTotal: 10000, creePar: userId }).returning().get();
+    const paiement = db
+      .insert(schema.paiement)
+      .values({ idFacture: facture.idFacture, mode: "VIREMENT", montant: 10000, utilisateurId: userId, statutRapprochement: "EN_ATTENTE" })
+      .returning()
+      .get();
+
+    const rapprochement = await app.inject({
+      method: "PATCH",
+      url: `/api/v1/paiements/${paiement.idPaiement}/rapprochement`,
+      headers: authHeader(tokenComptable),
     });
 
     expect(rapprochement.statusCode).toBe(403);
@@ -1901,6 +2001,42 @@ describe("Module paiement mobile Orange Money (6.6)", () => {
 
     const reponse = await app.inject({ method: "GET", url: "/api/v1/paiements-mobiles/999999", headers: authHeader(token) });
     expect(reponse.statusCode).toBe(404);
+  });
+
+  it("un caissier ne peut pas initier ni actualiser un paiement mobile sur la facture d'un autre site (403)", async () => {
+    const fournisseur = new FournisseurPaiementMobileFactice();
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST, fournisseurPaiementMobile: fournisseur });
+    const token = await connecter(app);
+    const idEntreprise = db.select().from(schema.site).where(eq(schema.site.idSite, siteId)).get()!.idEntreprise;
+    const autreSite = db.insert(schema.site).values({ idEntreprise, nom: "Site B" }).returning().get().idSite;
+    const autreUserId = creerUtilisateur(db, { siteId: autreSite, nom: "B", prenom: "B", identifiant: "caissierb", motDePasse: "motdepasse-secret", role: "CAISSIER" }).idUser;
+    const facture = db.insert(schema.facture).values({ siteId: autreSite, montantTotal: 5000, creePar: autreUserId }).returning().get();
+
+    const initiation = await app.inject({
+      method: "POST",
+      url: "/api/v1/paiements-mobiles",
+      headers: authHeader(token),
+      payload: { idFacture: facture.idFacture, numeroTelephone: "690000000", montant: 5000, parcours: "USSD_CLIENT" },
+    });
+    expect(initiation.statusCode).toBe(403);
+
+    // même en connaissant l'id d'une transaction d'un autre site (créée directement en base ici
+    // pour isoler le test de la première assertion), l'actualisation doit rester bloquée.
+    const transaction = db
+      .insert(schema.transactionMobileMoney)
+      .values({ idFacture: facture.idFacture, parcours: "USSD_CLIENT", numeroTelephone: "690000000", montant: 5000, statut: "EN_ATTENTE", dateExpiration: "2099-01-01T00:00:00.000Z" })
+      .returning()
+      .get();
+
+    const actualisation = await app.inject({
+      method: "POST",
+      url: `/api/v1/paiements-mobiles/${transaction.idTransaction}/actualiser`,
+      headers: authHeader(token),
+    });
+    expect(actualisation.statusCode).toBe(403);
+
+    const consultation = await app.inject({ method: "GET", url: `/api/v1/paiements-mobiles/${transaction.idTransaction}`, headers: authHeader(token) });
+    expect(consultation.statusCode).toBe(403);
   });
 
   // 6.6 : "EXPIRÉE : Délai de validation dépassé (OTP non saisi à temps) :

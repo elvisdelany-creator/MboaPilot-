@@ -51,6 +51,15 @@ export function creerAuthRequis(db: Db) {
   };
 }
 
+// 2.5.2 : cloisonnement logique multi-site — un compte non-Administrateur
+// n'agit jamais sur une ressource d'un site autre que le sien ; la "bascule
+// de site" pour un rôle habilité à superviser plusieurs sites (ex. gérant
+// multi-boutiques) est une vue dédiée différée en V2, pas une exception
+// générale aux contrôles d'accès des routes métier existantes.
+export function siteAutorise(utilisateur: { role: Role; siteId: number }, siteIdCible: number) {
+  return utilisateur.role === "ADMINISTRATEUR" || utilisateur.siteId === siteIdCible;
+}
+
 export function exigerRole(...roles: Role[]) {
   return async function (request: FastifyRequest, reply: FastifyReply) {
     if (!roles.includes(request.user.role)) {

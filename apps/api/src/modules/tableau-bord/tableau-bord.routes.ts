@@ -16,67 +16,63 @@ import { listerResumesApporteurs } from "../apporteurs/apporteur.service.js";
 // (indicateurs financiers), distincte des alertes d'échéance/de stock déjà
 // ouvertes aux rôles de vente sur le tableau de bord de base.
 export function registerTableauBordRoutes(app: FastifyInstance, db: Db, guards: RouteGuards & { pilotage: Guard }) {
-  app.get<{ Querystring: { siteId: string; aujourdHui: string } }>(
+  app.get<{ Querystring: { aujourdHui: string } }>(
     "/api/v1/tableau-bord/indicateurs",
     { preHandler: [guards.authRequis, guards.pilotage] },
     async (request, reply) => {
-      const { siteId, aujourdHui } = request.query;
-      reply.code(200).send(calculerIndicateursJour(db, Number(siteId), aujourdHui));
+      reply.code(200).send(calculerIndicateursJour(db, request.user.siteId, request.query.aujourdHui));
     }
   );
 
   // 9.3 : courbe d'évolution du CA, "filtrable... par famille d'activité"
-  app.get<{ Querystring: { siteId: string; aujourdHui: string; jours?: string; libelleFamille?: string } }>(
+  app.get<{ Querystring: { aujourdHui: string; jours?: string; libelleFamille?: string } }>(
     "/api/v1/tableau-bord/evolution-ca",
     { preHandler: [guards.authRequis, guards.pilotage] },
     async (request, reply) => {
-      const { siteId, aujourdHui, jours, libelleFamille } = request.query;
-      reply.code(200).send(calculerEvolutionCA(db, Number(siteId), aujourdHui, jours ? Number(jours) : 30, libelleFamille || undefined));
+      const { aujourdHui, jours, libelleFamille } = request.query;
+      reply.code(200).send(calculerEvolutionCA(db, request.user.siteId, aujourdHui, jours ? Number(jours) : 30, libelleFamille || undefined));
     }
   );
 
-  app.get<{ Querystring: { siteId: string } }>(
+  app.get(
     "/api/v1/tableau-bord/valorisation-stock",
     { preHandler: [guards.authRequis, guards.pilotage] },
     async (request, reply) => {
-      reply.code(200).send({ valorisation: calculerValorisationStock(db, Number(request.query.siteId)) });
+      reply.code(200).send({ valorisation: calculerValorisationStock(db, request.user.siteId) });
     }
   );
 
-  app.get<{ Querystring: { siteId: string; aujourdHui: string } }>(
+  app.get<{ Querystring: { aujourdHui: string } }>(
     "/api/v1/tableau-bord/encaissements-jour",
     { preHandler: [guards.authRequis, guards.pilotage] },
     async (request, reply) => {
-      const { siteId, aujourdHui } = request.query;
-      reply.code(200).send(listerEncaissementsJour(db, Number(siteId), aujourdHui));
+      reply.code(200).send(listerEncaissementsJour(db, request.user.siteId, request.query.aujourdHui));
     }
   );
 
   // 8.6 : "Chiffre d'affaires — par famille d'activité"
-  app.get<{ Querystring: { siteId: string; aujourdHui: string } }>(
+  app.get<{ Querystring: { aujourdHui: string } }>(
     "/api/v1/tableau-bord/ventilation-ca",
     { preHandler: [guards.authRequis, guards.pilotage] },
     async (request, reply) => {
-      const { siteId, aujourdHui } = request.query;
-      reply.code(200).send(calculerVentilationCAJour(db, Number(siteId), aujourdHui));
+      reply.code(200).send(calculerVentilationCAJour(db, request.user.siteId, request.query.aujourdHui));
     }
   );
 
   // 6.1, 8.6 : "Marge / rentabilité — par famille et par article"
-  app.get<{ Querystring: { siteId: string; aujourdHui: string } }>(
+  app.get<{ Querystring: { aujourdHui: string } }>(
     "/api/v1/tableau-bord/marge-par-article",
     { preHandler: [guards.authRequis, guards.pilotage] },
     async (request, reply) => {
-      const { siteId, aujourdHui } = request.query;
-      reply.code(200).send(calculerMargeParArticleJour(db, Number(siteId), aujourdHui));
+      reply.code(200).send(calculerMargeParArticleJour(db, request.user.siteId, request.query.aujourdHui));
     }
   );
 
-  app.get<{ Querystring: { siteId: string } }>(
+  app.get(
     "/api/v1/tableau-bord/commissions-canalplus",
     { preHandler: [guards.authRequis, guards.pilotage] },
     async (request, reply) => {
-      reply.code(200).send(listerCommissionsCanalplusEnCours(db, Number(request.query.siteId)));
+      reply.code(200).send(listerCommissionsCanalplusEnCours(db, request.user.siteId));
     }
   );
 

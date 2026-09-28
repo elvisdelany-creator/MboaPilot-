@@ -16,25 +16,25 @@ export function registerJobsRoutes(app: FastifyInstance, db: Db, guards: RouteGu
   // 8.6 : "Abonnements à échéance — Listes J-7/J-3/J-1... filtrable par
   // famille et par site" — même tableau de bord que le Comptable (2.5.1,
   // "lecture financière") consulte déjà via le guard pilotage
-  app.get<{ Querystring: { siteId: string; idFamille?: string } }>(
+  app.get<{ Querystring: { idFamille?: string } }>(
     "/api/v1/alertes-echeance",
     { preHandler: [guards.authRequis, guards.lectureFinanciere] },
     async (request, reply) => {
       const aujourdHui = new Date().toISOString().slice(0, 10);
       const idFamille = request.query.idFamille !== undefined ? Number(request.query.idFamille) : undefined;
-      reply.code(200).send(listerAlertesEcheance(db, Number(request.query.siteId), aujourdHui, idFamille));
+      reply.code(200).send(listerAlertesEcheance(db, request.user.siteId, aujourdHui, idFamille));
     }
   );
 
   // 4.4, 8.8 : liste dédiée « Abonnements expirés » du tableau de bord,
   // filtrable par famille — bornée par la durée de rétention paramétrable
-  app.get<{ Querystring: { siteId: string; idFamille?: string } }>(
+  app.get<{ Querystring: { idFamille?: string } }>(
     "/api/v1/abonnements-expires",
     { preHandler: [guards.authRequis, guards.lectureFinanciere] },
     async (request, reply) => {
       const aujourdHui = new Date().toISOString().slice(0, 10);
       const idFamille = request.query.idFamille !== undefined ? Number(request.query.idFamille) : undefined;
-      reply.code(200).send(listerAbonnementsExpires(db, Number(request.query.siteId), aujourdHui, idFamille));
+      reply.code(200).send(listerAbonnementsExpires(db, request.user.siteId, aujourdHui, idFamille));
     }
   );
 }

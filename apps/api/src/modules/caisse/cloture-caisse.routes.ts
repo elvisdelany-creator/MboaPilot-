@@ -14,19 +14,19 @@ function envoyerErreur(reply: FastifyReply, erreur: unknown) {
 // (comptage et validation de l'écart théorique/réel) est réservée à
 // l'encadrement, comme les autres contrôles financiers (avoirs, stock).
 export function registerClotureCaisseRoutes(app: FastifyInstance, db: Db, guards: { authRequis: Guard; ventes: Guard; validationCloture: Guard }) {
-  app.get<{ Querystring: { siteId: string } }>(
+  app.get(
     "/api/v1/cloture-caisse/ouverte",
     { preHandler: [guards.authRequis, guards.ventes] },
     async (request, reply) => {
-      reply.code(200).send(obtenirClotureOuverte(db, Number(request.query.siteId)) ?? null);
+      reply.code(200).send(obtenirClotureOuverte(db, request.user.siteId) ?? null);
     }
   );
 
-  app.get<{ Querystring: { siteId: string } }>(
+  app.get(
     "/api/v1/cloture-caisse",
     { preHandler: [guards.authRequis, guards.ventes] },
     async (request, reply) => {
-      reply.code(200).send(listerClotures(db, Number(request.query.siteId)));
+      reply.code(200).send(listerClotures(db, request.user.siteId));
     }
   );
 
@@ -38,12 +38,12 @@ export function registerClotureCaisseRoutes(app: FastifyInstance, db: Db, guards
     }
   );
 
-  app.post<{ Body: { siteId: number; userId: number; fondOuverture: number } }>(
+  app.post<{ Body: { userId: number; fondOuverture: number } }>(
     "/api/v1/cloture-caisse/ouvrir",
     { preHandler: [guards.authRequis, guards.ventes] },
     async (request, reply) => {
       try {
-        reply.code(201).send(ouvrirCaisse(db, request.body));
+        reply.code(201).send(ouvrirCaisse(db, { ...request.body, siteId: request.user.siteId }));
       } catch (erreur) {
         envoyerErreur(reply, erreur);
       }

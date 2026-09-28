@@ -26,11 +26,11 @@ function envoyerErreur(reply: import("fastify").FastifyReply, erreur: unknown) {
 // Coût de revient et marge, eux, restent "réservés à l'encadrement" (comme
 // l'export CSV ci-dessous) : masqués dans la réponse pour tout autre rôle.
 export function registerProduitsRoutes(app: FastifyInstance, db: Db, guards: RouteGuards & { gestionCatalogue: Guard }) {
-  app.get<{ Querystring: { siteId: string } }>(
+  app.get(
     "/api/v1/produits",
     { preHandler: [guards.authRequis] },
     async (request, reply) => {
-      const produits = listerProduits(db, Number(request.query.siteId));
+      const produits = listerProduits(db, request.user.siteId);
       reply.code(200).send(estRoleEncadrement(request.user.role) ? produits : produits.map(masquerCoutMargeProduit));
     }
   );
@@ -70,7 +70,7 @@ export function registerProduitsRoutes(app: FastifyInstance, db: Db, guards: Rou
 
   // 8.2 : import/export de catalogue (CSV) — pour l'initialisation et les
   // mises à jour tarifaires en masse, réservé à l'encadrement (données de coût/marge).
-  app.get<{ Querystring: { siteId: string } }>(
+  app.get(
     "/api/v1/produits/export-csv",
     { preHandler: [guards.authRequis, guards.gestionCatalogue] },
     async (request, reply) => {
@@ -78,16 +78,16 @@ export function registerProduitsRoutes(app: FastifyInstance, db: Db, guards: Rou
         .code(200)
         .header("Content-Type", "text/csv; charset=utf-8")
         .header("Content-Disposition", "attachment; filename=catalogue.csv")
-        .send(exporterCatalogueCsv(db, Number(request.query.siteId)));
+        .send(exporterCatalogueCsv(db, request.user.siteId));
     }
   );
 
-  app.post<{ Body: { siteId: number; userId: number; contenuCsv: string } }>(
+  app.post<{ Body: { userId: number; contenuCsv: string } }>(
     "/api/v1/produits/import-csv",
     { preHandler: [guards.authRequis, guards.gestionCatalogue] },
     async (request, reply) => {
       try {
-        reply.code(200).send(importerCatalogueCsv(db, request.body.siteId, request.body.contenuCsv, request.body.userId));
+        reply.code(200).send(importerCatalogueCsv(db, request.user.siteId, request.body.contenuCsv, request.body.userId));
       } catch (erreur) {
         envoyerErreur(reply, erreur);
       }

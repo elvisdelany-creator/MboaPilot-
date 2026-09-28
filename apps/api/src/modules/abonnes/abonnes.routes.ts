@@ -27,12 +27,11 @@ export function registerAbonnesRoutes(
   db: Db,
   guards: RouteGuards & { fusionAbonnes: Guard; anonymisationAbonne: Guard; lectureFinanciere: Guard; rechercheAbonnes: Guard }
 ) {
-  app.get<{ Querystring: { siteId: string; q: string } }>(
+  app.get<{ Querystring: { q: string } }>(
     "/api/v1/abonnes",
     { preHandler: [guards.authRequis, guards.rechercheAbonnes] },
     async (request, reply) => {
-      const { siteId, q } = request.query;
-      const resultats = rechercherAbonnes(db, Number(siteId), q);
+      const resultats = rechercherAbonnes(db, request.user.siteId, request.query.q);
       reply.code(200).send(resultats);
     }
   );

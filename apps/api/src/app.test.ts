@@ -466,6 +466,21 @@ describe("GET /api/v1/abonnes", () => {
     expect(resultats[0].nom).toBe("Nga Ndongo");
   });
 
+  // 2.5.2 : le siteId transmis en paramètre n'est qu'une indication client —
+  // c'est toujours celui de l'appelant (relu du jeton/de la base) qui fait foi
+  it("ignore un siteId d'un autre site transmis en paramètre — recherche toujours cloisonnée sur son propre site", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const token = await connecter(app);
+    const idEntreprise = db.select().from(schema.site).where(eq(schema.site.idSite, siteId)).get()!.idEntreprise;
+    const autreSite = db.insert(schema.site).values({ idEntreprise, nom: "Site B" }).returning().get().idSite;
+    db.insert(schema.abonne).values({ siteId: autreSite, nom: "SecretSiteB", prenom: "X", telephone: "699999999" }).run();
+
+    const reponse = await app.inject({ method: "GET", url: `/api/v1/abonnes?siteId=${autreSite}&q=SecretSiteB`, headers: authHeader(token) });
+
+    expect(reponse.statusCode).toBe(200);
+    expect(reponse.json()).toHaveLength(0);
+  });
+
   // 2.5.1, 8.4 : un technicien SAV doit pouvoir rattacher un abonné existant
   // à un nouveau dossier (NouveauDossierDialog.tsx appelle cette recherche),
   // sans pour autant accéder à sa fiche financière (factures, paiements)
@@ -548,6 +563,54 @@ describe("GET /api/v1/alertes-echeance", () => {
 
     expect(reponse.statusCode).toBe(200);
     expect(Array.isArray(reponse.json())).toBe(true);
+  });
+
+  // 2.5.2 : cloisonnement — le siteId transmis en paramètre est ignoré, seul
+  // celui de l'appelant fait foi (idem pour /abonnements-expires, même repository)
+  it("ignore un siteId d'un autre site transmis en paramètre — n'expose pas ses alertes ni ses abonnements expirés", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const token = await connecter(app);
+    const idEntreprise = db.select().from(schema.site).where(eq(schema.site.idSite, siteId)).get()!.idEntreprise;
+    const autreSite = db.insert(schema.site).values({ idEntreprise, nom: "Site B" }).returning().get().idSite;
+    const autreUserId = creerUtilisateur(db, { siteId: autreSite, nom: "B", prenom: "B", identifiant: "bsite", motDePasse: "motdepasse-secret", role: "CAISSIER" }).idUser;
+
+    const dateFinProche = new Date();
+    dateFinProche.setDate(dateFinProche.getDate() + 3);
+    const abonneAutreSite = db.insert(schema.abonne).values({ siteId: autreSite, nom: "SecretSiteB", prenom: "X", telephone: "699999999" }).returning().get();
+    db.insert(schema.abonnement)
+      .values({
+        idAbonne: abonneAutreSite.idAbonne,
+        idFormule,
+        siteId: autreSite,
+        dateDebut: new Date().toISOString().slice(0, 10),
+        dateFin: dateFinProche.toISOString().slice(0, 10),
+        statut: "ACTIF",
+        creePar: autreUserId,
+      })
+      .run();
+    await app.inject({ method: "POST", url: "/api/v1/jobs/quotidien", headers: authHeader(token) });
+
+    const alertes = await app.inject({ method: "GET", url: `/api/v1/alertes-echeance?siteId=${autreSite}`, headers: authHeader(token) });
+    expect(alertes.statusCode).toBe(200);
+    expect(alertes.json()).toHaveLength(0);
+
+    const dateFinPassee = new Date();
+    dateFinPassee.setDate(dateFinPassee.getDate() - 90);
+    db.insert(schema.abonnement)
+      .values({
+        idAbonne: abonneAutreSite.idAbonne,
+        idFormule,
+        siteId: autreSite,
+        dateDebut: "2020-01-01",
+        dateFin: dateFinPassee.toISOString().slice(0, 10),
+        statut: "EXPIRE",
+        creePar: autreUserId,
+      })
+      .run();
+
+    const expires = await app.inject({ method: "GET", url: `/api/v1/abonnements-expires?siteId=${autreSite}`, headers: authHeader(token) });
+    expect(expires.statusCode).toBe(200);
+    expect(expires.json()).toHaveLength(0);
   });
 
   // 8.6 : "Abonnements à échéance — Listes J-7/J-3/J-1... filtrable par famille et par site"
@@ -921,6 +984,52 @@ describe("Module SAV (5.10, 8.4)", () => {
       rmSync(dossierTemp, { recursive: true, force: true });
     }
   });
+
+  // 2.5.2 : cloisonnement multi-site — un caissier d'un autre site ne doit
+  // jamais consulter ni agir sur un dossier SAV qui ne lui appartient pas,
+  // que ce soit par la liste (siteId ignoré) ou en devinant directement l'ID.
+  it("un caissier ne peut ni lister, ni consulter, ni modifier un dossier SAV d'un autre site (403)", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const token = await connecter(app);
+    const idEntreprise = db.select().from(schema.site).where(eq(schema.site.idSite, siteId)).get()!.idEntreprise;
+    const autreSite = db.insert(schema.site).values({ idEntreprise, nom: "Site B" }).returning().get().idSite;
+    const dossier = db
+      .insert(schema.savDossier)
+      .values({ siteId: autreSite, clientNom: "SecretSiteB", clientTelephone: "699999999", descriptionPanne: "Panne", sousGarantie: 0 })
+      .returning()
+      .get();
+    const photo = db
+      .insert(schema.savPhoto)
+      .values({ idDossierSav: dossier.idDossierSav, nomFichier: "x.jpg", nomFichierOriginal: "x.jpg", typeMime: "image/jpeg" })
+      .returning()
+      .get();
+
+    const liste = await app.inject({ method: "GET", url: `/api/v1/sav/dossiers?siteId=${autreSite}`, headers: authHeader(token) });
+    expect(liste.statusCode).toBe(200);
+    expect(liste.json()).toHaveLength(0);
+
+    const detail = await app.inject({ method: "GET", url: `/api/v1/sav/dossiers/${dossier.idDossierSav}`, headers: authHeader(token) });
+    expect(detail.statusCode).toBe(403);
+
+    const pieces = await app.inject({
+      method: "POST",
+      url: `/api/v1/sav/dossiers/${dossier.idDossierSav}/pieces`,
+      headers: authHeader(token),
+      payload: { idProduit: 1, quantite: 1, userId },
+    });
+    expect(pieces.statusCode).toBe(403);
+
+    const statut = await app.inject({
+      method: "POST",
+      url: `/api/v1/sav/dossiers/${dossier.idDossierSav}/statut`,
+      headers: authHeader(token),
+      payload: { nouveauStatut: "DIAGNOSTIC", userId },
+    });
+    expect(statut.statusCode).toBe(403);
+
+    const photoFichier = await app.inject({ method: "GET", url: `/api/v1/sav/photos/${photo.idPhoto}`, headers: authHeader(token) });
+    expect(photoFichier.statusCode).toBe(403);
+  });
 });
 
 describe("Module apporteur d'affaires (6.3)", () => {
@@ -1184,6 +1293,23 @@ describe("Module suivi de stock (5.2)", () => {
     expect(reponse.statusCode).toBe(200);
     expect(reponse.json()).toHaveLength(1);
     expect(reponse.json()[0].derniereVente).toBeNull();
+  });
+
+  // 2.5.2 : le siteId transmis en paramètre est ignoré — toujours celui de l'appelant
+  it("ignore un siteId d'un autre site transmis en paramètre pour les alertes et la rotation lente", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const token = await connecter(app);
+    const idEntreprise = db.select().from(schema.site).where(eq(schema.site.idSite, siteId)).get()!.idEntreprise;
+    const autreSite = db.insert(schema.site).values({ idEntreprise, nom: "Site B" }).returning().get().idSite;
+    await creerProduitSuivi(db, autreSite, 100); // stock 10 <= seuil 100 : déclenche une alerte côté Site B
+
+    const alertes = await app.inject({ method: "GET", url: `/api/v1/stock/alertes?siteId=${autreSite}`, headers: authHeader(token) });
+    expect(alertes.statusCode).toBe(200);
+    expect(alertes.json()).toHaveLength(0);
+
+    const rotation = await app.inject({ method: "GET", url: `/api/v1/stock/rotation-lente?siteId=${autreSite}`, headers: authHeader(token) });
+    expect(rotation.statusCode).toBe(200);
+    expect(rotation.json()).toHaveLength(0);
   });
 
   it("un caissier ne peut pas réceptionner un achat, enregistrer une casse ni ajuster l'inventaire (403)", async () => {
@@ -1914,6 +2040,35 @@ describe("Module gestion du catalogue (8.2)", () => {
     });
     expect(refusImport.statusCode).toBe(403);
   });
+
+  // 2.5.2 : le siteId transmis (query ou body) est ignoré — c'est toujours
+  // celui de l'appelant qui détermine le catalogue consulté/modifié
+  it("ignore un siteId d'un autre site transmis en paramètre ou dans le corps de la requête", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    creerUtilisateur(db, { siteId, nom: "Admin", prenom: "D", identifiant: "admin1", motDePasse: "motdepasse-secret", role: "ADMINISTRATEUR" });
+    const tokenAdmin = await connecter(app, "admin1");
+    const idEntreprise = db.select().from(schema.site).where(eq(schema.site.idSite, siteId)).get()!.idEntreprise;
+    const autreSite = db.insert(schema.site).values({ idEntreprise, nom: "Site B" }).returning().get().idSite;
+    db.insert(schema.produit).values({ siteId: autreSite, type: "BIEN", libelle: "SECRET-SITE-B", prixVente: 9999 }).run();
+
+    const liste = await app.inject({ method: "GET", url: `/api/v1/produits?siteId=${autreSite}`, headers: authHeader(tokenAdmin) });
+    expect(liste.statusCode).toBe(200);
+    expect(liste.json()).toHaveLength(0);
+
+    const exportCsv = await app.inject({ method: "GET", url: `/api/v1/produits/export-csv?siteId=${autreSite}`, headers: authHeader(tokenAdmin) });
+    expect(exportCsv.body).not.toContain("SECRET-SITE-B");
+
+    // l'import cible aussi toujours le site de l'appelant, jamais celui indiqué dans le corps
+    const contenuCsv = "Type,Libelle,Categorie,PrixVente,CoutRevient,SuiviStock,SeuilAlerte\r\nBIEN,Importe,,1000,0,0,";
+    await app.inject({
+      method: "POST",
+      url: "/api/v1/produits/import-csv",
+      headers: authHeader(tokenAdmin),
+      payload: { siteId: autreSite, userId, contenuCsv },
+    });
+    const produitImporte = db.select().from(schema.produit).where(eq(schema.produit.libelle, "Importe")).get();
+    expect(produitImporte?.siteId).toBe(siteId);
+  });
 });
 
 // fournisseur entièrement pilotable pour les tests HTTP — indépendant du
@@ -2576,6 +2731,43 @@ describe("Tableau de bord de pilotage (8.6, 9.3)", () => {
       headers: authHeader(token),
     });
     expect(reponse.statusCode).toBe(403);
+  });
+
+  // 2.5.2 : le siteId transmis en paramètre est ignoré — toujours celui de l'appelant
+  it("ignore un siteId d'un autre site transmis en paramètre sur tous les indicateurs de pilotage", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    creerUtilisateur(db, { siteId, nom: "Admin", prenom: "D", identifiant: "admin1", motDePasse: "motdepasse-secret", role: "ADMINISTRATEUR" });
+    const token = await connecter(app, "admin1");
+    const idEntreprise = db.select().from(schema.site).where(eq(schema.site.idSite, siteId)).get()!.idEntreprise;
+    const autreSite = db.insert(schema.site).values({ idEntreprise, nom: "Site B" }).returning().get().idSite;
+    const autreUserId = creerUtilisateur(db, { siteId: autreSite, nom: "B", prenom: "B", identifiant: "bsite", motDePasse: "motdepasse-secret", role: "CAISSIER" }).idUser;
+    const aujourdHui = new Date().toISOString().slice(0, 10);
+    const facture = db.insert(schema.facture).values({ siteId: autreSite, statut: "VALIDEE", montantTotal: 99000, creePar: autreUserId }).returning().get();
+    db.insert(schema.paiement).values({ idFacture: facture.idFacture, mode: "CASH", montant: 99000, utilisateurId: autreUserId }).run();
+
+    const indicateurs = await app.inject({
+      method: "GET",
+      url: `/api/v1/tableau-bord/indicateurs?siteId=${autreSite}&aujourdHui=${aujourdHui}`,
+      headers: authHeader(token),
+    });
+    expect(indicateurs.statusCode).toBe(200);
+    expect(indicateurs.json().chiffreAffairesJour).toBe(0);
+
+    const encaissements = await app.inject({
+      method: "GET",
+      url: `/api/v1/tableau-bord/encaissements-jour?siteId=${autreSite}&aujourdHui=${aujourdHui}`,
+      headers: authHeader(token),
+    });
+    expect(encaissements.statusCode).toBe(200);
+    expect(encaissements.json().find((v: { mode: string }) => v.mode === "CASH")?.total ?? 0).toBe(0);
+
+    const ventilation = await app.inject({
+      method: "GET",
+      url: `/api/v1/tableau-bord/ventilation-ca?siteId=${autreSite}&aujourdHui=${aujourdHui}`,
+      headers: authHeader(token),
+    });
+    expect(ventilation.statusCode).toBe(200);
+    expect(ventilation.json()).toEqual([]);
   });
 });
 
@@ -3586,6 +3778,21 @@ describe("Comptes partagés streaming (5.9)", () => {
     });
     expect(creation.statusCode).toBe(403);
   });
+
+  // 2.5.2 : le siteId transmis en paramètre est ignoré — toujours celui de l'appelant
+  it("ignore un siteId d'un autre site transmis en paramètre", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const token = await connecter(app);
+    const idEntreprise = db.select().from(schema.site).where(eq(schema.site.idSite, siteId)).get()!.idEntreprise;
+    const autreSite = db.insert(schema.site).values({ idEntreprise, nom: "Site B" }).returning().get().idSite;
+    const famille = db.insert(schema.familleAbonnement).values({ libelle: "NETFLIX" }).returning().get();
+    db.insert(schema.comptePartageStreaming).values({ siteId: autreSite, idFamille: famille.idFamille, libelle: "SECRET-SITE-B", nombreEcransMax: 4 }).run();
+
+    const liste = await app.inject({ method: "GET", url: `/api/v1/comptes-partages?siteId=${autreSite}`, headers: authHeader(token) });
+
+    expect(liste.statusCode).toBe(200);
+    expect(liste.json()).toHaveLength(0);
+  });
 });
 
 describe("Sauvegarde et export des données (2.6)", () => {
@@ -3699,6 +3906,33 @@ describe("Clôture de caisse quotidienne (13.1)", () => {
       payload: { siteId, userId, fondOuverture: 10000 },
     });
     expect(deuxieme.statusCode).toBe(400);
+  });
+
+  // 2.5.2 : le siteId transmis (query ou body) est ignoré — toujours celui de l'appelant
+  it("ignore un siteId d'un autre site transmis en paramètre ou dans le corps de la requête", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const token = await connecter(app);
+    const idEntreprise = db.select().from(schema.site).where(eq(schema.site.idSite, siteId)).get()!.idEntreprise;
+    const autreSite = db.insert(schema.site).values({ idEntreprise, nom: "Site B" }).returning().get().idSite;
+    const autreUserId = creerUtilisateur(db, { siteId: autreSite, nom: "B", prenom: "B", identifiant: "bsite", motDePasse: "motdepasse-secret", role: "CAISSIER" }).idUser;
+    db.insert(schema.clotureCaisse).values({ siteId: autreSite, statut: "OUVERTE", fondOuverture: 50000, ouvertPar: autreUserId }).run();
+
+    const ouverte = await app.inject({ method: "GET", url: `/api/v1/cloture-caisse/ouverte?siteId=${autreSite}`, headers: authHeader(token) });
+    expect(ouverte.statusCode).toBe(200);
+    expect(ouverte.json()).toBeNull();
+
+    const liste = await app.inject({ method: "GET", url: `/api/v1/cloture-caisse?siteId=${autreSite}`, headers: authHeader(token) });
+    expect(liste.statusCode).toBe(200);
+    expect(liste.json()).toHaveLength(0);
+
+    const ouverture = await app.inject({
+      method: "POST",
+      url: "/api/v1/cloture-caisse/ouvrir",
+      headers: authHeader(token),
+      payload: { siteId: autreSite, userId, fondOuverture: 20000 },
+    });
+    expect(ouverture.statusCode).toBe(201);
+    expect(db.select().from(schema.clotureCaisse).where(eq(schema.clotureCaisse.idCloture, ouverture.json().idCloture)).get()?.siteId).toBe(siteId);
   });
 });
 

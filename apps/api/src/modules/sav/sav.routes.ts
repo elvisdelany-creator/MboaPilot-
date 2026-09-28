@@ -3,6 +3,7 @@ import { join } from "node:path";
 import type { FastifyInstance } from "fastify";
 import type { Db } from "../../db/types.js";
 import type { RouteGuards } from "../auth/auth.plugin.js";
+import { siteAutorise } from "../auth/auth.plugin.js";
 import {
   creerDossierSav,
   listerDossiersSav,
@@ -23,14 +24,16 @@ function envoyerErreur(reply: import("fastify").FastifyReply, erreur: unknown) {
   reply.code(statut).send({ erreur: message });
 }
 
+const ERREUR_SITE_DOSSIER = { erreur: "Ce dossier SAV n'appartient pas à votre site" };
+
 // 5.10, 8.4 : module SAV — accessible aux rôles pouvant recevoir un appareil
 // au comptoir (Administrateur, Gérant, Caissier) et au Technicien SAV.
 export function registerSavRoutes(app: FastifyInstance, db: Db, dossierPhotos: string, guards: RouteGuards & { sav: RouteGuards["ventes"] }) {
-  app.get<{ Querystring: { siteId: string } }>(
+  app.get(
     "/api/v1/sav/dossiers",
     { preHandler: [guards.authRequis, guards.sav] },
     async (request, reply) => {
-      reply.code(200).send(listerDossiersSav(db, Number(request.query.siteId)));
+      reply.code(200).send(listerDossiersSav(db, request.user.siteId));
     }
   );
 
@@ -42,6 +45,10 @@ export function registerSavRoutes(app: FastifyInstance, db: Db, dossierPhotos: s
       const dossier = trouverDossierSav(db, idDossierSav);
       if (!dossier) {
         reply.code(404).send({ erreur: `Dossier SAV ${idDossierSav} introuvable` });
+        return;
+      }
+      if (!siteAutorise(request.user, dossier.siteId)) {
+        reply.code(403).send(ERREUR_SITE_DOSSIER);
         return;
       }
       reply.code(200).send({
@@ -75,8 +82,14 @@ export function registerSavRoutes(app: FastifyInstance, db: Db, dossierPhotos: s
     "/api/v1/sav/dossiers/:idDossierSav/pieces",
     { preHandler: [guards.authRequis, guards.sav] },
     async (request, reply) => {
+      const idDossierSav = Number(request.params.idDossierSav);
+      const dossier = trouverDossierSav(db, idDossierSav);
+      if (dossier && !siteAutorise(request.user, dossier.siteId)) {
+        reply.code(403).send(ERREUR_SITE_DOSSIER);
+        return;
+      }
       try {
-        affecterPieceSav(db, { ...request.body, idDossierSav: Number(request.params.idDossierSav) });
+        affecterPieceSav(db, { ...request.body, idDossierSav });
         reply.code(201).send({ ok: true });
       } catch (erreur) {
         envoyerErreur(reply, erreur);
@@ -88,8 +101,14 @@ export function registerSavRoutes(app: FastifyInstance, db: Db, dossierPhotos: s
     "/api/v1/sav/dossiers/:idDossierSav/statut",
     { preHandler: [guards.authRequis, guards.sav] },
     async (request, reply) => {
+      const idDossierSav = Number(request.params.idDossierSav);
+      const dossier = trouverDossierSav(db, idDossierSav);
+      if (dossier && !siteAutorise(request.user, dossier.siteId)) {
+        reply.code(403).send(ERREUR_SITE_DOSSIER);
+        return;
+      }
       try {
-        const resultat = changerStatutSav(db, { ...request.body, idDossierSav: Number(request.params.idDossierSav) });
+        const resultat = changerStatutSav(db, { ...request.body, idDossierSav });
         reply.code(200).send(resultat);
       } catch (erreur) {
         envoyerErreur(reply, erreur);
@@ -102,11 +121,17 @@ export function registerSavRoutes(app: FastifyInstance, db: Db, dossierPhotos: s
     "/api/v1/sav/dossiers/:idDossierSav/photos",
     { preHandler: [guards.authRequis, guards.sav] },
     async (request, reply) => {
+      const idDossierSav = Number(request.params.idDossierSav);
+      const dossier = trouverDossierSav(db, idDossierSav);
+      if (dossier && !siteAutorise(request.user, dossier.siteId)) {
+        reply.code(403).send(ERREUR_SITE_DOSSIER);
+        return;
+      }
       try {
         const fichier = await request.file();
         if (!fichier) throw new Error("Aucun fichier fourni");
         const photo = enregistrerPhotoSav(db, dossierPhotos, {
-          idDossierSav: Number(request.params.idDossierSav),
+          idDossierSav,
           contenu: await fichier.toBuffer(),
           nomFichierOriginal: fichier.filename,
           typeMime: fichier.mimetype,
@@ -125,6 +150,11 @@ export function registerSavRoutes(app: FastifyInstance, db: Db, dossierPhotos: s
       const photo = trouverPhotoSav(db, Number(request.params.idPhoto));
       if (!photo) {
         reply.code(404).send({ erreur: `Photo ${request.params.idPhoto} introuvable` });
+        return;
+      }
+      const dossier = trouverDossierSav(db, photo.idDossierSav);
+      if (dossier && !siteAutorise(request.user, dossier.siteId)) {
+        reply.code(403).send(ERREUR_SITE_DOSSIER);
         return;
       }
       reply.code(200).header("Content-Type", photo.typeMime).send(readFileSync(join(dossierPhotos, photo.nomFichier)));

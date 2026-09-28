@@ -21,11 +21,11 @@ function envoyerErreur(reply: FastifyReply, erreur: unknown) {
 // les communiquer au client au comptoir) ; création/édition réservées à
 // l'encadrement, comme pour les autres réglages de catalogue (8.2, 8.8).
 export function registerComptesPartagesRoutes(app: FastifyInstance, db: Db, guards: { authRequis: Guard; ventes: Guard; gestionComptesPartages: Guard }) {
-  app.get<{ Querystring: { siteId: string } }>(
+  app.get(
     "/api/v1/comptes-partages",
     { preHandler: [guards.authRequis, guards.ventes] },
     async (request, reply) => {
-      reply.code(200).send(listerComptesPartages(db, Number(request.query.siteId)));
+      reply.code(200).send(listerComptesPartages(db, request.user.siteId));
     }
   );
 

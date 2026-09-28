@@ -25,22 +25,22 @@ function envoyerErreur(reply: import("fastify").FastifyReply, erreur: unknown) {
 // aux rôles de vente/SAV, mouvements correctifs (achat, casse, inventaire)
 // réservés à Administrateur/Gérant (validation par un rôle habilité, 5.2).
 export function registerStockRoutes(app: FastifyInstance, db: Db, guards: RouteGuards & { gestionStock: Guard }) {
-  app.get<{ Querystring: { siteId: string } }>(
+  app.get(
     "/api/v1/stock/alertes",
     { preHandler: [guards.authRequis] },
     async (request, reply) => {
-      const alertes = listerAlertesStock(db, Number(request.query.siteId));
+      const alertes = listerAlertesStock(db, request.user.siteId);
       reply.code(200).send(estRoleEncadrement(request.user.role) ? alertes : alertes.map(masquerCoutMargeProduit));
     }
   );
 
   // 8.6, 9.3 : "État des stocks — produits à rotation lente"
-  app.get<{ Querystring: { siteId: string } }>(
+  app.get(
     "/api/v1/stock/rotation-lente",
     { preHandler: [guards.authRequis] },
     async (request, reply) => {
       const aujourdHui = new Date().toISOString().slice(0, 10);
-      const rotationLente = listerProduitsRotationLente(db, Number(request.query.siteId), aujourdHui);
+      const rotationLente = listerProduitsRotationLente(db, request.user.siteId, aujourdHui);
       reply
         .code(200)
         .send(

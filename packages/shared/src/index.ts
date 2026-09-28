@@ -21,3 +21,4 @@ export { calculerMontantTaxe, extraireTaxeDuTTC } from "./taxe.js";
 export { analyserCsv, construireCsv } from "./csv.js";
 export { validerMotDePasse, POLITIQUE_MDP_PAR_DEFAUT, type PolitiqueMotDePasse } from "./politique-mot-de-passe.js";
 export { normaliserLibelle } from "./normaliser-libelle.js";
+export { excedentEncaissementSuspect, SEUIL_EXCEDENT_ENCAISSEMENT_SUSPECT } from "./excedent-encaissement.js";

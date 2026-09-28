@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Wallet } from "lucide-react";
+import { excedentEncaissementSuspect } from "@mboapilot/shared";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ConfirmationSurpaiementDialog } from "@/components/shared/ConfirmationSurpaiementDialog";
 import { encaisserSoldeFactureRequete, ErreurAuthentification, type ModePaiementEncaissement } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 
@@ -36,6 +38,7 @@ export function EncaisserSoldeDialog({ facture, solde, onFerme, onSucces }: Prop
   const [dateCheque, setDateCheque] = useState("");
   const [referenceVirement, setReferenceVirement] = useState("");
   const [enCours, setEnCours] = useState(false);
+  const [confirmationSurpaiement, setConfirmationSurpaiement] = useState(false);
 
   useEffect(() => {
     setMontant(solde);
@@ -47,8 +50,17 @@ export function EncaisserSoldeDialog({ facture, solde, onFerme, onSucces }: Prop
     setReferenceVirement("");
   }, [facture, solde]);
 
-  async function valider() {
+  function valider() {
+    if (modePaiement === "CASH" && excedentEncaissementSuspect(montant, solde)) {
+      setConfirmationSurpaiement(true);
+      return;
+    }
+    soumettre();
+  }
+
+  async function soumettre() {
     if (!facture || montant <= 0) return;
+    setConfirmationSurpaiement(false);
     setEnCours(true);
     try {
       const resultat = await encaisserSoldeFactureRequete(token, facture.idFacture, {
@@ -183,6 +195,15 @@ export function EncaisserSoldeDialog({ facture, solde, onFerme, onSucces }: Prop
           </Button>
         </DialogFooter>
       </DialogContent>
+
+      <ConfirmationSurpaiementDialog
+        open={confirmationSurpaiement}
+        montant={montant}
+        total={solde}
+        enCours={enCours}
+        onAnnuler={() => setConfirmationSurpaiement(false)}
+        onConfirmer={soumettre}
+      />
     </Dialog>
   );
 }

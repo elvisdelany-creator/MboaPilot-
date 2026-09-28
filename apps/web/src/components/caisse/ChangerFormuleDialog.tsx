@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { validerMigrationFormule } from "@mboapilot/shared";
+import { excedentEncaissementSuspect, validerMigrationFormule } from "@mboapilot/shared";
 import {
   Dialog,
   DialogContent,
@@ -14,6 +14,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
+import { ConfirmationSurpaiementDialog } from "@/components/shared/ConfirmationSurpaiementDialog";
 import { changerFormuleRequete, chargerOptions, ErreurAuthentification, type ModePaiementEncaissement } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import type { Formule, OptionCatalogue } from "@/lib/types";
@@ -52,6 +53,7 @@ export function ChangerFormuleDialog({ numeroAbonnement, formuleActuelle, formul
   const [titulaireCheque, setTitulaireCheque] = useState("");
   const [dateCheque, setDateCheque] = useState("");
   const [referenceVirement, setReferenceVirement] = useState("");
+  const [confirmationSurpaiement, setConfirmationSurpaiement] = useState(false);
 
   const ouvert = numeroAbonnement !== null;
 
@@ -101,8 +103,17 @@ export function ChangerFormuleDialog({ numeroAbonnement, formuleActuelle, formul
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [choix, idsOptionsSelectionnees]);
 
-  async function valider() {
+  function valider() {
+    if (modePaiement === "CASH" && excedentEncaissementSuspect(montantEncaisse, montantDu)) {
+      setConfirmationSurpaiement(true);
+      return;
+    }
+    soumettre();
+  }
+
+  async function soumettre() {
     if (!numeroAbonnement || !choix) return;
+    setConfirmationSurpaiement(false);
     setEnCours(true);
     try {
       const resultat = await changerFormuleRequete(token, numeroAbonnement, {
@@ -300,6 +311,15 @@ export function ChangerFormuleDialog({ numeroAbonnement, formuleActuelle, formul
           </Button>
         </DialogFooter>
       </DialogContent>
+
+      <ConfirmationSurpaiementDialog
+        open={confirmationSurpaiement}
+        montant={montantEncaisse}
+        total={montantDu}
+        enCours={enCours}
+        onAnnuler={() => setConfirmationSurpaiement(false)}
+        onConfirmer={soumettre}
+      />
     </Dialog>
   );
 }

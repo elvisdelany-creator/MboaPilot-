@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { excedentEncaissementSuspect } from "@mboapilot/shared";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ConfirmationSurpaiementDialog } from "@/components/shared/ConfirmationSurpaiementDialog";
 import { chargerInfosEntreprise, changerStatutSavRequete, ErreurAuthentification, type ModePaiementEncaissement } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import type { DossierSavDetaille, StatutSav } from "@/lib/types";
@@ -40,6 +42,7 @@ export function ChangerStatutDialog({ dossier, statutCible, onFerme, onSucces }:
   const [montantMainOeuvre, setMontantMainOeuvre] = useState(0);
   const [montantEncaisse, setMontantEncaisse] = useState(0);
   const [enCours, setEnCours] = useState(false);
+  const [confirmationSurpaiement, setConfirmationSurpaiement] = useState(false);
 
   // 6.5 : moyen de paiement de l'encaissement, au passage en LIVRE
   const [modePaiement, setModePaiement] = useState<ModePaiementEncaissement>("CASH");
@@ -83,8 +86,17 @@ export function ChangerStatutDialog({ dossier, statutCible, onFerme, onSucces }:
       (modePaiement === "CHEQUE" && banque.trim() && numeroCheque.trim() && titulaireCheque.trim() && dateCheque) ||
       (modePaiement === "VIREMENT" && banque.trim() && referenceVirement.trim()));
 
-  async function valider() {
+  function valider() {
+    if (encaissementEnCours && modePaiement === "CASH" && dossier.facture && excedentEncaissementSuspect(montantEncaisse, dossier.facture.montantTotal)) {
+      setConfirmationSurpaiement(true);
+      return;
+    }
+    soumettre();
+  }
+
+  async function soumettre() {
     if (!statutCible) return;
+    setConfirmationSurpaiement(false);
     setEnCours(true);
     try {
       const resultat = await changerStatutSavRequete(token, dossier.idDossierSav, {
@@ -266,6 +278,17 @@ export function ChangerStatutDialog({ dossier, statutCible, onFerme, onSucces }:
           </Button>
         </DialogFooter>
       </DialogContent>
+
+      {dossier.facture && (
+        <ConfirmationSurpaiementDialog
+          open={confirmationSurpaiement}
+          montant={montantEncaisse}
+          total={dossier.facture.montantTotal}
+          enCours={enCours}
+          onAnnuler={() => setConfirmationSurpaiement(false)}
+          onConfirmer={soumettre}
+        />
+      )}
     </Dialog>
   );
 }

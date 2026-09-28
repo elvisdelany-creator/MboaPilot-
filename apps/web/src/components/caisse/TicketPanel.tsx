@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { ArrowUpCircle, FileText, Wrench } from "lucide-react";
+import { excedentEncaissementSuspect } from "@mboapilot/shared";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -7,6 +8,7 @@ import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
+import { ConfirmationSurpaiementDialog } from "@/components/shared/ConfirmationSurpaiementDialog";
 import { calculerPrixKitHorsFormuleSecurise } from "@/lib/prix-kit";
 import type { Abonne, CatalogueKit, ComptePartage, Formule, NouvelAbonne, ParcoursPaiementMobile } from "@/lib/types";
 
@@ -112,6 +114,7 @@ export function TicketPanel({
   const [dateCheque, setDateCheque] = useState("");
   // 6.5 : "Virement bancaire — Banque émettrice, référence de virement"
   const [referenceVirement, setReferenceVirement] = useState("");
+  const [confirmationSurpaiement, setConfirmationSurpaiement] = useState(false);
   useEffect(() => setMontant(total), [total]);
 
   const pretAValider =
@@ -124,6 +127,10 @@ export function TicketPanel({
       (modePaiement === "MOBILE_MONEY" && numeroTelephone.trim().length > 0));
 
   function valider() {
+    if (modePaiement === "CASH" && excedentEncaissementSuspect(montant, total)) {
+      setConfirmationSurpaiement(true);
+      return;
+    }
     if (modePaiement === "CASH") onValider({ mode: "CASH", montant });
     else if (modePaiement === "CHEQUE")
       onValider({
@@ -430,6 +437,18 @@ export function TicketPanel({
           {enCours ? "Encaissement…" : modePaiement === "MOBILE_MONEY" ? "Initier le paiement Mobile Money" : "Valider et encaisser"}
         </Button>
       </div>
+
+      <ConfirmationSurpaiementDialog
+        open={confirmationSurpaiement}
+        montant={montant}
+        total={total}
+        enCours={enCours}
+        onAnnuler={() => setConfirmationSurpaiement(false)}
+        onConfirmer={() => {
+          setConfirmationSurpaiement(false);
+          onValider({ mode: "CASH", montant });
+        }}
+      />
     </aside>
   );
 }

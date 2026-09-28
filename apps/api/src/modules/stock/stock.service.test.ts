@@ -46,6 +46,14 @@ describe("receptionnerAchat (5.2)", () => {
   it("rejette une quantité non positive", () => {
     expect(() => receptionnerAchat(db, { idProduit, siteId, quantite: 0, coutUnitaire: 2000, userId })).toThrow(/positive/i);
   });
+
+  // 5.2, 6.1 : un coût unitaire négatif se propage tel quel dans le coût
+  // moyen pondéré (packages/shared, calculerCoutMoyenPondere), écrivant un
+  // coût de revient négatif en base par une voie qui contourne la validation
+  // de produit.repository.ts (écriture directe, sans passer par modifierProduit)
+  it("rejette un coût unitaire négatif", () => {
+    expect(() => receptionnerAchat(db, { idProduit, siteId, quantite: 10, coutUnitaire: -500, userId })).toThrow(/négatif|positif/i);
+  });
 });
 
 describe("enregistrerCasse (5.2)", () => {

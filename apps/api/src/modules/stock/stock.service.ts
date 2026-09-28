@@ -17,6 +17,7 @@ export interface ReceptionnerAchatParams {
 // dernier prix d'achat.
 export function receptionnerAchat(db: Db, params: ReceptionnerAchatParams) {
   if (params.quantite <= 0) throw new Error("La quantité reçue doit être positive");
+  if (params.coutUnitaire < 0) throw new Error("Le coût unitaire d'achat ne peut pas être négatif");
 
   const produitAvant = db.select().from(schema.produit).where(eq(schema.produit.idProduit, params.idProduit)).get();
   if (!produitAvant) throw new Error(`Produit ${params.idProduit} introuvable`);

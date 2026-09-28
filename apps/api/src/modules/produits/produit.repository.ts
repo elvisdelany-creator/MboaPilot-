@@ -36,6 +36,7 @@ export function creerProduit(db: Db, input: CreerProduitInput) {
   // opérations qui l'utilisent directement (échange de matériel, pièce SAV),
   // produisant une facture au montant négatif
   if (input.prixVente < 0) throw new Error("Le prix de vente ne peut pas être négatif");
+  if (input.coutRevient !== undefined && input.coutRevient < 0) throw new Error("Le coût de revient ne peut pas être négatif");
 
   const margeType = input.margeType ?? "VALEUR";
   const coutRevient = input.coutRevient ?? 0;
@@ -86,6 +87,7 @@ export function modifierProduit(db: Db, idProduit: number, input: ModifierProdui
   if (!avant) throw new Error(`Produit ${idProduit} introuvable`);
   if (input.libelle !== undefined && !input.libelle.trim()) throw new Error("Le libellé de l'article est obligatoire");
   if (input.prixVente !== undefined && input.prixVente < 0) throw new Error("Le prix de vente ne peut pas être négatif");
+  if (input.coutRevient !== undefined && input.coutRevient < 0) throw new Error("Le coût de revient ne peut pas être négatif");
 
   const margeType = input.margeType ?? avant.margeType;
   const coutRevient = input.coutRevient ?? avant.coutRevient;

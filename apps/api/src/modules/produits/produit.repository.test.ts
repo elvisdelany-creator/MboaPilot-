@@ -75,6 +75,14 @@ describe("creerProduit (8.2 : création d'une fiche article)", () => {
     expect(() => creerProduit(db, { siteId, type: "BIEN", libelle: "Câble HDMI", prixVente: -2500 })).toThrow(/négatif|positif/i);
   });
 
+  // 6.1 : un coût de revient négatif produit une marge en pourcentage
+  // absurde (calculerMarge divise par un coût négatif) — vérifié : un coût
+  // de revient de -500 pour une marge de 500 FCFA donne -100 % au lieu
+  // d'être rejeté, faussant tableau de bord et export CSV.
+  it("rejette un coût de revient négatif", () => {
+    expect(() => creerProduit(db, { siteId, type: "BIEN", libelle: "Câble HDMI", prixVente: 2500, coutRevient: -500 })).toThrow(/négatif|positif/i);
+  });
+
   // 5.2 : "code interne/code-barres optionnel"
   it("enregistre le code interne/code-barres optionnel", () => {
     const produit = creerProduit(db, { siteId, type: "BIEN", libelle: "Câble HDMI", prixVente: 2500, codeBarres: "3700123456789" });
@@ -118,6 +126,12 @@ describe("modifierProduit (8.2 : édition d'une fiche article, historique des pr
 
     expect(() => modifierProduit(db, cree.idProduit, { prixVente: -100, userId })).toThrow(/négatif|positif/i);
     expect(() => modifierProduit(db, cree.idProduit, { libelle: "  ", userId })).toThrow(/libellé/i);
+  });
+
+  it("rejette un coût de revient négatif", () => {
+    const cree = creerProduit(db, { siteId, type: "BIEN", libelle: "Décodeur", prixVente: 15000 });
+
+    expect(() => modifierProduit(db, cree.idProduit, { coutRevient: -100, userId })).toThrow(/négatif|positif/i);
   });
 
   it("journalise un changement de prix ou de coût dans l'historique", () => {

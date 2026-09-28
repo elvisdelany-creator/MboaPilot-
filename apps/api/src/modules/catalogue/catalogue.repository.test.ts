@@ -125,6 +125,10 @@ describe("Back-office catalogue (8.8) : familles, formules, options — sans int
 
       expect(familles.map((f) => f.libelle)).toEqual(["MOREPLEX"]);
     });
+
+    it("exige un libellé", () => {
+      expect(() => creerFamille(db, { libelle: "  " })).toThrow(/libellé/i);
+    });
   });
 
   describe("creerFormule / modifierFormule", () => {
@@ -152,6 +156,19 @@ describe("Back-office catalogue (8.8) : familles, formules, options — sans int
 
     it("renvoie undefined pour une formule inconnue", () => {
       expect(modifierFormule(db, 999999, { prix: 1000 })).toBeUndefined();
+    });
+
+    // 7.4 : un prix de formule négatif se propage tel quel dans le
+    // différentiel de migration (cible.prix - actuelle.prix), sans aucun
+    // garde-fou de ce côté — reproduit une facture de migration à -10 000 FCFA
+    it("rejette un prix ou un libellé invalide", () => {
+      const fam = db.insert(schema.familleAbonnement).values({ libelle: "CANAL+" }).returning().get();
+
+      expect(() => creerFormule(db, { idFamille: fam.idFamille, libelle: "ACCESS", prix: -5000, rang: 1 })).toThrow(/négatif|positif/i);
+      expect(() => creerFormule(db, { idFamille: fam.idFamille, libelle: "  ", prix: 5000, rang: 1 })).toThrow(/libellé/i);
+
+      const formule = creerFormule(db, { idFamille: fam.idFamille, libelle: "ACCESS", prix: 5000, rang: 1 });
+      expect(() => modifierFormule(db, formule.idFormule, { prix: -100 })).toThrow(/négatif|positif/i);
     });
   });
 
@@ -192,6 +209,14 @@ describe("Back-office catalogue (8.8) : familles, formules, options — sans int
 
       expect(modifiee?.libelle).toBe("Bouquet Sport Premium");
       expect(modifiee?.prix).toBe(2500);
+    });
+
+    it("rejette un prix négatif ou un libellé vide", () => {
+      expect(() => creerOption(db, { libelle: "Bouquet Sport+", prix: -2000 })).toThrow(/négatif|positif/i);
+      expect(() => creerOption(db, { libelle: "  ", prix: 2000 })).toThrow(/libellé/i);
+
+      const option = creerOption(db, { libelle: "Bouquet Sport+", prix: 2000 });
+      expect(() => modifierOption(db, option.idOption, { prix: -500 })).toThrow(/négatif|positif/i);
     });
   });
 
@@ -236,6 +261,16 @@ describe("Back-office catalogue (8.8) : familles, formules, options — sans int
     it("renvoie undefined pour un kit inconnu", () => {
       expect(modifierKit(db, 999999, { prixFixe: 1000 })).toBeUndefined();
     });
+
+    it("rejette un libellé vide ou un prix négatif", () => {
+      const fam = db.insert(schema.familleAbonnement).values({ libelle: "MOREPLEX" }).returning().get();
+
+      expect(() => creerKit(db, { idFamille: fam.idFamille, libelle: "  ", reglePrix: "PRIX_FIXE", prixFixe: 30000 })).toThrow(/libellé/i);
+      expect(() => creerKit(db, { idFamille: fam.idFamille, libelle: "KIT", reglePrix: "PRIX_FIXE", prixFixe: -30000 })).toThrow(/négatif|positif/i);
+
+      const kit = creerKit(db, { idFamille: fam.idFamille, libelle: "KIT MOREPLEX", reglePrix: "PRIX_FIXE", prixFixe: 30000 });
+      expect(() => modifierKit(db, kit.idKit, { prixFixe: -100 })).toThrow(/négatif|positif/i);
+    });
   });
 
   describe("definirPrixDecodeurKit / supprimerPrixDecodeurKit (5.1.1)", () => {
@@ -262,6 +297,14 @@ describe("Back-office catalogue (8.8) : familles, formules, options — sans int
       if (kitApres.reglePrix === "PRIX_DECODEUR_VARIABLE_SELON_FORMULE") {
         expect(kitApres.prixDecodeurParFormule[evasion.idFormule]).toBeUndefined();
       }
+    });
+
+    it("rejette un prix décodeur négatif", () => {
+      const fam = db.insert(schema.familleAbonnement).values({ libelle: "CANAL+" }).returning().get();
+      const evasion = creerFormule(db, { idFamille: fam.idFamille, libelle: "EVASION", prix: 10500, rang: 2 });
+      const kit = creerKit(db, { idFamille: fam.idFamille, libelle: "KIT CANAL+ GLOBALZ", reglePrix: "PRIX_DECODEUR_VARIABLE_SELON_FORMULE" });
+
+      expect(() => definirPrixDecodeurKit(db, { idKit: kit.idKit, idFormule: evasion.idFormule, prixDecodeur: -5000 })).toThrow(/négatif|positif/i);
     });
   });
 

@@ -51,6 +51,7 @@ export interface CreerFamilleInput {
 }
 
 export function creerFamille(db: Db, input: CreerFamilleInput) {
+  if (!input.libelle.trim()) throw new Error("Le libellé de la famille est obligatoire");
   return db.insert(schema.familleAbonnement).values({ libelle: input.libelle }).returning().get();
 }
 
@@ -68,6 +69,11 @@ export interface CreerFormuleInput {
 }
 
 export function creerFormule(db: Db, input: CreerFormuleInput) {
+  if (!input.libelle.trim()) throw new Error("Le libellé de la formule est obligatoire");
+  // 7.4 : un prix négatif se propage tel quel dans le différentiel de
+  // migration (cible.prix - actuelle.prix), sans garde-fou de ce côté
+  if (input.prix < 0) throw new Error("Le prix de la formule ne peut pas être négatif");
+
   return db
     .insert(schema.formule)
     .values({
@@ -94,6 +100,9 @@ export interface ModifierFormuleInput {
 // une formule désactivée reste dans l'historique (abonnements déjà vendus)
 // mais disparaît du catalogue de vente (listerCatalogue filtre actif = 1)
 export function modifierFormule(db: Db, idFormule: number, input: ModifierFormuleInput) {
+  if (input.libelle !== undefined && !input.libelle.trim()) throw new Error("Le libellé de la formule est obligatoire");
+  if (input.prix !== undefined && input.prix < 0) throw new Error("Le prix de la formule ne peut pas être négatif");
+
   return db
     .update(schema.formule)
     .set({
@@ -121,6 +130,8 @@ export interface CreerOptionInput {
 }
 
 export function creerOption(db: Db, input: CreerOptionInput) {
+  if (!input.libelle.trim()) throw new Error("Le libellé de l'option est obligatoire");
+  if (input.prix < 0) throw new Error("Le prix de l'option ne peut pas être négatif");
   return db.insert(schema.optionComplement).values({ libelle: input.libelle, prix: input.prix }).returning().get();
 }
 
@@ -130,6 +141,9 @@ export interface ModifierOptionInput {
 }
 
 export function modifierOption(db: Db, idOption: number, input: ModifierOptionInput) {
+  if (input.libelle !== undefined && !input.libelle.trim()) throw new Error("Le libellé de l'option est obligatoire");
+  if (input.prix !== undefined && input.prix < 0) throw new Error("Le prix de l'option ne peut pas être négatif");
+
   return db
     .update(schema.optionComplement)
     .set({
@@ -211,7 +225,20 @@ export interface CreerKitInput {
   prixKitReference?: number;
 }
 
+// 5.1.1 : un prix négatif sur l'un de ces champs se propage tel quel dans
+// calculerPrixKit (packages/shared), quelle que soit la règle de prix
+function validerPrixKit(input: { prixFixe?: number; prixParaboleAccessoires?: number; prixKitReference?: number }) {
+  if (input.prixFixe !== undefined && input.prixFixe < 0) throw new Error("Le prix fixe du kit ne peut pas être négatif");
+  if (input.prixParaboleAccessoires !== undefined && input.prixParaboleAccessoires < 0) {
+    throw new Error("Le prix de la parabole/des accessoires ne peut pas être négatif");
+  }
+  if (input.prixKitReference !== undefined && input.prixKitReference < 0) throw new Error("Le prix de référence du kit ne peut pas être négatif");
+}
+
 export function creerKit(db: Db, input: CreerKitInput) {
+  if (!input.libelle.trim()) throw new Error("Le libellé du kit est obligatoire");
+  validerPrixKit(input);
+
   return db
     .insert(schema.kit)
     .values({
@@ -237,6 +264,9 @@ export interface ModifierKitInput {
 }
 
 export function modifierKit(db: Db, idKit: number, input: ModifierKitInput) {
+  if (input.libelle !== undefined && !input.libelle.trim()) throw new Error("Le libellé du kit est obligatoire");
+  validerPrixKit(input);
+
   return db
     .update(schema.kit)
     .set({
@@ -267,6 +297,8 @@ export interface DefinirPrixDecodeurInput {
 // grille de prix décodeur par formule (règle PRIX_DECODEUR_VARIABLE_SELON_FORMULE) —
 // idempotent, comme lierOptionFormule
 export function definirPrixDecodeurKit(db: Db, input: DefinirPrixDecodeurInput) {
+  if (input.prixDecodeur < 0) throw new Error("Le prix du décodeur ne peut pas être négatif");
+
   const existant = db
     .select()
     .from(schema.kitPrixDecodeur)

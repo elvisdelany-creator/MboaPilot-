@@ -29,8 +29,15 @@ export function AjouterPieceDialog({ ouvert, idDossierSav, onFerme, onSucces }: 
   const [quantite, setQuantite] = useState(1);
   const [enCours, setEnCours] = useState(false);
 
+  // les champs sont réinitialisés à la fermeture (annulation ou échec laissé
+  // en l'état) — sinon une quantité restée en place depuis une tentative
+  // précédente s'applique par erreur à la pièce suivante (NouveauCompteDialog, 8.7)
   useEffect(() => {
-    if (!ouvert) return;
+    if (!ouvert) {
+      setIdProduit("");
+      setQuantite(1);
+      return;
+    }
     chargerProduits(token, utilisateur.siteId)
       .then((data) => {
         setProduits(data);
@@ -45,7 +52,6 @@ export function AjouterPieceDialog({ ouvert, idDossierSav, onFerme, onSucces }: 
     try {
       await affecterPieceSavRequete(token, idDossierSav, { idProduit: Number(idProduit), quantite, userId: utilisateur.idUser });
       toast.success("Pièce affectée au dossier.");
-      setQuantite(1);
       onSucces();
     } catch (erreur) {
       if (erreur instanceof ErreurAuthentification) {

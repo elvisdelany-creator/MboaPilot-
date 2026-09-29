@@ -1,6 +1,9 @@
+import { eq } from "drizzle-orm";
 import type { FastifyInstance, FastifyReply } from "fastify";
 import type { Db } from "../../db/types.js";
 import type { Guard } from "../auth/auth.plugin.js";
+import { siteAutorise } from "../auth/auth.plugin.js";
+import * as schema from "../../db/schema.js";
 import { fermerCaisse, listerClotures, obtenirClotureOuverte, obtenirComptagesCloture, ouvrirCaisse, type ComptageInput } from "./cloture-caisse.service.js";
 
 function envoyerErreur(reply: FastifyReply, erreur: unknown) {
@@ -8,6 +11,8 @@ function envoyerErreur(reply: FastifyReply, erreur: unknown) {
   const statut = /introuvable/i.test(message) ? 404 : 400;
   reply.code(statut).send({ erreur: message });
 }
+
+const ERREUR_SITE_CLOTURE = { erreur: "Cette session de caisse n'appartient pas à votre site" };
 
 // 13.1 : clôture de caisse quotidienne — l'ouverture (fond de caisse) reste
 // accessible aux rôles de vente qui démarrent un service ; la fermeture
@@ -34,7 +39,13 @@ export function registerClotureCaisseRoutes(app: FastifyInstance, db: Db, guards
     "/api/v1/cloture-caisse/:idCloture/comptages",
     { preHandler: [guards.authRequis, guards.ventes] },
     async (request, reply) => {
-      reply.code(200).send(obtenirComptagesCloture(db, Number(request.params.idCloture)));
+      const idCloture = Number(request.params.idCloture);
+      const cloture = db.select().from(schema.clotureCaisse).where(eq(schema.clotureCaisse.idCloture, idCloture)).get();
+      if (cloture && !siteAutorise(request.user, cloture.siteId)) {
+        reply.code(403).send(ERREUR_SITE_CLOTURE);
+        return;
+      }
+      reply.code(200).send(obtenirComptagesCloture(db, idCloture));
     }
   );
 
@@ -54,9 +65,15 @@ export function registerClotureCaisseRoutes(app: FastifyInstance, db: Db, guards
     "/api/v1/cloture-caisse/:idCloture/fermer",
     { preHandler: [guards.authRequis, guards.validationCloture] },
     async (request, reply) => {
+      const idCloture = Number(request.params.idCloture);
+      const cloture = db.select().from(schema.clotureCaisse).where(eq(schema.clotureCaisse.idCloture, idCloture)).get();
+      if (cloture && !siteAutorise(request.user, cloture.siteId)) {
+        reply.code(403).send(ERREUR_SITE_CLOTURE);
+        return;
+      }
       try {
         const resultat = fermerCaisse(db, {
-          idCloture: Number(request.params.idCloture),
+          idCloture,
           userId: request.body.userId,
           comptages: request.body.comptages,
         });

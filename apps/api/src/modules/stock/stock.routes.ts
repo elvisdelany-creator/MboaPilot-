@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import type { Db } from "../../db/types.js";
 import type { Guard, RouteGuards } from "../auth/auth.plugin.js";
+import { siteAutorise } from "../auth/auth.plugin.js";
 import { listerMouvementsProduit } from "./stock.repository.js";
 import {
   ajusterInventaire,
@@ -13,13 +14,15 @@ import {
   type ReceptionnerAchatParams,
 } from "./stock.service.js";
 import { transfererStock, type TransfererStockParams } from "./transfert.service.js";
-import { estRoleEncadrement, masquerCoutMargeProduit } from "../produits/produit.repository.js";
+import { estRoleEncadrement, masquerCoutMargeProduit, trouverProduit } from "../produits/produit.repository.js";
 
 function envoyerErreur(reply: import("fastify").FastifyReply, erreur: unknown) {
   const message = erreur instanceof Error ? erreur.message : "Erreur inconnue";
   const statut = /introuvable/i.test(message) ? 404 : 400;
   reply.code(statut).send({ erreur: message });
 }
+
+const ERREUR_SITE_PRODUIT = { erreur: "Ce produit n'appartient pas à votre site" };
 
 // 5.2, 8.6, 9.3 : suivi de stock — consultation (alertes, historique) ouverte
 // aux rôles de vente/SAV, mouvements correctifs (achat, casse, inventaire)
@@ -55,7 +58,13 @@ export function registerStockRoutes(app: FastifyInstance, db: Db, guards: RouteG
     "/api/v1/produits/:idProduit/mouvements",
     { preHandler: [guards.authRequis] },
     async (request, reply) => {
-      reply.code(200).send(listerMouvementsProduit(db, Number(request.params.idProduit)));
+      const idProduit = Number(request.params.idProduit);
+      const produit = trouverProduit(db, idProduit);
+      if (produit && !siteAutorise(request.user, produit.siteId)) {
+        reply.code(403).send(ERREUR_SITE_PRODUIT);
+        return;
+      }
+      reply.code(200).send(listerMouvementsProduit(db, idProduit));
     }
   );
 
@@ -63,6 +72,11 @@ export function registerStockRoutes(app: FastifyInstance, db: Db, guards: RouteG
     "/api/v1/stock/achats",
     { preHandler: [guards.authRequis, guards.gestionStock] },
     async (request, reply) => {
+      const produit = trouverProduit(db, request.body.idProduit);
+      if (produit && !siteAutorise(request.user, produit.siteId)) {
+        reply.code(403).send(ERREUR_SITE_PRODUIT);
+        return;
+      }
       try {
         reply.code(201).send(receptionnerAchat(db, request.body));
       } catch (erreur) {
@@ -75,6 +89,11 @@ export function registerStockRoutes(app: FastifyInstance, db: Db, guards: RouteG
     "/api/v1/stock/casses",
     { preHandler: [guards.authRequis, guards.gestionStock] },
     async (request, reply) => {
+      const produit = trouverProduit(db, request.body.idProduit);
+      if (produit && !siteAutorise(request.user, produit.siteId)) {
+        reply.code(403).send(ERREUR_SITE_PRODUIT);
+        return;
+      }
       try {
         reply.code(201).send(enregistrerCasse(db, request.body));
       } catch (erreur) {
@@ -87,6 +106,11 @@ export function registerStockRoutes(app: FastifyInstance, db: Db, guards: RouteG
     "/api/v1/stock/inventaires",
     { preHandler: [guards.authRequis, guards.gestionStock] },
     async (request, reply) => {
+      const produit = trouverProduit(db, request.body.idProduit);
+      if (produit && !siteAutorise(request.user, produit.siteId)) {
+        reply.code(403).send(ERREUR_SITE_PRODUIT);
+        return;
+      }
       try {
         reply.code(201).send(ajusterInventaire(db, request.body));
       } catch (erreur) {
@@ -99,6 +123,11 @@ export function registerStockRoutes(app: FastifyInstance, db: Db, guards: RouteG
     "/api/v1/stock/transferts",
     { preHandler: [guards.authRequis, guards.gestionStock] },
     async (request, reply) => {
+      const produitSource = trouverProduit(db, request.body.idProduitSource);
+      if (produitSource && !siteAutorise(request.user, produitSource.siteId)) {
+        reply.code(403).send(ERREUR_SITE_PRODUIT);
+        return;
+      }
       try {
         reply.code(201).send(transfererStock(db, request.body));
       } catch (erreur) {

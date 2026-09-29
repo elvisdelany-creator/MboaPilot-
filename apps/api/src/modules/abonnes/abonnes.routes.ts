@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import type { Db } from "../../db/types.js";
 import type { Guard, RouteGuards } from "../auth/auth.plugin.js";
+import { siteAutorise } from "../auth/auth.plugin.js";
 import { modifierAbonne, rechercherAbonnes, trouverAbonne, type ModifierAbonneInput } from "./abonne.repository.js";
 import { construireFiche360 } from "./fiche-360.service.js";
 import { fusionnerAbonnes, type FusionnerAbonnesParams } from "./fusion-abonnes.service.js";
@@ -11,6 +12,8 @@ function envoyerErreur(reply: import("fastify").FastifyReply, erreur: unknown) {
   const statut = /introuvable/i.test(message) ? 404 : 400;
   reply.code(statut).send({ erreur: message });
 }
+
+const ERREUR_SITE_ABONNE = { erreur: "Cet abonné n'appartient pas à votre site" };
 
 // 8.1, 11.3 : gestion des clients/abonnés — recherche, consultation et
 // modification de fiche (rôles de vente) ; fusion de doublons et
@@ -57,6 +60,10 @@ export function registerAbonnesRoutes(
         reply.code(404).send({ erreur: "Abonné introuvable" });
         return;
       }
+      if (!siteAutorise(request.user, abonne.siteId)) {
+        reply.code(403).send(ERREUR_SITE_ABONNE);
+        return;
+      }
       reply.code(200).send(abonne);
     }
   );
@@ -65,13 +72,19 @@ export function registerAbonnesRoutes(
     "/api/v1/abonnes/:idAbonne",
     { preHandler: [guards.authRequis, guards.ventes] },
     async (request, reply) => {
+      const idAbonne = Number(request.params.idAbonne);
+      const abonne = trouverAbonne(db, idAbonne);
+      if (abonne && !siteAutorise(request.user, abonne.siteId)) {
+        reply.code(403).send(ERREUR_SITE_ABONNE);
+        return;
+      }
       // 6.3, 14.2 : "non modifiable après création sans droit administrateur"
       if (request.body.apporteurId !== undefined && request.user.role !== "ADMINISTRATEUR") {
         reply.code(403).send({ erreur: "Seul un administrateur peut modifier l'apporteur d'affaires d'un abonné" });
         return;
       }
       try {
-        reply.code(200).send(modifierAbonne(db, Number(request.params.idAbonne), request.body));
+        reply.code(200).send(modifierAbonne(db, idAbonne, request.body));
       } catch (erreur) {
         envoyerErreur(reply, erreur);
       }
@@ -82,8 +95,14 @@ export function registerAbonnesRoutes(
     "/api/v1/abonnes/:idAbonne/fiche-360",
     { preHandler: [guards.authRequis, guards.lectureFinanciere] },
     async (request, reply) => {
+      const idAbonne = Number(request.params.idAbonne);
+      const abonne = trouverAbonne(db, idAbonne);
+      if (abonne && !siteAutorise(request.user, abonne.siteId)) {
+        reply.code(403).send(ERREUR_SITE_ABONNE);
+        return;
+      }
       try {
-        reply.code(200).send(construireFiche360(db, Number(request.params.idAbonne)));
+        reply.code(200).send(construireFiche360(db, idAbonne));
       } catch (erreur) {
         envoyerErreur(reply, erreur);
       }
@@ -96,8 +115,14 @@ export function registerAbonnesRoutes(
     "/api/v1/abonnes/:idAbonne/anonymiser",
     { preHandler: [guards.authRequis, guards.anonymisationAbonne] },
     async (request, reply) => {
+      const idAbonne = Number(request.params.idAbonne);
+      const abonne = trouverAbonne(db, idAbonne);
+      if (abonne && !siteAutorise(request.user, abonne.siteId)) {
+        reply.code(403).send(ERREUR_SITE_ABONNE);
+        return;
+      }
       try {
-        reply.code(200).send(anonymiserAbonne(db, { idAbonne: Number(request.params.idAbonne), userId: request.body.userId }));
+        reply.code(200).send(anonymiserAbonne(db, { idAbonne, userId: request.body.userId }));
       } catch (erreur) {
         envoyerErreur(reply, erreur);
       }

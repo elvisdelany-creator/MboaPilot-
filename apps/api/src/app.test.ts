@@ -1424,6 +1424,81 @@ describe("Module suivi de stock (5.2)", () => {
 
     expect(transfert.statusCode).toBe(403);
   });
+
+  // 2.5.2 : contrairement aux alertes/rotation lente (cloisonnées par siteId
+  // de l'appelant), les routes par idProduit ne vérifiaient pas du tout le
+  // site du produit ciblé — un gérant pouvait réceptionner un achat, casser
+  // du stock ou ajuster l'inventaire d'un produit d'un AUTRE site en
+  // fournissant simplement son idProduit (siteId du corps ignoré ou non).
+  it("refuse un achat, une casse et un ajustement d'inventaire sur un produit d'un autre site (403)", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    creerUtilisateur(db, { siteId, nom: "Gerant", prenom: "G", identifiant: "gerant1", motDePasse: "motdepasse-secret", role: "GERANT" });
+    const tokenGerant = await connecter(app, "gerant1");
+    const idEntreprise = db.select().from(schema.site).where(eq(schema.site.idSite, siteId)).get()!.idEntreprise;
+    const autreSite = db.insert(schema.site).values({ idEntreprise, nom: "Site B" }).returning().get().idSite;
+    const idProduitAutreSite = await creerProduitSuivi(db, autreSite, 5);
+
+    const achat = await app.inject({
+      method: "POST",
+      url: "/api/v1/stock/achats",
+      headers: authHeader(tokenGerant),
+      payload: { idProduit: idProduitAutreSite, siteId, quantite: 10, coutUnitaire: 2000, userId },
+    });
+    expect(achat.statusCode).toBe(403);
+
+    const casse = await app.inject({
+      method: "POST",
+      url: "/api/v1/stock/casses",
+      headers: authHeader(tokenGerant),
+      payload: { idProduit: idProduitAutreSite, siteId, quantite: 1, motif: "Chute", userId },
+    });
+    expect(casse.statusCode).toBe(403);
+
+    const inventaire = await app.inject({
+      method: "POST",
+      url: "/api/v1/stock/inventaires",
+      headers: authHeader(tokenGerant),
+      payload: { idProduit: idProduitAutreSite, siteId, quantiteComptee: 3, motif: "Comptage", userId },
+    });
+    expect(inventaire.statusCode).toBe(403);
+
+    const produit = db.select().from(schema.produit).where(eq(schema.produit.idProduit, idProduitAutreSite)).get();
+    expect(produit?.quantiteStock).toBe(10); // inchangé malgré les 3 tentatives
+  });
+
+  it("refuse de transférer du stock dont le produit source appartient à un autre site (403)", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    creerUtilisateur(db, { siteId, nom: "Gerant", prenom: "G", identifiant: "gerant1", motDePasse: "motdepasse-secret", role: "GERANT" });
+    const tokenGerant = await connecter(app, "gerant1");
+    const idEntreprise = db.select().from(schema.site).where(eq(schema.site.idSite, siteId)).get()!.idEntreprise;
+    const autreSite = db.insert(schema.site).values({ idEntreprise, nom: "Site B" }).returning().get().idSite;
+    const idProduitAutreSite = await creerProduitSuivi(db, autreSite, 5);
+
+    const transfert = await app.inject({
+      method: "POST",
+      url: "/api/v1/stock/transferts",
+      headers: authHeader(tokenGerant),
+      payload: { idProduitSource: idProduitAutreSite, siteDestinationId: siteId, quantite: 4, userId },
+    });
+
+    expect(transfert.statusCode).toBe(403);
+  });
+
+  it("refuse de consulter les mouvements de stock d'un produit appartenant à un autre site (403)", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const token = await connecter(app);
+    const idEntreprise = db.select().from(schema.site).where(eq(schema.site.idSite, siteId)).get()!.idEntreprise;
+    const autreSite = db.insert(schema.site).values({ idEntreprise, nom: "Site B" }).returning().get().idSite;
+    const idProduitAutreSite = await creerProduitSuivi(db, autreSite, 5);
+
+    const mouvements = await app.inject({
+      method: "GET",
+      url: `/api/v1/produits/${idProduitAutreSite}/mouvements`,
+      headers: authHeader(token),
+    });
+
+    expect(mouvements.statusCode).toBe(403);
+  });
 });
 
 describe("Vente rapide de produits/services hors abonnement (5.2, 5.3, 8.5)", () => {
@@ -2124,6 +2199,55 @@ describe("Module gestion du catalogue (8.2)", () => {
     const produitImporte = db.select().from(schema.produit).where(eq(schema.produit.libelle, "Importe")).get();
     expect(produitImporte?.siteId).toBe(siteId);
   });
+
+  // 2.5.2 : contrairement à la liste et à l'export CSV (cloisonnés par
+  // siteId de l'appelant), les routes par idProduit ne vérifiaient pas du
+  // tout le site du produit ciblé.
+  it("refuse de modifier un produit appartenant à un autre site (403)", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    // un Administrateur est délibérément exempté du cloisonnement (2.5.2,
+    // enterprise-wide) : ce test porte sur un Gérant, restreint à son site
+    creerUtilisateur(db, { siteId, nom: "Gerant", prenom: "G", identifiant: "gerant1", motDePasse: "motdepasse-secret", role: "GERANT" });
+    const tokenGerant = await connecter(app, "gerant1");
+    const idEntreprise = db.select().from(schema.site).where(eq(schema.site.idSite, siteId)).get()!.idEntreprise;
+    const autreSite = db.insert(schema.site).values({ idEntreprise, nom: "Site B" }).returning().get().idSite;
+    const produitAutreSite = db
+      .insert(schema.produit)
+      .values({ siteId: autreSite, type: "BIEN", libelle: "SECRET-SITE-B", prixVente: 9999 })
+      .returning()
+      .get();
+
+    const modification = await app.inject({
+      method: "PATCH",
+      url: `/api/v1/produits/${produitAutreSite.idProduit}`,
+      headers: authHeader(tokenGerant),
+      payload: { prixVente: 1 },
+    });
+
+    expect(modification.statusCode).toBe(403);
+    const produit = db.select().from(schema.produit).where(eq(schema.produit.idProduit, produitAutreSite.idProduit)).get();
+    expect(produit?.prixVente).toBe(9999);
+  });
+
+  it("refuse de consulter l'historique de prix d'un produit appartenant à un autre site (403)", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const token = await connecter(app);
+    const idEntreprise = db.select().from(schema.site).where(eq(schema.site.idSite, siteId)).get()!.idEntreprise;
+    const autreSite = db.insert(schema.site).values({ idEntreprise, nom: "Site B" }).returning().get().idSite;
+    const produitAutreSite = db
+      .insert(schema.produit)
+      .values({ siteId: autreSite, type: "BIEN", libelle: "SECRET-SITE-B", prixVente: 9999 })
+      .returning()
+      .get();
+
+    const historique = await app.inject({
+      method: "GET",
+      url: `/api/v1/produits/${produitAutreSite.idProduit}/historique-prix`,
+      headers: authHeader(token),
+    });
+
+    expect(historique.statusCode).toBe(403);
+  });
 });
 
 // fournisseur entièrement pilotable pour les tests HTTP — indépendant du
@@ -2612,6 +2736,61 @@ describe("Fiche client 360° et fusion de doublons (8.1)", () => {
     });
 
     expect(reponse.statusCode).toBe(403);
+  });
+
+  // 2.5.2 : contrairement à la recherche (cloisonnée par le siteId de
+  // l'appelant), les routes par idAbonne ne vérifiaient pas du tout le site
+  // de l'abonné ciblé — la fiche 360° expose pourtant tout l'historique
+  // financier (factures, paiements, solde), la plus sensible des quatre.
+  it("refuse la fiche, la fiche 360°, la modification et l'anonymisation d'un abonné d'un autre site (403)", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    creerUtilisateur(db, { siteId, nom: "Admin", prenom: "D", identifiant: "admin1", motDePasse: "motdepasse-secret", role: "ADMINISTRATEUR" });
+    const tokenAdmin = await connecter(app, "admin1");
+    const idEntreprise = db.select().from(schema.site).where(eq(schema.site.idSite, siteId)).get()!.idEntreprise;
+    const autreSite = db.insert(schema.site).values({ idEntreprise, nom: "Site B" }).returning().get().idSite;
+    const abonneAutreSite = db
+      .insert(schema.abonne)
+      .values({ siteId: autreSite, nom: "SecretSiteB", prenom: "X", telephone: "699999999" })
+      .returning()
+      .get();
+
+    // 2.5.2 : ADMINISTRATEUR reste exempté (enterprise-wide), comme partout
+    // ailleurs — ce test utilise donc un gérant pour vérifier la restriction
+    creerUtilisateur(db, { siteId, nom: "Gerant", prenom: "G", identifiant: "gerant1", motDePasse: "motdepasse-secret", role: "GERANT" });
+    const tokenGerant = await connecter(app, "gerant1");
+
+    const ficheGerant = await app.inject({
+      method: "GET",
+      url: `/api/v1/abonnes/${abonneAutreSite.idAbonne}`,
+      headers: authHeader(tokenGerant),
+    });
+    expect(ficheGerant.statusCode).toBe(403);
+
+    const fiche360 = await app.inject({
+      method: "GET",
+      url: `/api/v1/abonnes/${abonneAutreSite.idAbonne}/fiche-360`,
+      headers: authHeader(tokenGerant),
+    });
+    expect(fiche360.statusCode).toBe(403);
+
+    const modification = await app.inject({
+      method: "PATCH",
+      url: `/api/v1/abonnes/${abonneAutreSite.idAbonne}`,
+      headers: authHeader(tokenGerant),
+      payload: { email: "x@example.cm" },
+    });
+    expect(modification.statusCode).toBe(403);
+
+    const anonymisation = await app.inject({
+      method: "POST",
+      url: `/api/v1/abonnes/${abonneAutreSite.idAbonne}/anonymiser`,
+      headers: authHeader(tokenAdmin),
+      payload: { userId },
+    });
+    // l'anonymisation est réservée à l'Administrateur, qui reste exempté du
+    // cloisonnement (comme pour la modification de produit/stock) : elle
+    // aboutit donc normalement ici, contrairement aux trois vérifications ci-dessus
+    expect(anonymisation.statusCode).toBe(200);
   });
 });
 
@@ -4013,6 +4192,42 @@ describe("Clôture de caisse quotidienne (13.1)", () => {
     });
     expect(ouverture.statusCode).toBe(201);
     expect(db.select().from(schema.clotureCaisse).where(eq(schema.clotureCaisse.idCloture, ouverture.json().idCloture)).get()?.siteId).toBe(siteId);
+  });
+
+  // 2.5.2 : contrairement à l'ouverture et à la liste (cloisonnées par le
+  // siteId de l'appelant), les routes par idCloture ne vérifiaient pas du
+  // tout le site de la session ciblée — un gérant pouvait clôturer (avec des
+  // comptages arbitraires) une session de caisse d'un AUTRE site.
+  it("refuse de consulter les comptages et de clôturer une session de caisse d'un autre site (403)", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    creerUtilisateur(db, { siteId, nom: "Ger", prenom: "F", identifiant: "gerant1", motDePasse: "motdepasse-secret", role: "GERANT" });
+    const tokenGerant = await connecter(app, "gerant1");
+    const idEntreprise = db.select().from(schema.site).where(eq(schema.site.idSite, siteId)).get()!.idEntreprise;
+    const autreSite = db.insert(schema.site).values({ idEntreprise, nom: "Site B" }).returning().get().idSite;
+    const autreUserId = creerUtilisateur(db, { siteId: autreSite, nom: "B", prenom: "B", identifiant: "bsite", motDePasse: "motdepasse-secret", role: "CAISSIER" }).idUser;
+    const clotureAutreSite = db
+      .insert(schema.clotureCaisse)
+      .values({ siteId: autreSite, statut: "OUVERTE", fondOuverture: 50000, ouvertPar: autreUserId })
+      .returning()
+      .get();
+
+    const comptages = await app.inject({
+      method: "GET",
+      url: `/api/v1/cloture-caisse/${clotureAutreSite.idCloture}/comptages`,
+      headers: authHeader(tokenGerant),
+    });
+    expect(comptages.statusCode).toBe(403);
+
+    const fermeture = await app.inject({
+      method: "POST",
+      url: `/api/v1/cloture-caisse/${clotureAutreSite.idCloture}/fermer`,
+      headers: authHeader(tokenGerant),
+      payload: { userId, comptages: [{ mode: "CASH", montantCompte: 50000 }] },
+    });
+    expect(fermeture.statusCode).toBe(403);
+
+    const clotureInchangee = db.select().from(schema.clotureCaisse).where(eq(schema.clotureCaisse.idCloture, clotureAutreSite.idCloture)).get();
+    expect(clotureInchangee?.statut).toBe("OUVERTE");
   });
 });
 

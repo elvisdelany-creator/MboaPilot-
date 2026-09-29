@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import type { Db } from "../../db/types.js";
 import type { Guard, RouteGuards } from "../auth/auth.plugin.js";
+import { siteAutorise } from "../auth/auth.plugin.js";
 import {
   creerProduit,
   estRoleEncadrement,
@@ -9,6 +10,7 @@ import {
   masquerCoutHistoriquePrix,
   masquerCoutMargeProduit,
   modifierProduit,
+  trouverProduit,
   type CreerProduitInput,
   type ModifierProduitInput,
 } from "./produit.repository.js";
@@ -19,6 +21,8 @@ function envoyerErreur(reply: import("fastify").FastifyReply, erreur: unknown) {
   const statut = /introuvable/i.test(message) ? 404 : 400;
   reply.code(statut).send({ erreur: message });
 }
+
+const ERREUR_SITE_PRODUIT = { erreur: "Ce produit n'appartient pas à votre site" };
 
 // 8.2 : gestion du catalogue — consultation ouverte à tout utilisateur
 // authentifié (nécessaire à la caisse, au SAV, à l'échange de matériel),
@@ -51,8 +55,14 @@ export function registerProduitsRoutes(app: FastifyInstance, db: Db, guards: Rou
     "/api/v1/produits/:idProduit",
     { preHandler: [guards.authRequis, guards.gestionCatalogue] },
     async (request, reply) => {
+      const idProduit = Number(request.params.idProduit);
+      const produit = trouverProduit(db, idProduit);
+      if (produit && !siteAutorise(request.user, produit.siteId)) {
+        reply.code(403).send(ERREUR_SITE_PRODUIT);
+        return;
+      }
       try {
-        reply.code(200).send(modifierProduit(db, Number(request.params.idProduit), request.body));
+        reply.code(200).send(modifierProduit(db, idProduit, request.body));
       } catch (erreur) {
         envoyerErreur(reply, erreur);
       }
@@ -63,7 +73,13 @@ export function registerProduitsRoutes(app: FastifyInstance, db: Db, guards: Rou
     "/api/v1/produits/:idProduit/historique-prix",
     { preHandler: [guards.authRequis] },
     async (request, reply) => {
-      const historique = listerHistoriquePrixProduit(db, Number(request.params.idProduit));
+      const idProduit = Number(request.params.idProduit);
+      const produit = trouverProduit(db, idProduit);
+      if (produit && !siteAutorise(request.user, produit.siteId)) {
+        reply.code(403).send(ERREUR_SITE_PRODUIT);
+        return;
+      }
+      const historique = listerHistoriquePrixProduit(db, idProduit);
       reply.code(200).send(estRoleEncadrement(request.user.role) ? historique : historique.map(masquerCoutHistoriquePrix));
     }
   );

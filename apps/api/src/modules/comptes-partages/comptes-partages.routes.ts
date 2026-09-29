@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyReply } from "fastify";
 import type { Db } from "../../db/types.js";
 import type { Guard } from "../auth/auth.plugin.js";
+import { siteAutorise } from "../auth/auth.plugin.js";
 import {
   construireFicheComptePartage,
   creerComptePartage,
@@ -15,6 +16,8 @@ function envoyerErreur(reply: FastifyReply, erreur: unknown) {
   const statut = /introuvable/i.test(message) ? 404 : 400;
   reply.code(statut).send({ erreur: message });
 }
+
+const ERREUR_SITE_COMPTE_PARTAGE = { erreur: "Ce compte partagé n'appartient pas à votre site" };
 
 // 5.9, 11.2 : comptes partagés streaming (Netflix, Prime Vidéo, IPTV…) —
 // identifiants visibles uniquement aux rôles de vente (qui doivent pouvoir
@@ -62,6 +65,10 @@ export function registerComptesPartagesRoutes(app: FastifyInstance, db: Db, guar
       const fiche = construireFicheComptePartage(db, Number(request.params.idComptePartage));
       if (!fiche) {
         reply.code(404).send({ erreur: `Compte partagé ${request.params.idComptePartage} introuvable` });
+        return;
+      }
+      if (!siteAutorise(request.user, fiche.compte.siteId)) {
+        reply.code(403).send(ERREUR_SITE_COMPTE_PARTAGE);
         return;
       }
       reply.code(200).send(fiche);

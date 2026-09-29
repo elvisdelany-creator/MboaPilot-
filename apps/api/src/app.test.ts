@@ -3848,6 +3848,31 @@ describe("Comptes partagés streaming (5.9)", () => {
     expect(liste.statusCode).toBe(200);
     expect(liste.json()).toHaveLength(0);
   });
+
+  // 2.5.2 : contrairement à la route de liste, la fiche d'un compte partagé
+  // s'accède par son ID — un caissier ne doit pas pouvoir en consulter une
+  // (identifiants déchiffrés y compris) appartenant à un autre site en
+  // devinant/itérant son idComptePartage.
+  it("refuse la fiche d'un compte partagé appartenant à un autre site (403)", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const token = await connecter(app);
+    const idEntreprise = db.select().from(schema.site).where(eq(schema.site.idSite, siteId)).get()!.idEntreprise;
+    const autreSite = db.insert(schema.site).values({ idEntreprise, nom: "Site B" }).returning().get().idSite;
+    const famille = db.insert(schema.familleAbonnement).values({ libelle: "NETFLIX" }).returning().get();
+    const compteAutreSite = db
+      .insert(schema.comptePartageStreaming)
+      .values({ siteId: autreSite, idFamille: famille.idFamille, libelle: "SECRET-SITE-B", nombreEcransMax: 4 })
+      .returning()
+      .get();
+
+    const fiche = await app.inject({
+      method: "GET",
+      url: `/api/v1/comptes-partages/${compteAutreSite.idComptePartage}/fiche`,
+      headers: authHeader(token),
+    });
+
+    expect(fiche.statusCode).toBe(403);
+  });
 });
 
 describe("Sauvegarde et export des données (2.6)", () => {

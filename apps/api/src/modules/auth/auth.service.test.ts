@@ -84,5 +84,12 @@ describe("authentifier (2.5.1, 11.2)", () => {
 
     const utilisateur = authentifier(db, "vnga", "motdepasse-secret", "2026-01-01T10:20:00.000Z");
     expect(utilisateur.identifiant).toBe("vnga");
+
+    // le compteur était déjà à 0 au moment du verrouillage (mis à 0 par
+    // enregistrerEchecConnexion) : la remise à zéro conditionnée à
+    // "tentativesEchouees > 0" ne suffit pas à effacer un verrouilleJusqua
+    // désormais expiré — il doit être explicitement remis à null
+    const ligne = db.select().from(schema.utilisateur).where(eq(schema.utilisateur.identifiant, "vnga")).get();
+    expect(ligne?.verrouilleJusqua).toBeNull();
   });
 });

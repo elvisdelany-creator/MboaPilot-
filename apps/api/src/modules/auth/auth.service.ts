@@ -42,7 +42,11 @@ export function authentifier(db: Db, identifiant: string, motDePasse: string, ma
     throw new Error(MESSAGE_ERREUR);
   }
 
-  if (utilisateur.tentativesEchouees > 0) {
+  // le compteur est déjà remis à 0 par enregistrerEchecConnexion au moment
+  // même où le verrouillage se déclenche (voir plus bas) : une connexion
+  // réussie après expiration du délai doit donc aussi effacer verrouilleJusqua,
+  // pas seulement se fier à "tentativesEchouees > 0" pour le faire.
+  if (utilisateur.tentativesEchouees > 0 || utilisateur.verrouilleJusqua !== null) {
     db.update(schema.utilisateur)
       .set({ tentativesEchouees: 0, verrouilleJusqua: null })
       .where(eq(schema.utilisateur.idUser, utilisateur.idUser))

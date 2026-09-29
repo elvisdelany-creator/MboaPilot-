@@ -95,14 +95,43 @@ describe("fermerCaisse (13.1) — écart théorique/réel par mode de paiement",
     expect(stockee).toHaveLength(4);
   });
 
-  it("n'attribue pas à une session les encaissements antérieurs à son ouverture", () => {
+  // 13.1 : rien ne bloque un encaissement pendant que la caisse est "fermée"
+  // (pas de session ouverte) — le théorique de la PREMIÈRE clôture jamais
+  // faite pour un site doit donc rattraper tout ce qui a été encaissé avant
+  // elle, sous peine de faire disparaître définitivement ce chiffre d'affaires
+  // de toute réconciliation.
+  it("rattache à la toute première clôture d'un site les encaissements antérieurs à son ouverture", () => {
     encaisserVente(9000, "CASH", "2025-01-01 08:00:00"); // encaissé avant toute ouverture de session
 
     const cloture = ouvrirCaisse(db, { siteId, userId: caissierId, fondOuverture: 5000 });
-    const resultat = fermerCaisse(db, { idCloture: cloture.idCloture, userId: caissierId, comptages: [{ mode: "CASH", montantCompte: 5000 }] });
+    const resultat = fermerCaisse(db, { idCloture: cloture.idCloture, userId: caissierId, comptages: [{ mode: "CASH", montantCompte: 14000 }] });
 
     const cash = resultat.comptages.find((c) => c.mode === "CASH")!;
-    expect(cash.montantTheorique).toBe(5000); // seulement le fond, pas les 9000 antérieurs
+    expect(cash.montantTheorique).toBe(14000); // le fond (5000) + les 9000 antérieurs, sinon ils s'évaporent
+    expect(cash.ecart).toBe(0);
+  });
+
+  // 13.1 : reproduit le bug réel constaté en test grandeur nature — une vente
+  // encaissée entre deux sessions de caisse (caisse "fermée") ne doit pas
+  // devenir un écart fantôme sur la clôture suivante.
+  it("rattrape, sur la clôture suivante, les encaissements reçus dans l'intervalle entre deux sessions", () => {
+    const clotureA = ouvrirCaisse(db, { siteId, userId: caissierId, fondOuverture: 5000 });
+    fermerCaisse(db, { idCloture: clotureA.idCloture, userId: caissierId, comptages: [{ mode: "CASH", montantCompte: 5000 }] });
+    // horodatages explicites, le MÊME jour, pour exercer précisément le cas
+    // réel constaté (clôture, vente, réouverture, le même jour) plutôt que de
+    // dépendre du minutage réel de l'exécution du test
+    db.update(schema.clotureCaisse).set({ dateFermeture: "2025-06-01 10:00:00" }).where(eq(schema.clotureCaisse.idCloture, clotureA.idCloture)).run();
+
+    // vente réalisée alors qu'aucune session n'est ouverte (caisse "fermée")
+    encaisserVente(3200, "CASH", "2025-06-01 14:00:00");
+
+    const clotureB = ouvrirCaisse(db, { siteId, userId: caissierId, fondOuverture: 0 });
+    db.update(schema.clotureCaisse).set({ dateOuverture: "2025-06-01 18:00:00" }).where(eq(schema.clotureCaisse.idCloture, clotureB.idCloture)).run();
+    const resultat = fermerCaisse(db, { idCloture: clotureB.idCloture, userId: caissierId, comptages: [{ mode: "CASH", montantCompte: 3200 }] });
+
+    const cash = resultat.comptages.find((c) => c.mode === "CASH")!;
+    expect(cash.montantTheorique).toBe(3200); // et non 0 : sinon écart fantôme de +3200
+    expect(cash.ecart).toBe(0);
   });
 
   it("journalise la clôture (11.5)", () => {

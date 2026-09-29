@@ -61,12 +61,25 @@ export function fermerCaisse(db: Db, params: FermerCaisseParams) {
   if (!cloture) throw new Error(`Session de caisse ${params.idCloture} introuvable`);
   if (cloture.statut !== "OUVERTE") throw new Error("Cette session de caisse est déjà fermée");
 
+  // 13.1 : rien n'empêche un encaissement pendant que la caisse est "fermée"
+  // (aucune session ouverte) — le théorique doit donc rattraper tout ce qui a
+  // été encaissé depuis la fin de la DERNIÈRE clôture du site (et non depuis
+  // l'ouverture de cette session), sous peine de faire disparaître ces
+  // encaissements de toute réconciliation (écart fantôme constaté en test).
+  const derniereClotureFermee = db
+    .select()
+    .from(schema.clotureCaisse)
+    .where(and(eq(schema.clotureCaisse.siteId, cloture.siteId), eq(schema.clotureCaisse.statut, "FERMEE")))
+    .orderBy(desc(schema.clotureCaisse.idCloture))
+    .get();
+  const depuis = derniereClotureFermee?.dateFermeture ?? "0000-00-00 00:00:00";
+
   const comptages = MODES_PAIEMENT.map((mode) => {
     const paiements = db
       .select({ total: sql<number>`coalesce(sum(${schema.paiement.montant}), 0)` })
       .from(schema.paiement)
       .innerJoin(schema.facture, eq(schema.paiement.idFacture, schema.facture.idFacture))
-      .where(and(eq(schema.facture.siteId, cloture.siteId), eq(schema.paiement.mode, mode), gte(schema.paiement.datePaiement, cloture.dateOuverture)))
+      .where(and(eq(schema.facture.siteId, cloture.siteId), eq(schema.paiement.mode, mode), gte(schema.paiement.datePaiement, depuis)))
       .get();
     const montantTheorique = (mode === "CASH" ? cloture.fondOuverture : 0) + Number(paiements?.total ?? 0);
     const montantCompte = params.comptages.find((c) => c.mode === mode)?.montantCompte ?? 0;
@@ -80,7 +93,11 @@ export function fermerCaisse(db: Db, params: FermerCaisseParams) {
   }
 
   const ecartTotal = comptages.reduce((total, c) => total + c.ecart, 0);
-  const dateFermeture = new Date().toISOString();
+  // même format que le défaut SQL datetime('now') des autres colonnes de date
+  // (date_ouverture, date_paiement…) — sinon la comparaison de chaînes entre
+  // un dateFermeture au format ISO ("...T...Z") et un datePaiement au format
+  // SQL ("... ...") est incorrecte dès qu'ils tombent le même jour.
+  const dateFermeture = new Date().toISOString().replace("T", " ").slice(0, 19);
 
   const clotureFermee = db
     .update(schema.clotureCaisse)

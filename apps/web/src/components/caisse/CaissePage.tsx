@@ -348,6 +348,7 @@ export function CaissePage({ onNaviguer, abonneInitial, idFamilleInitiale }: Pro
         siteId: utilisateur.siteId,
         userId: utilisateur.idUser,
         idAbonne: abonneSelectionne && "idAbonne" in abonneSelectionne ? abonneSelectionne.idAbonne : undefined,
+        nouvelAbonne: abonneSelectionne && !("idAbonne" in abonneSelectionne) ? abonneSelectionne : undefined,
         lignes: panierProduits.map((l) => ({ idProduit: l.produit.idProduit, quantite: l.quantite, remise: l.remise || undefined })),
         montantEncaisse,
         modePaiement: paiement.mode === "MOBILE_MONEY" ? undefined : paiement.mode,

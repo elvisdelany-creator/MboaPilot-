@@ -17,7 +17,9 @@ export function registerVentesRoutes(app: FastifyInstance, db: Db, guards: Route
     { preHandler: [guards.authRequis, guards.ventes] },
     async (request, reply) => {
       try {
-        reply.code(201).send(creerVenteProduits(db, request.body));
+        // 2.5.2 : le siteId du corps n'est qu'une indication client — celui de
+        // l'appelant (relu en base à chaque requête) fait seul foi
+        reply.code(201).send(creerVenteProduits(db, { ...request.body, siteId: request.user.siteId }));
       } catch (erreur) {
         envoyerErreur(reply, erreur);
       }

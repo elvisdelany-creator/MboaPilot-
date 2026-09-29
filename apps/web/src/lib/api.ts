@@ -297,6 +297,7 @@ export interface CreerVentePayload {
   siteId: number;
   userId: number;
   idAbonne?: number;
+  nouvelAbonne?: NouvelAbonne;
   lignes: { idProduit: number; quantite: number; remise?: number }[];
   montantEncaisse: number;
   modePaiement?: ModePaiementEncaissement;

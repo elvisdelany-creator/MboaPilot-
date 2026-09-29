@@ -307,6 +307,35 @@ describe("POST /api/v1/recrutements", () => {
 
     expect(reponse.statusCode).toBe(400);
   });
+
+  // 2.5.2 : le siteId transmis dans le corps n'est qu'une indication client —
+  // c'est toujours celui de l'appelant qui fait foi (sinon un caissier peut
+  // recruter un abonné sur un autre site que le sien)
+  it("ignore un siteId d'un autre site transmis dans le corps — recrute toujours sur le site de l'appelant", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const token = await connecter(app);
+    const idEntreprise = db.select().from(schema.site).where(eq(schema.site.idSite, siteId)).get()!.idEntreprise;
+    const autreSite = db.insert(schema.site).values({ idEntreprise, nom: "Site B" }).returning().get().idSite;
+
+    const reponse = await app.inject({
+      method: "POST",
+      url: "/api/v1/recrutements",
+      headers: authHeader(token),
+      payload: {
+        siteId: autreSite,
+        userId,
+        aujourdHui: "2025-11-16",
+        abonne: { nom: "SecretSiteB", prenom: "X", telephone: "699999999" },
+        idFormule,
+        montantEncaisse: 13000,
+      },
+    });
+
+    expect(reponse.statusCode).toBe(201);
+    const abonneCree = db.select().from(schema.abonne).where(eq(schema.abonne.nom, "SecretSiteB")).get();
+    expect(abonneCree?.siteId).toBe(siteId);
+    expect(abonneCree?.siteId).not.toBe(autreSite);
+  });
 });
 
 describe("POST /api/v1/abonnements/:numeroAbonnement/reabonnements", () => {
@@ -1439,6 +1468,32 @@ describe("Vente rapide de produits/services hors abonnement (5.2, 5.3, 8.5)", ()
     });
 
     expect(vente.statusCode).toBe(403);
+  });
+
+  // 2.5.2 : le siteId transmis dans le corps n'est qu'une indication client —
+  // c'est toujours celui de l'appelant qui fait foi (sinon un caissier peut
+  // vendre, décrémenter le stock et créer une facture sur un autre site)
+  it("ignore un siteId d'un autre site transmis dans le corps — vend toujours sur le site de l'appelant", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const token = await connecter(app);
+    const idEntreprise = db.select().from(schema.site).where(eq(schema.site.idSite, siteId)).get()!.idEntreprise;
+    const autreSite = db.insert(schema.site).values({ idEntreprise, nom: "Site B" }).returning().get().idSite;
+    const produitAutreSite = db
+      .insert(schema.produit)
+      .values({ siteId: autreSite, type: "BIEN", libelle: "SECRET-SITE-B", prixVente: 2500, suiviStock: 1, quantiteStock: 10 })
+      .returning()
+      .get();
+
+    const vente = await app.inject({
+      method: "POST",
+      url: "/api/v1/ventes",
+      headers: authHeader(token),
+      payload: { siteId: autreSite, userId, lignes: [{ idProduit: produitAutreSite.idProduit, quantite: 1 }], montantEncaisse: 2500 },
+    });
+
+    // le produit ciblé (site B) n'existe pas sur le site de l'appelant -> "introuvable" (404),
+    // preuve que la vente n'a jamais atteint le site B malgré le siteId transmis
+    expect(vente.statusCode).toBe(404);
   });
 
   // 6.5 : "Chèque — Banque, numéro de chèque, titulaire, date" — round-trip

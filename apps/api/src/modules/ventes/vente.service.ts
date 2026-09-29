@@ -5,6 +5,7 @@ import * as schema from "../../db/schema.js";
 import { enregistrerMouvement } from "../stock/stock.repository.js";
 import { trouverTauxTvaParSite } from "../entreprise/entreprise.repository.js";
 import { creerPaiement } from "../factures/paiement.repository.js";
+import { creerAbonne, type AbonneInput } from "../abonnes/abonne.repository.js";
 
 export interface LigneVenteProduitInput {
   idProduit: number;
@@ -17,6 +18,9 @@ export interface CreerVenteProduitsParams {
   siteId: number;
   userId: number;
   idAbonne?: number;
+  // client nouvellement créé (walk-in), au lieu d'un idAbonne existant — mêmes
+  // champs et mêmes validations que le recrutement (recrutement.service.ts)
+  nouvelAbonne?: Omit<AbonneInput, "siteId">;
   lignes: LigneVenteProduitInput[];
   montantEncaisse: number;
   // 6.5 : moyen de paiement de l'encaissement — comptant par défaut ; le
@@ -47,7 +51,8 @@ export function creerVenteProduits(db: Db, params: CreerVenteProduitsParams): Ve
   const lignesResolues = params.lignes.map((ligne) => {
     if (ligne.quantite <= 0) throw new Error("La quantité doit être positive");
     const produit = db.select().from(schema.produit).where(eq(schema.produit.idProduit, ligne.idProduit)).get();
-    if (!produit) throw new Error(`Produit ${ligne.idProduit} introuvable`);
+    // 2.5.2 : un produit d'un autre site n'existe pas, du point de vue de cette vente
+    if (!produit || produit.siteId !== params.siteId) throw new Error(`Produit ${ligne.idProduit} introuvable`);
 
     const prixCatalogue = produit.prixVente * ligne.quantite;
     const remise = ligne.remise ?? 0;
@@ -63,9 +68,13 @@ export function creerVenteProduits(db: Db, params: CreerVenteProduitsParams): Ve
   // au taux en vigueur à cet instant, jamais recalculée après coup
   const montantTaxe = extraireTaxeDuTTC(montantTotal, trouverTauxTvaParSite(db, params.siteId));
 
+  const idAbonne = params.nouvelAbonne
+    ? creerAbonne(db, { siteId: params.siteId, ...params.nouvelAbonne }).idAbonne
+    : params.idAbonne;
+
   const facture = db
     .insert(schema.facture)
-    .values({ siteId: params.siteId, idAbonne: params.idAbonne, creePar: params.userId, montantTotal, montantTaxe })
+    .values({ siteId: params.siteId, idAbonne, creePar: params.userId, montantTotal, montantTaxe })
     .returning()
     .get();
 

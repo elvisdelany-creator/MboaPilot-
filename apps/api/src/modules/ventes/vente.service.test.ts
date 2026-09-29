@@ -126,6 +126,22 @@ describe("creerVenteProduits (5.2, 5.3, 8.5)", () => {
     expect(factureSansAbonne?.idAbonne).toBeNull();
   });
 
+  it("crée le nouvel abonné et rattache la facture, quand nouvelAbonne est fourni au lieu de idAbonne", () => {
+    const resultat = creerVenteProduits(db, {
+      siteId,
+      userId,
+      nouvelAbonne: { nom: "TestAvoir", prenom: "Nathalie", telephone: "695112233" },
+      lignes: [{ idProduit: idBien, quantite: 1 }],
+      montantEncaisse: 0,
+    });
+
+    const facture = db.select().from(schema.facture).where(eq(schema.facture.idFacture, resultat.idFacture)).get();
+    expect(facture?.idAbonne).not.toBeNull();
+
+    const abonneCree = db.select().from(schema.abonne).where(eq(schema.abonne.idAbonne, facture!.idAbonne!)).get();
+    expect(abonneCree).toMatchObject({ nom: "TestAvoir", prenom: "Nathalie", telephone: "695112233", siteId });
+  });
+
   it("rejette une vente sans article", () => {
     expect(() => creerVenteProduits(db, { siteId, userId, lignes: [], montantEncaisse: 0 })).toThrow(/au moins un article/);
   });
@@ -140,6 +156,25 @@ describe("creerVenteProduits (5.2, 5.3, 8.5)", () => {
     expect(() => creerVenteProduits(db, { siteId, userId, lignes: [{ idProduit: 999999, quantite: 1 }], montantEncaisse: 0 })).toThrow(
       /introuvable/
     );
+  });
+
+  // 2.5.2 : cloisonnement multi-site — un produit d'un autre site ne doit
+  // jamais pouvoir être vendu (ni son stock décrémenté) via ce siteId
+  it("rejette un produit qui appartient à un autre site que celui de la vente", () => {
+    const ent = db.insert(schema.entreprise).values({ nom: "Ent B" }).returning().get();
+    const autreSite = db.insert(schema.site).values({ idEntreprise: ent.idEntreprise, nom: "Site B" }).returning().get().idSite;
+    const produitAutreSite = db
+      .insert(schema.produit)
+      .values({ siteId: autreSite, type: "BIEN", libelle: "SECRET-SITE-B", prixVente: 2500, suiviStock: 1, quantiteStock: 10 })
+      .returning()
+      .get();
+
+    expect(() =>
+      creerVenteProduits(db, { siteId, userId, lignes: [{ idProduit: produitAutreSite.idProduit, quantite: 1 }], montantEncaisse: 0 })
+    ).toThrow(/introuvable/);
+
+    const produit = db.select().from(schema.produit).where(eq(schema.produit.idProduit, produitAutreSite.idProduit)).get();
+    expect(produit?.quantiteStock).toBe(10);
   });
 
   it("6.4 : applique une remise ponctuelle sur une ligne, conservée pour transparence", () => {

@@ -23,7 +23,9 @@ export function registerAbonnementsRoutes(app: FastifyInstance, db: Db, guards: 
     { preHandler: [guards.authRequis, guards.ventes] },
     async (request, reply) => {
       try {
-        const resultat = recruterAbonne(db, request.body);
+        // 2.5.2 : le siteId du corps n'est qu'une indication client — celui de
+        // l'appelant (relu en base à chaque requête) fait seul foi
+        const resultat = recruterAbonne(db, { ...request.body, siteId: request.user.siteId });
         reply.code(201).send(resultat);
       } catch (erreur) {
         envoyerErreur(reply, erreur);
@@ -38,6 +40,7 @@ export function registerAbonnementsRoutes(app: FastifyInstance, db: Db, guards: 
       try {
         const resultat = reabonner(db, {
           ...request.body,
+          siteId: request.user.siteId,
           numeroAbonnement: Number(request.params.numeroAbonnement),
         });
         reply.code(200).send(resultat);
@@ -54,6 +57,7 @@ export function registerAbonnementsRoutes(app: FastifyInstance, db: Db, guards: 
       try {
         const resultat = echangerMateriel(db, {
           ...request.body,
+          siteId: request.user.siteId,
           numeroAbonnement: Number(request.params.numeroAbonnement),
         });
         reply.code(201).send(resultat);
@@ -70,6 +74,7 @@ export function registerAbonnementsRoutes(app: FastifyInstance, db: Db, guards: 
       try {
         const resultat = changerFormule(db, {
           ...request.body,
+          siteId: request.user.siteId,
           numeroAbonnement: Number(request.params.numeroAbonnement),
         });
         reply.code(200).send(resultat);

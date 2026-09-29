@@ -68,6 +68,18 @@ describe("modifierEntreprise (6.1, 8.8)", () => {
 
     expect(modifiee?.tauxCommissionVendeurDefaut).toBe(100);
   });
+
+  // 6.1 : un taux de TVA <= -100 % rend le calcul de taxe mathématiquement
+  // impossible (division par zéro ou négative dans extraireTaxeDuTTC,
+  // packages/shared/src/taxe.ts) — constaté en test grandeur nature : -100 %
+  // saisi via l'écran Paramètres a été accepté et a produit un montant_taxe
+  // NULL sur une vraie facture, sans aucune erreur.
+  it("rejette un taux de TVA négatif", () => {
+    const ent = db.insert(schema.entreprise).values({ nom: "Boutique Test" }).returning().get();
+
+    expect(() => modifierEntreprise(db, ent.idEntreprise, { tauxTva: -1 })).toThrow(/TVA/);
+    expect(() => modifierEntreprise(db, ent.idEntreprise, { tauxTva: -10000 })).toThrow(/TVA/);
+  });
 });
 
 // 4.4, 8.8 : durée de rétention des abonnements EXPIRE dans la liste dédiée

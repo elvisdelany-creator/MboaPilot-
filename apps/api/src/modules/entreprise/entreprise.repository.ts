@@ -215,6 +215,14 @@ export function modifierEntreprise(db: Db, idEntreprise: number, input: Modifier
     throw new Error("Le taux de garantie doit être compris entre 0 et 100 %");
   }
 
+  // 6.1 : un taux négatif rend le calcul de taxe mathématiquement impossible
+  // (division par zéro ou négative dans extraireTaxeDuTTC) — constaté en
+  // test grandeur nature : -100 % accepté sans erreur produisait un
+  // montant_taxe NULL sur une vraie facture.
+  if (input.tauxTva !== undefined && input.tauxTva !== null && input.tauxTva < 0) {
+    throw new Error("Le taux de TVA ne peut pas être négatif");
+  }
+
   return db
     .update(schema.entreprise)
     .set({

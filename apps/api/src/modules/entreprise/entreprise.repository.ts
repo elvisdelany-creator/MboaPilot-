@@ -223,6 +223,13 @@ export function modifierEntreprise(db: Db, idEntreprise: number, input: Modifier
     throw new Error("Le taux de TVA ne peut pas être négatif");
   }
 
+  // 6.2, 8.8 : même garde-fou que côté apporteur (apporteur.repository.ts) —
+  // un taux négatif produirait une commission CANAL+ négative, absurde pour
+  // un pour-mille de commission.
+  if (input.tauxCommissionVendeurDefaut !== undefined && input.tauxCommissionVendeurDefaut !== null && input.tauxCommissionVendeurDefaut < 0) {
+    throw new Error("Le taux de commission vendeur par défaut ne peut pas être négatif");
+  }
+
   return db
     .update(schema.entreprise)
     .set({

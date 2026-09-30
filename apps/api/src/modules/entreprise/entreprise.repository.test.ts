@@ -69,6 +69,16 @@ describe("modifierEntreprise (6.1, 8.8)", () => {
     expect(modifiee?.tauxCommissionVendeurDefaut).toBe(100);
   });
 
+  // 6.2, 8.8 : même garde-fou que côté apporteur (apporteur.repository.ts) —
+  // un taux vendeur par défaut négatif produirait une commission CANAL+
+  // négative (montant_commission = round(montantTotal * taux / 1000)),
+  // absurde pour un pour-mille de commission.
+  it("rejette un taux de commission vendeur par défaut négatif", () => {
+    const ent = db.insert(schema.entreprise).values({ nom: "Boutique Test" }).returning().get();
+
+    expect(() => modifierEntreprise(db, ent.idEntreprise, { tauxCommissionVendeurDefaut: -1 })).toThrow(/commission/);
+  });
+
   // 6.1 : un taux de TVA <= -100 % rend le calcul de taxe mathématiquement
   // impossible (division par zéro ou négative dans extraireTaxeDuTTC,
   // packages/shared/src/taxe.ts) — constaté en test grandeur nature : -100 %

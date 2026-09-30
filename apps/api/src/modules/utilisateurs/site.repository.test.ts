@@ -51,6 +51,17 @@ describe("modifierSite (8.7)", () => {
   it("renvoie undefined pour un site inconnu", () => {
     expect(modifierSite(db, 999999, { nom: "X" })).toBeUndefined();
   });
+
+  // 8.7 : même garde-fou qu'à la création (creerSite) — constaté en test
+  // grandeur nature via un appel API direct : un nom vide/blanc était
+  // accepté sans erreur, effaçant le nom affiché partout (en-tête, reçus,
+  // sélecteurs de site).
+  it("rejette un nom vide ou blanc", () => {
+    const site = creerSite(db, { idEntreprise, nom: "Site A" });
+
+    expect(() => modifierSite(db, site.idSite, { nom: "" })).toThrow(/nom/i);
+    expect(() => modifierSite(db, site.idSite, { nom: "   " })).toThrow(/nom/i);
+  });
 });
 
 // 11.4, 6.7 : "Compatibilité imprimante thermique 80mm (protocole ESC/POS)"

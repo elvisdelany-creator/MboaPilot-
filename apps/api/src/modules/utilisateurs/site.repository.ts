@@ -38,6 +38,10 @@ export interface ModifierSiteInput {
 }
 
 export function modifierSite(db: Db, idSite: number, input: ModifierSiteInput) {
+  // 8.7 : même garde-fou qu'à la création (creerSite) — le nom du site est
+  // affiché partout (en-tête, reçus, sélecteurs de site).
+  if (input.nom !== undefined && !input.nom.trim()) throw new Error("Le nom du site est obligatoire");
+
   const efface = input.imprimanteHote === "";
   return db
     .update(schema.site)

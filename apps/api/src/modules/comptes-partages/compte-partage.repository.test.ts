@@ -123,6 +123,23 @@ describe("modifierComptePartage", () => {
     expect(() => modifierComptePartage(db, compte.idComptePartage, { nombreEcransMax: 0 })).toThrow(/positif/i);
     expect(() => modifierComptePartage(db, compte.idComptePartage, { nombreEcransMax: -1 })).toThrow(/positif/i);
   });
+
+  // 5.9 : constaté en test grandeur nature — réduire la capacité en dessous
+  // du nombre d'écrans déjà occupés (2/2 -> 1) était accepté sans erreur,
+  // affichant ensuite "2/1 écrans" : un état que le recrutement (peutAffecterEcran)
+  // est censé rendre impossible d'atteindre, contourné ici par la modification.
+  it("rejette une réduction de capacité en dessous du nombre d'écrans déjà occupés", () => {
+    const compte = creerComptePartage(db, { siteId, idFamille, libelle: "Compte Netflix #1", nombreEcransMax: 2 });
+    creerAbonnementSurCompte(compte.idComptePartage, "ACTIF");
+    creerAbonnementSurCompte(compte.idComptePartage, "ACTIF");
+    expect(compterEcransOccupes(db, compte.idComptePartage)).toBe(2);
+
+    expect(() => modifierComptePartage(db, compte.idComptePartage, { nombreEcransMax: 1 })).toThrow(/écrans déjà occupés/i);
+
+    // une capacité non réduite en dessous de l'occupation reste autorisée
+    const modifie = modifierComptePartage(db, compte.idComptePartage, { nombreEcransMax: 2 });
+    expect(modifie?.nombreEcransMax).toBe(2);
+  });
 });
 
 describe("construireFicheComptePartage", () => {

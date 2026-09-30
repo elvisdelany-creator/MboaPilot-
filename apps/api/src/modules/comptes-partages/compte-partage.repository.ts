@@ -79,6 +79,16 @@ export function modifierComptePartage(db: Db, idComptePartage: number, input: Mo
   if (input.libelle !== undefined && !input.libelle.trim()) throw new Error("Le libellé du compte partagé est obligatoire");
   if (input.nombreEcransMax !== undefined && input.nombreEcransMax <= 0) throw new Error("Le nombre d'écrans autorisés doit être positif");
 
+  // 5.9 : une capacité réduite en dessous des écrans déjà occupés recréerait,
+  // par un autre chemin, l'état que le recrutement (peutAffecterEcran) est
+  // censé rendre impossible d'atteindre.
+  if (input.nombreEcransMax !== undefined) {
+    const ecransOccupes = compterEcransOccupes(db, idComptePartage);
+    if (input.nombreEcransMax < ecransOccupes) {
+      throw new Error(`La capacité (${input.nombreEcransMax}) ne peut pas être inférieure au nombre d'écrans déjà occupés (${ecransOccupes})`);
+    }
+  }
+
   const compte = db
     .update(schema.comptePartageStreaming)
     .set({

@@ -56,6 +56,13 @@ export function modifierAbonne(db: Db, idAbonne: number, input: ModifierAbonneIn
   const existant = trouverAbonne(db, idAbonne);
   if (!existant) throw new Error(`Abonné ${idAbonne} introuvable`);
 
+  // 8.1 : même garde-fou qu'à la création (creerAbonne) — une chaîne vide
+  // n'est pas "nullish" (?? existant.xxx ne s'applique pas dans ce cas),
+  // donc { nom: "" } écraserait silencieusement l'identité réelle du client.
+  if (input.nom !== undefined && !input.nom.trim()) throw new Error("Le nom de l'abonné est obligatoire");
+  if (input.prenom !== undefined && !input.prenom.trim()) throw new Error("Le prénom de l'abonné est obligatoire");
+  if (input.telephone !== undefined && !input.telephone.trim()) throw new Error("Le téléphone de l'abonné est obligatoire");
+
   return db
     .update(schema.abonne)
     .set({

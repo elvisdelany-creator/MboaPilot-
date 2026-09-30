@@ -135,6 +135,17 @@ describe("modifierAbonne (8.1 : consultation et modification de fiche abonné)",
     expect(() => modifierAbonne(db, 999999, { email: "x@example.cm" })).toThrow(/introuvable/);
   });
 
+  // 8.1 : même garde-fou qu'à la création (creerAbonne) — une chaîne vide
+  // n'est pas "nullish" (?? existant.nom ne s'applique pas), donc {nom: ""}
+  // écrasait silencieusement l'identité réelle du client sans erreur.
+  it("rejette un nom, prénom ou téléphone vide", () => {
+    const ab = creerAbonne(db, { siteId, nom: "Nga Ndongo", prenom: "Valentin", telephone: "690000000" });
+
+    expect(() => modifierAbonne(db, ab.idAbonne, { nom: "" })).toThrow(/nom/i);
+    expect(() => modifierAbonne(db, ab.idAbonne, { prenom: "  " })).toThrow(/prénom/i);
+    expect(() => modifierAbonne(db, ab.idAbonne, { telephone: "" })).toThrow(/téléphone/i);
+  });
+
   // 6.3, 14.2 : "non modifiable après création sans droit administrateur" —
   // la restriction de rôle est vérifiée côté route (abonnes.routes.ts) ;
   // ici, la fonction accepte le champ quand on choisit de le transmettre.

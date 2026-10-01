@@ -36,6 +36,7 @@ export function EchangeMaterielDialog({ numeroAbonnement, onFerme, onSucces }: P
 
   const [produits, setProduits] = useState<Produit[]>([]);
   const [idProduit, setIdProduit] = useState<string>("");
+  const [typeMateriel, setTypeMateriel] = useState<string>("DECODEUR");
   const [numeroSerie, setNumeroSerie] = useState("");
   const [motif, setMotif] = useState<"panne" | "vol">("panne");
   const [sousGarantie, setSousGarantie] = useState(false);
@@ -84,6 +85,7 @@ export function EchangeMaterielDialog({ numeroAbonnement, onFerme, onSucces }: P
 
   function reinitialiser() {
     setIdProduit("");
+    setTypeMateriel("DECODEUR");
     setNumeroSerie("");
     setMotif("panne");
     setSousGarantie(false);
@@ -112,7 +114,7 @@ export function EchangeMaterielDialog({ numeroAbonnement, onFerme, onSucces }: P
         siteId: utilisateur.siteId,
         userId: utilisateur.idUser,
         idProduit: Number(idProduit),
-        typeMateriel: "DECODEUR",
+        typeMateriel,
         numeroSerie: numeroSerie || undefined,
         sousGarantie,
         motif,
@@ -164,6 +166,22 @@ export function EchangeMaterielDialog({ numeroAbonnement, onFerme, onSucces }: P
                     {p.libelle} — {formateurFcfa.format(p.prixVente)} FCFA
                   </SelectItem>
                 ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div>
+            <Label htmlFor="type-materiel-echange">Type de matériel</Label>
+            <Select value={typeMateriel} onValueChange={setTypeMateriel}>
+              <SelectTrigger id="type-materiel-echange" className="mt-1 w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="DECODEUR">Décodeur</SelectItem>
+                <SelectItem value="PARABOLE">Parabole</SelectItem>
+                <SelectItem value="CARTE_ACCES">Carte d'accès</SelectItem>
+                <SelectItem value="TELECOMMANDE">Télécommande</SelectItem>
+                <SelectItem value="AUTRE">Autre</SelectItem>
               </SelectContent>
             </Select>
           </div>

@@ -94,16 +94,26 @@ export function changerStatutSav(
     const montantMainOeuvre = params.montantMainOeuvre ?? 0;
     const pieces = db.select().from(schema.savPieceUtilisee).where(eq(schema.savPieceUtilisee.idDossierSav, dossier.idDossierSav)).all();
 
-    let montantPieces = 0;
-    for (const piece of pieces) {
-      const produit = db.select().from(schema.produit).where(eq(schema.produit.idProduit, piece.idProduit)).get();
-      montantPieces += (produit?.prixVente ?? 0) * piece.quantite;
-    }
-
     // 5.10, 7.3, 8.8 : "sous garantie (gratuit ou tarif réduit selon la
-    // politique)" — tauxGarantiePourcent à 0 (gratuit) par défaut
-    const montantPlein = montantPieces + montantMainOeuvre;
-    montantFacture = dossier.sousGarantie === 1 ? Math.round((montantPlein * trouverTauxGarantieEntreprise(db)) / 100) : montantPlein;
+    // politique)" — tauxGarantiePourcent à 0 (gratuit) par défaut. Le ratio
+    // est appliqué ligne par ligne (et non au seul total) pour que la somme
+    // des lignes de vente corresponde toujours exactement au total facturé —
+    // constaté en test grandeur nature : les lignes portaient le prix plein
+    // même sous garantie à taux réduit, et même hors garantie une pièce en
+    // quantité > 1 ne portait que le prix unitaire, pas le montant de la ligne.
+    const ratioGarantie = dossier.sousGarantie === 1 ? trouverTauxGarantieEntreprise(db) / 100 : 1;
+
+    const lignesPieces = pieces.map((piece) => {
+      const produit = db.select().from(schema.produit).where(eq(schema.produit.idProduit, piece.idProduit)).get();
+      return {
+        idProduit: piece.idProduit,
+        quantite: piece.quantite,
+        prixApplique: Math.round((produit?.prixVente ?? 0) * piece.quantite * ratioGarantie),
+      };
+    });
+    const montantPiecesFacture = lignesPieces.reduce((somme, l) => somme + l.prixApplique, 0);
+    const montantMainOeuvreFacture = Math.round(montantMainOeuvre * ratioGarantie);
+    montantFacture = montantPiecesFacture + montantMainOeuvreFacture;
     // 3.2.3, 6.1, 8.8 : "porte le total, la TVA/taxes le cas échéant" —
     // figée au taux en vigueur à cet instant, jamais recalculée après coup
     const montantTaxe = extraireTaxeDuTTC(montantFacture, trouverTauxTvaParSite(db, dossier.siteId));
@@ -116,14 +126,18 @@ export function changerStatutSav(
     idFacture = facture.idFacture;
     jetonVerification = facture.jetonVerification;
 
-    for (const piece of pieces) {
-      const produit = db.select().from(schema.produit).where(eq(schema.produit.idProduit, piece.idProduit)).get();
+    for (const ligne of lignesPieces) {
       db.insert(schema.ligneVente)
-        .values({ idFacture: facture.idFacture, idProduit: piece.idProduit, quantite: piece.quantite, prixApplique: produit?.prixVente ?? 0 })
+        .values({
+          idFacture: facture.idFacture,
+          idProduit: ligne.idProduit,
+          quantite: ligne.quantite,
+          prixApplique: ligne.prixApplique,
+        })
         .run();
     }
-    if (montantMainOeuvre > 0) {
-      db.insert(schema.ligneVente).values({ idFacture: facture.idFacture, prixApplique: montantMainOeuvre }).run();
+    if (montantMainOeuvreFacture > 0) {
+      db.insert(schema.ligneVente).values({ idFacture: facture.idFacture, prixApplique: montantMainOeuvreFacture }).run();
     }
 
     if (montantFacture === 0) {

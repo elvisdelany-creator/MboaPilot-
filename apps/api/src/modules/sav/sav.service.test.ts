@@ -86,6 +86,29 @@ describe("changerStatutSav — cycle de vie (5.10)", () => {
     void resultat;
   });
 
+  // 6.4, constaté en test grandeur nature : la ligne de vente d'une pièce SAV
+  // enregistrait prix_applique = prix unitaire du produit, sans le multiplier
+  // par la quantité affectée — alors que partout ailleurs (recrutement,
+  // vente directe, avoir) prix_applique est le montant TOTAL de la ligne
+  // (divisé par quantité pour l'affichage unitaire, cf. EmettreAvoirDialog).
+  // Conséquence réelle observée : pour 2 pièces à 3000 FCFA, la facture
+  // affichait bien 6000 FCFA mais la ligne de vente ne portait que 3000 —
+  // la somme des lignes ne correspondait plus au total facturé, et un avoir
+  // calculé sur cette ligne aurait crédité deux fois moins que payé.
+  it("passage en PRET : la ligne de vente d'une pièce reflète le montant total (prix unitaire × quantité)", () => {
+    changerStatutSav(db, { idDossierSav, nouveauStatut: "DIAGNOSTIC", userId });
+    affecterPieceSav(db, { idDossierSav, idProduit: idProduitPiece, quantite: 2, userId }); // 3000 FCFA/u
+    changerStatutSav(db, { idDossierSav, nouveauStatut: "REPARATION", userId });
+
+    const resultatPret = changerStatutSav(db, { idDossierSav, nouveauStatut: "PRET", userId });
+
+    expect(resultatPret.montantFacture).toBe(6000);
+    const lignes = db.select().from(schema.ligneVente).where(eq(schema.ligneVente.idFacture, resultatPret.idFacture!)).all();
+    const sommeLignes = lignes.reduce((somme, l) => somme + l.prixApplique, 0);
+    expect(sommeLignes).toBe(resultatPret.montantFacture);
+    expect(lignes[0].prixApplique).toBe(6000);
+  });
+
   it("passage en PRET sous garantie : facture à 0, auto-validée", () => {
     db.update(schema.savDossier).set({ sousGarantie: 1 }).where(eq(schema.savDossier.idDossierSav, idDossierSav)).run();
     changerStatutSav(db, { idDossierSav, nouveauStatut: "DIAGNOSTIC", userId });
@@ -110,6 +133,13 @@ describe("changerStatutSav — cycle de vie (5.10)", () => {
 
     expect(resultat.montantFacture).toBe(2500); // 50 % de 5000
     expect(resultat.statutFacture).toBe("BROUILLON");
+
+    // constaté en test grandeur nature : les lignes portaient le prix PLEIN
+    // (3000 + 2000 = 5000) alors que la facture ne due que 2500 — le taux de
+    // garantie n'était appliqué qu'au total, jamais répercuté sur les lignes.
+    const lignes = db.select().from(schema.ligneVente).where(eq(schema.ligneVente.idFacture, resultat.idFacture!)).all();
+    const sommeLignes = lignes.reduce((somme, l) => somme + l.prixApplique, 0);
+    expect(sommeLignes).toBe(2500);
   });
 
   it("PRET -> LIVRE avec encaissement valide la facture", () => {

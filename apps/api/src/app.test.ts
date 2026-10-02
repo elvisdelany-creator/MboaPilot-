@@ -4342,3 +4342,71 @@ describe("Fiche de vérification publique d'une facture (13.1)", () => {
     expect(reponse.json().dossierSav).toEqual({ statut: "PRET" });
   });
 });
+
+// 11.5 : "journal d'audit immuable" — l'auteur d'une action est toujours
+// l'utilisateur authentifié, jamais un userId fourni par le client. Constaté
+// en test grandeur nature : un administrateur connecté pouvait créer une
+// vente, ou annuler un paiement, en déclarant le userId d'un autre compte, et
+// le journal d'audit comme les champs « créé par » l'attribuaient à ce tiers.
+describe("Attribution des actions à l'utilisateur authentifié (11.5)", () => {
+  it("ignore un userId d'un autre utilisateur transmis dans le corps — la vente est attribuée à l'appelant", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const token = await connecter(app);
+    const autreUtilisateur = creerUtilisateur(db, {
+      siteId,
+      nom: "Autre",
+      prenom: "C",
+      identifiant: "caissier2",
+      motDePasse: "motdepasse-secret",
+      role: "CAISSIER",
+    }).idUser;
+    const idProduit = db
+      .insert(schema.produit)
+      .values({ siteId, type: "SERVICE", libelle: "Installation", prixVente: 5000 })
+      .returning()
+      .get().idProduit;
+
+    const vente = await app.inject({
+      method: "POST",
+      url: "/api/v1/ventes",
+      headers: authHeader(token),
+      payload: { siteId, userId: autreUtilisateur, lignes: [{ idProduit, quantite: 1 }], montantEncaisse: 5000 },
+    });
+
+    expect(vente.statusCode).toBe(201);
+    const facture = db.select().from(schema.facture).where(eq(schema.facture.idFacture, vente.json().idFacture)).get()!;
+    expect(facture.creePar).toBe(userId);
+    const paiement = db.select().from(schema.paiement).where(eq(schema.paiement.idFacture, facture.idFacture)).get()!;
+    expect(paiement.utilisateurId).toBe(userId);
+  });
+
+  it("ignore un userId d'un autre utilisateur transmis en paramètre — l'annulation de paiement est journalisée au nom de l'appelant", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const idGerant = creerUtilisateur(db, {
+      siteId,
+      nom: "Gerant",
+      prenom: "G",
+      identifiant: "gerant1",
+      motDePasse: "motdepasse-secret",
+      role: "GERANT",
+    }).idUser;
+    const token = await connecter(app, "gerant1");
+    const facture = db.insert(schema.facture).values({ siteId, statut: "VALIDEE", montantTotal: 5000, creePar: userId }).returning().get();
+    const paiement = db
+      .insert(schema.paiement)
+      .values({ idFacture: facture.idFacture, mode: "CASH", montant: 5000, utilisateurId: userId })
+      .returning()
+      .get();
+
+    const reponse = await app.inject({
+      method: "DELETE",
+      url: `/api/v1/paiements/${paiement.idPaiement}?userId=${userId}`,
+      headers: authHeader(token),
+    });
+
+    expect(reponse.statusCode).toBe(200);
+    const audit = db.select().from(schema.journalAudit).where(eq(schema.journalAudit.tableCible, "paiement")).all();
+    expect(audit).toHaveLength(1);
+    expect(audit[0].utilisateurId).toBe(idGerant);
+  });
+});

@@ -48,6 +48,17 @@ export function creerAuthRequis(db: Db) {
       role: utilisateurCourant.role,
       idApporteur: utilisateurCourant.idApporteur,
     };
+
+    // 11.5 : l'auteur d'une action (journal d'audit, « créé par », paiements)
+    // est toujours l'utilisateur authentifié — un userId fourni par le client,
+    // dans le corps ou en paramètre, est écrasé plutôt que cru, sinon un
+    // compte pourrait imputer une opération à un autre.
+    if (request.body && typeof request.body === "object" && "userId" in request.body) {
+      (request.body as { userId: number }).userId = utilisateurCourant.idUser;
+    }
+    if (request.query && typeof request.query === "object" && "userId" in request.query) {
+      (request.query as { userId: string }).userId = String(utilisateurCourant.idUser);
+    }
   };
 }
 

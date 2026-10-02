@@ -117,7 +117,8 @@ export function executerJobQuotidien(
       suivi.statut,
       abonnementCourant.statut,
       suivi.dateFinProbatoire,
-      aujourdHui
+      aujourdHui,
+      abonnementCourant.dateFin
     );
     if (nouveauStatutSuivi !== suivi.statut) {
       db.update(schema.suiviCommissionCanalplus)

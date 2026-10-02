@@ -201,6 +201,23 @@ describe("executerJobQuotidien — suivi commission CANAL+ (6.2)", () => {
     expect(misAJour?.statut).toBe("CONFIRMEE");
     expect(resultat.commissionsConfirmees).toBe(1);
   });
+
+  // 6.2.3 : constaté en test grandeur nature — un recrutement antidaté de 5
+  // mois (abonnement déjà expiré, jamais renouvelé) voyait sa commission
+  // passer à CONFIRMEE au premier job, car la période probatoire était déjà
+  // « dépassée » lors de la première évaluation.
+  it("annule la commission d'un abonnement expiré avant la fin de la période probatoire, même si le premier job passe après celle-ci", () => {
+    const abonne = creerAbonne("690000008");
+    const sub = creerAbonnement(abonne.idAbonne, "2025-05-01", "2025-05-30"); // expiré, jamais renouvelé
+    const suivi = creerSuivi(sub.numeroAbonnement, "2025-08-28"); // probation déjà terminée
+
+    const resultat = executerJobQuotidien(db, "2025-10-01");
+
+    const misAJour = db.select().from(schema.suiviCommissionCanalplus).where(eq(schema.suiviCommissionCanalplus.idSuivi, suivi.idSuivi)).get();
+    expect(misAJour?.statut).toBe("ANNULEE");
+    expect(resultat.commissionsAnnulees).toBe(1);
+    expect(resultat.commissionsConfirmees).toBe(0);
+  });
 });
 
 // 11.3 : "durée de conservation définie et paramétrable, avec archivage ou

@@ -114,6 +114,45 @@ describe("importerCatalogueCsv (8.2)", () => {
     expect(resultat.erreurs[1].ligne).toBe(3);
   });
 
+  // 8.2 : constaté en test grandeur nature — Number("") vaut 0, donc une
+  // cellule PrixVente laissée vide écrasait silencieusement le prix d'un
+  // article existant par 0 FCFA, rapporté comme « 1 mis à jour, 0 erreur ».
+  it("rejette un prix de vente vide au lieu de le traiter comme 0 — l'article existant est inchangé", () => {
+    const idProduit = creerProduit(db, { siteId, type: "BIEN", libelle: "Télécommande", prixVente: 2500, coutRevient: 1000 }).idProduit;
+    const csv = ["Type,Libelle,Categorie,PrixVente,CoutRevient,SuiviStock,SeuilAlerte", "BIEN,Télécommande,,,1000,0,"].join("\n");
+
+    const resultat = importerCatalogueCsv(db, siteId, csv, userId);
+
+    expect(resultat.misAJour).toBe(0);
+    expect(resultat.erreurs).toHaveLength(1);
+    expect(resultat.erreurs[0].message).toMatch(/prix/i);
+    const produit = db.select().from(schema.produit).where(eq(schema.produit.idProduit, idProduit)).get();
+    expect(produit?.prixVente).toBe(2500);
+  });
+
+  it("rejette un prix de vente décimal (les montants sont en FCFA entiers)", () => {
+    const csv = ["Type,Libelle,Categorie,PrixVente,CoutRevient,SuiviStock,SeuilAlerte", "BIEN,Câble,,1500.5,,0,"].join("\n");
+
+    const resultat = importerCatalogueCsv(db, siteId, csv, userId);
+
+    expect(resultat.crees).toBe(0);
+    expect(resultat.erreurs).toHaveLength(1);
+  });
+
+  it("rejette un coût de revient négatif et un seuil d'alerte négatif ou décimal", () => {
+    const csv = [
+      "Type,Libelle,Categorie,PrixVente,CoutRevient,SuiviStock,SeuilAlerte",
+      "BIEN,Article A,,1500,-200,0,",
+      "BIEN,Article B,,1500,500,1,-3",
+      "BIEN,Article C,,1500,500,1,2.5",
+    ].join("\n");
+
+    const resultat = importerCatalogueCsv(db, siteId, csv, userId);
+
+    expect(resultat.crees).toBe(0);
+    expect(resultat.erreurs.map((e) => e.ligne)).toEqual([2, 3, 4]);
+  });
+
   it("rejette un CSV sans les colonnes obligatoires", () => {
     expect(() => importerCatalogueCsv(db, siteId, "Foo,Bar\n1,2", userId)).toThrow(/colonnes/i);
   });

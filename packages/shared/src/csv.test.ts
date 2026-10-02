@@ -25,6 +25,19 @@ describe("analyserCsv (8.2 : import de catalogue)", () => {
     expect(lignes).toEqual([{ Libelle: "Stylo", PrixVente: "300" }]);
   });
 
+  // 8.2 : Excel en version française (la norme au Cameroun) enregistre et
+  // rouvre les CSV avec le point-virgule comme séparateur — un fichier
+  // retravaillé dans le tableur ne doit pas être rejeté comme « colonnes
+  // manquantes » (constaté en test grandeur nature).
+  it("détecte le point-virgule comme séparateur (CSV Excel version française)", () => {
+    const lignes = analyserCsv('Type;Libelle;PrixVente\r\nBIEN;Câble HDMI;1500\r\nSERVICE;"Pose; murale";5000');
+
+    expect(lignes).toEqual([
+      { Type: "BIEN", Libelle: "Câble HDMI", PrixVente: "1500" },
+      { Type: "SERVICE", Libelle: "Pose; murale", PrixVente: "5000" },
+    ]);
+  });
+
   it("renvoie un tableau vide pour un contenu vide", () => {
     expect(analyserCsv("")).toEqual([]);
     expect(analyserCsv("   \n  ")).toEqual([]);

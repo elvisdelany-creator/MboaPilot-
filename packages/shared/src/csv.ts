@@ -1,7 +1,23 @@
 // 8.2 : import/export de catalogue (CSV) — parseur/générateur minimal
 // (RFC 4180 : champs entre guillemets, virgule/guillemet/saut de ligne échappés).
 
+// Excel en version française enregistre ses CSV avec « ; » : le séparateur est
+// déduit de la ligne d'en-tête (hors guillemets), « , » par défaut.
+function detecterSeparateur(texte: string): "," | ";" {
+  let virgules = 0;
+  let pointsVirgules = 0;
+  let dansGuillemets = false;
+  for (const c of texte) {
+    if (c === '"') dansGuillemets = !dansGuillemets;
+    else if (!dansGuillemets && (c === "\n" || c === "\r")) break;
+    else if (!dansGuillemets && c === ",") virgules++;
+    else if (!dansGuillemets && c === ";") pointsVirgules++;
+  }
+  return pointsVirgules > virgules ? ";" : ",";
+}
+
 function decouperLignesCsv(texte: string): string[][] {
+  const separateur = detecterSeparateur(texte);
   const lignes: string[][] = [];
   let ligne: string[] = [];
   let champ = "";
@@ -26,7 +42,7 @@ function decouperLignesCsv(texte: string): string[][] {
 
     if (c === '"') {
       dansGuillemets = true;
-    } else if (c === ",") {
+    } else if (c === separateur) {
       ligne.push(champ);
       champ = "";
     } else if (c === "\n" || c === "\r") {

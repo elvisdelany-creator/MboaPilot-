@@ -77,6 +77,11 @@ export function importerCatalogueCsv(db: Db, siteId: number, contenuCsv: string,
   return resultat;
 }
 
+function lireEntierPositif(valeur: string): number | undefined {
+  const texte = valeur.trim();
+  return /^\d+$/.test(texte) ? Number(texte) : undefined;
+}
+
 function analyserLigneCsv(ligne: Record<string, string>): Omit<CreerProduitInput, "siteId"> {
   const type = ligne.Type.trim().toUpperCase();
   if (!(TYPES_VALIDES as readonly string[]).includes(type)) {
@@ -85,14 +90,17 @@ function analyserLigneCsv(ligne: Record<string, string>): Omit<CreerProduitInput
   const libelle = ligne.Libelle.trim();
   if (!libelle) throw new Error("Libellé obligatoire");
 
-  const prixVente = Number(ligne.PrixVente);
-  if (!Number.isFinite(prixVente) || prixVente < 0) throw new Error(`Prix de vente invalide "${ligne.PrixVente}"`);
+  // Number("") vaut 0 : une cellule vide serait lue comme « 0 FCFA » (et
+  // écraserait le prix d'un article existant) — seuls des entiers explicites
+  // sont acceptés ; coût et seuil vides restent « non renseignés ».
+  const prixVente = lireEntierPositif(ligne.PrixVente);
+  if (prixVente === undefined) throw new Error(`Prix de vente invalide "${ligne.PrixVente}" — entier en FCFA obligatoire`);
 
-  const coutRevient = ligne.CoutRevient.trim() === "" ? undefined : Number(ligne.CoutRevient);
-  if (coutRevient !== undefined && !Number.isFinite(coutRevient)) throw new Error(`Coût de revient invalide "${ligne.CoutRevient}"`);
+  const coutRevient = ligne.CoutRevient.trim() === "" ? undefined : lireEntierPositif(ligne.CoutRevient);
+  if (ligne.CoutRevient.trim() !== "" && coutRevient === undefined) throw new Error(`Coût de revient invalide "${ligne.CoutRevient}"`);
 
-  const seuilAlerte = ligne.SeuilAlerte.trim() === "" ? undefined : Number(ligne.SeuilAlerte);
-  if (seuilAlerte !== undefined && !Number.isFinite(seuilAlerte)) throw new Error(`Seuil d'alerte invalide "${ligne.SeuilAlerte}"`);
+  const seuilAlerte = ligne.SeuilAlerte.trim() === "" ? undefined : lireEntierPositif(ligne.SeuilAlerte);
+  if (ligne.SeuilAlerte.trim() !== "" && seuilAlerte === undefined) throw new Error(`Seuil d'alerte invalide "${ligne.SeuilAlerte}"`);
 
   return {
     type: type as CreerProduitInput["type"],

@@ -12,6 +12,13 @@ export interface IndicateursJour {
   nombreAlertesStock: number;
 }
 
+// Une ligne d'avoir (6.4) porte une quantité positive et un prix négatif : sa
+// quantité et sa marge doivent se retrancher de celles de la vente d'origine,
+// pas s'y ajouter.
+function construireSignesFactures(factures: { idFacture: number; type: string }[]): Map<number, 1 | -1> {
+  return new Map(factures.map((f) => [f.idFacture, f.type === "AVOIR" ? -1 : 1]));
+}
+
 // 9.3 : cartons KPI en tête de tableau de bord. La marge est "estimée" (et
 // non recalculée historiquement) : elle s'appuie sur la marge courante de
 // l'article (6.1), pas sur un instantané au moment de la vente. Les lignes
@@ -34,10 +41,11 @@ export function calculerIndicateursJour(db: Db, siteId: number, aujourdHui: stri
   const produits = idsProduits.length > 0 ? db.select().from(schema.produit).where(inArray(schema.produit.idProduit, idsProduits)).all() : [];
   const produitParId = new Map(produits.map((p) => [p.idProduit, p]));
 
+  const signeParFacture = construireSignesFactures(facturesJour);
   const margeEstimeeJour = lignes.reduce((total, l) => {
     if (l.idProduit === null) return total;
     const produit = produitParId.get(l.idProduit);
-    return total + (produit ? (produit.margeValeur ?? 0) * l.quantite : 0);
+    return total + (produit ? (produit.margeValeur ?? 0) * l.quantite * signeParFacture.get(l.idFacture)! : 0);
   }, 0);
 
   return {
@@ -200,6 +208,7 @@ export function calculerMargeParArticleJour(db: Db, siteId: number, aujourdHui: 
   const idsFactures = facturesJour.map((f) => f.idFacture);
   const lignes = idsFactures.length > 0 ? db.select().from(schema.ligneVente).where(inArray(schema.ligneVente.idFacture, idsFactures)).all() : [];
 
+  const signeParFacture = construireSignesFactures(facturesJour);
   const margeParProduit = new Map<number, MargeArticle>();
   for (const ligne of lignes) {
     if (ligne.idProduit === null) continue;
@@ -207,8 +216,9 @@ export function calculerMargeParArticleJour(db: Db, siteId: number, aujourdHui: 
     if (!produit) continue;
 
     const entree = margeParProduit.get(produit.idProduit) ?? { idProduit: produit.idProduit, libelle: produit.libelle, quantiteVendue: 0, margeEstimee: 0 };
-    entree.quantiteVendue += ligne.quantite;
-    entree.margeEstimee += (produit.margeValeur ?? 0) * ligne.quantite;
+    const signe = signeParFacture.get(ligne.idFacture)!;
+    entree.quantiteVendue += ligne.quantite * signe;
+    entree.margeEstimee += (produit.margeValeur ?? 0) * ligne.quantite * signe;
     margeParProduit.set(produit.idProduit, entree);
   }
 

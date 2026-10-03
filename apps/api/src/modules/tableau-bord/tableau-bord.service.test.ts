@@ -4,6 +4,7 @@ import { genererPlageJours } from "@mboapilot/shared";
 import { creerDbTest, type Db } from "../../test-utils/db.js";
 import { recruterAbonne } from "../abonnements/recrutement.service.js";
 import { creerApporteur } from "../apporteurs/apporteur.repository.js";
+import { creerAvoir } from "../factures/avoir.service.js";
 import { creerProduit } from "../produits/produit.repository.js";
 import { receptionnerAchat } from "../stock/stock.service.js";
 import { creerVenteProduits } from "../ventes/vente.service.js";
@@ -58,6 +59,22 @@ describe("calculerIndicateursJour (9.3 : cartons KPI)", () => {
   it("un jour sans facture renvoie des indicateurs à zéro", () => {
     const indicateurs = calculerIndicateursJour(db, siteId, AUJOURDHUI);
     expect(indicateurs).toEqual({ chiffreAffairesJour: 0, margeEstimeeJour: 0, nombreEcheances7j: 0, nombreAlertesStock: 0 });
+  });
+
+  // 6.4, 9.3 : constaté en test grandeur nature — une ligne d'avoir porte une
+  // quantité positive (et un prix négatif) : sa marge s'ajoutait à celle du
+  // jour au lieu de s'en retrancher. Après un avoir complet, le CA retombait
+  // à 0 mais la marge estimée doublait (3 400 FCFA au lieu de 0).
+  it("un avoir retranche sa marge au lieu de l'ajouter", () => {
+    const produit = creerProduit(db, { siteId, type: "BIEN", libelle: "Télécommande", prixVente: 3200, coutRevient: 1500, margeType: "VALEUR", margeValeur: 1700 });
+    const vente = creerVenteProduits(db, { siteId, userId, lignes: [{ idProduit: produit.idProduit, quantite: 3 }], montantEncaisse: 9600 });
+    const ligne = db.select().from(schema.ligneVente).where(eq(schema.ligneVente.idFacture, vente.idFacture)).get()!;
+
+    creerAvoir(db, { idFactureOrigine: vente.idFacture, lignes: [{ idLigneOrigine: ligne.idLigne, quantite: 1 }], restituerStock: false, userId });
+
+    const indicateurs = calculerIndicateursJour(db, siteId, AUJOURDHUI);
+    expect(indicateurs.chiffreAffairesJour).toBe(6400); // 9600 - 3200
+    expect(indicateurs.margeEstimeeJour).toBe(3400); // 2 unités nettes × 1700
   });
 });
 
@@ -228,6 +245,18 @@ describe("calculerMargeParArticleJour (8.6)", () => {
     expect(marges).toEqual([
       { idProduit: cable.idProduit, libelle: "Câble HDMI", quantiteVendue: 3, margeEstimee: 1500 }, // 500 × 3
       { idProduit: decodeur.idProduit, libelle: "Décodeur", quantiteVendue: 2, margeEstimee: 400 }, // 200 × 2
+    ]);
+  });
+
+  it("un avoir retranche la quantité et la marge de l'article au lieu de les ajouter", () => {
+    const cable = creerProduit(db, { siteId, type: "BIEN", libelle: "Câble HDMI", prixVente: 2000, coutRevient: 1000, margeType: "VALEUR", margeValeur: 500 });
+    const vente = creerVenteProduits(db, { siteId, userId, lignes: [{ idProduit: cable.idProduit, quantite: 3 }], montantEncaisse: 6000 });
+    const ligne = db.select().from(schema.ligneVente).where(eq(schema.ligneVente.idFacture, vente.idFacture)).get()!;
+
+    creerAvoir(db, { idFactureOrigine: vente.idFacture, lignes: [{ idLigneOrigine: ligne.idLigne, quantite: 1 }], restituerStock: false, userId });
+
+    expect(calculerMargeParArticleJour(db, siteId, AUJOURDHUI)).toEqual([
+      { idProduit: cable.idProduit, libelle: "Câble HDMI", quantiteVendue: 2, margeEstimee: 1000 }, // (3 - 1) × 500
     ]);
   });
 

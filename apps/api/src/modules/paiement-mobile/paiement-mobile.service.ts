@@ -23,6 +23,18 @@ export async function initierPaiementMobile(db: Db, fournisseur: FournisseurPaie
   if (!facture) throw new Error(`Facture ${params.idFacture} introuvable`);
   if (facture.statut === "VALIDEE") throw new Error("Cette facture est déjà validée");
 
+  // 6.6 : une seule transaction à la fois par facture — sinon deux
+  // confirmations aboutissent et le client est débité deux fois. Jugé sur la
+  // date d'expiration réelle (et non sur le seul statut, actualisé à la
+  // demande) pour qu'un client dont le code n'a pas été saisi puisse réessayer.
+  const enAttente = db
+    .select()
+    .from(schema.transactionMobileMoney)
+    .where(eq(schema.transactionMobileMoney.idFacture, params.idFacture))
+    .all()
+    .some((t) => (t.statut === "INITIEE" || t.statut === "EN_ATTENTE") && new Date(t.dateExpiration).getTime() > Date.now());
+  if (enAttente) throw new Error("Un paiement Mobile Money est déjà en attente de confirmation pour cette facture");
+
   const dateExpiration = new Date(Date.now() + DELAI_EXPIRATION_MINUTES * 60 * 1000).toISOString();
 
   const transaction = db

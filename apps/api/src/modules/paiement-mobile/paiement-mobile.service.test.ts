@@ -79,6 +79,41 @@ describe("initierPaiementMobile (6.6)", () => {
       initierPaiementMobile(db, fournisseur, { idFacture: 999999, numeroTelephone: "690000000", montant: 5000, parcours: "USSD_CLIENT" })
     ).rejects.toThrow(/introuvable/);
   });
+
+  // 6.6 : constaté en test grandeur nature — deux transactions initiées sur la
+  // même facture tant que la première était en attente aboutissaient toutes
+  // deux : une facture de 5 000 FCFA recevait 10 000 FCFA de paiements
+  // Mobile Money (le client peut être débité deux fois).
+  it("refuse d'initier un second paiement tant qu'un autre est en attente de confirmation sur la même facture", async () => {
+    await initierPaiementMobile(db, fournisseur, { idFacture, numeroTelephone: "690000000", montant: 5000, parcours: "USSD_CLIENT" });
+
+    await expect(
+      initierPaiementMobile(db, fournisseur, { idFacture, numeroTelephone: "690000000", montant: 5000, parcours: "USSD_CLIENT" })
+    ).rejects.toThrow(/déjà en attente/);
+    expect(db.select().from(schema.transactionMobileMoney).where(eq(schema.transactionMobileMoney.idFacture, idFacture)).all()).toHaveLength(1);
+  });
+
+  it("autorise une nouvelle tentative une fois la précédente expirée, même si son statut n'a pas encore été actualisé", async () => {
+    const premiere = await initierPaiementMobile(db, fournisseur, { idFacture, numeroTelephone: "690000000", montant: 5000, parcours: "USSD_CLIENT" });
+    db.update(schema.transactionMobileMoney)
+      .set({ dateExpiration: new Date(Date.now() - 1000).toISOString() })
+      .where(eq(schema.transactionMobileMoney.idTransaction, premiere.idTransaction))
+      .run();
+
+    const seconde = await initierPaiementMobile(db, fournisseur, { idFacture, numeroTelephone: "690000000", montant: 5000, parcours: "USSD_CLIENT" });
+
+    expect(seconde.statut).toBe("EN_ATTENTE");
+  });
+
+  it("autorise une nouvelle tentative après un échec de la précédente", async () => {
+    const premiere = await initierPaiementMobile(db, fournisseur, { idFacture, numeroTelephone: "690000000", montant: 5000, parcours: "USSD_CLIENT" });
+    fournisseur.statut = "ECHOUEE";
+    await actualiserStatutTransaction(db, fournisseur, premiere.idTransaction, userId);
+
+    const seconde = await initierPaiementMobile(db, fournisseur, { idFacture, numeroTelephone: "690000000", montant: 5000, parcours: "USSD_CLIENT" });
+
+    expect(seconde.statut).toBe("EN_ATTENTE");
+  });
 });
 
 describe("actualiserStatutTransaction (6.6)", () => {

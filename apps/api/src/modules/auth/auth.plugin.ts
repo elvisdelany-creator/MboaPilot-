@@ -22,6 +22,9 @@ export function registerAuthPlugin(app: FastifyInstance, jwtSecret: string) {
   app.register(fastifyJwt, { secret: jwtSecret });
 }
 
+// noms sous lesquels les routes acceptent aujourd'hui l'auteur d'une action
+const CHAMPS_AUTEUR = ["userId", "utilisateurId"];
+
 // 11.2 : RBAC de bout en bout — jamais appliqué uniquement côté interface.
 // Le jeton ne prouve que l'identité (idUser) ; rôle, site et statut actif
 // sont toujours relus en base à chaque requête, jamais fait confiance à la
@@ -53,11 +56,13 @@ export function creerAuthRequis(db: Db) {
     // est toujours l'utilisateur authentifié — un userId fourni par le client,
     // dans le corps ou en paramètre, est écrasé plutôt que cru, sinon un
     // compte pourrait imputer une opération à un autre.
-    if (request.body && typeof request.body === "object" && "userId" in request.body) {
-      (request.body as { userId: number }).userId = utilisateurCourant.idUser;
-    }
-    if (request.query && typeof request.query === "object" && "userId" in request.query) {
-      (request.query as { userId: string }).userId = String(utilisateurCourant.idUser);
+    for (const champ of CHAMPS_AUTEUR) {
+      if (request.body && typeof request.body === "object" && champ in request.body) {
+        (request.body as Record<string, unknown>)[champ] = utilisateurCourant.idUser;
+      }
+      if (request.query && typeof request.query === "object" && champ in request.query) {
+        (request.query as Record<string, unknown>)[champ] = String(utilisateurCourant.idUser);
+      }
     }
   };
 }

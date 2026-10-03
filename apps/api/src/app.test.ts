@@ -4409,4 +4409,48 @@ describe("Attribution des actions à l'utilisateur authentifié (11.5)", () => {
     expect(audit).toHaveLength(1);
     expect(audit[0].utilisateurId).toBe(idGerant);
   });
+
+  // la route des règlements de commission nomme ce champ « utilisateurId »
+  // (et non « userId ») : le décaissement ne doit pas pouvoir être imputé à
+  // un autre compte non plus.
+  it("ignore un utilisateurId d'un autre utilisateur transmis dans le corps — le règlement de commission est attribué à l'appelant", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const idGerant = creerUtilisateur(db, {
+      siteId,
+      nom: "Gerant",
+      prenom: "G",
+      identifiant: "gerant1",
+      motDePasse: "motdepasse-secret",
+      role: "GERANT",
+    }).idUser;
+    const token = await connecter(app, "gerant1");
+    const apporteur = db.insert(schema.sousDistributeur).values({ nom: "Jean Apporteur", tauxCommissionDefaut: 500 }).returning().get();
+    const abonne = db.insert(schema.abonne).values({ siteId, nom: "Nga", prenom: "Paul", telephone: "690000000" }).returning().get();
+    const abonnement = db
+      .insert(schema.abonnement)
+      .values({ idAbonne: abonne.idAbonne, idFormule, siteId, dateDebut: "2025-01-01", dateFin: "2025-01-30", creePar: userId })
+      .returning()
+      .get();
+    db.insert(schema.suiviCommissionCanalplus)
+      .values({
+        numeroAbonnement: abonnement.numeroAbonnement,
+        vendeurId: userId,
+        apporteurId: apporteur.idApporteur,
+        montantCommission: 5000,
+        dateFinProbatoire: "2025-05-01",
+        statut: "CONFIRMEE",
+      })
+      .run();
+
+    const reponse = await app.inject({
+      method: "POST",
+      url: `/api/v1/apporteurs/${apporteur.idApporteur}/reglements`,
+      headers: authHeader(token),
+      payload: { montant: 3000, modePaiement: "CASH", utilisateurId: userId },
+    });
+
+    expect(reponse.statusCode).toBe(201);
+    const reglement = db.select().from(schema.reglementCommission).get()!;
+    expect(reglement.utilisateurId).toBe(idGerant);
+  });
 });

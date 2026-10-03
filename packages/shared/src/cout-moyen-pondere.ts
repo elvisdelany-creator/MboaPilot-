@@ -6,7 +6,11 @@ export function calculerCoutMoyenPondere(
   quantiteAchetee: number,
   coutUnitaireAchat: number
 ): number {
-  const stockTotal = stockActuel + quantiteAchetee;
+  // un stock négatif (vente avant réception enregistrée) ne représente
+  // aucune unité en main : ces unités sont déjà parties à l'ancien coût, elles
+  // ne doivent pas peser négativement dans la moyenne
+  const stockEnMain = Math.max(stockActuel, 0);
+  const stockTotal = stockEnMain + quantiteAchetee;
   if (stockTotal === 0) return coutUnitaireAchat;
-  return Math.round((stockActuel * coutActuelRevient + quantiteAchetee * coutUnitaireAchat) / stockTotal);
+  return Math.round((stockEnMain * coutActuelRevient + quantiteAchetee * coutUnitaireAchat) / stockTotal);
 }

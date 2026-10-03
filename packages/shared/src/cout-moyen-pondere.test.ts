@@ -19,4 +19,18 @@ describe("calculerCoutMoyenPondere (5.2 : réception d'achat)", () => {
   it("une réception sur un stock déjà en place déplace la moyenne vers le nouveau coût", () => {
     expect(calculerCoutMoyenPondere(100, 500, 10, 1000)).toBe(545);
   });
+
+  // 5.2 : le stock peut légitimement être négatif (vente avant réception
+  // enregistrée). Constaté en test grandeur nature : un stock de -12 à 700 FCFA
+  // recevant 20 unités à 800 donnait (-12×700 + 20×800) / 8 = 950, un coût
+  // supérieur à tous les prix d'achat. Les unités déjà vendues sont parties à
+  // l'ancien coût : seules les unités réellement en main pèsent dans la moyenne.
+  it("un stock négatif ne pèse pas dans la moyenne : le coût devient celui de la réception", () => {
+    expect(calculerCoutMoyenPondere(-12, 700, 20, 800)).toBe(800);
+  });
+
+  it("un stock négatif ne produit jamais un coût hors de la fourchette des prix d'achat, même si la réception est inférieure au déficit", () => {
+    expect(calculerCoutMoyenPondere(-12, 700, 5, 800)).toBe(800);
+    expect(calculerCoutMoyenPondere(-10, 700, 11, 1000)).toBe(1000);
+  });
 });

@@ -59,6 +59,15 @@ describe("creerUtilisateur (2.5.1)", () => {
     ).toThrow(/identifiant/i);
   });
 
+  // 2.5.1 : le type Role n'existe qu'à la compilation — constaté en test
+  // grandeur nature : un rôle inexistant envoyé par l'API (« SUPERADMIN ») était
+  // enregistré tel quel, produisant un compte qui n'est accepté par aucun garde
+  it("rejette un rôle qui n'existe pas", () => {
+    expect(() =>
+      creerUtilisateur(db, { siteId, nom: "Nga", prenom: "Valentin", identifiant: "vnga", motDePasse: "motdepasse-secret", role: "SUPERADMIN" as never })
+    ).toThrow(/rôle/i);
+  });
+
   it("rejette un identifiant déjà utilisé avec un message clair, pas une erreur SQL brute", () => {
     creerUtilisateur(db, { siteId, nom: "Nga", prenom: "Valentin", identifiant: "vnga", motDePasse: "motdepasse-secret", role: "CAISSIER" });
 
@@ -129,6 +138,13 @@ describe("modifierUtilisateur (8.7)", () => {
 
     expect(modifie?.actif).toBe(0);
     expect(modifie?.role).toBe("GERANT");
+  });
+
+  it("rejette un changement vers un rôle qui n'existe pas, sans modifier le compte", () => {
+    const u = creerUtilisateur(db, { siteId, nom: "Nga", prenom: "Valentin", identifiant: "vnga", motDePasse: "motdepasse-secret", role: "CAISSIER" });
+
+    expect(() => modifierUtilisateur(db, u.idUser, { role: "NIMPORTEQUOI" as never })).toThrow(/rôle/i);
+    expect(listerUtilisateurs(db, siteId)[0].role).toBe("CAISSIER");
   });
 
   // 11.5 : "création/désactivation d'utilisateur" — action sensible à journaliser

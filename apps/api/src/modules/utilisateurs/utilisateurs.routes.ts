@@ -57,6 +57,12 @@ export function registerUtilisateursRoutes(app: FastifyInstance, db: Db, guards:
         reply.code(400).send({ erreur: "Impossible de désactiver votre propre compte" });
         return;
       }
+      // même raison : se retirer son propre rôle d'administrateur laisserait
+      // l'application sans compte habilité, sans autre issue qu'une intervention en base
+      if (idUser === request.user.idUser && request.body.role !== undefined && request.body.role !== "ADMINISTRATEUR") {
+        reply.code(400).send({ erreur: "Impossible de retirer votre propre rôle d'administrateur" });
+        return;
+      }
       try {
         const utilisateur = modifierUtilisateur(db, idUser, request.body, request.user.idUser);
         if (!utilisateur) throw new Error(`Utilisateur ${idUser} introuvable`);

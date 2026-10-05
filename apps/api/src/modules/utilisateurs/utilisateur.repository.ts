@@ -7,7 +7,14 @@ import { trouverPolitiqueMotDePasseParSite } from "../entreprise/entreprise.repo
 
 const TOURS_HACHAGE = 12;
 
-export type Role = "ADMINISTRATEUR" | "GERANT" | "CAISSIER" | "TECHNICIEN_SAV" | "COMPTABLE" | "APPORTEUR";
+export const ROLES = ["ADMINISTRATEUR", "GERANT", "CAISSIER", "TECHNICIEN_SAV", "COMPTABLE", "APPORTEUR"] as const;
+export type Role = (typeof ROLES)[number];
+
+// le type Role n'existe qu'à la compilation : une valeur venue de l'API doit
+// être vérifiée à l'exécution, sinon un rôle inexistant est enregistré tel quel
+function exigerRoleValide(role: string) {
+  if (!(ROLES as readonly string[]).includes(role)) throw new Error(`Rôle inconnu "${role}" — attendu : ${ROLES.join(", ")}`);
+}
 
 export interface CreerUtilisateurInput {
   siteId: number;
@@ -28,6 +35,7 @@ export function creerUtilisateur(db: Db, input: CreerUtilisateurInput, acteurId:
   if (!input.nom.trim()) throw new Error("Le nom de l'utilisateur est obligatoire");
   if (!input.prenom.trim()) throw new Error("Le prénom de l'utilisateur est obligatoire");
   if (!input.identifiant.trim()) throw new Error("L'identifiant de l'utilisateur est obligatoire");
+  exigerRoleValide(input.role);
   if (trouverUtilisateurParIdentifiant(db, input.identifiant)) throw new Error("Cet identifiant est déjà utilisé par un autre compte");
 
   const politique = trouverPolitiqueMotDePasseParSite(db, input.siteId);
@@ -126,7 +134,8 @@ export interface ModifierUtilisateurInput {
 // 11.5 : "désactivation d'utilisateur" est une action sensible à journaliser,
 // avec la valeur avant/après (actif, rôle) et l'auteur du changement.
 export function modifierUtilisateur(db: Db, idUser: number, input: ModifierUtilisateurInput, acteurId: number | null = null) {
-  const avant = db.select(COLONNES_SANS_HASH).from(schema.utilisateur).where(eq(schema.utilisateur.idUser, idUser)).get();
+  if (input.role !== undefined) exigerRoleValide(input.role);
+  const avant =db.select(COLONNES_SANS_HASH).from(schema.utilisateur).where(eq(schema.utilisateur.idUser, idUser)).get();
   if (!avant) return undefined;
 
   const apres = db

@@ -3208,6 +3208,28 @@ describe("Module gestion des utilisateurs, rôles et sites (8.7)", () => {
     expect(reponse.statusCode).toBe(400);
   });
 
+  // 2.5.1 : même garde-fou que l'auto-désactivation — se rétrograder soi-même
+  // (constaté en test grandeur nature) laisserait l'application sans compte
+  // habilité à administrer, sans autre issue qu'une intervention en base.
+  it("un administrateur ne peut pas retirer son propre rôle d'administrateur (400)", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const tokenAdmin = await connecterAdmin(app);
+    const idAdmin = (await app.inject({ method: "GET", url: "/api/v1/utilisateurs", headers: authHeader(tokenAdmin) }))
+      .json()
+      .find((u: { identifiant: string }) => u.identifiant === "admin1").idUser;
+
+    const reponse = await app.inject({
+      method: "PATCH",
+      url: `/api/v1/utilisateurs/${idAdmin}`,
+      headers: authHeader(tokenAdmin),
+      payload: { role: "CAISSIER" },
+    });
+
+    expect(reponse.statusCode).toBe(400);
+    const utilisateur = db.select().from(schema.utilisateur).where(eq(schema.utilisateur.idUser, idAdmin)).get();
+    expect(utilisateur?.role).toBe("ADMINISTRATEUR");
+  });
+
   it("renvoie 404 pour un utilisateur inconnu", async () => {
     const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
     const tokenAdmin = await connecterAdmin(app);

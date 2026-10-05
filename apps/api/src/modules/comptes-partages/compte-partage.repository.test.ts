@@ -92,6 +92,34 @@ describe("creerComptePartage / listerComptesPartages (5.9)", () => {
     expect(trouverComptePartage(db, compte.idComptePartage)?.identifiant).toBeNull();
   });
 
+  // 11.2, 2.6 : la sauvegarde exportée ne contient pas la clé de chiffrement
+  // (data/.encryption-key) — restaurée sur une machine neuve, ses identifiants
+  // deviennent illisibles. Constaté en test grandeur nature : l'erreur de
+  // déchiffrement faisait échouer toute la liste des comptes et, via
+  // trouverComptePartage (qui n'a besoin que de la capacité), toute vente sur
+  // un compte streaming.
+  it("11.2 : des identifiants illisibles (clé différente) ne bloquent ni la liste ni la lecture du compte", () => {
+    const compte = creerComptePartage(db, { siteId, idFamille, libelle: "Netflix #1", identifiant: "boutique@example.cm", motDePasse: "secret", nombreEcransMax: 4 });
+    const autre = creerComptePartage(db, { siteId, idFamille, libelle: "Netflix #2", identifiant: "autre@example.cm", motDePasse: "secret2", nombreEcransMax: 2 });
+    const illisible = `${"00".repeat(12)}:${"00".repeat(16)}:abcd`; // format valide, non authentique
+    db.update(schema.comptePartageStreaming)
+      .set({ identifiant: illisible, motDePasse: illisible })
+      .where(eq(schema.comptePartageStreaming.idComptePartage, compte.idComptePartage))
+      .run();
+
+    const comptes = listerComptesPartages(db, siteId);
+
+    expect(comptes).toHaveLength(2);
+    const abime = comptes.find((c) => c.idComptePartage === compte.idComptePartage)!;
+    expect(abime.identifiant).toBeNull();
+    expect(abime.motDePasse).toBeNull();
+    expect(abime.identifiantsIllisibles).toBe(true);
+    const sain = comptes.find((c) => c.idComptePartage === autre.idComptePartage)!;
+    expect(sain.identifiant).toBe("autre@example.cm");
+    expect(sain.identifiantsIllisibles).toBe(false);
+    expect(trouverComptePartage(db, compte.idComptePartage)?.libelle).toBe("Netflix #1");
+  });
+
   it("compte uniquement les abonnements ACTIF comme écrans occupés", () => {
     const compte = creerComptePartage(db, { siteId, idFamille, libelle: "Compte Netflix #1", nombreEcransMax: 4 });
     creerAbonnementSurCompte(compte.idComptePartage, "ACTIF");

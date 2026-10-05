@@ -15,12 +15,22 @@ export interface CreerComptePartageInput {
 // 11.2 : déchiffre à la lecture un compte tel que stocké en base (identifiant
 // et mot de passe chiffrés au repos, 5.9) — la visibilité de la valeur en
 // clair reste par ailleurs restreinte au niveau des routes aux rôles de vente.
-function dechiffrerCompte<T extends { identifiant: string | null; motDePasse: string | null }>(compte: T): T {
-  return {
-    ...compte,
-    identifiant: compte.identifiant !== null ? dechiffrer(compte.identifiant) : null,
-    motDePasse: compte.motDePasse !== null ? dechiffrer(compte.motDePasse) : null,
-  };
+function dechiffrerCompte<T extends { identifiant: string | null; motDePasse: string | null }>(compte: T): T & { identifiantsIllisibles: boolean } {
+  // La sauvegarde exportée (2.6) ne contient pas la clé de chiffrement : sur
+  // une machine restaurée avec une autre clé, les identifiants deviennent
+  // illisibles. Cela ne doit pas faire échouer la liste des comptes ni les
+  // ventes sur compte streaming (qui n'ont besoin que de la capacité) — les
+  // identifiants sont signalés illisibles et peuvent être ressaisis (modification).
+  try {
+    return {
+      ...compte,
+      identifiant: compte.identifiant !== null ? dechiffrer(compte.identifiant) : null,
+      motDePasse: compte.motDePasse !== null ? dechiffrer(compte.motDePasse) : null,
+      identifiantsIllisibles: false,
+    };
+  } catch {
+    return { ...compte, identifiant: null, motDePasse: null, identifiantsIllisibles: true };
+  }
 }
 
 // 5.9, 11.2 : compte fournisseur mutualisé (Netflix, Prime Vidéo, IPTV…) —

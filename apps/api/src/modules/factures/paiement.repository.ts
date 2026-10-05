@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
 
@@ -15,6 +15,34 @@ export interface CreerPaiementParams {
   referenceVirement?: string;
 }
 
+// 8.5, 9.2 : un client qui tend plus que le dû se voit rendre la monnaie —
+// seul le montant réellement conservé est un encaissement, sinon « Encaissements
+// du jour » et le théorique CASH de la clôture de caisse comptent la monnaie
+// rendue. Limité au comptant : un chèque, un virement ou un paiement mobile
+// ont un montant exact, sans rendu de monnaie.
+function montantEncaisseNet(db: Db, params: CreerPaiementParams): number {
+  if (params.mode !== "CASH") return params.montant;
+
+  const facture = db.select().from(schema.facture).where(eq(schema.facture.idFacture, params.idFacture)).get();
+  if (!facture) return params.montant;
+
+  const totalPaye =
+    db
+      .select({ total: sql<number>`coalesce(sum(${schema.paiement.montant}), 0)` })
+      .from(schema.paiement)
+      .where(eq(schema.paiement.idFacture, params.idFacture))
+      .get()?.total ?? 0;
+  const totalAvoirs =
+    db
+      .select({ total: sql<number>`coalesce(sum(${schema.facture.montantTotal}), 0)` })
+      .from(schema.facture)
+      .where(eq(schema.facture.factureOrigineId, params.idFacture))
+      .get()?.total ?? 0;
+
+  const solde = facture.montantTotal + totalAvoirs - totalPaye;
+  return solde > 0 ? Math.min(params.montant, solde) : params.montant;
+}
+
 // 6.5 : "Comptant" et "Chèque" ont une validation "Immédiate" ; seul le
 // "Virement bancaire" est "Différée (rapprochement)" — un virement démarre
 // donc EN_ATTENTE de rapprochement, les autres modes n'ont aucun statut
@@ -25,7 +53,7 @@ export function creerPaiement(db: Db, params: CreerPaiementParams) {
     .values({
       idFacture: params.idFacture,
       mode: params.mode,
-      montant: params.montant,
+      montant: montantEncaisseNet(db, params),
       utilisateurId: params.utilisateurId,
       referenceTransaction: params.referenceTransaction,
       banque: params.banque,

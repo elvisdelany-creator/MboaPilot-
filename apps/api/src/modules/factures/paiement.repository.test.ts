@@ -43,6 +43,58 @@ describe("creerPaiement (6.5)", () => {
   });
 });
 
+// 8.5, 9.2 : « calcul automatique de la monnaie rendue » — constaté en test
+// grandeur nature : une vente de 5 000 FCFA réglée avec un billet de 10 000
+// enregistrait 10 000 FCFA de paiement. La monnaie rendue n'est pas un
+// encaissement : « Encaissements du jour » affichait 10 000 en CASH pour 5 000
+// de CA, et la clôture de caisse (théorique CASH) signalait un faux manque égal
+// à la monnaie rendue à chaque vente avec monnaie.
+describe("creerPaiement — monnaie rendue (8.5, 9.2, 13.1)", () => {
+  it("un paiement CASH supérieur au dû n'enregistre que le montant dû (le reste est rendu au client)", () => {
+    const paiement = creerPaiement(db, { idFacture, mode: "CASH", montant: 15000, utilisateurId: userId });
+
+    expect(paiement.montant).toBe(10000);
+  });
+
+  it("tient compte des paiements déjà enregistrés sur la facture", () => {
+    creerPaiement(db, { idFacture, mode: "CASH", montant: 7000, utilisateurId: userId });
+
+    const paiement = creerPaiement(db, { idFacture, mode: "CASH", montant: 5000, utilisateurId: userId });
+
+    expect(paiement.montant).toBe(3000);
+  });
+
+  it("tient compte des avoirs déjà émis sur la facture", () => {
+    db.insert(schema.facture)
+      .values({ siteId: 1, type: "AVOIR", factureOrigineId: idFacture, montantTotal: -4000, creePar: userId, statut: "VALIDEE" })
+      .run();
+
+    const paiement = creerPaiement(db, { idFacture, mode: "CASH", montant: 10000, utilisateurId: userId });
+
+    expect(paiement.montant).toBe(6000);
+  });
+
+  it("un paiement CASH inférieur ou égal au dû est enregistré tel quel", () => {
+    expect(creerPaiement(db, { idFacture, mode: "CASH", montant: 4000, utilisateurId: userId }).montant).toBe(4000);
+    expect(creerPaiement(db, { idFacture, mode: "CASH", montant: 6000, utilisateurId: userId }).montant).toBe(6000);
+  });
+
+  it("un chèque garde son montant : il n'y a pas de monnaie à rendre", () => {
+    const paiement = creerPaiement(db, {
+      idFacture,
+      mode: "CHEQUE",
+      montant: 15000,
+      utilisateurId: userId,
+      banque: "Afriland",
+      numeroCheque: "123",
+      titulaireCheque: "Client",
+      dateCheque: "2026-09-01",
+    });
+
+    expect(paiement.montant).toBe(15000);
+  });
+});
+
 describe("confirmerRapprochementVirement (6.5)", () => {
   it("passe un virement EN_ATTENTE à RAPPROCHE", () => {
     const paiement = creerPaiement(db, { idFacture, mode: "VIREMENT", montant: 10000, utilisateurId: userId, referenceVirement: "VIR-001" });

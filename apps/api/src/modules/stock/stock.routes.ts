@@ -27,10 +27,10 @@ const ERREUR_SITE_PRODUIT = { erreur: "Ce produit n'appartient pas à votre site
 // 5.2, 8.6, 9.3 : suivi de stock — consultation (alertes, historique) ouverte
 // aux rôles de vente/SAV, mouvements correctifs (achat, casse, inventaire)
 // réservés à Administrateur/Gérant (validation par un rôle habilité, 5.2).
-export function registerStockRoutes(app: FastifyInstance, db: Db, guards: RouteGuards & { gestionStock: Guard }) {
+export function registerStockRoutes(app: FastifyInstance, db: Db, guards: RouteGuards & { gestionStock: Guard; lectureInterne: Guard }) {
   app.get(
     "/api/v1/stock/alertes",
-    { preHandler: [guards.authRequis] },
+    { preHandler: [guards.authRequis, guards.lectureInterne] },
     async (request, reply) => {
       const alertes = listerAlertesStock(db, request.user.siteId);
       reply.code(200).send(estRoleEncadrement(request.user.role) ? alertes : alertes.map(masquerCoutMargeProduit));
@@ -40,7 +40,7 @@ export function registerStockRoutes(app: FastifyInstance, db: Db, guards: RouteG
   // 8.6, 9.3 : "État des stocks — produits à rotation lente"
   app.get(
     "/api/v1/stock/rotation-lente",
-    { preHandler: [guards.authRequis] },
+    { preHandler: [guards.authRequis, guards.lectureInterne] },
     async (request, reply) => {
       const aujourdHui = new Date().toISOString().slice(0, 10);
       const rotationLente = listerProduitsRotationLente(db, request.user.siteId, aujourdHui);
@@ -56,7 +56,7 @@ export function registerStockRoutes(app: FastifyInstance, db: Db, guards: RouteG
 
   app.get<{ Params: { idProduit: string } }>(
     "/api/v1/produits/:idProduit/mouvements",
-    { preHandler: [guards.authRequis] },
+    { preHandler: [guards.authRequis, guards.lectureInterne] },
     async (request, reply) => {
       const idProduit = Number(request.params.idProduit);
       const produit = trouverProduit(db, idProduit);

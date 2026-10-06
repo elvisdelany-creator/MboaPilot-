@@ -1280,6 +1280,47 @@ describe("Abonnements — cloisonnement multi-site (2.5.2)", () => {
   });
 });
 
+// 2.5.1 : « Apporteur d'affaires (lecture restreinte à ses propres abonnés
+// référés) » — constaté en test grandeur nature avec une matrice rôle × route :
+// les routes protégées par la seule authentification (produits, stock, catalogue)
+// restaient lisibles par ce partenaire externe (niveaux de stock, mouvements avec
+// auteur et motif, rotation lente), alors que l'interface le dit « bloqué côté serveur ».
+describe("Lecture restreinte du rôle APPORTEUR (2.5.1)", () => {
+  const ROUTES_INTERNES = [
+    "/api/v1/produits",
+    "/api/v1/produits/1/historique-prix",
+    "/api/v1/produits/1/mouvements",
+    "/api/v1/stock/alertes",
+    "/api/v1/stock/rotation-lente",
+    "/api/v1/catalogue",
+    "/api/v1/catalogue/familles",
+    "/api/v1/catalogue/options",
+    "/api/v1/catalogue/kits/1/composants",
+  ];
+
+  it("un apporteur ne peut lire ni produits, ni stock, ni catalogue (403)", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    creerUtilisateur(db, { siteId, nom: "A", prenom: "P", identifiant: "apporteur1", motDePasse: "motdepasse-secret", role: "APPORTEUR" });
+    const token = await connecter(app, "apporteur1");
+
+    for (const url of ROUTES_INTERNES) {
+      const reponse = await app.inject({ method: "GET", url, headers: authHeader(token) });
+      expect(reponse.statusCode, url).toBe(403);
+    }
+  });
+
+  it("un technicien SAV garde la lecture des produits, du stock et du catalogue", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    creerUtilisateur(db, { siteId, nom: "T", prenom: "S", identifiant: "tech1", motDePasse: "motdepasse-secret", role: "TECHNICIEN_SAV" });
+    const token = await connecter(app, "tech1");
+
+    for (const url of ["/api/v1/produits", "/api/v1/stock/alertes", "/api/v1/stock/rotation-lente", "/api/v1/catalogue", "/api/v1/catalogue/familles", "/api/v1/catalogue/options"]) {
+      const reponse = await app.inject({ method: "GET", url, headers: authHeader(token) });
+      expect(reponse.statusCode, url).toBe(200);
+    }
+  });
+});
+
 describe("Module apporteur d'affaires (6.3)", () => {
   it("un administrateur crée un apporteur, un caissier peut le lister (choix au recrutement)", async () => {
     const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });

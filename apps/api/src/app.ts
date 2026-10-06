@@ -120,15 +120,20 @@ export function buildApp(db: Db, options: BuildAppOptions) {
   // financière (fiche-360, factures) restée réservée à lectureFinanciere
   const rechercheAbonnes = exigerRole("ADMINISTRATEUR", "GERANT", "CAISSIER", "COMPTABLE", "TECHNICIEN_SAV");
 
+  // 2.5.1 : « Apporteur d'affaires (lecture restreinte à ses propres abonnés
+  // référés) » — produits, stock et catalogue sont des données internes,
+  // jamais lisibles par ce partenaire externe
+  const lectureInterne = exigerRole("ADMINISTRATEUR", "GERANT", "CAISSIER", "TECHNICIEN_SAV", "COMPTABLE");
+
   registerAbonnementsRoutes(app, db, { authRequis, ventes });
   // 11.3 : anonymisation (droit de suppression) réservée à l'Administrateur seul
   registerAbonnesRoutes(app, db, { authRequis, ventes, fusionAbonnes, anonymisationAbonne: admin, lectureFinanciere, rechercheAbonnes });
-  registerCatalogueRoutes(app, db, { authRequis, gestionCatalogue });
+  registerCatalogueRoutes(app, db, { authRequis, gestionCatalogue, lectureInterne });
   registerJobsRoutes(app, db, { authRequis, ventes, admin, lectureFinanciere });
-  registerProduitsRoutes(app, db, { authRequis, ventes, gestionCatalogue });
+  registerProduitsRoutes(app, db, { authRequis, ventes, gestionCatalogue, lectureInterne });
   registerSavRoutes(app, db, options.dossierPhotosSav ?? "./data/sav-photos", { authRequis, ventes, sav });
   registerApporteursRoutes(app, db, { authRequis, ventes, gestionApporteurs, consultationApporteurs });
-  registerStockRoutes(app, db, { authRequis, ventes, gestionStock });
+  registerStockRoutes(app, db, { authRequis, ventes, gestionStock, lectureInterne });
   registerPaiementMobileRoutes(app, db, fournisseurPaiementMobile, { authRequis, ventes });
   registerTableauBordRoutes(app, db, { authRequis, ventes, pilotage });
   registerUtilisateursRoutes(app, db, { authRequis, admin });

@@ -43,12 +43,12 @@ function envoyerErreur(reply: FastifyReply, erreur: unknown) {
 // soit son rôle. Le back-office (8.8 : familles, formules, options, kits —
 // sans intervention développeur) est réservé à l'encadrement (gestionCatalogue,
 // même guard que la fiche article — 8.2).
-export function registerCatalogueRoutes(app: FastifyInstance, db: Db, guards: { authRequis: Guard; gestionCatalogue: Guard }) {
-  app.get("/api/v1/catalogue", { preHandler: [guards.authRequis] }, async (_request, reply) => {
+export function registerCatalogueRoutes(app: FastifyInstance, db: Db, guards: { authRequis: Guard; gestionCatalogue: Guard; lectureInterne: Guard }) {
+  app.get("/api/v1/catalogue", { preHandler: [guards.authRequis, guards.lectureInterne] }, async (_request, reply) => {
     reply.code(200).send(listerCatalogue(db));
   });
 
-  app.get("/api/v1/catalogue/familles", { preHandler: [guards.authRequis] }, async (_request, reply) => {
+  app.get("/api/v1/catalogue/familles", { preHandler: [guards.authRequis, guards.lectureInterne] }, async (_request, reply) => {
     reply.code(200).send(listerFamilles(db));
   });
 
@@ -101,7 +101,7 @@ export function registerCatalogueRoutes(app: FastifyInstance, db: Db, guards: { 
     }
   );
 
-  app.get("/api/v1/catalogue/options", { preHandler: [guards.authRequis] }, async (_request, reply) => {
+  app.get("/api/v1/catalogue/options", { preHandler: [guards.authRequis, guards.lectureInterne] }, async (_request, reply) => {
     reply.code(200).send(listerOptions(db));
   });
 
@@ -214,7 +214,7 @@ export function registerCatalogueRoutes(app: FastifyInstance, db: Db, guards: { 
   // à l'encadrement, comme le reste du back-office catalogue.
   app.get<{ Params: { idKit: string } }>(
     "/api/v1/catalogue/kits/:idKit/composants",
-    { preHandler: [guards.authRequis] },
+    { preHandler: [guards.authRequis, guards.lectureInterne] },
     async (request, reply) => {
       reply.code(200).send(listerComposantsKit(db, Number(request.params.idKit)));
     }

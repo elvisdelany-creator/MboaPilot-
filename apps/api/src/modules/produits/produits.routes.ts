@@ -29,10 +29,10 @@ const ERREUR_SITE_PRODUIT = { erreur: "Ce produit n'appartient pas à votre site
 // création/édition des fiches article réservée à Administrateur/Gérant.
 // Coût de revient et marge, eux, restent "réservés à l'encadrement" (comme
 // l'export CSV ci-dessous) : masqués dans la réponse pour tout autre rôle.
-export function registerProduitsRoutes(app: FastifyInstance, db: Db, guards: RouteGuards & { gestionCatalogue: Guard }) {
+export function registerProduitsRoutes(app: FastifyInstance, db: Db, guards: RouteGuards & { gestionCatalogue: Guard; lectureInterne: Guard }) {
   app.get(
     "/api/v1/produits",
-    { preHandler: [guards.authRequis] },
+    { preHandler: [guards.authRequis, guards.lectureInterne] },
     async (request, reply) => {
       const produits = listerProduits(db, request.user.siteId);
       reply.code(200).send(estRoleEncadrement(request.user.role) ? produits : produits.map(masquerCoutMargeProduit));
@@ -71,7 +71,7 @@ export function registerProduitsRoutes(app: FastifyInstance, db: Db, guards: Rou
 
   app.get<{ Params: { idProduit: string } }>(
     "/api/v1/produits/:idProduit/historique-prix",
-    { preHandler: [guards.authRequis] },
+    { preHandler: [guards.authRequis, guards.lectureInterne] },
     async (request, reply) => {
       const idProduit = Number(request.params.idProduit);
       const produit = trouverProduit(db, idProduit);

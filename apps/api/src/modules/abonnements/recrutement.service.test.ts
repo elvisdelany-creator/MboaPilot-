@@ -678,6 +678,72 @@ describe("recruterAbonne — options complémentaires (3.2.2, 5.4.2)", () => {
       })
     ).toThrow(/compatible/i);
   });
+
+  // constaté en test grandeur nature : un recrutement refusé pour option
+  // incompatible laissait un abonné et un abonnement ACTIF (28 000 FCFA de
+  // formule) sans aucune facture ni paiement — l'abonné et l'abonnement étaient
+  // créés avant la validation des options et du kit, sans transaction.
+  function compterEnregistrements() {
+    return {
+      abonnes: db.select().from(schema.abonne).all().length,
+      abonnements: db.select().from(schema.abonnement).all().length,
+      factures: db.select().from(schema.facture).all().length,
+    };
+  }
+
+  it("un recrutement refusé pour option incompatible ne laisse aucun abonné ni abonnement ACTIF sans facture", () => {
+    const autreFormule = db.insert(schema.formule).values({ idFamille: familleCanalPlus, libelle: "TOUT CANAL+ 2", prix: 28000, rang: 5 }).returning().get().idFormule;
+    const avant = compterEnregistrements();
+
+    expect(() =>
+      recruterAbonne(db, {
+        siteId,
+        userId,
+        aujourdHui: "2025-11-16",
+        abonne: { nom: "Nga", prenom: "Paul", telephone: "690000000" },
+        idFormule: autreFormule,
+        idsOptions: [optionEnglishPlus],
+        montantEncaisse: 0,
+      })
+    ).toThrow(/compatible/i);
+
+    expect(compterEnregistrements()).toEqual(avant);
+  });
+
+  it("un recrutement refusé pour kit introuvable ne laisse aucun abonné ni abonnement", () => {
+    const avant = compterEnregistrements();
+
+    expect(() =>
+      recruterAbonne(db, {
+        siteId,
+        userId,
+        aujourdHui: "2025-11-16",
+        abonne: { nom: "Nga", prenom: "Paul", telephone: "690000000" },
+        idFormule: formuleAccess,
+        idKit: 999999,
+        montantEncaisse: 0,
+      })
+    ).toThrow(/introuvable/i);
+
+    expect(compterEnregistrements()).toEqual(avant);
+  });
+
+  it("une même option transmise deux fois n'est facturée qu'une fois", () => {
+    const resultat = recruterAbonne(db, {
+      siteId,
+      userId,
+      aujourdHui: "2025-11-16",
+      abonne: { nom: "Nga", prenom: "Paul", telephone: "690000000" },
+      idFormule: formuleAccess,
+      idsOptions: [optionEnglishPlus, optionEnglishPlus],
+      montantEncaisse: 10000,
+    });
+
+    const facture = db.select().from(schema.facture).where(eq(schema.facture.idFacture, resultat.idFacture)).get();
+    expect(facture?.montantTotal).toBe(10000); // 5000 (ACCESS) + 5000 (option, une seule fois)
+    const lignesOption = db.select().from(schema.ligneVente).where(eq(schema.ligneVente.idFacture, resultat.idFacture)).all().filter((l) => l.idOption === optionEnglishPlus);
+    expect(lignesOption).toHaveLength(1);
+  });
 });
 
 // 3.2.2, 7.1 : "Décodeur/carte d'accès effectivement installés chez un

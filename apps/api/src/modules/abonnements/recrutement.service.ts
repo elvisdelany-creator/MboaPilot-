@@ -57,8 +57,15 @@ export interface RecrutementResultat {
 const DUREE_PROBATION_CANALPLUS_CYCLES = 4; // 4 mois = 119 jours (6.2)
 const LIBELLE_FAMILLE_CANALPLUS = "CANAL+";
 
-// 7.1 : création d'un nouvel abonnement, pour un abonné nouveau ou existant
+// 7.1 : création d'un nouvel abonnement, pour un abonné nouveau ou existant.
+// Atomique : l'abonné et l'abonnement sont créés avant la validation du kit et
+// des options — une erreur à ce stade (option incompatible, kit introuvable ou
+// sans prix configuré) laissait un abonnement ACTIF sans facture ni paiement.
 export function recruterAbonne(db: Db, params: RecruterAbonneParams): RecrutementResultat {
+  return db.transaction(() => recruterAbonneSansTransaction(db, params));
+}
+
+function recruterAbonneSansTransaction(db: Db, params: RecruterAbonneParams): RecrutementResultat {
   // 6.3 : le lien apporteur↔abonné n'est renseigné qu'à la création de l'abonné,
   // jamais modifié ensuite par un recrutement — seul un abonné existant transmet
   // son lien permanent (hérité) au recrutement en cours si aucun n'est précisé.
@@ -134,7 +141,8 @@ export function recruterAbonne(db: Db, params: RecruterAbonneParams): Recrutemen
   // formules... avec règles de compatibilité et de tarif différencié selon
   // la formule support" — prix_surcharge remplace le prix par défaut de
   // l'option quand renseigné pour la paire (formule, option).
-  const optionsAppliquees = (params.idsOptions ?? []).map((idOption) => {
+  // une option ne se vend qu'une fois par abonnement : un doublon est ignoré
+  const optionsAppliquees = [...new Set(params.idsOptions ?? [])].map((idOption) => {
     const option = db.select().from(schema.optionComplement).where(eq(schema.optionComplement.idOption, idOption)).get();
     if (!option) throw new Error(`Option ${idOption} introuvable`);
     const compat = db

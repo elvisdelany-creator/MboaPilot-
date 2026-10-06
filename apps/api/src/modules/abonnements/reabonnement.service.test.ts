@@ -254,6 +254,40 @@ describe("reabonner — options complémentaires (7.2)", () => {
       reabonner(db, { siteId, userId, aujourdHui: "2025-12-20", numeroAbonnement, idFormule: autreFormule, idsOptions: [optionFrenchPlus], montantEncaisse: 0 })
     ).toThrow(/compatible/i);
   });
+
+  // constaté en test grandeur nature (même défaut qu'au recrutement) : les dates
+  // et le statut de l'abonnement étaient déjà renouvelés quand l'option
+  // incompatible faisait échouer l'opération — mois offert, sans facture.
+  it("un réabonnement refusé pour option incompatible ne renouvelle pas l'abonnement et ne laisse ni facture ni historique", () => {
+    db.update(schema.abonnement).set({ statut: "EXPIRE" }).where(eq(schema.abonnement.numeroAbonnement, numeroAbonnement)).run();
+    const autreFormule = db.insert(schema.formule).values({ idFamille: familleDstv, libelle: "YANGA", prix: 5000, rang: 1 }).returning().get().idFormule;
+    const avant = db.select().from(schema.abonnement).where(eq(schema.abonnement.numeroAbonnement, numeroAbonnement)).get()!;
+    const facturesAvant = db.select().from(schema.facture).all().length;
+    const historiqueAvant = db.select().from(schema.historiqueAbonnement).all().length;
+
+    expect(() =>
+      reabonner(db, { siteId, userId, aujourdHui: "2025-12-20", numeroAbonnement, idFormule: autreFormule, idsOptions: [optionFrenchPlus], montantEncaisse: 0 })
+    ).toThrow(/compatible/i);
+
+    const apres = db.select().from(schema.abonnement).where(eq(schema.abonnement.numeroAbonnement, numeroAbonnement)).get()!;
+    expect(apres).toEqual(avant);
+    expect(db.select().from(schema.facture).all()).toHaveLength(facturesAvant);
+    expect(db.select().from(schema.historiqueAbonnement).all()).toHaveLength(historiqueAvant);
+  });
+
+  it("une même option transmise deux fois n'est facturée qu'une fois", () => {
+    const resultat = reabonner(db, {
+      siteId,
+      userId,
+      aujourdHui: "2025-12-20",
+      numeroAbonnement,
+      idsOptions: [optionFrenchPlus, optionFrenchPlus],
+      montantEncaisse: 26000,
+    });
+
+    const facture = db.select().from(schema.facture).where(eq(schema.facture.idFacture, resultat.idFacture)).get();
+    expect(facture?.montantTotal).toBe(26000); // 13000 (COMPAQ) + 13000 (option, une seule fois)
+  });
 });
 
 // 3.2.3, 6.1, 8.8 : "porte le total, la TVA/taxes le cas échéant"

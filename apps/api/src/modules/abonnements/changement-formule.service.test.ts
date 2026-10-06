@@ -181,6 +181,38 @@ describe("changerFormule — options complémentaires (3.2.2, 5.4.2, 7.4)", () =
       changerFormule(db, { siteId, userId, aujourdHui, numeroAbonnement, idNouvelleFormule: idToutCanalplus, idsOptions: [optionEnglishPlus], montantEncaisse: 0 })
     ).toThrow(/compatible/i);
   });
+
+  // constaté en test grandeur nature (même défaut qu'au recrutement) : la
+  // formule de l'abonnement était déjà modifiée et journalisée quand l'option
+  // incompatible faisait échouer l'opération — migration de gamme sans facture.
+  it("une migration refusée pour option incompatible ne change pas la formule et ne laisse ni historique ni facture", () => {
+    const facturesAvant = db.select().from(schema.facture).all().length;
+    const historiqueAvant = db.select().from(schema.historiqueAbonnement).all().length;
+
+    expect(() =>
+      changerFormule(db, { siteId, userId, aujourdHui, numeroAbonnement, idNouvelleFormule: idToutCanalplus, idsOptions: [optionEnglishPlus], montantEncaisse: 0 })
+    ).toThrow(/compatible/i);
+
+    const abonnement = db.select().from(schema.abonnement).where(eq(schema.abonnement.numeroAbonnement, numeroAbonnement)).get()!;
+    expect(abonnement.idFormule).toBe(idAccess);
+    expect(db.select().from(schema.facture).all()).toHaveLength(facturesAvant);
+    expect(db.select().from(schema.historiqueAbonnement).all()).toHaveLength(historiqueAvant);
+  });
+
+  it("une même option transmise deux fois n'est facturée qu'une fois", () => {
+    const resultat = changerFormule(db, {
+      siteId,
+      userId,
+      aujourdHui,
+      numeroAbonnement,
+      idNouvelleFormule: idEvasion,
+      idsOptions: [optionEnglishPlus, optionEnglishPlus],
+      montantEncaisse: 7500,
+    });
+
+    const facture = db.select().from(schema.facture).where(eq(schema.facture.idFacture, resultat.idFacture)).get();
+    expect(facture?.montantTotal).toBe(7500); // 5500 (différentiel) + 2000 (option, une seule fois)
+  });
 });
 
 // 3.2.3, 6.1, 8.8 : "porte le total, la TVA/taxes le cas échéant"

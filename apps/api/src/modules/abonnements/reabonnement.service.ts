@@ -39,6 +39,12 @@ export interface ReabonnementResultat {
 // 7.2 : renouvellement d'un abonnement déjà existant pour un abonné déjà connu.
 // Réutilise le même numero_abonnement (contrairement à un échange de matériel, 7.3).
 export function reabonner(db: Db, params: ReabonnerParams): ReabonnementResultat {
+  // atomique : l'abonnement était renouvelé (dates, statut, historique) avant la
+  // validation des options — une option incompatible offrait un mois sans facture
+  return db.transaction(() => reabonnerSansTransaction(db, params));
+}
+
+function reabonnerSansTransaction(db: Db, params: ReabonnerParams): ReabonnementResultat {
   const abonnementActuel = db
     .select()
     .from(schema.abonnement)
@@ -103,7 +109,8 @@ export function reabonner(db: Db, params: ReabonnerParams): ReabonnementResultat
 
   // 3.2.2, 5.4.2, 7.2 : "ajuster ses options" — même règle de compatibilité
   // et de tarif différencié qu'au recrutement (5.4.2)
-  const optionsAppliquees = (params.idsOptions ?? []).map((idOption) => {
+  // une option ne se vend qu'une fois par abonnement : un doublon est ignoré
+  const optionsAppliquees = [...new Set(params.idsOptions ?? [])].map((idOption) => {
     const option = db.select().from(schema.optionComplement).where(eq(schema.optionComplement.idOption, idOption)).get();
     if (!option) throw new Error(`Option ${idOption} introuvable`);
     const compat = db

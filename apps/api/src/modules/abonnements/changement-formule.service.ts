@@ -44,6 +44,12 @@ export interface ChangerFormuleResultat {
 // famille. Contrairement au réabonnement (7.2), les dates de la période en
 // cours ne sont jamais recalculées : seule la formule change.
 export function changerFormule(db: Db, params: ChangerFormuleParams): ChangerFormuleResultat {
+  // atomique : la formule était modifiée et journalisée avant la validation des
+  // options — une option incompatible changeait la gamme sans facture
+  return db.transaction(() => changerFormuleSansTransaction(db, params));
+}
+
+function changerFormuleSansTransaction(db: Db, params: ChangerFormuleParams): ChangerFormuleResultat {
   const abonnement = db.select().from(schema.abonnement).where(eq(schema.abonnement.numeroAbonnement, params.numeroAbonnement)).get();
   if (!abonnement) throw new Error(`Abonnement ${params.numeroAbonnement} introuvable`);
   // 4.3, 7.4 : le job quotidien qui bascule le statut à EXPIRE ne tourne
@@ -83,7 +89,8 @@ export function changerFormule(db: Db, params: ChangerFormuleParams): ChangerFor
   // 3.2.2, 5.4.2, 7.4 : "ajuster ses options" lors de la migration — mêmes
   // règles de compatibilité et de tarif différencié que pour le
   // recrutement/réabonnement, vis-à-vis de la nouvelle formule
-  const optionsAppliquees = (params.idsOptions ?? []).map((idOption) => {
+  // une option ne se vend qu'une fois par abonnement : un doublon est ignoré
+  const optionsAppliquees = [...new Set(params.idsOptions ?? [])].map((idOption) => {
     const option = db.select().from(schema.optionComplement).where(eq(schema.optionComplement.idOption, idOption)).get();
     if (!option) throw new Error(`Option ${idOption} introuvable`);
     const compat = db

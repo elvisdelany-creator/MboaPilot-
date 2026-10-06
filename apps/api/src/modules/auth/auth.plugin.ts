@@ -18,8 +18,13 @@ export interface RouteGuards {
   ventes: Guard;
 }
 
+// 11.2 : un jeton sans expiration resterait valide indéfiniment (jeton volé,
+// poste partagé, mot de passe réinitialisé après compromission) — une journée de
+// travail laisse une session de caisse aller au bout d'un service sans coupure.
+const DUREE_SESSION = "12h";
+
 export function registerAuthPlugin(app: FastifyInstance, jwtSecret: string) {
-  app.register(fastifyJwt, { secret: jwtSecret });
+  app.register(fastifyJwt, { secret: jwtSecret, sign: { expiresIn: DUREE_SESSION } });
 }
 
 // noms sous lesquels les routes acceptent aujourd'hui l'auteur d'une action

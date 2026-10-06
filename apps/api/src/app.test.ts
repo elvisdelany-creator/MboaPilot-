@@ -63,6 +63,31 @@ describe("POST /api/v1/auth/login (2.5.1)", () => {
     expect(corps.utilisateur).not.toHaveProperty("motDePasseHash");
   });
 
+  // 11.2 : constaté en test grandeur nature — le jeton émis ne contenait aucune
+  // date d'expiration : valide indéfiniment, conservé par l'interface dans le
+  // navigateur. Un jeton volé, un poste partagé ou un mot de passe réinitialisé
+  // après compromission restaient exploitables sans limite de durée.
+  it("11.2 : le jeton émis expire au bout d'une journée de travail (12 h)", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const token = await connecter(app);
+
+    const charge = JSON.parse(Buffer.from(token.split(".")[1], "base64url").toString());
+
+    expect(charge.exp).toBeTypeOf("number");
+    expect(charge.exp - charge.iat).toBe(12 * 60 * 60);
+  });
+
+  it("11.2 : un jeton expiré est refusé (401)", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    await app.ready();
+    const expire = app.jwt.sign({ idUser: userId, siteId, role: "CAISSIER", idApporteur: null }, { expiresIn: "1ms" });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    const reponse = await app.inject({ method: "GET", url: "/api/v1/produits", headers: authHeader(expire) });
+
+    expect(reponse.statusCode).toBe(401);
+  });
+
   it("renvoie 401 pour un mot de passe incorrect", async () => {
     const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
 

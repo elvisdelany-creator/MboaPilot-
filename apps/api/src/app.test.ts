@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import type { FastifyInstance } from "fastify";
 import { eq } from "drizzle-orm";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { creerDbTest, type Db } from "./test-utils/db.js";
@@ -1034,6 +1034,74 @@ describe("Module SAV (5.10, 8.4)", () => {
       expect(fichier.statusCode).toBe(200);
       expect(fichier.headers["content-type"]).toBe("image/jpeg");
       expect(fichier.rawPayload.toString()).toBe("contenu-image-factice");
+    } finally {
+      rmSync(dossierTemp, { recursive: true, force: true });
+    }
+  });
+
+  // 5.10 : constaté en test grandeur nature — la limite par défaut du
+  // multipart (≈ 1 Mo) refusait toute photo de téléphone (2 à 6 Mo, sans
+  // réduction côté interface) avec un message technique anglais brut.
+  async function televerserImage(app: ReturnType<typeof buildApp>, token: string, idDossierSav: number, tailleOctets: number) {
+    const frontiere = "----mboapilot-test-boundary";
+    const corps = Buffer.concat([
+      Buffer.from(`--${frontiere}\r\nContent-Disposition: form-data; name="file"; filename="photo.jpg"\r\nContent-Type: image/jpeg\r\n\r\n`),
+      Buffer.alloc(tailleOctets, 1),
+      Buffer.from(`\r\n--${frontiere}--\r\n`),
+    ]);
+    return app.inject({
+      method: "POST",
+      url: `/api/v1/sav/dossiers/${idDossierSav}/photos`,
+      headers: { ...authHeader(token), "content-type": `multipart/form-data; boundary=${frontiere}` },
+      payload: corps,
+    });
+  }
+
+  it("5.10 : accepte une photo de téléphone de 5 Mo", async () => {
+    const dossierTemp = mkdtempSync(join(tmpdir(), "mboapilot-test-sav-photos-app-"));
+    try {
+      const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST, dossierPhotosSav: dossierTemp });
+      const token = await connecter(app);
+      const { idDossierSav } = (
+        await app.inject({ method: "POST", url: "/api/v1/sav/dossiers", headers: authHeader(token), payload: { siteId, descriptionPanne: "Écran fissuré", sousGarantie: false, userId } })
+      ).json();
+
+      const upload = await televerserImage(app, token, idDossierSav, 5 * 1024 * 1024);
+
+      expect(upload.statusCode).toBe(201);
+    } finally {
+      rmSync(dossierTemp, { recursive: true, force: true });
+    }
+  });
+
+  it("5.10 : refuse une photo de plus de 10 Mo avec un message clair en français (413)", async () => {
+    const dossierTemp = mkdtempSync(join(tmpdir(), "mboapilot-test-sav-photos-app-"));
+    try {
+      const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST, dossierPhotosSav: dossierTemp });
+      const token = await connecter(app);
+      const { idDossierSav } = (
+        await app.inject({ method: "POST", url: "/api/v1/sav/dossiers", headers: authHeader(token), payload: { siteId, descriptionPanne: "Écran fissuré", sousGarantie: false, userId } })
+      ).json();
+
+      const upload = await televerserImage(app, token, idDossierSav, 11 * 1024 * 1024);
+
+      expect(upload.statusCode).toBe(413);
+      expect(upload.json().erreur).toMatch(/10 Mo/);
+    } finally {
+      rmSync(dossierTemp, { recursive: true, force: true });
+    }
+  });
+
+  it("5.10 : une photo pour un dossier inexistant est refusée (404) sans laisser de fichier orphelin sur le disque", async () => {
+    const dossierTemp = mkdtempSync(join(tmpdir(), "mboapilot-test-sav-photos-app-"));
+    try {
+      const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST, dossierPhotosSav: dossierTemp });
+      const token = await connecter(app);
+
+      const upload = await televerserImage(app, token, 999999, 1024);
+
+      expect(upload.statusCode).toBe(404);
+      expect(readdirSync(dossierTemp)).toHaveLength(0);
     } finally {
       rmSync(dossierTemp, { recursive: true, force: true });
     }

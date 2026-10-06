@@ -24,7 +24,9 @@ function envoyerErreur(reply: import("fastify").FastifyReply, erreur: unknown) {
   reply.code(statut).send({ erreur: message });
 }
 
-const ERREUR_SITE_DOSSIER = { erreur: "Ce dossier SAV n'appartient pas à votre site" };
+const TAILLE_MAX_PHOTO_OCTETS = 10 * 1024 * 1024;
+
+const ERREUR_SITE_DOSSIER ={ erreur: "Ce dossier SAV n'appartient pas à votre site" };
 
 // 5.10, 8.4 : module SAV — accessible aux rôles pouvant recevoir un appareil
 // au comptoir (Administrateur, Gérant, Caissier) et au Technicien SAV.
@@ -123,12 +125,20 @@ export function registerSavRoutes(app: FastifyInstance, db: Db, dossierPhotos: s
     async (request, reply) => {
       const idDossierSav = Number(request.params.idDossierSav);
       const dossier = trouverDossierSav(db, idDossierSav);
-      if (dossier && !siteAutorise(request.user, dossier.siteId)) {
+      // vérifié avant d'écrire le moindre fichier : sinon un dossier inexistant
+      // laissait une photo orpheline sur le disque (l'insertion en base échouait ensuite)
+      if (!dossier) {
+        reply.code(404).send({ erreur: `Dossier SAV ${idDossierSav} introuvable` });
+        return;
+      }
+      if (!siteAutorise(request.user, dossier.siteId)) {
         reply.code(403).send(ERREUR_SITE_DOSSIER);
         return;
       }
       try {
-        const fichier = await request.file();
+        // la limite par défaut du multipart (≈ 1 Mo) refusait toute photo de
+        // téléphone (2 à 6 Mo) : plafond explicite, propre à cette route
+        const fichier = await request.file({ limits: { fileSize: TAILLE_MAX_PHOTO_OCTETS } });
         if (!fichier) throw new Error("Aucun fichier fourni");
         const photo = enregistrerPhotoSav(db, dossierPhotos, {
           idDossierSav,
@@ -138,6 +148,10 @@ export function registerSavRoutes(app: FastifyInstance, db: Db, dossierPhotos: s
         });
         reply.code(201).send(photo);
       } catch (erreur) {
+        if ((erreur as { code?: string }).code === "FST_REQ_FILE_TOO_LARGE") {
+          reply.code(413).send({ erreur: "La photo dépasse la taille maximale autorisée de 10 Mo" });
+          return;
+        }
         envoyerErreur(reply, erreur);
       }
     }

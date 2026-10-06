@@ -25,8 +25,8 @@ export function AppHeader({ vueActive, onNaviguer, children }: Props) {
   const utilisateur = session!.utilisateur;
 
   return (
-    <header className="flex shrink-0 items-center gap-4 border-b border-border bg-card px-4 py-3">
-      <nav aria-label="Navigation principale" className="flex shrink-0 items-center gap-1">
+    <header className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-2 border-b border-border bg-card px-4 py-3">
+      <nav aria-label="Navigation principale" className="flex flex-wrap items-center gap-1">
         <Button
           variant={vueActive === "dashboard" ? "default" : "ghost"}
           className="h-9 cursor-pointer"

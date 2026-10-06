@@ -209,6 +209,19 @@ describe("Garde d'authentification (11.2 : RBAC de bout en bout, jamais uniqueme
 });
 
 describe("POST /api/v1/recrutements", () => {
+  // constaté en test grandeur nature (balayage des routes avec un corps vide) :
+  // l'absence du champ « abonne » faisait lever une TypeError hors du bloc
+  // try/catch de la route, donc une réponse 500 au lieu d'un refus explicite
+  it("refuse une requête sans informations d'abonné par un 400 explicite, jamais un 500", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const token = await connecter(app);
+
+    const reponse = await app.inject({ method: "POST", url: "/api/v1/recrutements", headers: authHeader(token), payload: {} });
+
+    expect(reponse.statusCode).toBe(400);
+    expect(reponse.json().erreur).toMatch(/abonné/i);
+  });
+
   it("crée un abonnement et renvoie 201", async () => {
     const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
     const token = await connecter(app);
@@ -4496,6 +4509,18 @@ describe("Impression ESC/POS du ticket de caisse (11.4, 6.7)", () => {
 
     expect(config.statusCode).toBe(200);
     expect(config.json()).toMatchObject({ imprimanteHote: "192.168.1.50", imprimantePort: 9100 });
+  });
+
+  // la modification n'était pas protégée par un try/catch : un corps vide
+  // (« No values to set ») renvoyait une 500 au lieu d'un refus explicite
+  it("refuse une configuration vide par un 400, jamais un 500", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    creerUtilisateur(db, { siteId, nom: "Gerant", prenom: "G", identifiant: "gerant1", motDePasse: "motdepasse-secret", role: "GERANT" });
+    const token = await connecter(app, "gerant1");
+
+    const config = await app.inject({ method: "PATCH", url: "/api/v1/site/imprimante", headers: authHeader(token), payload: {} });
+
+    expect(config.statusCode).toBe(400);
   });
 
   it("un caissier ne peut pas configurer l'imprimante (403)", async () => {

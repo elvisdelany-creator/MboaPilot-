@@ -88,12 +88,16 @@ export function registerEntrepriseRoutes(app: FastifyInstance, db: Db, dossierLo
     "/api/v1/site/imprimante",
     { preHandler: [guards.authRequis, guards.gestionParametres] },
     async (request, reply) => {
-      const site = modifierSite(db, request.user.siteId, request.body);
-      if (!site) {
-        reply.code(404).send({ erreur: "Site introuvable" });
-        return;
+      try {
+        const site = modifierSite(db, request.user.siteId, request.body);
+        if (!site) {
+          reply.code(404).send({ erreur: "Site introuvable" });
+          return;
+        }
+        reply.code(200).send(site);
+      } catch (erreur) {
+        envoyerErreur(reply, erreur);
       }
-      reply.code(200).send(site);
     }
   );
 }

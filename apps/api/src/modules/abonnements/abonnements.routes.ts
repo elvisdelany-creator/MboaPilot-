@@ -51,6 +51,10 @@ export function registerAbonnementsRoutes(app: FastifyInstance, db: Db, guards: 
     "/api/v1/recrutements",
     { preHandler: [guards.authRequis, guards.ventes] },
     async (request, reply) => {
+      if (!request.body?.abonne || typeof request.body.abonne !== "object") {
+        reply.code(400).send({ erreur: "Les informations de l'abonné sont obligatoires" });
+        return;
+      }
       if ("idAbonne" in request.body.abonne && abonneAutreSite(db, request.user, request.body.abonne.idAbonne)) {
         reply.code(403).send(ERREUR_SITE_ABONNE);
         return;

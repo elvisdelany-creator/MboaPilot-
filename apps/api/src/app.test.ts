@@ -1154,6 +1154,46 @@ describe("Module SAV (5.10, 8.4)", () => {
   });
 });
 
+// 2.5.2 : l'ouverture d'un dossier SAV prenait le siteId et l'idAbonne du corps
+// de la requête sans contrôle : un caissier pouvait ouvrir un dossier sur un
+// autre site, ou le rattacher à un abonné d'un autre site.
+describe("Module SAV — ouverture de dossier et cloisonnement multi-site (2.5.2)", () => {
+  it("ignore un siteId d'un autre site transmis dans le corps — le dossier s'ouvre toujours sur le site de l'appelant", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const token = await connecter(app);
+    const idEntreprise = db.select().from(schema.site).where(eq(schema.site.idSite, siteId)).get()!.idEntreprise;
+    const autreSite = db.insert(schema.site).values({ idEntreprise, nom: "Site B" }).returning().get().idSite;
+
+    const ouverture = await app.inject({
+      method: "POST",
+      url: "/api/v1/sav/dossiers",
+      headers: authHeader(token),
+      payload: { siteId: autreSite, descriptionPanne: "Écran fissuré", sousGarantie: false, userId },
+    });
+
+    expect(ouverture.statusCode).toBe(201);
+    expect(ouverture.json().siteId).toBe(siteId);
+  });
+
+  it("refuse de rattacher un dossier à un abonné d'un autre site (403)", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const token = await connecter(app);
+    const idEntreprise = db.select().from(schema.site).where(eq(schema.site.idSite, siteId)).get()!.idEntreprise;
+    const autreSite = db.insert(schema.site).values({ idEntreprise, nom: "Site B" }).returning().get().idSite;
+    const abonne = db.insert(schema.abonne).values({ siteId: autreSite, nom: "SecretSiteB", prenom: "Client", telephone: "699999999" }).returning().get();
+
+    const ouverture = await app.inject({
+      method: "POST",
+      url: "/api/v1/sav/dossiers",
+      headers: authHeader(token),
+      payload: { siteId, idAbonne: abonne.idAbonne, descriptionPanne: "Écran fissuré", sousGarantie: false, userId },
+    });
+
+    expect(ouverture.statusCode).toBe(403);
+    expect(db.select().from(schema.savDossier).all()).toHaveLength(0);
+  });
+});
+
 // 2.5.2 : cloisonnement multi-site — constaté en test grandeur nature : un
 // caissier de la Boutique Akwa renouvelait et faisait migrer un abonnement du
 // Site principal (200), les factures étant comptabilisées sur son propre site, et
@@ -1709,6 +1749,26 @@ describe("Vente rapide de produits/services hors abonnement (5.2, 5.3, 8.5)", ()
     });
 
     expect(vente.statusCode).toBe(403);
+  });
+
+  // 2.5.2 : une vente ne se rattache pas à un abonné d'un autre site
+  it("refuse de rattacher une vente à un abonné d'un autre site (403)", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const token = await connecter(app);
+    const idProduit = await creerBien(db);
+    const idEntreprise = db.select().from(schema.site).where(eq(schema.site.idSite, siteId)).get()!.idEntreprise;
+    const autreSite = db.insert(schema.site).values({ idEntreprise, nom: "Site B" }).returning().get().idSite;
+    const abonne = db.insert(schema.abonne).values({ siteId: autreSite, nom: "SecretSiteB", prenom: "Client", telephone: "699999999" }).returning().get();
+
+    const vente = await app.inject({
+      method: "POST",
+      url: "/api/v1/ventes",
+      headers: authHeader(token),
+      payload: { siteId, userId, idAbonne: abonne.idAbonne, lignes: [{ idProduit, quantite: 1 }], montantEncaisse: 2500 },
+    });
+
+    expect(vente.statusCode).toBe(403);
+    expect(db.select().from(schema.facture).all()).toHaveLength(0);
   });
 
   // 2.5.2 : le siteId transmis dans le corps n'est qu'une indication client —

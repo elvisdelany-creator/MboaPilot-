@@ -17,6 +17,7 @@ import { affecterPieceSav, changerStatutSav, type AffecterPieceParams, type Chan
 import { enregistrerPhotoSav, listerPhotosSav, trouverPhotoSav } from "./sav-photo.service.js";
 import { listerPaiementsFacture } from "../factures/paiement.repository.js";
 import { listerAvoirsFacture } from "../factures/avoir.service.js";
+import { trouverAbonne } from "../abonnes/abonne.repository.js";
 
 function envoyerErreur(reply: import("fastify").FastifyReply, erreur: unknown) {
   const message = erreur instanceof Error ? erreur.message : "Erreur inconnue";
@@ -72,8 +73,17 @@ export function registerSavRoutes(app: FastifyInstance, db: Db, dossierPhotos: s
     "/api/v1/sav/dossiers",
     { preHandler: [guards.authRequis, guards.sav] },
     async (request, reply) => {
+      if (request.body.idAbonne !== undefined && request.body.idAbonne !== null) {
+        const abonne = trouverAbonne(db, request.body.idAbonne);
+        if (abonne && !siteAutorise(request.user, abonne.siteId)) {
+          reply.code(403).send({ erreur: "Cet abonné n'appartient pas à votre site" });
+          return;
+        }
+      }
       try {
-        reply.code(201).send(creerDossierSav(db, request.body));
+        // 2.5.2 : le siteId du corps n'est qu'une indication client — celui de
+        // l'appelant (relu en base à chaque requête) fait seul foi
+        reply.code(201).send(creerDossierSav(db, { ...request.body, siteId: request.user.siteId }));
       } catch (erreur) {
         envoyerErreur(reply, erreur);
       }

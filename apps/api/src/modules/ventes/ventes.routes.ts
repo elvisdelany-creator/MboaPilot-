@@ -1,6 +1,8 @@
 import type { FastifyInstance } from "fastify";
 import type { Db } from "../../db/types.js";
 import type { RouteGuards } from "../auth/auth.plugin.js";
+import { siteAutorise } from "../auth/auth.plugin.js";
+import { trouverAbonne } from "../abonnes/abonne.repository.js";
 import { creerVenteProduits, type CreerVenteProduitsParams } from "./vente.service.js";
 
 function envoyerErreur(reply: import("fastify").FastifyReply, erreur: unknown) {
@@ -16,6 +18,13 @@ export function registerVentesRoutes(app: FastifyInstance, db: Db, guards: Route
     "/api/v1/ventes",
     { preHandler: [guards.authRequis, guards.ventes] },
     async (request, reply) => {
+      if (request.body.idAbonne !== undefined && request.body.idAbonne !== null) {
+        const abonne = trouverAbonne(db, request.body.idAbonne);
+        if (abonne && !siteAutorise(request.user, abonne.siteId)) {
+          reply.code(403).send({ erreur: "Cet abonné n'appartient pas à votre site" });
+          return;
+        }
+      }
       try {
         // 2.5.2 : le siteId du corps n'est qu'une indication client — celui de
         // l'appelant (relu en base à chaque requête) fait seul foi

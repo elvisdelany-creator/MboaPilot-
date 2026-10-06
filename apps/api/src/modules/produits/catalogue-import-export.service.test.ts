@@ -35,6 +35,20 @@ describe("exporterCatalogueCsv (8.2)", () => {
     expect(lignes[1]).toContain("2500");
   });
 
+  // 8.2 : injection de formule CSV — un libellé en « =... » est neutralisé à
+  // l'export (sinon le tableur l'exécute à l'ouverture), sans casser l'aller-retour
+  it("neutralise un libellé en formule à l'export, et le réimport retrouve le même article (pas de doublon)", () => {
+    creerProduit(db, { siteId, type: "BIEN", libelle: '=HYPERLINK("http://exemple.test";"clic")', prixVente: 1000 });
+
+    const csv = exporterCatalogueCsv(db, siteId);
+    expect(csv).toContain(`"'=HYPERLINK(""http://exemple.test"";""clic"")"`);
+
+    const resultat = importerCatalogueCsv(db, siteId, csv, userId);
+
+    expect(resultat).toMatchObject({ crees: 0, misAJour: 1, erreurs: [] });
+    expect(db.select().from(schema.produit).all()).toHaveLength(1);
+  });
+
   it("n'exporte que les produits du site demandé", () => {
     const autreSite = db.insert(schema.site).values({ idEntreprise, nom: "Site B" }).returning().get().idSite;
     creerProduit(db, { siteId, type: "BIEN", libelle: "Article site A", prixVente: 1000 });

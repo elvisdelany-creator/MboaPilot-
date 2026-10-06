@@ -70,14 +70,24 @@ export function analyserCsv(texte: string): Record<string, string>[] {
   return lignes.slice(1).map((champs) => {
     const objet: Record<string, string> = {};
     entetes.forEach((entete, i) => {
-      objet[entete] = (champs[i] ?? "").trim();
+      const valeur = (champs[i] ?? "").trim();
+      objet[entete] = DEBUT_FORMULE_NEUTRALISE.test(valeur) ? valeur.slice(1) : valeur;
     });
     return objet;
   });
 }
 
+// Injection de formule CSV : un tableur exécute comme formule toute cellule qui
+// commence par = + - @ (ou tabulation / retour chariot). Un texte (jamais un
+// nombre) qui commence ainsi — éventuellement après des apostrophes, pour que
+// l'opération reste réversible — reçoit une apostrophe qui force le mode texte ;
+// analyserCsv la retire à la relecture.
+const DEBUT_FORMULE = /^'*[=+\-@\t\r]/;
+const DEBUT_FORMULE_NEUTRALISE = /^'+[=+\-@\t\r]/;
+
 function echapperChampCsv(valeur: string | number): string {
-  const s = String(valeur);
+  const brut = String(valeur);
+  const s = typeof valeur === "string" && DEBUT_FORMULE.test(brut) ? `'${brut}` : brut;
   return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 

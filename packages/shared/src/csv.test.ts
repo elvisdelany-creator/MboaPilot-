@@ -58,6 +58,25 @@ describe("construireCsv (8.2 : export de catalogue)", () => {
     expect(csv).toBe('Libelle\r\n"Décodeur, modèle ""G11"""');
   });
 
+  // 8.2 : constaté en test grandeur nature — un libellé « =HYPERLINK(...) »
+  // était exporté tel quel : Excel l'exécute comme une formule à l'ouverture du
+  // fichier (injection de formule CSV, OWASP). Les textes commençant par un
+  // caractère de formule reçoivent une apostrophe qui force le mode texte.
+  it("neutralise les textes qui commencent par un caractère de formule (= + - @ tabulation)", () => {
+    const csv = construireCsv(["Libelle"], [["=1+1"], ["+33600000000"], ["-SOMME(A1)"], ["@SUM(A1)"], ["\tcmd"], ["Câble HDMI"]]);
+    expect(csv.split("\r\n")).toEqual(["Libelle", "'=1+1", "'+33600000000", "'-SOMME(A1)", "'@SUM(A1)", "'\tcmd", "Câble HDMI"]);
+  });
+
+  it("ne modifie pas les nombres, même négatifs", () => {
+    expect(construireCsv(["Ecart"], [[-5], [1500]])).toBe("Ecart\r\n-5\r\n1500");
+  });
+
+  it("round-trip : un texte neutralisé à l'export est restitué à l'identique à l'import", () => {
+    const textes = ["=HYPERLINK(\"http://exemple.test\";\"clic\")", "+33 6 00 00 00 00", "'=déjà apostrophé", "'Cas normal", "@mention"];
+    const relu = analyserCsv(construireCsv(["Libelle"], textes.map((t) => [t])));
+    expect(relu.map((l) => l.Libelle)).toEqual(textes);
+  });
+
   it("round-trip : analyserCsv(construireCsv(x)) restitue les mêmes valeurs", () => {
     const entetes = ["Libelle", "Categorie"];
     const donnees: (string | number)[][] = [

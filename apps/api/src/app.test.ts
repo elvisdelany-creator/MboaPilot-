@@ -1154,6 +1154,79 @@ describe("Module SAV (5.10, 8.4)", () => {
   });
 });
 
+// 2.5.2 : cloisonnement multi-site — constaté en test grandeur nature : un
+// caissier de la Boutique Akwa renouvelait et faisait migrer un abonnement du
+// Site principal (200), les factures étant comptabilisées sur son propre site, et
+// listait les abonnements d'un abonné d'un autre site.
+describe("Abonnements — cloisonnement multi-site (2.5.2)", () => {
+  it("un caissier ne peut ni lister, ni recruter sur, ni renouveler, ni migrer, ni échanger le matériel d'un abonnement d'un autre site (403)", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const token = await connecter(app);
+    const idEntreprise = db.select().from(schema.site).where(eq(schema.site.idSite, siteId)).get()!.idEntreprise;
+    const autreSite = db.insert(schema.site).values({ idEntreprise, nom: "Site B" }).returning().get().idSite;
+    const abonne = db.insert(schema.abonne).values({ siteId: autreSite, nom: "SecretSiteB", prenom: "Client", telephone: "699999999" }).returning().get();
+    const abonnement = db
+      .insert(schema.abonnement)
+      .values({ idAbonne: abonne.idAbonne, idFormule, siteId: autreSite, dateDebut: "2026-01-01", dateFin: "2026-01-30", creePar: userId })
+      .returning()
+      .get();
+    const avant = db.select().from(schema.abonnement).where(eq(schema.abonnement.numeroAbonnement, abonnement.numeroAbonnement)).get();
+    const facturesAvant = db.select().from(schema.facture).all().length;
+
+    const liste = await app.inject({ method: "GET", url: `/api/v1/abonnes/${abonne.idAbonne}/abonnements`, headers: authHeader(token) });
+    expect(liste.statusCode).toBe(403);
+
+    const recrutement = await app.inject({
+      method: "POST",
+      url: "/api/v1/recrutements",
+      headers: authHeader(token),
+      payload: { userId, aujourdHui: "2026-10-01", abonne: { idAbonne: abonne.idAbonne }, idFormule, montantEncaisse: 13000 },
+    });
+    expect(recrutement.statusCode).toBe(403);
+
+    const reabonnement = await app.inject({
+      method: "POST",
+      url: `/api/v1/abonnements/${abonnement.numeroAbonnement}/reabonnements`,
+      headers: authHeader(token),
+      payload: { userId, aujourdHui: "2026-10-01", montantEncaisse: 13000 },
+    });
+    expect(reabonnement.statusCode).toBe(403);
+
+    const migration = await app.inject({
+      method: "POST",
+      url: `/api/v1/abonnements/${abonnement.numeroAbonnement}/changement-formule`,
+      headers: authHeader(token),
+      payload: { userId, aujourdHui: "2026-10-01", idNouvelleFormule: idFormule, montantEncaisse: 0 },
+    });
+    expect(migration.statusCode).toBe(403);
+
+    const echange = await app.inject({
+      method: "POST",
+      url: `/api/v1/abonnements/${abonnement.numeroAbonnement}/echange-materiel`,
+      headers: authHeader(token),
+      payload: { userId, idProduit: 1, typeMateriel: "DECODEUR", sousGarantie: false, motif: "panne", montantEncaisse: 0 },
+    });
+    expect(echange.statusCode).toBe(403);
+
+    expect(db.select().from(schema.abonnement).where(eq(schema.abonnement.numeroAbonnement, abonnement.numeroAbonnement)).get()).toEqual(avant);
+    expect(db.select().from(schema.facture).all()).toHaveLength(facturesAvant);
+  });
+
+  it("un abonnement inconnu reste signalé en 404, pas en 403", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const token = await connecter(app);
+
+    const reabonnement = await app.inject({
+      method: "POST",
+      url: "/api/v1/abonnements/999999/reabonnements",
+      headers: authHeader(token),
+      payload: { userId, aujourdHui: "2026-10-01", montantEncaisse: 0 },
+    });
+
+    expect(reabonnement.statusCode).toBe(404);
+  });
+});
+
 describe("Module apporteur d'affaires (6.3)", () => {
   it("un administrateur crée un apporteur, un caissier peut le lister (choix au recrutement)", async () => {
     const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });

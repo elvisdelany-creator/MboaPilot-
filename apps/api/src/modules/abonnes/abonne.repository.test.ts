@@ -96,6 +96,32 @@ describe("rechercherAbonnes (4.5 : résolution unifiée id_abonne / numero_abonn
     expect(resultats[0].telephone).toBe("690000000");
   });
 
+  // 4.5 : constaté en test grandeur nature — le téléphone n'était comparé que
+  // par sous-chaîne brute : un client saisi « +237 690 11 22 33 » n'était pas
+  // retrouvé par « 690112233 », ni l'inverse. Les caissiers tapent les numéros
+  // avec espaces, tirets ou indicatif pays.
+  it("trouve un téléphone saisi avec espaces et indicatif pays à partir du numéro nu", () => {
+    creerAbonne(db, { siteId, nom: "Nga Ndongo", prenom: "Valentin", telephone: "+237 690 11 22 33" });
+
+    expect(rechercherAbonnes(db, siteId, "690112233")).toHaveLength(1);
+    expect(rechercherAbonnes(db, siteId, "11 22")).toHaveLength(1);
+  });
+
+  it("trouve un téléphone nu à partir d'une saisie avec espaces, tirets ou indicatif pays", () => {
+    creerAbonne(db, { siteId, nom: "Nga Ndongo", prenom: "Valentin", telephone: "690112233" });
+
+    expect(rechercherAbonnes(db, siteId, "690 11 22 33")).toHaveLength(1);
+    expect(rechercherAbonnes(db, siteId, "690-11-22-33")).toHaveLength(1);
+    expect(rechercherAbonnes(db, siteId, "+237690112233")).toHaveLength(1);
+    expect(rechercherAbonnes(db, siteId, "237 690 11 22 33")).toHaveLength(1);
+  });
+
+  it("une recherche par nom contenant un chiffre ne se met pas à ressembler à un téléphone", () => {
+    creerAbonne(db, { siteId, nom: "Nga", prenom: "Valentin", telephone: "690112233" });
+
+    expect(rechercherAbonnes(db, siteId, "Nga 2")).toHaveLength(0);
+  });
+
   it("ne renvoie rien si aucune correspondance", () => {
     expect(rechercherAbonnes(db, siteId, "inconnu")).toHaveLength(0);
   });

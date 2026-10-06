@@ -136,13 +136,25 @@ export function rechercherAbonnes(db: Db, siteId: number, terme: string) {
   // 4.5, 8.2 : même repère que l'import CSV et le transfert de stock — un
   // caissier tape rarement les accents (clavier/téléphone basique), donc la
   // recherche par nom/prénom reste en JS (normalisation NFD, sans équivalent
-  // SQLite natif fiable) ; le téléphone reste une simple sous-chaîne.
+  // SQLite natif fiable). Le téléphone est comparé sur ses seuls chiffres, hors
+  // indicatif pays : les numéros sont saisis avec espaces, tirets ou « +237 ».
   const termeNormalise = normaliserLibelle(terme);
+  const termeTelephone = /^[+\d\s().-]+$/.test(terme) ? chiffresTelephone(terme) : "";
   const abonnesSite = db.select().from(schema.abonne).where(eq(schema.abonne.siteId, siteId)).all();
   return abonnesSite.filter(
     (a) =>
       normaliserLibelle(a.nom).includes(termeNormalise) ||
       normaliserLibelle(a.prenom).includes(termeNormalise) ||
-      a.telephone.includes(terme)
+      a.telephone.includes(terme) ||
+      (termeTelephone !== "" && chiffresTelephone(a.telephone).includes(termeTelephone))
   );
+}
+
+const INDICATIF_CAMEROUN = "237";
+
+// chiffres seuls d'un numéro, sans l'indicatif pays quand le numéro est complet
+// (« +237 690 11 22 33 » et « 690112233 » désignent le même abonné)
+function chiffresTelephone(valeur: string): string {
+  const chiffres = valeur.replace(/\D/g, "");
+  return chiffres.startsWith(INDICATIF_CAMEROUN) && chiffres.length > 9 ? chiffres.slice(INDICATIF_CAMEROUN.length) : chiffres;
 }

@@ -1,9 +1,13 @@
 import { db } from "./db/client.js";
+import { appliquerMigrations } from "./db/appliquer-migrations.js";
 import { buildApp } from "./app.js";
 import { obtenirSecretJwt } from "./config/jwt-secret.js";
 import { planifierJobQuotidien } from "./jobs/planificateur.js";
 import { planifierSauvegardeQuotidienne } from "./jobs/planificateur-sauvegarde.js";
 import { revaliderLicence } from "./modules/licence/licence.service.js";
+
+// 2.6 : base restaurée ou application mise à jour — mise à niveau avant toute requête
+appliquerMigrations(db);
 
 const dossierSauvegardes = process.env.MBOAPILOT_BACKUPS_DIR ?? "./data/backups";
 const app = buildApp(db, { jwtSecret: obtenirSecretJwt(), dossierSauvegardes });

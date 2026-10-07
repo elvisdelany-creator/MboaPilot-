@@ -221,3 +221,33 @@ describe("listerResumesApporteurs (8.6, 6.3)", () => {
     expect(resumes[0].soldeCommissionDu).toBe(10250);
   });
 });
+
+// 6.3 : constaté en test grandeur nature — un montant « abc » passait les gardes
+// (`"abc" <= 0` et `"abc" > solde` sont faux) et s'enregistrait comme règlement,
+// même avec un solde dû de 0 : le solde de l'apporteur devenait illisible.
+describe("enregistrerReglement : montants et mode invalides (6.3)", () => {
+  it.each([["abc"], [1.5], [Number.NaN], [null], [undefined]])("refuse le montant %s sans rien enregistrer", (montant) => {
+    const apporteur = creerApporteur(db, { nom: "Jean Apporteur", tauxCommissionDefaut: 500 });
+
+    expect(() =>
+      enregistrerReglement(db, { apporteurId: apporteur.idApporteur, montant: montant as never, modePaiement: "CASH", utilisateurId: userId })
+    ).toThrow(/montant du règlement/i);
+    expect(db.select().from(schema.reglementCommission).all()).toHaveLength(0);
+  });
+
+  it.each([["BITCOIN"], [undefined], [5]])("refuse le mode de paiement %s", (mode) => {
+    const apporteur = creerApporteur(db, { nom: "Jean Apporteur", tauxCommissionDefaut: 500 });
+
+    expect(() =>
+      enregistrerReglement(db, { apporteurId: apporteur.idApporteur, montant: 1000, modePaiement: mode as never, utilisateurId: userId })
+    ).toThrow(/mode de paiement/i);
+  });
+
+  it("refuse une référence qui n'est pas un texte", () => {
+    const apporteur = creerApporteur(db, { nom: "Jean Apporteur", tauxCommissionDefaut: 500 });
+
+    expect(() =>
+      enregistrerReglement(db, { apporteurId: apporteur.idApporteur, montant: 1000, modePaiement: "VIREMENT", reference: { x: 1 } as never, utilisateurId: userId })
+    ).toThrow(/référence/i);
+  });
+});

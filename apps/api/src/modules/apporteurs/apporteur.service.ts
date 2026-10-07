@@ -95,13 +95,21 @@ export function listerResumesApporteurs(db: Db): ResumeApporteur[] {
     .sort((a, b) => b.chiffreAffaires - a.chiffreAffaires);
 }
 
+const MODES_PAIEMENT: readonly string[] = ["CASH", "CHEQUE", "VIREMENT", "MOBILE_MONEY"];
+
 // 6.3 : enregistre un règlement de commission — jamais au-delà du solde
 // CONFIRMEE restant dû (garde-fou métier, comme un avoir ne peut excéder sa facture d'origine)
 export function enregistrerReglement(db: Db, params: EnregistrerReglementCommissionInput) {
   const apporteur = trouverApporteur(db, params.apporteurId);
   if (!apporteur) throw new Error(`Apporteur ${params.apporteurId} introuvable`);
 
-  if (params.montant <= 0) throw new Error("Le montant du règlement doit être positif");
+  if (!Number.isInteger(params.montant) || params.montant <= 0) {
+    throw new Error("Le montant du règlement doit être un entier positif en FCFA");
+  }
+  if (!MODES_PAIEMENT.includes(params.modePaiement)) throw new Error("Mode de paiement du règlement invalide");
+  if (params.reference !== undefined && params.reference !== null && typeof params.reference !== "string") {
+    throw new Error("La référence du règlement doit être un texte");
+  }
 
   const { soldeCommissionDu } = calculerSoldeCommission(db, params.apporteurId);
   if (params.montant > soldeCommissionDu) {

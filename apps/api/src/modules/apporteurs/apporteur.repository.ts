@@ -8,14 +8,25 @@ export interface CreerApporteurInput {
   tauxCommissionDefaut?: number; // pour-mille
 }
 
+// 6.2, 6.3 : taux en pour-mille — un entier entre 0 et 1000 (100 %). Un taux
+// négatif produirait une commission négative (montant "dû" qui n'a aucun sens),
+// un taux illisible ("abc", décimal) ou > 100 % une commission aberrante dès
+// qu'un recrutement confirmé l'utilise.
+function verifierTauxCommission(taux: unknown): void {
+  if (taux === undefined) return;
+  if (typeof taux === "number" && Number.isInteger(taux) && taux < 0) throw new Error("Le taux de commission par défaut ne peut pas être négatif");
+  if (typeof taux !== "number" || !Number.isInteger(taux) || taux > 1000) {
+    throw new Error("Le taux de commission par défaut doit être un entier en pour-mille, entre 0 et 1000");
+  }
+}
+
 // 6.3 : sous-distributeurs et apporteurs d'affaires
 export function creerApporteur(db: Db, input: CreerApporteurInput) {
-  if (!input.nom.trim()) throw new Error("Le nom de l'apporteur est obligatoire");
-  // 6.2, 6.3 : un taux négatif produirait une commission négative (montant
-  // "dû" qui n'a aucun sens) dès qu'un recrutement confirmé l'utilise
-  if (input.tauxCommissionDefaut !== undefined && input.tauxCommissionDefaut < 0) {
-    throw new Error("Le taux de commission par défaut ne peut pas être négatif");
+  if (typeof input.nom !== "string" || !input.nom.trim()) throw new Error("Le nom de l'apporteur est obligatoire");
+  if (input.telephone !== undefined && input.telephone !== null && typeof input.telephone !== "string") {
+    throw new Error("Le téléphone de l'apporteur doit être un texte");
   }
+  verifierTauxCommission(input.tauxCommissionDefaut);
 
   return db
     .insert(schema.sousDistributeur)
@@ -38,9 +49,9 @@ export interface ModifierApporteurInput {
 }
 
 export function modifierApporteur(db: Db, idApporteur: number, input: ModifierApporteurInput) {
-  if (input.tauxCommissionDefaut !== undefined && input.tauxCommissionDefaut < 0) {
-    throw new Error("Le taux de commission par défaut ne peut pas être négatif");
-  }
+  if (!trouverApporteur(db, idApporteur)) throw new Error(`Apporteur ${idApporteur} introuvable`);
+  verifierTauxCommission(input.tauxCommissionDefaut);
+  if (input.actif !== undefined && typeof input.actif !== "boolean") throw new Error("Le champ actif doit être vrai ou faux");
 
   return db
     .update(schema.sousDistributeur)

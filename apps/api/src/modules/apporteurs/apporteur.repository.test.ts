@@ -100,3 +100,45 @@ describe("enregistrerReglementCommission / listerReglementsApporteur (6.3)", () 
     expect(listerReglementsApporteur(db, apporteur1.idApporteur)[0].montant).toBe(5000);
   });
 });
+
+// 6.3 : constaté en test grandeur nature — « create validates, modify doesn't » :
+// un taux « abc », décimal ou supérieur à 100 % (1000 pour-mille) était accepté et
+// stocké ; un PATCH sur un apporteur inexistant répondait 200 sans corps ; un
+// « actif: "non" » était lu comme vrai.
+describe("validation des champs apporteur (6.3)", () => {
+  it.each([["abc"], [1.5], [Number.NaN], [1001]])("creerApporteur refuse le taux %s", (taux) => {
+    expect(() => creerApporteur(db, { nom: "Jean", tauxCommissionDefaut: taux as never })).toThrow(/taux de commission/i);
+    expect(listerApporteurs(db)).toHaveLength(0);
+  });
+
+  it("creerApporteur accepte les bornes 0 et 1000 pour-mille", () => {
+    expect(creerApporteur(db, { nom: "Zéro", tauxCommissionDefaut: 0 }).tauxCommissionDefaut).toBe(0);
+    expect(creerApporteur(db, { nom: "Cent", tauxCommissionDefaut: 1000 }).tauxCommissionDefaut).toBe(1000);
+  });
+
+  it.each([[undefined], [5], [null]])("creerApporteur refuse un nom invalide : %s", (nom) => {
+    expect(() => creerApporteur(db, { nom: nom as never })).toThrow(/nom de l'apporteur/i);
+  });
+
+  it("creerApporteur refuse un téléphone qui n'est pas un texte", () => {
+    expect(() => creerApporteur(db, { nom: "Jean", telephone: { x: 1 } as never })).toThrow(/téléphone/i);
+  });
+
+  it.each([["abc"], [1.5], [Number.NaN], [1001]])("modifierApporteur refuse le taux %s sans modifier l'apporteur", (taux) => {
+    const apporteur = creerApporteur(db, { nom: "Jean", tauxCommissionDefaut: 500 });
+
+    expect(() => modifierApporteur(db, apporteur.idApporteur, { tauxCommissionDefaut: taux as never })).toThrow(/taux de commission/i);
+    expect(trouverApporteur(db, apporteur.idApporteur)?.tauxCommissionDefaut).toBe(500);
+  });
+
+  it.each([["non"], [1], [null]])("modifierApporteur refuse un « actif » qui n'est pas un booléen : %s", (actif) => {
+    const apporteur = creerApporteur(db, { nom: "Jean" });
+
+    expect(() => modifierApporteur(db, apporteur.idApporteur, { actif: actif as never })).toThrow(/actif/i);
+    expect(trouverApporteur(db, apporteur.idApporteur)?.actif).toBe(1);
+  });
+
+  it("modifierApporteur signale un apporteur introuvable", () => {
+    expect(() => modifierApporteur(db, 999999, { actif: false })).toThrow(/introuvable/i);
+  });
+});

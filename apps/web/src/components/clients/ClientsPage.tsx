@@ -283,9 +283,9 @@ export function ClientsPage({ onNaviguer, onReabonnerDepuisFiche }: Props) {
 
           {fiche && (
             <div className="mx-auto max-w-3xl space-y-6">
-              <div className="flex items-start justify-between">
-                <div className="flex items-start gap-3">
-                  <UserSquare2 className="mt-1 size-8 text-muted-foreground" aria-hidden="true" />
+              <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
+                <div className="flex min-w-0 items-start gap-3">
+                  <UserSquare2 className="mt-1 size-8 shrink-0 text-muted-foreground" aria-hidden="true" />
                   <div>
                     <h2 className="font-heading text-lg font-semibold text-foreground">{fiche.abonne.prenom} {fiche.abonne.nom}</h2>
                     <p className="text-sm text-muted-foreground">
@@ -297,7 +297,7 @@ export function ClientsPage({ onNaviguer, onReabonnerDepuisFiche }: Props) {
                     {fiche.apporteur && <p className="mt-1 text-sm text-muted-foreground">Apporteur d'affaires : {fiche.apporteur.nom}</p>}
                   </div>
                 </div>
-                <div className="no-print flex shrink-0 gap-2">
+                <div className="no-print flex flex-wrap gap-2">
                   <Button variant="outline" size="sm" className="cursor-pointer gap-1" onClick={() => window.print()}>
                     <Printer className="size-4" />
                     Exporter (PDF)

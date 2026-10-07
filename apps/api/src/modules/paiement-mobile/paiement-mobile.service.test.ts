@@ -295,3 +295,27 @@ describe("actualiserStatutTransaction — suivi de commission CANAL+ différé (
     expect(db.select().from(schema.suiviCommissionCanalplus).all()).toHaveLength(1);
   });
 });
+
+// 6.6 : constaté par fuzz de types — un montant « abc », 1.5 ou 1e30 passait la
+// garde `<= 0` et créait une transaction Mobile Money au montant illisible.
+describe("initierPaiementMobile : entrées invalides (6.6)", () => {
+  it.each(["abc", 1.5, Number.NaN, 1e30, 0, -5, null, undefined])("refuse le montant %s sans créer de transaction", async (montant) => {
+    await expect(
+      initierPaiementMobile(db, fournisseur, { idFacture, numeroTelephone: "690000000", montant: montant as never, parcours: "USSD_CLIENT" })
+    ).rejects.toThrow(/montant du paiement mobile/i);
+    expect(db.select().from(schema.transactionMobileMoney).all()).toHaveLength(0);
+  });
+
+  it.each([123, { x: 1 }, "", undefined])("refuse le numéro de téléphone %s", async (numeroTelephone) => {
+    await expect(
+      initierPaiementMobile(db, fournisseur, { idFacture, numeroTelephone: numeroTelephone as never, montant: 5000, parcours: "USSD_CLIENT" })
+    ).rejects.toThrow(/téléphone/i);
+    expect(db.select().from(schema.transactionMobileMoney).all()).toHaveLength(0);
+  });
+
+  it.each(["BITCOIN", { x: 1 }, undefined])("refuse le parcours %s", async (parcours) => {
+    await expect(
+      initierPaiementMobile(db, fournisseur, { idFacture, numeroTelephone: "690000000", montant: 5000, parcours: parcours as never })
+    ).rejects.toThrow(/parcours/i);
+  });
+});

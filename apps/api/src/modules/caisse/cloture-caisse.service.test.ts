@@ -207,3 +207,17 @@ describe("validation des montants de clôture (13.1)", () => {
     expect(db.select().from(schema.clotureCaisseComptage).all()).toHaveLength(0);
   });
 });
+
+// 13.1 : Number.isInteger(1e30) est vrai — un fond ou un comptage de 1e30 était
+// accepté et stocké en réel (constaté par fuzz de types).
+describe("montants de clôture géants (13.1)", () => {
+  it("refuse un fond d'ouverture de 1e30", () => {
+    expect(() => ouvrirCaisse(db, { siteId, userId: caissierId, fondOuverture: 1e30 })).toThrow(/fond de caisse/i);
+  });
+
+  it("refuse un comptage de 1e30 sans fermer la session", () => {
+    const cloture = ouvrirCaisse(db, { siteId, userId: caissierId, fondOuverture: 1000 });
+    expect(() => fermerCaisse(db, { idCloture: cloture.idCloture, userId: caissierId, comptages: [{ mode: "CASH", montantCompte: 1e30 }] })).toThrow(/Comptage invalide/);
+    expect(obtenirClotureOuverte(db, siteId)?.idCloture).toBe(cloture.idCloture);
+  });
+});

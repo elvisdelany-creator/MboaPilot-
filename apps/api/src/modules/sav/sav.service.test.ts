@@ -303,3 +303,43 @@ describe("affecterPieceSav : entrées invalides (5.10)", () => {
     expect(db.select().from(schema.savPieceUtilisee).all()).toHaveLength(0);
   });
 });
+
+// 5.10, 6.4 : constaté par fuzz de types — la main d'œuvre « 1.5 » ou 1e30
+// alimentait la facture, un encaissement à la livraison « 1.5 » le paiement ;
+// une main d'œuvre négative ou « abc » était traitée comme 0.
+describe("changerStatutSav : montants invalides (5.10)", () => {
+  function jusquaReparation() {
+    changerStatutSav(db, { idDossierSav, nouveauStatut: "DIAGNOSTIC", userId });
+    changerStatutSav(db, { idDossierSav, nouveauStatut: "REPARATION", userId });
+  }
+
+  it.each(["abc", 1.5, Number.NaN, 1e30, -7, null])("refuse une main d'œuvre %s au passage en PRET, sans facture ni changement de statut", (montantMainOeuvre) => {
+    jusquaReparation();
+    expect(() => changerStatutSav(db, { idDossierSav, nouveauStatut: "PRET", montantMainOeuvre: montantMainOeuvre as never, userId })).toThrow(/main d'œuvre/i);
+
+    expect(trouverDossierSav(db, idDossierSav)?.statut).toBe("REPARATION");
+    expect(db.select().from(schema.facture).all()).toHaveLength(0);
+  });
+
+  it.each(["abc", 1.5, Number.NaN, 1e30, -7])("refuse un montant encaissé %s à la livraison, sans paiement", (montantEncaisse) => {
+    jusquaReparation();
+    changerStatutSav(db, { idDossierSav, nouveauStatut: "PRET", montantMainOeuvre: 2000, userId });
+
+    expect(() => changerStatutSav(db, { idDossierSav, nouveauStatut: "LIVRE", montantEncaisse: montantEncaisse as never, userId })).toThrow(/montant encaissé/i);
+
+    expect(trouverDossierSav(db, idDossierSav)?.statut).toBe("PRET");
+    expect(db.select().from(schema.paiement).all()).toHaveLength(0);
+  });
+
+  it("refuse un mode de paiement invalide à la livraison", () => {
+    jusquaReparation();
+    changerStatutSav(db, { idDossierSav, nouveauStatut: "PRET", montantMainOeuvre: 2000, userId });
+    expect(() => changerStatutSav(db, { idDossierSav, nouveauStatut: "LIVRE", montantEncaisse: 2000, modePaiement: "BITCOIN" as never, userId })).toThrow(/mode de paiement/i);
+  });
+
+  it.each([123, { x: 1 }])("refuse un diagnostic ou un motif qui n'est pas un texte : %s", (valeur) => {
+    expect(() => changerStatutSav(db, { idDossierSav, nouveauStatut: "DIAGNOSTIC", diagnostic: valeur as never, userId })).toThrow(/diagnostic/i);
+    expect(() => changerStatutSav(db, { idDossierSav, nouveauStatut: "DIAGNOSTIC", motif: valeur as never, userId })).toThrow(/motif/i);
+    expect(trouverDossierSav(db, idDossierSav)?.statut).toBe("RECU");
+  });
+});

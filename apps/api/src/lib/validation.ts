@@ -49,3 +49,7 @@ export function verifierEncaissementSaisi(params: { montantEncaisse?: unknown; r
   verifierRemise(params.remise);
   verifierModeEtReferencesPaiement(params);
 }
+
+export function verifierBooleen(valeur: unknown, libelle: string): void {
+  if (valeur !== undefined && typeof valeur !== "boolean") throw new Error(`${libelle} doit être vrai ou faux`);
+}

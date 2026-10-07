@@ -8,7 +8,7 @@ import { SimulateurNotification } from "../notifications/simulateur-notification
 import type { FournisseurNotification } from "../notifications/fournisseur.js";
 import { trouverTauxGarantieEntreprise, trouverTauxTvaParSite } from "../entreprise/entreprise.repository.js";
 import { creerPaiement } from "../factures/paiement.repository.js";
-import { verifierEntier } from "../../lib/validation.js";
+import { verifierEntier, verifierModeEtReferencesPaiement } from "../../lib/validation.js";
 
 export interface AffecterPieceParams {
   idDossierSav: number;
@@ -84,6 +84,15 @@ export function changerStatutSav(
 ): ChangerStatutSavResultat {
   const dossier = db.select().from(schema.savDossier).where(eq(schema.savDossier.idDossierSav, params.idDossierSav)).get();
   if (!dossier) throw new Error(`Dossier SAV ${params.idDossierSav} introuvable`);
+
+  // 5.10 : montants et textes saisis contrôlés avant toute écriture — une main
+  // d'œuvre négative ou illisible était traitée comme 0, un encaissement décimal
+  // ou géant finissait dans le paiement
+  verifierEntier(params.montantMainOeuvre, "Le montant de la main d'œuvre", { nullable: false });
+  verifierEntier(params.montantEncaisse, "Le montant encaissé", { nullable: false });
+  verifierModeEtReferencesPaiement(params);
+  if (params.diagnostic !== undefined && params.diagnostic !== null && typeof params.diagnostic !== "string") throw new Error("Le diagnostic doit être un texte");
+  if (params.motif !== undefined && params.motif !== null && typeof params.motif !== "string") throw new Error("Le motif doit être un texte");
 
   if (!peutTransitionnerSav(dossier.statut, params.nouveauStatut)) {
     throw new Error(`Transition invalide : ${dossier.statut} -> ${params.nouveauStatut}`);

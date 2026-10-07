@@ -25,7 +25,7 @@ export interface FermerCaisseParams {
 // 13.1 : "fond de caisse d'ouverture" — une seule session ouverte à la fois
 // par site, pour que le calcul du théorique (fermerCaisse) reste sans ambiguïté.
 export function ouvrirCaisse(db: Db, params: OuvrirCaisseParams) {
-  if (!Number.isInteger(params.fondOuverture)) throw new Error("Le fond de caisse d'ouverture doit être un montant entier en FCFA");
+  if (!Number.isSafeInteger(params.fondOuverture)) throw new Error("Le fond de caisse d'ouverture doit être un montant entier en FCFA");
   if (params.fondOuverture < 0) throw new Error("Le fond de caisse d'ouverture ne peut pas être négatif");
 
   const dejaOuverte = obtenirClotureOuverte(db, params.siteId);
@@ -68,7 +68,7 @@ function verifierComptages(comptages: unknown): ComptageInput[] {
     if (!mode || !(MODES_PAIEMENT as readonly string[]).includes(mode)) throw new Error(`Comptage invalide : mode de paiement inconnu (${String(mode)})`);
     if (modesVus.has(mode)) throw new Error(`Comptage invalide : le mode ${mode} est compté deux fois`);
     modesVus.add(mode);
-    if (!Number.isInteger(c.montantCompte) || c.montantCompte < 0) {
+    if (!Number.isSafeInteger(c.montantCompte) || c.montantCompte < 0) {
       throw new Error(`Comptage invalide : le montant compté (${mode}) doit être un entier positif ou nul en FCFA`);
     }
   }

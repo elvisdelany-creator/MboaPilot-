@@ -4,6 +4,7 @@ import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
 import type { FournisseurPaiementMobile, ParcoursPaiementMobile } from "./fournisseur.js";
 import { creerSuiviCommissionCanalplus } from "../abonnements/suivi-commission-canalplus.repository.js";
+import { verifierEntier } from "../../lib/validation.js";
 
 const DELAI_EXPIRATION_MINUTES = 5; // délai de saisie de l'OTP (6.6)
 
@@ -17,7 +18,9 @@ export interface InitierPaiementMobileParams {
 // 6.6 : initie une transaction de paiement mobile sur une facture existante
 // (créée BROUILLON par le flux caisse/SAV concerné, avec montantEncaisse=0).
 export async function initierPaiementMobile(db: Db, fournisseur: FournisseurPaiementMobile, params: InitierPaiementMobileParams) {
-  if (params.montant <= 0) throw new Error("Le montant du paiement mobile doit être positif");
+  verifierEntier(params.montant, "Le montant du paiement mobile", { min: 1, requis: true, nullable: false, message: "Le montant du paiement mobile doit être positif" });
+  if (typeof params.numeroTelephone !== "string" || !params.numeroTelephone.trim()) throw new Error("Le numéro de téléphone du paiement mobile est obligatoire");
+  if (params.parcours !== "USSD_CLIENT" && params.parcours !== "PUSH_MARCHAND") throw new Error("Le parcours de paiement mobile est invalide (USSD_CLIENT ou PUSH_MARCHAND)");
 
   const facture = db.select().from(schema.facture).where(eq(schema.facture.idFacture, params.idFacture)).get();
   if (!facture) throw new Error(`Facture ${params.idFacture} introuvable`);

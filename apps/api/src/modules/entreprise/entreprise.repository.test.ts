@@ -349,3 +349,68 @@ describe("modifierEntreprise — taux de garantie (5.10, 7.3, 8.8)", () => {
     expect(trouverTauxGarantieEntreprise(db)).toBe(0);
   });
 });
+
+// 8.8 : constaté par fuzz de types sur PATCH /entreprise — « abc », décimaux et
+// 1e30 étaient stockés dans le paramétrage (taxes, jalons, durées, politique de
+// mot de passe, garantie) ; une longueur minimale « abc » cassait ensuite la
+// création de tout compte, une garantie « abc » les factures SAV.
+describe("modifierEntreprise : valeurs de paramétrage invalides (8.8)", () => {
+  const CHAMPS_ENTIERS = [
+    "tauxTva",
+    "tauxCommissionVendeurDefaut",
+    "jalonAlerteUrgent",
+    "jalonAlerteModere",
+    "jalonAlerteAnticipe",
+    "dureeRetentionExpiresJours",
+    "dureeConservationDonneesJours",
+    "politiqueMdpLongueurMin",
+    "delaiGraceReabonnementJours",
+    "tauxGarantiePourcent",
+  ];
+  const CHAMPS_BOOLEENS = ["politiqueMdpExigerMajuscule", "politiqueMdpExigerChiffre", "politiqueMdpExigerCaractereSpecial"];
+
+  function entreprise() {
+    return db.insert(schema.entreprise).values({ nom: "Boutique Test" }).returning().get();
+  }
+
+  it.each(CHAMPS_ENTIERS.flatMap((champ) => ["abc", 1.5, Number.NaN, 1e30].map((valeur) => [champ, valeur] as const)))(
+    "refuse %s = %s sans modifier le paramétrage",
+    (champ, valeur) => {
+      const ent = entreprise();
+      expect(() => modifierEntreprise(db, ent.idEntreprise, { [champ]: valeur } as never)).toThrow();
+      expect(db.select().from(schema.entreprise).get()).toEqual(ent);
+    }
+  );
+
+  it.each(["jalonAlerteUrgent", "jalonAlerteModere", "jalonAlerteAnticipe", "dureeRetentionExpiresJours", "dureeConservationDonneesJours", "politiqueMdpLongueurMin", "delaiGraceReabonnementJours", "tauxGarantiePourcent"])(
+    "refuse %s = null (colonne obligatoire)",
+    (champ) => {
+      const ent = entreprise();
+      expect(() => modifierEntreprise(db, ent.idEntreprise, { [champ]: null } as never)).toThrow();
+      expect(db.select().from(schema.entreprise).get()).toEqual(ent);
+    }
+  );
+
+  it.each(CHAMPS_BOOLEENS.flatMap((champ) => ["oui", 1].map((valeur) => [champ, valeur] as const)))("refuse %s = %s (un booléen est attendu)", (champ, valeur) => {
+    const ent = entreprise();
+    expect(() => modifierEntreprise(db, ent.idEntreprise, { [champ]: valeur } as never)).toThrow(/vrai ou faux/i);
+    expect(db.select().from(schema.entreprise).get()).toEqual(ent);
+  });
+
+  it.each([123, { x: 1 }])("refuse des mentions légales qui ne sont pas un texte : %s", (valeur) => {
+    const ent = entreprise();
+    expect(() => modifierEntreprise(db, ent.idEntreprise, { mentionsLegales: valeur as never })).toThrow(/mentions légales/i);
+  });
+
+  it("refuse un taux de TVA supérieur à 100 % et une commission supérieure à 1000 pour-mille", () => {
+    const ent = entreprise();
+    expect(() => modifierEntreprise(db, ent.idEntreprise, { tauxTva: 10001 })).toThrow(/TVA/);
+    expect(() => modifierEntreprise(db, ent.idEntreprise, { tauxCommissionVendeurDefaut: 1001 })).toThrow(/commission/i);
+  });
+
+  it("accepte des valeurs valides, dont null pour la TVA et la commission (non renseignées)", () => {
+    const ent = entreprise();
+    const modifiee = modifierEntreprise(db, ent.idEntreprise, { tauxTva: null, tauxCommissionVendeurDefaut: null, jalonAlerteUrgent: 2, jalonAlerteModere: 4, jalonAlerteAnticipe: 10, tauxGarantiePourcent: 80 });
+    expect(modifiee).toMatchObject({ tauxTva: null, tauxCommissionVendeurDefaut: null, jalonAlerteUrgent: 2, tauxGarantiePourcent: 80 });
+  });
+});

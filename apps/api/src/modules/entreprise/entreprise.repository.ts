@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import { JALONS_PAR_DEFAUT, POLITIQUE_MDP_PAR_DEFAUT, type JalonsAlerte, type PolitiqueMotDePasse } from "@mboapilot/shared";
 import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
+import { verifierBooleen, verifierEntier } from "../../lib/validation.js";
 
 export interface InfosEntreprise {
   entreprise: {
@@ -184,6 +185,27 @@ export interface ModifierEntrepriseInput {
 export function modifierEntreprise(db: Db, idEntreprise: number, input: ModifierEntrepriseInput) {
   const actuelle = db.select().from(schema.entreprise).where(eq(schema.entreprise.idEntreprise, idEntreprise)).get();
   if (!actuelle) return undefined;
+
+  // 8.8 : types et bornes de base d'abord (« abc », décimaux, 1e30, null sur une
+  // colonne obligatoire) ; les contrôles métier détaillés suivent. Les champs
+  // dont la borne basse a son propre message plus bas n'ont ici que le contrôle de type.
+  const SANS_BORNE = Number.MIN_SAFE_INTEGER;
+  verifierEntier(input.tauxTva, "Le taux de TVA", { max: 10000 });
+  verifierEntier(input.tauxCommissionVendeurDefaut, "Le taux de commission vendeur par défaut", { max: 1000 });
+  verifierEntier(input.jalonAlerteUrgent, "Le jalon d'alerte urgent", { min: SANS_BORNE, nullable: false });
+  verifierEntier(input.jalonAlerteModere, "Le jalon d'alerte modéré", { min: SANS_BORNE, nullable: false });
+  verifierEntier(input.jalonAlerteAnticipe, "Le jalon d'alerte anticipé", { min: SANS_BORNE, nullable: false });
+  verifierEntier(input.dureeRetentionExpiresJours, "La durée de rétention des abonnements expirés", { min: SANS_BORNE, nullable: false });
+  verifierEntier(input.dureeConservationDonneesJours, "La durée de conservation des données", { min: SANS_BORNE, nullable: false });
+  verifierEntier(input.politiqueMdpLongueurMin, "La longueur minimale du mot de passe", { min: SANS_BORNE, nullable: false });
+  verifierEntier(input.delaiGraceReabonnementJours, "Le délai de grâce de réabonnement", { nullable: false });
+  verifierEntier(input.tauxGarantiePourcent, "Le taux de garantie", { min: SANS_BORNE, nullable: false });
+  verifierBooleen(input.politiqueMdpExigerMajuscule, "L'exigence de majuscule");
+  verifierBooleen(input.politiqueMdpExigerChiffre, "L'exigence de chiffre");
+  verifierBooleen(input.politiqueMdpExigerCaractereSpecial, "L'exigence de caractère spécial");
+  if (input.mentionsLegales !== undefined && input.mentionsLegales !== null && typeof input.mentionsLegales !== "string") {
+    throw new Error("Les mentions légales doivent être un texte");
+  }
 
   const jalonAlerteUrgent = input.jalonAlerteUrgent ?? actuelle.jalonAlerteUrgent;
   const jalonAlerteModere = input.jalonAlerteModere ?? actuelle.jalonAlerteModere;

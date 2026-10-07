@@ -226,6 +226,8 @@ export const abonnement = sqliteTable("abonnement", {
   echeanceIdx: index("idx_abonnement_echeance").on(t.dateFin, t.statut),
   abonneIdx: index("idx_abonnement_abonne").on(t.idAbonne),
   comptePartageIdx: index("idx_abonnement_compte_partage").on(t.idComptePartage),
+  // 11.1 : listes d'alertes et d'expirés du tableau de bord, cloisonnées par site
+  siteStatutFinIdx: index("idx_abonnement_site_statut_fin").on(t.siteId, t.statut, t.dateFin),
 }));
 
 export const materielAbonne = sqliteTable("materiel_abonne", {
@@ -398,7 +400,10 @@ export const facture = sqliteTable("facture", {
   creePar: integer("cree_par").notNull().references(() => utilisateur.idUser),
   dateCreation: text("date_creation").notNull().default(now),
   jetonVerification: text("jeton_verification").notNull().default(jetonAleatoire),
-});
+}, (t) => ({
+  // 11.1 : indicateurs du jour et courbe de CA = factures d'un site, d'un statut, sur une plage de dates
+  siteStatutDateIdx: index("idx_facture_site_statut_date").on(t.siteId, t.statut, t.dateCreation),
+}));
 
 export const ligneVente = sqliteTable("ligne_vente", {
   idLigne: integer("id_ligne").primaryKey({ autoIncrement: true }),
@@ -422,7 +427,9 @@ export const ligneVente = sqliteTable("ligne_vente", {
   // 6.4 : sur une ligne d'AVOIR, pointe vers la ligne de la facture d'origine
   // corrigée — permet d'empêcher de créditer plus que ce qui a été facturé
   ligneOrigineId: integer("ligne_origine_id").references((): AnySQLiteColumn => ligneVente.idLigne),
-});
+}, (t) => ({
+  factureIdx: index("idx_ligne_vente_facture").on(t.idFacture),
+}));
 
 export const paiement = sqliteTable("paiement", {
   idPaiement: integer("id_paiement").primaryKey({ autoIncrement: true }),
@@ -455,6 +462,8 @@ export const paiement = sqliteTable("paiement", {
 }, (t) => ({
   // idempotence des callbacks Orange Money : un même événement ne doit jamais créer deux paiements
   referenceUnique: uniqueIndex("idx_paiement_reference").on(t.referenceTransaction),
+  factureIdx: index("idx_paiement_facture").on(t.idFacture),
+  dateIdx: index("idx_paiement_date").on(t.datePaiement),
 }));
 
 // 6.6 : suivi d'une transaction de paiement mobile (Orange Money et

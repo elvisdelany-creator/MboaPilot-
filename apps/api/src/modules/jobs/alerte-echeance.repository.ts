@@ -1,5 +1,5 @@
-import { eq } from "drizzle-orm";
-import { classerUrgenceEcheance, joursAvantEcheance } from "@mboapilot/shared";
+import { and, eq, gte, lte } from "drizzle-orm";
+import { classerUrgenceEcheance, decalerJour, joursAvantEcheance } from "@mboapilot/shared";
 import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
 import { trouverDureeRetentionExpiresParSite, trouverJalonsAlerteParSite } from "../entreprise/entreprise.repository.js";
@@ -28,9 +28,17 @@ export function listerAlertesEcheance(db: Db, siteId: number, aujourdHui: string
     .from(schema.abonnement)
     .innerJoin(schema.abonne, eq(schema.abonnement.idAbonne, schema.abonne.idAbonne))
     .innerJoin(schema.formule, eq(schema.abonnement.idFormule, schema.formule.idFormule))
-    .where(eq(schema.abonnement.siteId, siteId))
+    .where(
+      and(
+        eq(schema.abonnement.siteId, siteId),
+        eq(schema.abonnement.statut, "ACTIF"),
+        // 11.1 : seuls les abonnements à échéance sous le jalon le plus anticipé
+        // intéressent la liste — filtré en SQL (index site/statut/date de fin)
+        gte(schema.abonnement.dateFin, aujourdHui),
+        lte(schema.abonnement.dateFin, decalerJour(aujourdHui, Math.max(jalonsConfigures.urgent, jalonsConfigures.modere, jalonsConfigures.anticipe))),
+      ),
+    )
     .all()
-    .filter((l) => l.abonnement.statut === "ACTIF")
     .filter((l) => idFamille === undefined || l.formule.idFamille === idFamille);
 
   return lignes
@@ -70,9 +78,14 @@ export function listerAbonnementsExpires(db: Db, siteId: number, aujourdHui: str
     .from(schema.abonnement)
     .innerJoin(schema.abonne, eq(schema.abonnement.idAbonne, schema.abonne.idAbonne))
     .innerJoin(schema.formule, eq(schema.abonnement.idFormule, schema.formule.idFormule))
-    .where(eq(schema.abonnement.siteId, siteId))
+    .where(
+      and(
+        eq(schema.abonnement.siteId, siteId),
+        eq(schema.abonnement.statut, "EXPIRE"),
+        gte(schema.abonnement.dateFin, decalerJour(aujourdHui, -dureeRetention)),
+      ),
+    )
     .all()
-    .filter((l) => l.abonnement.statut === "EXPIRE")
     .filter((l) => idFamille === undefined || l.formule.idFamille === idFamille);
 
   return lignes

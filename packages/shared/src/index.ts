@@ -15,7 +15,7 @@ export { calculerCoutMoyenPondere } from "./cout-moyen-pondere.js";
 export { calculerMarge, type MargeArticle, type MargeCalculee, type MargeType } from "./marge-article.js";
 export { peutTransitionnerPaiementMobile, type StatutPaiementMobile } from "./statut-paiement-mobile.js";
 export { validerMigrationFormule, type FormuleMigration, type ResultatValidationMigration } from "./migration-formule.js";
-export { genererPlageJours } from "./plage-jours.js";
+export { decalerJour, genererPlageJours } from "./plage-jours.js";
 export { peutAffecterEcran } from "./compte-partage-streaming.js";
 export { calculerMontantTaxe, extraireTaxeDuTTC } from "./taxe.js";
 export { analyserCsv, construireCsv } from "./csv.js";

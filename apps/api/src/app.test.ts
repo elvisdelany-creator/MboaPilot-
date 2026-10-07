@@ -4768,3 +4768,32 @@ describe("Attribution des actions à l'utilisateur authentifié (11.5)", () => {
     expect(reglement.utilisateurId).toBe(idGerant);
   });
 });
+
+// 11.1 : le tableau de bord filtre désormais les factures par plage de dates
+// en SQL — un paramètre `aujourdHui` absent ou mal formé doit être refusé
+// proprement (400), pas faire échouer le calcul de la plage en 500.
+describe("Tableau de bord : paramètre aujourdHui (11.1)", () => {
+  const ROUTES = ["indicateurs", "evolution-ca", "encaissements-jour", "ventilation-ca", "marge-par-article"];
+
+  it.each(ROUTES)("%s : 400 si aujourdHui est absent ou n'est pas une date AAAA-MM-JJ", async (route) => {
+    creerUtilisateur(db, { siteId, nom: "G", prenom: "G", identifiant: "gerant-tb", motDePasse: "motdepasse-secret", role: "GERANT" });
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const token = await connecter(app, "gerant-tb");
+
+    for (const query of ["", "?aujourdHui=", "?aujourdHui=hier", "?aujourdHui=2026-13-45", "?aujourdHui=2026-02-30"]) {
+      const reponse = await app.inject({ method: "GET", url: `/api/v1/tableau-bord/${route}${query}`, headers: authHeader(token) });
+      expect(reponse.statusCode, `${route}${query}`).toBe(400);
+      expect(reponse.json().message).toMatch(/date/i);
+    }
+  });
+
+  it.each(ROUTES)("%s : 200 avec une date valide", async (route) => {
+    creerUtilisateur(db, { siteId, nom: "G", prenom: "G", identifiant: "gerant-tb", motDePasse: "motdepasse-secret", role: "GERANT" });
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const token = await connecter(app, "gerant-tb");
+
+    const reponse = await app.inject({ method: "GET", url: `/api/v1/tableau-bord/${route}?aujourdHui=2026-02-28`, headers: authHeader(token) });
+
+    expect(reponse.statusCode).toBe(200);
+  });
+});

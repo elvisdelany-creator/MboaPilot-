@@ -1,5 +1,5 @@
-import { and, eq, inArray } from "drizzle-orm";
-import { genererPlageJours } from "@mboapilot/shared";
+import { and, eq, gte, inArray, lt } from "drizzle-orm";
+import { decalerJour, genererPlageJours } from "@mboapilot/shared";
 import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
 import { listerAlertesEcheance } from "../jobs/alerte-echeance.repository.js";
@@ -19,18 +19,31 @@ function construireSignesFactures(factures: { idFacture: number; type: string }[
   return new Map(factures.map((f) => [f.idFacture, f.type === "AVOIR" ? -1 : 1]));
 }
 
+// 11.1 : factures VALIDEES d'un site sur un jour donné — filtrées en SQL (index
+// site/statut/date) : charger toutes les factures du site pour filtrer en
+// mémoire coûtait 1 à 2 s à 150 000 factures.
+function facturesValideesDuJour(db: Db, siteId: number, jour: string) {
+  return db
+    .select()
+    .from(schema.facture)
+    .where(
+      and(
+        eq(schema.facture.siteId, siteId),
+        eq(schema.facture.statut, "VALIDEE"),
+        gte(schema.facture.dateCreation, jour),
+        lt(schema.facture.dateCreation, decalerJour(jour, 1)),
+      ),
+    )
+    .all();
+}
+
 // 9.3 : cartons KPI en tête de tableau de bord. La marge est "estimée" (et
 // non recalculée historiquement) : elle s'appuie sur la marge courante de
 // l'article (6.1), pas sur un instantané au moment de la vente. Les lignes
 // d'abonnement/kit ne portent pas de marge dans le modèle actuel (5.1.1 ne
 // prévoit pas de coût de revient pour les formules — non tranché ici).
 export function calculerIndicateursJour(db: Db, siteId: number, aujourdHui: string): IndicateursJour {
-  const facturesJour = db
-    .select()
-    .from(schema.facture)
-    .where(and(eq(schema.facture.siteId, siteId), eq(schema.facture.statut, "VALIDEE")))
-    .all()
-    .filter((f) => f.dateCreation.slice(0, 10) === aujourdHui);
+  const facturesJour = facturesValideesDuJour(db, siteId, aujourdHui);
 
   const chiffreAffairesJour = facturesJour.reduce((total, f) => total + f.montantTotal, 0);
 
@@ -71,9 +84,8 @@ export function calculerEvolutionCA(db: Db, siteId: number, aujourdHui: string, 
   const factures = db
     .select()
     .from(schema.facture)
-    .where(and(eq(schema.facture.siteId, siteId), eq(schema.facture.statut, "VALIDEE")))
-    .all()
-    .filter((f) => f.dateCreation.slice(0, 10) >= premierJour);
+    .where(and(eq(schema.facture.siteId, siteId), eq(schema.facture.statut, "VALIDEE"), gte(schema.facture.dateCreation, premierJour)))
+    .all();
 
   const montantParJour = new Map<string, number>();
 
@@ -86,8 +98,9 @@ export function calculerEvolutionCA(db: Db, siteId: number, aujourdHui: string, 
     const factureParId = new Map(factures.map((f) => [f.idFacture, f]));
     const idsFactures = factures.map((f) => f.idFacture);
     const lignes = idsFactures.length > 0 ? db.select().from(schema.ligneVente).where(inArray(schema.ligneVente.idFacture, idsFactures)).all() : [];
+    const resoudreFamille = creerResolveurFamilleLigne(db);
     for (const ligne of lignes) {
-      if (resoudreLibelleFamilleLigne(db, ligne) !== libelleFamille) continue;
+      if (resoudreFamille(ligne) !== libelleFamille) continue;
       const facture = factureParId.get(ligne.idFacture)!;
       const jour = facture.dateCreation.slice(0, 10);
       montantParJour.set(jour, (montantParJour.get(jour) ?? 0) + ligne.prixApplique);
@@ -120,9 +133,8 @@ export function listerEncaissementsJour(db: Db, siteId: number, aujourdHui: stri
     .select({ paiement: schema.paiement })
     .from(schema.paiement)
     .innerJoin(schema.facture, eq(schema.paiement.idFacture, schema.facture.idFacture))
-    .where(eq(schema.facture.siteId, siteId))
-    .all()
-    .filter((l) => l.paiement.datePaiement.slice(0, 10) === aujourdHui);
+    .where(and(eq(schema.facture.siteId, siteId), gte(schema.paiement.datePaiement, aujourdHui), lt(schema.paiement.datePaiement, decalerJour(aujourdHui, 1))))
+    .all();
 
   const totalParMode = new Map<string, number>();
   for (const l of lignes) totalParMode.set(l.paiement.mode, (totalParMode.get(l.paiement.mode) ?? 0) + l.paiement.montant);
@@ -137,6 +149,22 @@ const LIBELLE_AUTRE = "Autre";
 // résout le libellé de famille d'une ligne de vente : famille d'abonnement
 // (ligne rattachée à un abonnement ou à un kit), sinon Produits & Services
 // / SAV selon le type d'article (5.2, 5.3), pour couvrir toute nature de vente.
+//
+// 11.1 : une même formule/kit/article revient sur des milliers de lignes — le
+// résolveur mémorise le résultat par origine au lieu de relire la base à chaque ligne.
+function creerResolveurFamilleLigne(db: Db): (ligne: typeof schema.ligneVente.$inferSelect) => string {
+  const memo = new Map<string, string>();
+  return (ligne) => {
+    const cle = `${ligne.numeroAbonnement ?? ""}|${ligne.idKit ?? ""}|${ligne.idProduit ?? ""}`;
+    let libelle = memo.get(cle);
+    if (libelle === undefined) {
+      libelle = resoudreLibelleFamilleLigne(db, ligne);
+      memo.set(cle, libelle);
+    }
+    return libelle;
+  };
+}
+
 function resoudreLibelleFamilleLigne(db: Db, ligne: typeof schema.ligneVente.$inferSelect): string {
   if (ligne.numeroAbonnement !== null) {
     const abonnement = db.select().from(schema.abonnement).where(eq(schema.abonnement.numeroAbonnement, ligne.numeroAbonnement)).get();
@@ -166,19 +194,15 @@ export interface VentilationCAFamille {
 // streaming, structurellement identiques, 5.9) apparaît sous son propre
 // libellé ; le hors-abonnement se regroupe sous Produits & Services / SAV.
 export function calculerVentilationCAJour(db: Db, siteId: number, aujourdHui: string): VentilationCAFamille[] {
-  const facturesJour = db
-    .select()
-    .from(schema.facture)
-    .where(and(eq(schema.facture.siteId, siteId), eq(schema.facture.statut, "VALIDEE")))
-    .all()
-    .filter((f) => f.dateCreation.slice(0, 10) === aujourdHui);
+  const facturesJour = facturesValideesDuJour(db, siteId, aujourdHui);
 
   const idsFactures = facturesJour.map((f) => f.idFacture);
   const lignes = idsFactures.length > 0 ? db.select().from(schema.ligneVente).where(inArray(schema.ligneVente.idFacture, idsFactures)).all() : [];
 
   const totalParLibelle = new Map<string, number>();
+  const resoudreFamille = creerResolveurFamilleLigne(db);
   for (const ligne of lignes) {
-    const libelle = resoudreLibelleFamilleLigne(db, ligne);
+    const libelle = resoudreFamille(ligne);
     totalParLibelle.set(libelle, (totalParLibelle.get(libelle) ?? 0) + ligne.prixApplique);
   }
 
@@ -198,21 +222,19 @@ export interface MargeArticle {
 // d'abonnement/kit/option sont ignorées, pas de coût de revient prévu pour
 // les formules (5.1.1 — non tranché).
 export function calculerMargeParArticleJour(db: Db, siteId: number, aujourdHui: string): MargeArticle[] {
-  const facturesJour = db
-    .select()
-    .from(schema.facture)
-    .where(and(eq(schema.facture.siteId, siteId), eq(schema.facture.statut, "VALIDEE")))
-    .all()
-    .filter((f) => f.dateCreation.slice(0, 10) === aujourdHui);
+  const facturesJour = facturesValideesDuJour(db, siteId, aujourdHui);
 
   const idsFactures = facturesJour.map((f) => f.idFacture);
   const lignes = idsFactures.length > 0 ? db.select().from(schema.ligneVente).where(inArray(schema.ligneVente.idFacture, idsFactures)).all() : [];
 
   const signeParFacture = construireSignesFactures(facturesJour);
   const margeParProduit = new Map<number, MargeArticle>();
+  const idsProduits = [...new Set(lignes.filter((l) => l.idProduit !== null).map((l) => l.idProduit as number))];
+  const produits = idsProduits.length > 0 ? db.select().from(schema.produit).where(inArray(schema.produit.idProduit, idsProduits)).all() : [];
+  const produitParId = new Map(produits.map((p) => [p.idProduit, p]));
   for (const ligne of lignes) {
     if (ligne.idProduit === null) continue;
-    const produit = db.select().from(schema.produit).where(eq(schema.produit.idProduit, ligne.idProduit)).get();
+    const produit = produitParId.get(ligne.idProduit);
     if (!produit) continue;
 
     const entree = margeParProduit.get(produit.idProduit) ?? { idProduit: produit.idProduit, libelle: produit.libelle, quantiteVendue: 0, margeEstimee: 0 };

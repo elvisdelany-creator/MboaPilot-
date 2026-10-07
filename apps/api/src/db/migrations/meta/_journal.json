@@ -218,6 +218,13 @@
       "when": 1789466846200,
       "tag": "0030_chunky_crusher_hogan",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "6",
+      "when": 1791331228694,
+      "tag": "0031_sudden_squadron_sinister",
+      "breakpoints": true
     }
   ]
 }

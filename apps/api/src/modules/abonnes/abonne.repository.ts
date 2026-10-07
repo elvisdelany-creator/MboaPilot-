@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { joursAvantEcheance, normaliserLibelle } from "@mboapilot/shared";
 import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
@@ -99,11 +99,26 @@ export function listerAbonnesEligiblesAnonymisationAutomatique(
 ): AbonneEligibleAnonymisation[] {
   const abonnes = db.select().from(schema.abonne).all().filter((a) => a.nom !== PLACEHOLDER_NOM_ANONYMISE);
 
+  // 11.1 : une seule agrégation pour tous les abonnés (et non une requête par
+  // abonné) — le job quotidien bloquait l'API ~8 s à 50 000 abonnés
+  const syntheseParAbonne = new Map(
+    db
+      .select({
+        idAbonne: schema.abonnement.idAbonne,
+        derniereFin: sql<string>`max(${schema.abonnement.dateFin})`,
+        nombreActifs: sql<number>`sum(${schema.abonnement.statut} = 'ACTIF')`,
+      })
+      .from(schema.abonnement)
+      .groupBy(schema.abonnement.idAbonne)
+      .all()
+      .map((r) => [r.idAbonne, r]),
+  );
+
   return abonnes
     .map((abonne) => {
-      const abonnements = db.select().from(schema.abonnement).where(eq(schema.abonnement.idAbonne, abonne.idAbonne)).all();
-      const aUnAbonnementActif = abonnements.some((ab) => ab.statut === "ACTIF");
-      const derniereActivite = abonnements.length > 0 ? abonnements.map((ab) => ab.dateFin).sort().at(-1)! : abonne.dateCreation.slice(0, 10);
+      const synthese = syntheseParAbonne.get(abonne.idAbonne);
+      const aUnAbonnementActif = (synthese?.nombreActifs ?? 0) > 0;
+      const derniereActivite = synthese ? synthese.derniereFin : abonne.dateCreation.slice(0, 10);
       return { abonne, aUnAbonnementActif, derniereActivite };
     })
     .filter((a) => !a.aUnAbonnementActif)

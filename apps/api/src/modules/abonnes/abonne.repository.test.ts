@@ -279,4 +279,28 @@ describe("listerAbonnesEligiblesAnonymisationAutomatique (11.3)", () => {
 
     expect(listerAbonnesEligiblesAnonymisationAutomatique(db, "2026-01-01", 1095)).toHaveLength(0); // le plus récent (2025-12-01) est trop proche
   });
+
+  // 11.1 : constaté en test grandeur nature (50 000 abonnés) — une requête par
+  // abonné bloquait l'API ~8 s à chaque exécution du job quotidien. Le nombre
+  // de requêtes ne doit pas dépendre du nombre d'abonnés.
+  it("n'émet pas une requête par abonné (nombre de requêtes constant)", () => {
+    for (let i = 0; i < 40; i++) {
+      const abonne = creerAbonne(db, { siteId, nom: `Nom${i}`, prenom: "P", telephone: `69000${String(i).padStart(4, "0")}` });
+      db.insert(schema.abonnement)
+        .values({ idAbonne: abonne.idAbonne, idFormule, siteId, dateDebut: "2020-01-01", dateFin: "2020-01-31", statut: "EXPIRE", creePar: userId })
+        .run();
+    }
+    let requetes = 0;
+    const dbEspion = new Proxy(db, {
+      get(cible, propriete, recepteur) {
+        if (propriete === "select" || propriete === "all" || propriete === "get") requetes++;
+        return Reflect.get(cible, propriete, recepteur);
+      },
+    });
+
+    const eligibles = listerAbonnesEligiblesAnonymisationAutomatique(dbEspion, "2026-01-01", 1095);
+
+    expect(eligibles).toHaveLength(40);
+    expect(requetes).toBeLessThanOrEqual(3);
+  });
 });

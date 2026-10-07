@@ -4797,3 +4797,38 @@ describe("Tableau de bord : paramètre aujourdHui (11.1)", () => {
     expect(reponse.statusCode).toBe(200);
   });
 });
+
+// 8.1, 4.5 : constaté par fuzz des routes GET — sans paramètre `q`, la recherche
+// d'abonnés répondait 500 (« Cannot read properties of undefined ») ; un `q` vide
+// renvoyait tous les abonnés du site (50 000 lignes à la volumétrie visée).
+describe("GET /api/v1/abonnes : paramètre de recherche q (4.5)", () => {
+  async function chercher(url: string) {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const token = await connecter(app);
+    db.insert(schema.abonne).values({ siteId, nom: "Nga", prenom: "Valentin", telephone: "690000000" }).run();
+    return app.inject({ method: "GET", url, headers: authHeader(token) });
+  }
+
+  it("400 si q est absent", async () => {
+    const reponse = await chercher("/api/v1/abonnes");
+    expect(reponse.statusCode).toBe(400);
+    expect(reponse.json().erreur).toMatch(/recherche/i);
+  });
+
+  it("400 si q est répété (tableau)", async () => {
+    const reponse = await chercher("/api/v1/abonnes?q=a&q=b");
+    expect(reponse.statusCode).toBe(400);
+  });
+
+  it.each(["q=", "q=%20%20"])("un terme vide (%s) ne renvoie aucun abonné au lieu de toute la base", async (query) => {
+    const reponse = await chercher(`/api/v1/abonnes?${query}`);
+    expect(reponse.statusCode).toBe(200);
+    expect(reponse.json()).toEqual([]);
+  });
+
+  it("trouve toujours un abonné par son nom", async () => {
+    const reponse = await chercher("/api/v1/abonnes?q=nga");
+    expect(reponse.statusCode).toBe(200);
+    expect(reponse.json()).toHaveLength(1);
+  });
+});

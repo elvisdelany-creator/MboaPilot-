@@ -34,7 +34,18 @@ export function registerAbonnesRoutes(
     "/api/v1/abonnes",
     { preHandler: [guards.authRequis, guards.rechercheAbonnes] },
     async (request, reply) => {
-      const resultats = rechercherAbonnes(db, request.user.siteId, request.query.q);
+      const { q } = request.query;
+      if (typeof q !== "string") {
+        reply.code(400).send({ erreur: "Le terme de recherche est obligatoire" });
+        return;
+      }
+      // un terme vide « contient » tout : sans ce garde-fou, la recherche renverrait
+      // tous les abonnés du site (jusqu'à 50 000 lignes, 11.1)
+      if (!q.trim()) {
+        reply.code(200).send([]);
+        return;
+      }
+      const resultats = rechercherAbonnes(db, request.user.siteId, q);
       reply.code(200).send(resultats);
     }
   );

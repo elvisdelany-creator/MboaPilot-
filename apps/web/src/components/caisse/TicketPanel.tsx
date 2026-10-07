@@ -415,6 +415,12 @@ export function TicketPanel({
       </div>
 
       <div className="space-y-2 border-t border-border p-4">
+        {/* un recrutement exige un client : sans cette aide, les boutons grisés ne disent pas pourquoi */}
+        {formuleSelectionnee && !abonneSelectionne && (
+          <p id="ticket-aide-client" className="text-xs text-muted-foreground">
+            Sélectionnez ou créez un client pour valider ce recrutement.
+          </p>
+        )}
         {/* 6.7 : estimation imprimable avant encaissement — distincte de la facture BROUILLON */}
         <Button
           type="button"
@@ -422,6 +428,7 @@ export function TicketPanel({
           size="sm"
           className="w-full cursor-pointer gap-2"
           disabled={!abonneSelectionne || !formuleSelectionnee}
+          aria-describedby={formuleSelectionnee && !abonneSelectionne ? "ticket-aide-client" : undefined}
           onClick={onImprimerProForma}
         >
           <FileText className="size-4" />
@@ -432,6 +439,7 @@ export function TicketPanel({
           size="lg"
           className="h-12 w-full cursor-pointer text-base"
           disabled={!pretAValider}
+          aria-describedby={formuleSelectionnee && !abonneSelectionne ? "ticket-aide-client" : undefined}
           onClick={valider}
         >
           {enCours ? "Encaissement…" : modePaiement === "MOBILE_MONEY" ? "Initier le paiement Mobile Money" : "Valider et encaisser"}

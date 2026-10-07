@@ -28,6 +28,7 @@ import { registerImpressionRoutes } from "./modules/impression/impression.routes
 import { registerVerificationRoutes } from "./modules/verification/verification.routes.js";
 import { ImprimanteReseauTcp } from "./modules/impression/imprimante-reseau-tcp.js";
 import type { FournisseurImpression } from "./modules/impression/fournisseur.js";
+import { dossierLogos, dossierPhotosSav, dossierSauvegardes } from "./config/chemins.js";
 
 export interface BuildAppOptions {
   jwtSecret: string;
@@ -134,18 +135,18 @@ export function buildApp(db: Db, options: BuildAppOptions) {
   registerCatalogueRoutes(app, db, { authRequis, gestionCatalogue, lectureInterne });
   registerJobsRoutes(app, db, { authRequis, ventes, admin, lectureFinanciere });
   registerProduitsRoutes(app, db, { authRequis, ventes, gestionCatalogue, lectureInterne });
-  registerSavRoutes(app, db, options.dossierPhotosSav ?? "./data/sav-photos", { authRequis, ventes, sav });
+  registerSavRoutes(app, db, options.dossierPhotosSav ?? dossierPhotosSav(), { authRequis, ventes, sav });
   registerApporteursRoutes(app, db, { authRequis, ventes, gestionApporteurs, consultationApporteurs });
   registerStockRoutes(app, db, { authRequis, ventes, gestionStock, lectureInterne });
   registerPaiementMobileRoutes(app, db, fournisseurPaiementMobile, { authRequis, ventes });
   registerTableauBordRoutes(app, db, { authRequis, ventes, pilotage });
   registerUtilisateursRoutes(app, db, { authRequis, admin });
-  registerEntrepriseRoutes(app, db, options.dossierLogos ?? "./data/logos", { authRequis, gestionParametres });
+  registerEntrepriseRoutes(app, db, options.dossierLogos ?? dossierLogos(), { authRequis, gestionParametres });
   registerComptesPartagesRoutes(app, db, { authRequis, ventes, gestionComptesPartages });
   // 5.2, 5.3, 8.5 : vente rapide de produits/services hors abonnement
   registerVentesRoutes(app, db, { authRequis, ventes });
   // 2.6 : sauvegardes et export manuel des données
-  registerSauvegardeRoutes(app, db, options.dossierSauvegardes ?? "./data/backups", { authRequis, admin });
+  registerSauvegardeRoutes(app, db, options.dossierSauvegardes ?? dossierSauvegardes(), { authRequis, admin });
   // 6.4 : correction d'une facture VALIDEE par avoir
   registerAvoirRoutes(app, db, { authRequis, ventes, gestionAvoirs, lectureFinanciere, gestionRapprochement });
   // 10.4 : état de la licence éditeur, consultable par tout utilisateur connecté

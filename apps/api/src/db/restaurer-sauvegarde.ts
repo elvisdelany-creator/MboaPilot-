@@ -9,8 +9,9 @@
 import { copyFileSync, existsSync, mkdirSync, renameSync } from "node:fs";
 import { dirname } from "node:path";
 import Database from "better-sqlite3";
+import { cheminBase } from "../config/chemins.js";
 
-const DB_PATH = process.env.MBOAPILOT_DB_PATH ?? "./data/mboapilot.db";
+const DB_PATH = cheminBase();
 const cheminSauvegarde = process.argv[2];
 
 if (!cheminSauvegarde) {

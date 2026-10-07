@@ -3,8 +3,9 @@ import { drizzle } from "drizzle-orm/better-sqlite3";
 import { migrate } from "drizzle-orm/better-sqlite3/migrator";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
+import { cheminBase } from "../config/chemins.js";
 
-const DB_PATH = process.env.MBOAPILOT_DB_PATH ?? "./data/mboapilot.db";
+const DB_PATH = cheminBase();
 mkdirSync(dirname(DB_PATH), { recursive: true });
 
 const sqlite = new Database(DB_PATH);

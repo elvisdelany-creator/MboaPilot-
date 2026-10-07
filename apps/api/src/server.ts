@@ -5,11 +5,12 @@ import { obtenirSecretJwt } from "./config/jwt-secret.js";
 import { planifierJobQuotidien } from "./jobs/planificateur.js";
 import { planifierSauvegardeQuotidienne } from "./jobs/planificateur-sauvegarde.js";
 import { revaliderLicence } from "./modules/licence/licence.service.js";
+import { dossierSauvegardes as dossierSauvegardesConfigure } from "./config/chemins.js";
 
 // 2.6 : base restaurée ou application mise à jour — mise à niveau avant toute requête
 appliquerMigrations(db);
 
-const dossierSauvegardes = process.env.MBOAPILOT_BACKUPS_DIR ?? "./data/backups";
+const dossierSauvegardes = dossierSauvegardesConfigure();
 const app = buildApp(db, { jwtSecret: obtenirSecretJwt(), dossierSauvegardes });
 const port = Number(process.env.PORT ?? 3001);
 

@@ -1,12 +1,13 @@
 import { randomBytes } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
+import { cheminSecretJwt } from "./chemins.js";
 
 // Mode local (2.2) : aucune configuration externe requise pour démarrer. Si
 // JWT_SECRET n'est pas fourni, un secret est généré une fois et persisté sur
 // disque pour que les sessions survivent aux redémarrages. En mode hébergé
 // (2.3) ou en marque blanche multi-tenant, définir JWT_SECRET explicitement.
-export function obtenirSecretJwt(cheminSecret = "./data/.jwt-secret"): string {
+export function obtenirSecretJwt(cheminSecret = cheminSecretJwt()): string {
   if (process.env.JWT_SECRET) return process.env.JWT_SECRET;
 
   if (existsSync(cheminSecret)) return readFileSync(cheminSecret, "utf-8").trim();

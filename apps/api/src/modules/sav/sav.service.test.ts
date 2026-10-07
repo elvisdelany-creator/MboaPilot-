@@ -284,3 +284,22 @@ describe("changerStatutSav — TVA figée sur la facture (3.2.3, 6.1, 8.8)", () 
     expect(facture?.montantTaxe).toBe(833); // 5000 TTC -> HT 4167, taxe 833
   });
 });
+
+// 5.10 : constaté par fuzz de types — la pièce était insérée AVANT le mouvement
+// de stock : une quantité illisible ou un produit inconnu laissait une pièce
+// « utilisée » orpheline (sans mouvement ni décrément de stock).
+describe("affecterPieceSav : entrées invalides (5.10)", () => {
+  it.each(["abc", 1.5, Number.NaN, 0, -2, null, undefined])("refuse la quantité %s sans rien enregistrer", (quantite) => {
+    expect(() => affecterPieceSav(db, { idDossierSav, idProduit: idProduitPiece, quantite: quantite as never, userId })).toThrow(/quantité/i);
+
+    expect(db.select().from(schema.savPieceUtilisee).all()).toHaveLength(0);
+    expect(db.select().from(schema.stockMouvement).all()).toHaveLength(0);
+    expect(db.select().from(schema.produit).where(eq(schema.produit.idProduit, idProduitPiece)).get()?.quantiteStock).toBe(10);
+  });
+
+  it("un produit inconnu ne laisse aucune pièce orpheline", () => {
+    expect(() => affecterPieceSav(db, { idDossierSav, idProduit: 999999, quantite: 1, userId })).toThrow(/introuvable/i);
+
+    expect(db.select().from(schema.savPieceUtilisee).all()).toHaveLength(0);
+  });
+});

@@ -3,6 +3,7 @@ import type { Kit as KitCalcul } from "@mboapilot/shared";
 import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
 import { construireKitCalcul } from "./kit-mapper.js";
+import { verifierEntier } from "../../lib/validation.js";
 
 export type CatalogueKit = KitCalcul & { idKit: number; idFamille: number; libelle: string };
 
@@ -72,7 +73,9 @@ export function creerFormule(db: Db, input: CreerFormuleInput) {
   if (!input.libelle.trim()) throw new Error("Le libellé de la formule est obligatoire");
   // 7.4 : un prix négatif se propage tel quel dans le différentiel de
   // migration (cible.prix - actuelle.prix), sans garde-fou de ce côté
-  if (input.prix < 0) throw new Error("Le prix de la formule ne peut pas être négatif");
+  verifierEntier(input.prix, "Le prix de la formule", { requis: true, nullable: false });
+  verifierEntier(input.rang, "Le rang de la formule", { requis: true, nullable: false });
+  verifierEntier(input.dureeCycles, "La durée en cycles de la formule", { min: 1, nullable: false, message: "La durée en cycles de la formule doit être d'au moins 1" });
 
   return db
     .insert(schema.formule)
@@ -101,7 +104,9 @@ export interface ModifierFormuleInput {
 // mais disparaît du catalogue de vente (listerCatalogue filtre actif = 1)
 export function modifierFormule(db: Db, idFormule: number, input: ModifierFormuleInput) {
   if (input.libelle !== undefined && !input.libelle.trim()) throw new Error("Le libellé de la formule est obligatoire");
-  if (input.prix !== undefined && input.prix < 0) throw new Error("Le prix de la formule ne peut pas être négatif");
+  verifierEntier(input.prix, "Le prix de la formule", { nullable: false });
+  verifierEntier(input.rang, "Le rang de la formule", { nullable: false });
+  verifierEntier(input.dureeCycles, "La durée en cycles de la formule", { min: 1, nullable: false, message: "La durée en cycles de la formule doit être d'au moins 1" });
 
   return db
     .update(schema.formule)
@@ -131,7 +136,7 @@ export interface CreerOptionInput {
 
 export function creerOption(db: Db, input: CreerOptionInput) {
   if (!input.libelle.trim()) throw new Error("Le libellé de l'option est obligatoire");
-  if (input.prix < 0) throw new Error("Le prix de l'option ne peut pas être négatif");
+  verifierEntier(input.prix, "Le prix de l'option", { requis: true, nullable: false });
   return db.insert(schema.optionComplement).values({ libelle: input.libelle, prix: input.prix }).returning().get();
 }
 
@@ -142,7 +147,7 @@ export interface ModifierOptionInput {
 
 export function modifierOption(db: Db, idOption: number, input: ModifierOptionInput) {
   if (input.libelle !== undefined && !input.libelle.trim()) throw new Error("Le libellé de l'option est obligatoire");
-  if (input.prix !== undefined && input.prix < 0) throw new Error("Le prix de l'option ne peut pas être négatif");
+  verifierEntier(input.prix, "Le prix de l'option", { nullable: false });
 
   return db
     .update(schema.optionComplement)
@@ -184,6 +189,7 @@ export interface LierOptionFormuleInput {
 // remplace le prix par défaut de l'option pour cette formule) — idempotent :
 // relier une paire déjà liée met simplement à jour le prix de surcharge
 export function lierOptionFormule(db: Db, input: LierOptionFormuleInput) {
+  verifierEntier(input.prixSurcharge, "Le prix de surcharge de l'option");
   const existant = db
     .select()
     .from(schema.formuleOptionCompat)
@@ -228,11 +234,9 @@ export interface CreerKitInput {
 // 5.1.1 : un prix négatif sur l'un de ces champs se propage tel quel dans
 // calculerPrixKit (packages/shared), quelle que soit la règle de prix
 function validerPrixKit(input: { prixFixe?: number; prixParaboleAccessoires?: number; prixKitReference?: number }) {
-  if (input.prixFixe !== undefined && input.prixFixe < 0) throw new Error("Le prix fixe du kit ne peut pas être négatif");
-  if (input.prixParaboleAccessoires !== undefined && input.prixParaboleAccessoires < 0) {
-    throw new Error("Le prix de la parabole/des accessoires ne peut pas être négatif");
-  }
-  if (input.prixKitReference !== undefined && input.prixKitReference < 0) throw new Error("Le prix de référence du kit ne peut pas être négatif");
+  verifierEntier(input.prixFixe, "Le prix fixe du kit");
+  verifierEntier(input.prixParaboleAccessoires, "Le prix de la parabole/des accessoires du kit");
+  verifierEntier(input.prixKitReference, "Le prix de référence du kit");
 }
 
 export function creerKit(db: Db, input: CreerKitInput) {
@@ -297,7 +301,7 @@ export interface DefinirPrixDecodeurInput {
 // grille de prix décodeur par formule (règle PRIX_DECODEUR_VARIABLE_SELON_FORMULE) —
 // idempotent, comme lierOptionFormule
 export function definirPrixDecodeurKit(db: Db, input: DefinirPrixDecodeurInput) {
-  if (input.prixDecodeur < 0) throw new Error("Le prix du décodeur ne peut pas être négatif");
+  verifierEntier(input.prixDecodeur, "Le prix du décodeur", { requis: true, nullable: false });
 
   const existant = db
     .select()
@@ -336,6 +340,7 @@ export interface ComposantKitInput {
 // 5.1, 5.2 : composition physique d'un kit ("produit composé") — idempotent,
 // comme definirPrixDecodeurKit, mais concerne l'inventaire, jamais le prix.
 export function definirComposantKit(db: Db, input: ComposantKitInput) {
+  verifierEntier(input.quantite, "La quantité du composant", { min: 1, requis: true, nullable: false, message: "La quantité du composant doit être d'au moins 1" });
   const existant = db
     .select()
     .from(schema.kitComposant)

@@ -332,3 +332,94 @@ describe("Back-office catalogue (8.8) : familles, formules, options — sans int
     });
   });
 });
+
+// 8.8 : constaté par fuzz de types sur l'API en test grandeur nature — seuls les
+// montants négatifs étaient refusés : « abc », 1.5 ou 1e30 étaient stockés tels
+// quels dans les colonnes entières (prix, rang, durée, quantités), et se
+// propageaient dans les calculs de prix des kits et des différentiels.
+describe("catalogue : montants et entiers invalides refusés (8.8)", () => {
+  const INVALIDES: unknown[] = ["abc", 1.5, Number.NaN, 1e30, { x: 1 }];
+
+  function famille() {
+    return creerFamille(db, { libelle: "DSTV" });
+  }
+
+  it.each(INVALIDES)("creerFormule refuse un prix %s", (prix) => {
+    const f = famille();
+    expect(() => creerFormule(db, { idFamille: f.idFamille, libelle: "COMPAQ", prix: prix as never, rang: 1 })).toThrow(/prix de la formule/i);
+    expect(listerFormules(db, f.idFamille)).toHaveLength(0);
+  });
+
+  it.each(INVALIDES)("creerFormule refuse un rang %s", (rang) => {
+    const f = famille();
+    expect(() => creerFormule(db, { idFamille: f.idFamille, libelle: "COMPAQ", prix: 1000, rang: rang as never })).toThrow(/rang/i);
+  });
+
+  it("creerFormule exige un rang", () => {
+    const f = famille();
+    expect(() => creerFormule(db, { idFamille: f.idFamille, libelle: "COMPAQ", prix: 1000 } as never)).toThrow(/rang/i);
+  });
+
+  it.each(INVALIDES)("creerFormule refuse une durée en cycles %s", (dureeCycles) => {
+    const f = famille();
+    expect(() => creerFormule(db, { idFamille: f.idFamille, libelle: "COMPAQ", prix: 1000, rang: 1, dureeCycles: dureeCycles as never })).toThrow(/durée/i);
+  });
+
+  it("creerFormule refuse une durée en cycles nulle ou négative", () => {
+    const f = famille();
+    expect(() => creerFormule(db, { idFamille: f.idFamille, libelle: "COMPAQ", prix: 1000, rang: 1, dureeCycles: 0 })).toThrow(/durée/i);
+  });
+
+  it.each([["prix"], ["rang"], ["dureeCycles"]])("modifierFormule refuse %s = « abc » sans modifier la formule", (champ) => {
+    const f = famille();
+    const formule = creerFormule(db, { idFamille: f.idFamille, libelle: "COMPAQ", prix: 1000, rang: 1 });
+
+    expect(() => modifierFormule(db, formule.idFormule, { [champ]: "abc" } as never)).toThrow();
+    expect(listerFormules(db, f.idFamille)[0]).toMatchObject({ prix: 1000, rang: 1 });
+  });
+
+  it.each(INVALIDES)("creerOption et modifierOption refusent un prix %s", (prix) => {
+    expect(() => creerOption(db, { libelle: "English Plus", prix: prix as never })).toThrow(/prix de l'option/i);
+    const option = creerOption(db, { libelle: "English Plus", prix: 2000 });
+    expect(() => modifierOption(db, option.idOption, { prix: prix as never })).toThrow(/prix de l'option/i);
+    expect(listerOptions(db)[0].prix).toBe(2000);
+  });
+
+  it.each(["abc", 1.5, -3])("lierOptionFormule refuse un prix de surcharge %s", (prixSurcharge) => {
+    const f = famille();
+    const formule = creerFormule(db, { idFamille: f.idFamille, libelle: "COMPAQ", prix: 1000, rang: 1 });
+    const option = creerOption(db, { libelle: "English Plus", prix: 2000 });
+
+    expect(() => lierOptionFormule(db, { idFormule: formule.idFormule, idOption: option.idOption, prixSurcharge: prixSurcharge as never })).toThrow(/surcharge/i);
+    expect(listerOptions(db)[0].formulesCompatibles).toHaveLength(0);
+  });
+
+  it.each([["prixFixe"], ["prixParaboleAccessoires"], ["prixKitReference"]])("creerKit et modifierKit refusent %s = « abc » ou décimal", (champ) => {
+    const f = famille();
+    for (const invalide of ["abc", 1.5]) {
+      expect(() => creerKit(db, { idFamille: f.idFamille, libelle: "Kit", reglePrix: "PRIX_FIXE", prixFixe: 5000, [champ]: invalide } as never)).toThrow(/kit|parabole/i);
+    }
+    const kit = creerKit(db, { idFamille: f.idFamille, libelle: "Kit", reglePrix: "PRIX_FIXE", prixFixe: 5000 });
+    expect(() => modifierKit(db, kit.idKit, { [champ]: "abc" } as never)).toThrow(/kit|parabole/i);
+    expect(listerKits(db, f.idFamille)[0].prixFixe).toBe(5000);
+  });
+
+  it.each(["abc", 1.5])("definirPrixDecodeurKit refuse un prix %s", (prixDecodeur) => {
+    const f = famille();
+    const formule = creerFormule(db, { idFamille: f.idFamille, libelle: "COMPAQ", prix: 1000, rang: 1 });
+    const kit = creerKit(db, { idFamille: f.idFamille, libelle: "Kit", reglePrix: "PRIX_DECODEUR_VARIABLE_SELON_FORMULE" });
+
+    expect(() => definirPrixDecodeurKit(db, { idKit: kit.idKit, idFormule: formule.idFormule, prixDecodeur: prixDecodeur as never })).toThrow(/décodeur/i);
+  });
+
+  it.each(["abc", 1.5, 0, -2])("definirComposantKit refuse une quantité %s", (quantite) => {
+    const f = famille();
+    const kit = creerKit(db, { idFamille: f.idFamille, libelle: "Kit", reglePrix: "PRIX_FIXE", prixFixe: 5000 });
+    const ent = db.insert(schema.entreprise).values({ nom: "Boutique" }).returning().get();
+    const site = db.insert(schema.site).values({ idEntreprise: ent.idEntreprise, nom: "Site A" }).returning().get();
+    const produit = db.insert(schema.produit).values({ siteId: site.idSite, type: "BIEN", libelle: "Câble", prixVente: 1000 }).returning().get();
+
+    expect(() => definirComposantKit(db, { idKit: kit.idKit, idProduit: produit.idProduit, quantite: quantite as never })).toThrow(/quantité/i);
+    expect(listerComposantsKit(db, kit.idKit)).toHaveLength(0);
+  });
+});

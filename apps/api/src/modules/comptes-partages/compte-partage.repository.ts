@@ -2,6 +2,7 @@ import { and, eq } from "drizzle-orm";
 import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
 import { chiffrer, dechiffrer } from "../../config/chiffrement.js";
+import { verifierEntier } from "../../lib/validation.js";
 
 export interface CreerComptePartageInput {
   siteId: number;
@@ -38,7 +39,7 @@ function dechiffrerCompte<T extends { identifiant: string | null; motDePasse: st
 // visibilité en clair reste restreinte au niveau des routes aux rôles de vente.
 export function creerComptePartage(db: Db, input: CreerComptePartageInput) {
   if (!input.libelle.trim()) throw new Error("Le libellé du compte partagé est obligatoire");
-  if (input.nombreEcransMax <= 0) throw new Error("Le nombre d'écrans autorisés doit être positif");
+  verifierEntier(input.nombreEcransMax, "Le nombre d'écrans autorisés", { min: 1, requis: true, nullable: false, message: "Le nombre d'écrans autorisés doit être positif" });
 
   const compte = db
     .insert(schema.comptePartageStreaming)
@@ -87,7 +88,7 @@ export interface ModifierComptePartageInput {
 
 export function modifierComptePartage(db: Db, idComptePartage: number, input: ModifierComptePartageInput) {
   if (input.libelle !== undefined && !input.libelle.trim()) throw new Error("Le libellé du compte partagé est obligatoire");
-  if (input.nombreEcransMax !== undefined && input.nombreEcransMax <= 0) throw new Error("Le nombre d'écrans autorisés doit être positif");
+  verifierEntier(input.nombreEcransMax, "Le nombre d'écrans autorisés", { min: 1, nullable: false, message: "Le nombre d'écrans autorisés doit être positif" });
 
   // 5.9 : une capacité réduite en dessous des écrans déjà occupés recréerait,
   // par un autre chemin, l'état que le recrutement (peutAffecterEcran) est

@@ -187,3 +187,19 @@ describe("construireFicheComptePartage", () => {
     expect(construireFicheComptePartage(db, 999999)).toBeUndefined();
   });
 });
+
+// 5.9 : constaté par fuzz de types — « abc » ou un décimal passait la garde
+// `<= 0` et s'enregistrait comme capacité d'écrans.
+describe("nombreEcransMax invalide (5.9)", () => {
+  it.each(["abc", 1.5, Number.NaN, 1e30, null, undefined])("creerComptePartage refuse la capacité %s", (nombreEcransMax) => {
+    expect(() => creerComptePartage(db, { siteId, idFamille, libelle: "Netflix famille", nombreEcransMax: nombreEcransMax as never })).toThrow(/écrans/i);
+    expect(listerComptesPartages(db, siteId)).toHaveLength(0);
+  });
+
+  it.each(["abc", 1.5, Number.NaN, 0])("modifierComptePartage refuse la capacité %s sans modifier le compte", (nombreEcransMax) => {
+    const compte = creerComptePartage(db, { siteId, idFamille, libelle: "Netflix famille", nombreEcransMax: 4 });
+
+    expect(() => modifierComptePartage(db, compte.idComptePartage, { nombreEcransMax: nombreEcransMax as never })).toThrow(/écrans/i);
+    expect(trouverComptePartage(db, compte.idComptePartage)?.nombreEcransMax).toBe(4);
+  });
+});

@@ -98,3 +98,29 @@ describe("trouverSite (8.7)", () => {
     expect(trouverSite(db, 999999)).toBeUndefined();
   });
 });
+
+// 11.4 : constaté par fuzz de types — le port d'imprimante « abc » ou décimal
+// était stocké tel quel, et l'impression tentait ensuite de s'y connecter.
+describe("modifierSite : imprimante invalide (11.4)", () => {
+  it.each(["abc", 1.5, Number.NaN, 0, 70000, -1, null])("refuse le port d'imprimante %s sans modifier le site", (port) => {
+    const site = creerSite(db, { idEntreprise, nom: "Site A" });
+
+    expect(() => modifierSite(db, site.idSite, { imprimanteHote: "192.168.1.50", imprimantePort: port as never })).toThrow(/port/i);
+    expect(trouverSite(db, site.idSite)).toMatchObject({ imprimanteHote: null, imprimantePort: null });
+  });
+
+  it("accepte un port valide", () => {
+    const site = creerSite(db, { idEntreprise, nom: "Site A" });
+    expect(modifierSite(db, site.idSite, { imprimanteHote: "192.168.1.50", imprimantePort: 9100 })?.imprimantePort).toBe(9100);
+  });
+
+  it.each([123, { x: 1 }])("refuse un hôte d'imprimante qui n'est pas un texte : %s", (hote) => {
+    const site = creerSite(db, { idEntreprise, nom: "Site A" });
+    expect(() => modifierSite(db, site.idSite, { imprimanteHote: hote as never })).toThrow(/hôte/i);
+  });
+
+  it("refuse un « actif » qui n'est pas un booléen", () => {
+    const site = creerSite(db, { idEntreprise, nom: "Site A" });
+    expect(() => modifierSite(db, site.idSite, { actif: "non" as never })).toThrow(/actif/i);
+  });
+});

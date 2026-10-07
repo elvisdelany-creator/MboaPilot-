@@ -27,6 +27,11 @@ export interface EnregistrerMouvementParams {
 // mouvement et maintient à jour le cache produit.quantite_stock en un même
 // geste, pour que les deux ne puissent jamais diverger.
 export function enregistrerMouvement(db: Db, params: EnregistrerMouvementParams) {
+  // dernier rempart avant l'écriture : une quantité texte ou décimale serait
+  // journalisée puis ferait échouer la mise à jour du stock (mouvement orphelin)
+  if (typeof params.quantite !== "number" || !Number.isSafeInteger(params.quantite)) {
+    throw new Error("La quantité du mouvement de stock doit être un nombre entier");
+  }
   const produit = db.select().from(schema.produit).where(eq(schema.produit.idProduit, params.idProduit)).get();
   if (!produit) throw new Error(`Produit ${params.idProduit} introuvable`);
 

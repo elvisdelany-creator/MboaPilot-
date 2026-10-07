@@ -10,6 +10,7 @@ import {
   receptionnerAchat,
 } from "./stock.service.js";
 import * as schema from "../../db/schema.js";
+import { enregistrerMouvement } from "./stock.repository.js";
 
 let db: Db;
 let siteId: number;
@@ -235,5 +236,51 @@ describe("decrementerComposantsKit (5.1, 5.2 : kit \"produit composé\")", () =>
     expect(() => decrementerComposantsKit(db, { idKit: idKitSansComposant, siteId, userId })).not.toThrow();
     const decodeur = db.select().from(schema.produit).where(eq(schema.produit.idProduit, idProduit)).get();
     expect(decodeur?.quantiteStock).toBe(10); // inchangé
+  });
+});
+
+// 5.2 : constaté en test grandeur nature — les gardes `quantite <= 0` sont
+// fausses pour « abc » ou NaN, qui passaient jusqu'à enregistrerMouvement : le
+// mouvement était journalisé avec une quantité texte, puis la mise à jour du
+// stock (stock + NaN) échouait, laissant un mouvement orphelin et un stock
+// désynchronisé de son journal.
+describe("mouvements de stock : quantités et coûts invalides (5.2)", () => {
+  const INVALIDES: unknown[] = ["abc", 1.5, Number.NaN, 1e30, null, undefined];
+
+  function etat() {
+    return {
+      stock: db.select().from(schema.produit).where(eq(schema.produit.idProduit, idProduit)).get()!,
+      mouvements: db.select().from(schema.stockMouvement).all().length,
+    };
+  }
+
+  it.each(INVALIDES)("receptionnerAchat refuse la quantité %s sans rien modifier", (quantite) => {
+    const avant = etat();
+    expect(() => receptionnerAchat(db, { idProduit, siteId, quantite: quantite as never, coutUnitaire: 2000, userId })).toThrow(/quantité reçue/i);
+    expect(etat()).toEqual(avant);
+  });
+
+  it.each(["abc", 1.5, Number.NaN, null, undefined])("receptionnerAchat refuse le coût unitaire %s sans rien modifier", (coutUnitaire) => {
+    const avant = etat();
+    expect(() => receptionnerAchat(db, { idProduit, siteId, quantite: 5, coutUnitaire: coutUnitaire as never, userId })).toThrow(/coût unitaire/i);
+    expect(etat()).toEqual(avant);
+  });
+
+  it.each(INVALIDES)("enregistrerCasse refuse la quantité %s sans rien modifier", (quantite) => {
+    const avant = etat();
+    expect(() => enregistrerCasse(db, { idProduit, siteId, quantite: quantite as never, motif: "Casse", userId })).toThrow(/quantité de casse/i);
+    expect(etat()).toEqual(avant);
+  });
+
+  it.each(INVALIDES)("ajusterInventaire refuse la quantité comptée %s sans rien modifier", (quantiteComptee) => {
+    const avant = etat();
+    expect(() => ajusterInventaire(db, { idProduit, siteId, quantiteComptee: quantiteComptee as never, motif: "Comptage", userId })).toThrow(/quantité comptée/i);
+    expect(etat()).toEqual(avant);
+  });
+
+  it("enregistrerMouvement refuse en dernier recours une quantité non entière, sans journaliser", () => {
+    const avant = etat();
+    expect(() => enregistrerMouvement(db, { idProduit, siteId, typeMouvement: "VENTE", quantite: "abc" as never, utilisateurId: userId })).toThrow(/quantité/i);
+    expect(etat()).toEqual(avant);
   });
 });

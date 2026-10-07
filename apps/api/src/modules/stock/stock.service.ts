@@ -3,6 +3,7 @@ import { calculerCoutMoyenPondere, joursAvantEcheance } from "@mboapilot/shared"
 import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
 import { enregistrerMouvement } from "./stock.repository.js";
+import { verifierEntier } from "../../lib/validation.js";
 
 export interface ReceptionnerAchatParams {
   idProduit: number;
@@ -16,8 +17,8 @@ export interface ReceptionnerAchatParams {
 // revient en coût moyen pondéré (CUMP) plutôt que de l'écraser par le
 // dernier prix d'achat.
 export function receptionnerAchat(db: Db, params: ReceptionnerAchatParams) {
-  if (params.quantite <= 0) throw new Error("La quantité reçue doit être positive");
-  if (params.coutUnitaire < 0) throw new Error("Le coût unitaire d'achat ne peut pas être négatif");
+  verifierEntier(params.quantite, "La quantité reçue", { min: 1, requis: true, nullable: false, message: "La quantité reçue doit être positive" });
+  verifierEntier(params.coutUnitaire, "Le coût unitaire d'achat", { requis: true, nullable: false });
 
   const produitAvant = db.select().from(schema.produit).where(eq(schema.produit.idProduit, params.idProduit)).get();
   if (!produitAvant) throw new Error(`Produit ${params.idProduit} introuvable`);
@@ -50,11 +51,11 @@ export interface EnregistrerCasseParams {
 
 // 5.2 : casse / perte / retour fournisseur — motif obligatoire, non rattaché à une vente
 export function enregistrerCasse(db: Db, params: EnregistrerCasseParams) {
-  if (!params.motif.trim()) throw new Error("Un motif est obligatoire pour une casse ou une perte");
+  if (typeof params.motif !== "string" || !params.motif.trim()) throw new Error("Un motif est obligatoire pour une casse ou une perte");
   // 5.2 : CASSE applique toujours une soustraction (signe -1 sur la
   // magnitude, stock.repository.ts) — une quantité négative inverserait ce
   // signe et augmenterait le stock au lieu de constater une perte
-  if (params.quantite <= 0) throw new Error("La quantité de casse ou de perte doit être positive");
+  verifierEntier(params.quantite, "La quantité de casse ou de perte", { min: 1, requis: true, nullable: false, message: "La quantité de casse ou de perte doit être positive" });
 
   return enregistrerMouvement(db, {
     idProduit: params.idProduit,
@@ -78,11 +79,11 @@ export interface AjusterInventaireParams {
 // justification obligatoire (le rôle habilité à valider est imposé côté
 // route via RBAC, pas ici).
 export function ajusterInventaire(db: Db, params: AjusterInventaireParams) {
-  if (!params.motif.trim()) throw new Error("Un motif est obligatoire pour un ajustement d'inventaire");
+  if (typeof params.motif !== "string" || !params.motif.trim()) throw new Error("Un motif est obligatoire pour un ajustement d'inventaire");
   // 5.2 : contrairement au stock théorique (qui peut légitimement devenir
   // négatif — vente au-delà du stock disponible), un comptage physique
   // négatif n'a aucun sens : on ne compte jamais "-5 articles" sur une étagère
-  if (params.quantiteComptee < 0) throw new Error("La quantité comptée ne peut pas être négative");
+  verifierEntier(params.quantiteComptee, "La quantité comptée", { requis: true, nullable: false, message: "La quantité comptée ne peut pas être négative" });
 
   const produit = db.select().from(schema.produit).where(eq(schema.produit.idProduit, params.idProduit)).get();
   if (!produit) throw new Error(`Produit ${params.idProduit} introuvable`);

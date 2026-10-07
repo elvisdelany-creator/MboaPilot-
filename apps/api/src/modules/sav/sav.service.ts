@@ -8,6 +8,7 @@ import { SimulateurNotification } from "../notifications/simulateur-notification
 import type { FournisseurNotification } from "../notifications/fournisseur.js";
 import { trouverTauxGarantieEntreprise, trouverTauxTvaParSite } from "../entreprise/entreprise.repository.js";
 import { creerPaiement } from "../factures/paiement.repository.js";
+import { verifierEntier } from "../../lib/validation.js";
 
 export interface AffecterPieceParams {
   idDossierSav: number;
@@ -20,18 +21,24 @@ export interface AffecterPieceParams {
 export function affecterPieceSav(db: Db, params: AffecterPieceParams) {
   const dossier = db.select().from(schema.savDossier).where(eq(schema.savDossier.idDossierSav, params.idDossierSav)).get();
   if (!dossier) throw new Error(`Dossier SAV ${params.idDossierSav} introuvable`);
+  verifierEntier(params.quantite, "La quantité de la pièce", { min: 1, requis: true, nullable: false });
+  if (!db.select().from(schema.produit).where(eq(schema.produit.idProduit, params.idProduit)).get()) throw new Error(`Produit ${params.idProduit} introuvable`);
 
-  db.insert(schema.savPieceUtilisee)
-    .values({ idDossierSav: params.idDossierSav, idProduit: params.idProduit, quantite: params.quantite })
-    .run();
+  // la pièce et son mouvement de stock vont ensemble : un produit inconnu ou
+  // une erreur de stock ne doit pas laisser une pièce « utilisée » orpheline
+  db.transaction(() => {
+    db.insert(schema.savPieceUtilisee)
+      .values({ idDossierSav: params.idDossierSav, idProduit: params.idProduit, quantite: params.quantite })
+      .run();
 
-  enregistrerMouvement(db, {
-    idProduit: params.idProduit,
-    siteId: dossier.siteId,
-    typeMouvement: "VENTE",
-    quantite: params.quantite,
-    motif: `SAV dossier ${params.idDossierSav}`,
-    utilisateurId: params.userId,
+    enregistrerMouvement(db, {
+      idProduit: params.idProduit,
+      siteId: dossier.siteId,
+      typeMouvement: "VENTE",
+      quantite: params.quantite,
+      motif: `SAV dossier ${params.idDossierSav}`,
+      utilisateurId: params.userId,
+    });
   });
 }
 

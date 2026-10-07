@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
   ArrowUpCircle,
@@ -91,6 +91,11 @@ export function ClientsPage({ onNaviguer, onReabonnerDepuisFiche }: Props) {
 
   const [terme, setTerme] = useState("");
   const [resultats, setResultats] = useState<Abonne[]>([]);
+  // « Aucun résultat » ne doit s'afficher qu'une fois la réponse reçue (et non pendant
+  // le délai de saisie ou la requête) ; le numéro de requête écarte une réponse
+  // tardive qui écraserait celle d'une saisie plus récente
+  const [rechercheEnCours, setRechercheEnCours] = useState(false);
+  const derniereRequete = useRef(0);
   const [idSelectionne, setIdSelectionne] = useState<number | null>(null);
   const [fiche, setFiche] = useState<Fiche360 | null>(null);
   const [catalogue, setCatalogue] = useState<CatalogueFamille[]>([]);
@@ -135,16 +140,21 @@ export function ClientsPage({ onNaviguer, onReabonnerDepuisFiche }: Props) {
   }, [token]);
 
   function rechargerRecherche() {
+    const numero = ++derniereRequete.current;
     if (!terme.trim()) {
       setResultats([]);
+      setRechercheEnCours(false);
       return;
     }
+    setRechercheEnCours(true);
     rechercherAbonnes(token, utilisateur.siteId, terme)
-      .then(setResultats)
-      .catch(() => setResultats([]));
+      .then((liste) => numero === derniereRequete.current && setResultats(liste))
+      .catch(() => numero === derniereRequete.current && setResultats([]))
+      .finally(() => numero === derniereRequete.current && setRechercheEnCours(false));
   }
 
   useEffect(() => {
+    if (terme.trim()) setRechercheEnCours(true);
     const identifiant = setTimeout(rechargerRecherche, 200);
     return () => clearTimeout(identifiant);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -240,7 +250,12 @@ export function ClientsPage({ onNaviguer, onReabonnerDepuisFiche }: Props) {
             />
           </div>
           <ul className="flex-1 overflow-y-auto">
-            {terme.trim() && resultats.length === 0 && <li className="p-4 text-sm text-muted-foreground">Aucun résultat.</li>}
+            {terme.trim() && resultats.length === 0 && rechercheEnCours && (
+              <li role="status" className="p-4 text-sm text-muted-foreground">
+                Recherche…
+              </li>
+            )}
+            {terme.trim() && resultats.length === 0 && !rechercheEnCours && <li className="p-4 text-sm text-muted-foreground">Aucun résultat.</li>}
             {!terme.trim() && <li className="p-4 text-sm text-muted-foreground">Recherchez un client pour voir sa fiche.</li>}
             {resultats.map((a) => (
               <li key={a.idAbonne} className="flex items-stretch border-b border-border">

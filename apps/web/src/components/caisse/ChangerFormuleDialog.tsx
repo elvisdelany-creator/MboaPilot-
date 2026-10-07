@@ -61,6 +61,8 @@ export function ChangerFormuleDialog({ numeroAbonnement, formuleActuelle, formul
     ? formulesFamille
         .map((formule) => ({ formule, validation: validerMigrationFormule(formuleActuelle, formule) }))
         .filter((c): c is { formule: Formule; validation: { autorise: true; montantDifferentiel: number } } => c.validation.autorise)
+        // de la formule immédiatement supérieure à la plus haute (et non dans l'ordre de création)
+        .sort((a, b) => a.formule.rang - b.formule.rang || a.formule.prix - b.formule.prix)
     : [];
 
   const choix = candidats.find((c) => c.formule.idFormule === idFormuleChoisie) ?? null;

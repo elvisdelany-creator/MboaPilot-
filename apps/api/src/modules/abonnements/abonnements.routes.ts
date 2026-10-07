@@ -10,6 +10,7 @@ import { reabonner, type ReabonnerParams } from "./reabonnement.service.js";
 import { echangerMateriel, type EchangerMaterielParams } from "./echange-materiel.service.js";
 import { changerFormule, type ChangerFormuleParams } from "./changement-formule.service.js";
 import { listerAbonnementsParAbonne } from "./abonnement.repository.js";
+import { envoyerErreur } from "../../lib/erreurs-api.js";
 
 const ERREUR_SITE_ABONNE = { erreur: "Cet abonné n'appartient pas à votre site" };
 const ERREUR_SITE_ABONNEMENT = { erreur: "Cet abonnement n'appartient pas à votre site" };
@@ -134,8 +135,3 @@ export function registerAbonnementsRoutes(app: FastifyInstance, db: Db, guards: 
   );
 }
 
-function envoyerErreur(reply: import("fastify").FastifyReply, erreur: unknown) {
-  const message = erreur instanceof Error ? erreur.message : "Erreur inconnue";
-  const statut = /introuvable/i.test(message) ? 404 : 400;
-  reply.code(statut).send({ erreur: message });
-}

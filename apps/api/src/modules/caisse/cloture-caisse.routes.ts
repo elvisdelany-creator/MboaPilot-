@@ -5,12 +5,7 @@ import type { Guard } from "../auth/auth.plugin.js";
 import { siteAutorise } from "../auth/auth.plugin.js";
 import * as schema from "../../db/schema.js";
 import { fermerCaisse, listerClotures, obtenirClotureOuverte, obtenirComptagesCloture, ouvrirCaisse, type ComptageInput } from "./cloture-caisse.service.js";
-
-function envoyerErreur(reply: FastifyReply, erreur: unknown) {
-  const message = erreur instanceof Error ? erreur.message : "Erreur inconnue";
-  const statut = /introuvable/i.test(message) ? 404 : 400;
-  reply.code(statut).send({ erreur: message });
-}
+import { envoyerErreur } from "../../lib/erreurs-api.js";
 
 const ERREUR_SITE_CLOTURE = { erreur: "Cette session de caisse n'appartient pas à votre site" };
 

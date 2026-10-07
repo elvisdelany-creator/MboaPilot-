@@ -3,12 +3,7 @@ import type { Db } from "../../db/types.js";
 import type { Guard, RouteGuards } from "../auth/auth.plugin.js";
 import { creerApporteur, listerApporteurs, modifierApporteur, type CreerApporteurInput, type ModifierApporteurInput } from "./apporteur.repository.js";
 import { construireFicheApporteur, enregistrerReglement } from "./apporteur.service.js";
-
-function envoyerErreur(reply: import("fastify").FastifyReply, erreur: unknown) {
-  const message = erreur instanceof Error ? erreur.message : "Erreur inconnue";
-  const statut = /introuvable/i.test(message) ? 404 : 400;
-  reply.code(statut).send({ erreur: message });
-}
+import { envoyerErreur } from "../../lib/erreurs-api.js";
 
 // 6.3, 2.5.1 : gestion des apporteurs (Administrateur/Gérant) ; consultation
 // de la fiche également accessible aux rôles de vente (pour choisir un

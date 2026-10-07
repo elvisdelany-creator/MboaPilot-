@@ -6,11 +6,7 @@ import type { Guard } from "../auth/auth.plugin.js";
 import { modifierEntreprise, trouverInfosEntrepriseParSite, type ModifierEntrepriseInput } from "./entreprise.repository.js";
 import { enregistrerLogoEntreprise, resoudreTypeMimeLogo } from "./logo.service.js";
 import { modifierSite } from "../utilisateurs/site.repository.js";
-
-function envoyerErreur(reply: FastifyReply, erreur: unknown) {
-  const message = erreur instanceof Error ? erreur.message : "Erreur inconnue";
-  reply.code(400).send({ erreur: message });
-}
+import { envoyerErreur } from "../../lib/erreurs-api.js";
 
 // 6.7 : identification de l'entreprise/site pour l'en-tête des documents
 // commerciaux (ticket de caisse, pro-forma) — accessible à tout rôle

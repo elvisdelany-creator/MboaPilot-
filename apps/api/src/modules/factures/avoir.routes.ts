@@ -8,12 +8,7 @@ import { creerAvoir, listerLignesFacture, type LigneAvoirInput } from "./avoir.s
 import { encaisserSoldeFacture, type EncaisserSoldeParams } from "./paiement-complementaire.service.js";
 import { annulerPaiement } from "./annulation-paiement.service.js";
 import { confirmerRapprochementVirement } from "./paiement.repository.js";
-
-function envoyerErreur(reply: import("fastify").FastifyReply, erreur: unknown) {
-  const message = erreur instanceof Error ? erreur.message : "Erreur inconnue";
-  const statut = /introuvable/i.test(message) ? 404 : 400;
-  reply.code(statut).send({ erreur: message });
-}
+import { envoyerErreur } from "../../lib/erreurs-api.js";
 
 const ERREUR_SITE_FACTURE = { erreur: "Cette facture n'appartient pas à votre site" };
 const ERREUR_SITE_PAIEMENT = { erreur: "Ce paiement n'appartient pas à votre site" };

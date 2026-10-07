@@ -6,12 +6,7 @@ import { modifierAbonne, rechercherAbonnes, trouverAbonne, type ModifierAbonneIn
 import { construireFiche360 } from "./fiche-360.service.js";
 import { fusionnerAbonnes, type FusionnerAbonnesParams } from "./fusion-abonnes.service.js";
 import { anonymiserAbonne } from "./anonymisation.service.js";
-
-function envoyerErreur(reply: import("fastify").FastifyReply, erreur: unknown) {
-  const message = erreur instanceof Error ? erreur.message : "Erreur inconnue";
-  const statut = /introuvable/i.test(message) ? 404 : 400;
-  reply.code(statut).send({ erreur: message });
-}
+import { envoyerErreur } from "../../lib/erreurs-api.js";
 
 const ERREUR_SITE_ABONNE = { erreur: "Cet abonné n'appartient pas à votre site" };
 

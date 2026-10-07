@@ -3,11 +3,7 @@ import type { Db } from "../../db/types.js";
 import type { Guard } from "../auth/auth.plugin.js";
 import { imprimerTicket, type ImprimerTicketParams } from "./impression.service.js";
 import type { FournisseurImpression } from "./fournisseur.js";
-
-function envoyerErreur(reply: FastifyReply, erreur: unknown) {
-  const message = erreur instanceof Error ? erreur.message : "Erreur inconnue";
-  reply.code(400).send({ erreur: message });
-}
+import { envoyerErreur } from "../../lib/erreurs-api.js";
 
 // 11.4, 6.7 : déclenche l'impression ESC/POS du ticket sur l'imprimante
 // réseau du site, si une a été configurée — mêmes rôles que la vente

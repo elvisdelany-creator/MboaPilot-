@@ -4,12 +4,7 @@ import type { RouteGuards } from "../auth/auth.plugin.js";
 import { siteAutorise } from "../auth/auth.plugin.js";
 import { trouverAbonne } from "../abonnes/abonne.repository.js";
 import { creerVenteProduits, type CreerVenteProduitsParams } from "./vente.service.js";
-
-function envoyerErreur(reply: import("fastify").FastifyReply, erreur: unknown) {
-  const message = erreur instanceof Error ? erreur.message : "Erreur inconnue";
-  const statut = /introuvable/i.test(message) ? 404 : 400;
-  reply.code(statut).send({ erreur: message });
-}
+import { envoyerErreur } from "../../lib/erreurs-api.js";
 
 // 5.2, 5.3, 8.5 : vente rapide de produits/services hors abonnement —
 // réservée aux mêmes rôles que la vente d'abonnements (2.5.1).

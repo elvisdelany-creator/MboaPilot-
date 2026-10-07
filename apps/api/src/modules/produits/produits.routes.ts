@@ -15,12 +15,7 @@ import {
   type ModifierProduitInput,
 } from "./produit.repository.js";
 import { exporterCatalogueCsv, importerCatalogueCsv } from "./catalogue-import-export.service.js";
-
-function envoyerErreur(reply: import("fastify").FastifyReply, erreur: unknown) {
-  const message = erreur instanceof Error ? erreur.message : "Erreur inconnue";
-  const statut = /introuvable/i.test(message) ? 404 : 400;
-  reply.code(statut).send({ erreur: message });
-}
+import { envoyerErreur } from "../../lib/erreurs-api.js";
 
 const ERREUR_SITE_PRODUIT = { erreur: "Ce produit n'appartient pas à votre site" };
 

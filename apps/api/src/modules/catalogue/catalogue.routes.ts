@@ -32,12 +32,7 @@ import {
   type ModifierKitInput,
   type ModifierOptionInput,
 } from "./catalogue.repository.js";
-
-function envoyerErreur(reply: FastifyReply, erreur: unknown) {
-  const message = erreur instanceof Error ? erreur.message : "Erreur inconnue";
-  const statut = /introuvable/i.test(message) ? 404 : 400;
-  reply.code(statut).send({ erreur: message });
-}
+import { envoyerErreur } from "../../lib/erreurs-api.js";
 
 // catalogue en lecture : accessible à tout utilisateur authentifié, quel que
 // soit son rôle. Le back-office (8.8 : familles, formules, options, kits —

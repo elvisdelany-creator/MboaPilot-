@@ -18,12 +18,7 @@ import { enregistrerPhotoSav, listerPhotosSav, trouverPhotoSav } from "./sav-pho
 import { listerPaiementsFacture } from "../factures/paiement.repository.js";
 import { listerAvoirsFacture } from "../factures/avoir.service.js";
 import { trouverAbonne } from "../abonnes/abonne.repository.js";
-
-function envoyerErreur(reply: import("fastify").FastifyReply, erreur: unknown) {
-  const message = erreur instanceof Error ? erreur.message : "Erreur inconnue";
-  const statut = /introuvable/i.test(message) ? 404 : 400;
-  reply.code(statut).send({ erreur: message });
-}
+import { envoyerErreur } from "../../lib/erreurs-api.js";
 
 const TAILLE_MAX_PHOTO_OCTETS = 10 * 1024 * 1024;
 

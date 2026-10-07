@@ -6,6 +6,7 @@ import { enregistrerMouvement } from "../stock/stock.repository.js";
 import { trouverTauxTvaParSite } from "../entreprise/entreprise.repository.js";
 import { creerPaiement } from "../factures/paiement.repository.js";
 import { creerAbonne, type AbonneInput } from "../abonnes/abonne.repository.js";
+import { verifierEncaissementSaisi, verifierEntier, verifierRemise } from "../../lib/validation.js";
 
 export interface LigneVenteProduitInput {
   idProduit: number;
@@ -46,10 +47,22 @@ export interface VenteResultat {
 // abonnement — décrémente le stock des produits suivis et génère la facture
 // et ses lignes de vente (5.2, tableau des mouvements de stock).
 export function creerVenteProduits(db: Db, params: CreerVenteProduitsParams): VenteResultat {
-  if (params.lignes.length === 0) throw new Error("La vente doit comporter au moins un article");
+  if (!Array.isArray(params.lignes) || params.lignes.length === 0) throw new Error("La vente doit comporter au moins un article");
+  for (const ligne of params.lignes) {
+    verifierEntier(ligne?.idProduit, "L'article", { min: 1, requis: true, nullable: false, message: "L'article de la vente est invalide" });
+    verifierEntier(ligne.quantite, "La quantité", { min: 1, requis: true, nullable: false, message: "La quantité doit être positive" });
+    verifierRemise(ligne.remise);
+  }
+  verifierEncaissementSaisi(params);
 
+  // atomique : la facture, ses lignes, les mouvements de stock et le paiement
+  // s'enregistrent ensemble — une erreur en cours de route laissait une facture
+  // à moitié créée (constaté par fuzz de types)
+  return db.transaction(() => creerVenteProduitsSansTransaction(db, params));
+}
+
+function creerVenteProduitsSansTransaction(db: Db, params: CreerVenteProduitsParams): VenteResultat {
   const lignesResolues = params.lignes.map((ligne) => {
-    if (ligne.quantite <= 0) throw new Error("La quantité doit être positive");
     const produit = db.select().from(schema.produit).where(eq(schema.produit.idProduit, ligne.idProduit)).get();
     // 2.5.2 : un produit d'un autre site n'existe pas, du point de vue de cette vente
     if (!produit || produit.siteId !== params.siteId) throw new Error(`Produit ${ligne.idProduit} introuvable`);

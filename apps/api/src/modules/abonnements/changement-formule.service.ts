@@ -4,6 +4,7 @@ import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
 import { trouverTauxTvaParSite } from "../entreprise/entreprise.repository.js";
 import { creerPaiement } from "../factures/paiement.repository.js";
+import { verifierEncaissementSaisi } from "../../lib/validation.js";
 
 export interface ChangerFormuleParams {
   siteId: number;
@@ -44,6 +45,7 @@ export interface ChangerFormuleResultat {
 // famille. Contrairement au réabonnement (7.2), les dates de la période en
 // cours ne sont jamais recalculées : seule la formule change.
 export function changerFormule(db: Db, params: ChangerFormuleParams): ChangerFormuleResultat {
+  verifierEncaissementSaisi(params);
   // atomique : la formule était modifiée et journalisée avant la validation des
   // options — une option incompatible changeait la gamme sans facture
   return db.transaction(() => changerFormuleSansTransaction(db, params));

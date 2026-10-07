@@ -2,6 +2,7 @@ import { eq, sql } from "drizzle-orm";
 import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
 import { creerPaiement } from "./paiement.repository.js";
+import { verifierEntier, verifierModeEtReferencesPaiement } from "../../lib/validation.js";
 
 export interface EncaisserSoldeParams {
   idFacture: number;
@@ -32,7 +33,8 @@ export function encaisserSoldeFacture(db: Db, params: EncaisserSoldeParams): Enc
   const facture = db.select().from(schema.facture).where(eq(schema.facture.idFacture, params.idFacture)).get();
   if (!facture) throw new Error(`Facture ${params.idFacture} introuvable`);
   if (facture.type === "AVOIR") throw new Error("Un avoir ne peut pas faire l'objet d'un encaissement complémentaire");
-  if (params.montant <= 0) throw new Error("Le montant encaissé doit être positif");
+  verifierEntier(params.montant, "Le montant encaissé", { min: 1, requis: true, nullable: false, message: "Le montant encaissé doit être positif" });
+  verifierModeEtReferencesPaiement(params);
 
   const totalPaye =
     db

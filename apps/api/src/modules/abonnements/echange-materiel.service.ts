@@ -5,6 +5,7 @@ import * as schema from "../../db/schema.js";
 import { enregistrerMouvement } from "../stock/stock.repository.js";
 import { trouverTauxGarantieEntreprise, trouverTauxTvaParSite } from "../entreprise/entreprise.repository.js";
 import { creerPaiement } from "../factures/paiement.repository.js";
+import { verifierEncaissementSaisi } from "../../lib/validation.js";
 
 export interface EchangerMaterielParams {
   siteId: number;
@@ -41,6 +42,10 @@ export interface EchangeMaterielResultat {
 // imposerait un nouveau numéro (3.2.2) est laissée à la couche appelante,
 // non tranchée arbitrairement ici.
 export function echangerMateriel(db: Db, params: EchangerMaterielParams): EchangeMaterielResultat {
+  verifierEncaissementSaisi(params);
+  if (typeof params.typeMateriel !== "string" || !params.typeMateriel.trim()) throw new Error("Le type de matériel est obligatoire");
+  if (typeof params.motif !== "string") throw new Error("Le motif de l'échange est obligatoire");
+  if (params.numeroSerie !== undefined && params.numeroSerie !== null && typeof params.numeroSerie !== "string") throw new Error("Le numéro de série doit être un texte");
   const abonnement = db
     .select()
     .from(schema.abonnement)

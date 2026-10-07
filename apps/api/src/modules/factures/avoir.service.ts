@@ -4,6 +4,7 @@ import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
 import { enregistrerMouvement } from "../stock/stock.repository.js";
 import { trouverTauxTvaParSite } from "../entreprise/entreprise.repository.js";
+import { verifierEntier } from "../../lib/validation.js";
 
 export interface LigneAvoirInput {
   idLigneOrigine: number;
@@ -34,10 +35,10 @@ export function creerAvoir(db: Db, params: CreerAvoirParams): AvoirResultat {
   if (!origine) throw new Error(`Facture ${params.idFactureOrigine} introuvable`);
   if (origine.type === "AVOIR") throw new Error("Un avoir ne peut pas lui-même faire l'objet d'un avoir");
   if (origine.statut !== "VALIDEE") throw new Error("Seule une facture VALIDEE peut faire l'objet d'un avoir");
-  if (params.lignes.length === 0) throw new Error("Un avoir doit comporter au moins une ligne");
+  if (!Array.isArray(params.lignes) || params.lignes.length === 0) throw new Error("Un avoir doit comporter au moins une ligne");
 
   const lignesAvoir = params.lignes.map((ligneInput) => {
-    if (ligneInput.quantite <= 0) throw new Error("La quantité à créditer doit être positive");
+    verifierEntier(ligneInput?.quantite, "La quantité à créditer", { min: 1, requis: true, nullable: false, message: "La quantité à créditer doit être positive" });
 
     const ligneOrigine = db.select().from(schema.ligneVente).where(eq(schema.ligneVente.idLigne, ligneInput.idLigneOrigine)).get();
     if (!ligneOrigine || ligneOrigine.idFacture !== origine.idFacture) {

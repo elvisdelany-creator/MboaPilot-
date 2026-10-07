@@ -4,6 +4,7 @@ import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
 import { trouverDelaiGraceReabonnementEntreprise, trouverTauxTvaParSite } from "../entreprise/entreprise.repository.js";
 import { creerPaiement } from "../factures/paiement.repository.js";
+import { verifierEncaissementSaisi } from "../../lib/validation.js";
 
 export interface ReabonnerParams {
   siteId: number;
@@ -39,6 +40,7 @@ export interface ReabonnementResultat {
 // 7.2 : renouvellement d'un abonnement déjà existant pour un abonné déjà connu.
 // Réutilise le même numero_abonnement (contrairement à un échange de matériel, 7.3).
 export function reabonner(db: Db, params: ReabonnerParams): ReabonnementResultat {
+  verifierEncaissementSaisi(params);
   // atomique : l'abonnement était renouvelé (dates, statut, historique) avant la
   // validation des options — une option incompatible offrait un mois sans facture
   return db.transaction(() => reabonnerSansTransaction(db, params));

@@ -15,9 +15,9 @@ export interface AbonneInput {
 }
 
 export function creerAbonne(db: Db, input: AbonneInput) {
-  if (!input.nom.trim()) throw new Error("Le nom de l'abonné est obligatoire");
-  if (!input.prenom.trim()) throw new Error("Le prénom de l'abonné est obligatoire");
-  if (!input.telephone.trim()) throw new Error("Le téléphone de l'abonné est obligatoire");
+  if (typeof input.nom !== "string" || !input.nom.trim()) throw new Error("Le nom de l'abonné est obligatoire");
+  if (typeof input.prenom !== "string" || !input.prenom.trim()) throw new Error("Le prénom de l'abonné est obligatoire");
+  if (typeof input.telephone !== "string" || !input.telephone.trim()) throw new Error("Le téléphone de l'abonné est obligatoire");
 
   return db
     .insert(schema.abonne)

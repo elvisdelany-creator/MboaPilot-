@@ -10,6 +10,7 @@ import { trouverTauxCommissionVendeurParSite, trouverTauxTvaParSite } from "../e
 import { decrementerComposantsKit } from "../stock/stock.service.js";
 import { creerPaiement } from "../factures/paiement.repository.js";
 import { creerSuiviCommissionCanalplus } from "./suivi-commission-canalplus.repository.js";
+import { verifierEncaissementSaisi } from "../../lib/validation.js";
 
 export interface RecruterAbonneParams {
   siteId: number;
@@ -62,6 +63,7 @@ const LIBELLE_FAMILLE_CANALPLUS = "CANAL+";
 // des options — une erreur à ce stade (option incompatible, kit introuvable ou
 // sans prix configuré) laissait un abonnement ACTIF sans facture ni paiement.
 export function recruterAbonne(db: Db, params: RecruterAbonneParams): RecrutementResultat {
+  verifierEncaissementSaisi(params);
   return db.transaction(() => recruterAbonneSansTransaction(db, params));
 }
 

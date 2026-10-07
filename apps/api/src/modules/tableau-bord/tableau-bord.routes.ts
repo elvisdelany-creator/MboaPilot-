@@ -17,7 +17,7 @@ import { listerResumesApporteurs } from "../apporteurs/apporteur.service.js";
 async function exigerJourValide(request: FastifyRequest, reply: FastifyReply) {
   const jour = (request.query as { aujourdHui?: string }).aujourdHui;
   const valide = typeof jour === "string" && /^\d{4}-\d{2}-\d{2}$/.test(jour) && !Number.isNaN(Date.parse(jour + "T00:00:00Z")) && new Date(jour + "T00:00:00Z").toISOString().startsWith(jour);
-  if (!valide) reply.code(400).send({ message: "Le paramètre aujourdHui doit être une date au format AAAA-MM-JJ" });
+  if (!valide) reply.code(400).send({ erreur: "Le paramètre aujourdHui doit être une date au format AAAA-MM-JJ" });
 }
 
 // 8.6, 9.3 : tableau de bord de pilotage — vue Administrateur/Gérant/Comptable

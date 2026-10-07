@@ -1,4 +1,5 @@
 import Fastify from "fastify";
+import { gestionnaireErreurFastify, gestionnaireRouteInconnue } from "./lib/erreurs-api.js";
 import multipart from "@fastify/multipart";
 import type { Db } from "./db/types.js";
 import { registerAbonnementsRoutes } from "./modules/abonnements/abonnements.routes.js";
@@ -54,6 +55,8 @@ const PREFIXES_ECRITURE_TOUJOURS_AUTORISES = ["/api/v1/auth", "/api/v1/licence",
 
 export function buildApp(db: Db, options: BuildAppOptions) {
   const app = Fastify();
+  app.setErrorHandler(gestionnaireErreurFastify);
+  app.setNotFoundHandler(gestionnaireRouteInconnue);
   registerAuthPlugin(app, options.jwtSecret);
   const authRequis = creerAuthRequis(db);
   // 5.10 : téléversement des photos optionnelles du dossier SAV (multipart/form-data)
@@ -74,7 +77,7 @@ export function buildApp(db: Db, options: BuildAppOptions) {
     const licence = obtenirOuCreerLicence(db, new Date().toISOString());
     const { etat } = calculerEtatLicence(licence, new Date().toISOString());
     if (etat === "DEGRADE") {
-      reply.code(403).send({ message: "Licence éditeur expirée : application en mode dégradé (lecture seule). Contactez votre éditeur pour réactiver l'abonnement." });
+      reply.code(403).send({ erreur: "Licence éditeur expirée : application en mode dégradé (lecture seule). Contactez votre éditeur pour réactiver l'abonnement." });
     }
   });
 

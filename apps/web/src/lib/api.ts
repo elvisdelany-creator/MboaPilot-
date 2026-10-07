@@ -51,9 +51,10 @@ const BASE = "/api/v1";
 export class ErreurAuthentification extends Error {}
 
 async function lireJson<T>(reponse: Response): Promise<T> {
-  const corps = await reponse.json();
+  // corps vide ou non JSON (réponse d'un proxy, d'un serveur arrêté) : pas d'exception technique
+  const corps = await reponse.json().catch(() => null);
   if (!reponse.ok) {
-    const message = corps?.erreur ?? "Erreur inattendue";
+    const message = corps?.erreur ?? corps?.message ?? "Erreur inattendue";
     if (reponse.status === 401) throw new ErreurAuthentification(message);
     throw new Error(message);
   }

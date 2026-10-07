@@ -4783,7 +4783,7 @@ describe("Tableau de bord : paramètre aujourdHui (11.1)", () => {
     for (const query of ["", "?aujourdHui=", "?aujourdHui=hier", "?aujourdHui=2026-13-45", "?aujourdHui=2026-02-30"]) {
       const reponse = await app.inject({ method: "GET", url: `/api/v1/tableau-bord/${route}${query}`, headers: authHeader(token) });
       expect(reponse.statusCode, `${route}${query}`).toBe(400);
-      expect(reponse.json().message).toMatch(/date/i);
+      expect(reponse.json().erreur).toMatch(/date/i);
     }
   });
 
@@ -4830,5 +4830,78 @@ describe("GET /api/v1/abonnes : paramètre de recherche q (4.5)", () => {
     const reponse = await chercher("/api/v1/abonnes?q=nga");
     expect(reponse.statusCode).toBe(200);
     expect(reponse.json()).toHaveLength(1);
+  });
+});
+
+// 10.3, 10.4 : le mode dégradé (lecture seule) n'était testé qu'au niveau du service ;
+// et son explication partait sous la clé « message » alors que l'interface ne lit que
+// « erreur » — l'utilisateur voyait « Erreur inattendue » au lieu de la raison du blocage.
+describe("mode dégradé de la licence : blocage des écritures (10.4)", () => {
+  function expirerLicence() {
+    db.insert(schema.licence).values({ empreinteInstallation: "inst-test", dateExpirationAbonnement: "2020-01-01", derniereRevalidationReussie: new Date().toISOString() }).run();
+  }
+
+  it("refuse une écriture avec une explication lisible sous la clé « erreur » (celle que l'interface affiche)", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const token = await connecter(app);
+    expirerLicence();
+
+    const reponse = await app.inject({
+      method: "POST",
+      url: "/api/v1/ventes",
+      headers: authHeader(token),
+      payload: { siteId, userId, lignes: [{ idProduit: 1, quantite: 1 }], montantEncaisse: 0 },
+    });
+
+    expect(reponse.statusCode).toBe(403);
+    expect(reponse.json().erreur).toMatch(/mode dégradé/i);
+  });
+
+  it("laisse passer les lectures, l'état de la licence et la connexion", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const token = await connecter(app);
+    expirerLicence();
+
+    const lecture = await app.inject({ method: "GET", url: "/api/v1/abonnes?q=a", headers: authHeader(token) });
+    const etat = await app.inject({ method: "GET", url: "/api/v1/licence/etat", headers: authHeader(token) });
+    const connexion = await app.inject({ method: "POST", url: "/api/v1/auth/login", payload: { identifiant: "caissier1", motDePasse: "motdepasse-secret" } });
+
+    expect(lecture.statusCode).toBe(200);
+    expect(etat.json().etat).toBe("DEGRADE");
+    expect(connexion.statusCode).toBe(200);
+  });
+
+  it("ne bloque rien tant que la licence est active", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const token = await connecter(app);
+
+    const reponse = await app.inject({
+      method: "POST",
+      url: "/api/v1/ventes",
+      headers: authHeader(token),
+      payload: { siteId, userId, lignes: [{ idProduit: 999999, quantite: 1 }], montantEncaisse: 0 },
+    });
+
+    expect(reponse.statusCode).not.toBe(403); // refusée pour un autre motif (produit introuvable), pas pour la licence
+  });
+});
+
+// Les erreurs que Fastify produit lui-même (JSON invalide, corps trop gros, exception non
+// prévue) utilisent la clé « message » et, pour les 500, citent le message interne.
+describe("erreurs générées par Fastify (format commun)", () => {
+  it("un corps JSON invalide donne une erreur lisible sous la clé « erreur »", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const token = await connecter(app);
+
+    const reponse = await app.inject({
+      method: "POST",
+      url: "/api/v1/ventes",
+      headers: { ...authHeader(token), "content-type": "application/json" },
+      payload: "{ pas du json",
+    });
+
+    expect(reponse.statusCode).toBe(400);
+    expect(typeof reponse.json().erreur).toBe("string");
+    expect(reponse.json().erreur.length).toBeGreaterThan(0);
   });
 });

@@ -414,3 +414,38 @@ describe("modifierEntreprise : valeurs de paramétrage invalides (8.8)", () => {
     expect(modifiee).toMatchObject({ tauxTva: null, tauxCommissionVendeurDefaut: null, jalonAlerteUrgent: 2, tauxGarantiePourcent: 80 });
   });
 });
+
+// 11.5 : un changement de taux de TVA, de garantie, de jalons ou de politique de mot de
+// passe modifie des montants et des droits — il doit laisser une trace immuable
+// (auteur, horodatage, valeur avant/après), comme les autres actions sensibles.
+describe("journal d'audit du paramétrage entreprise (11.5)", () => {
+  it("journalise uniquement les champs réellement modifiés, avec l'auteur", () => {
+    const ent = db.insert(schema.entreprise).values({ nom: "Boutique Test", tauxTva: 1925, tauxGarantiePourcent: 50 }).returning().get();
+    const site = db.insert(schema.site).values({ idEntreprise: ent.idEntreprise, nom: "Site A" }).returning().get();
+    const acteur = db.insert(schema.utilisateur).values({ siteId: site.idSite, nom: "A", prenom: "B", identifiant: "acteur", motDePasseHash: "h", role: "ADMINISTRATEUR" }).returning().get().idUser;
+
+    modifierEntreprise(db, ent.idEntreprise, { tauxTva: 1800, tauxGarantiePourcent: 50, mentionsLegales: "RC/1" }, acteur);
+
+    const lignes = db.select().from(schema.journalAudit).all().filter((j) => j.tableCible === "entreprise");
+    expect(lignes).toHaveLength(1);
+    expect(lignes[0]).toMatchObject({ action: "MODIFICATION", utilisateurId: acteur, idCible: String(ent.idEntreprise) });
+    expect(JSON.parse(lignes[0].valeurAvant!)).toEqual({ tauxTva: 1925, mentionsLegales: null });
+    expect(JSON.parse(lignes[0].valeurApres!)).toEqual({ tauxTva: 1800, mentionsLegales: "RC/1" });
+  });
+
+  it("ne journalise rien quand les valeurs envoyées sont identiques aux valeurs actuelles", () => {
+    const ent = db.insert(schema.entreprise).values({ nom: "Boutique Test", tauxTva: 1925 }).returning().get();
+
+    modifierEntreprise(db, ent.idEntreprise, { tauxTva: 1925 }, null);
+
+    expect(db.select().from(schema.journalAudit).all().filter((j) => j.tableCible === "entreprise")).toHaveLength(0);
+  });
+
+  it("ne journalise pas une modification refusée par la validation", () => {
+    const ent = db.insert(schema.entreprise).values({ nom: "Boutique Test" }).returning().get();
+
+    expect(() => modifierEntreprise(db, ent.idEntreprise, { tauxTva: "abc" as never }, null)).toThrow();
+
+    expect(db.select().from(schema.journalAudit).all()).toHaveLength(0);
+  });
+});

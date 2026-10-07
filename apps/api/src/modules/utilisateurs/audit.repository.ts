@@ -34,3 +34,41 @@ export function listerJournalAudit(db: Db, filtre: JournalAuditFiltre = {}) {
   const conditions = filtre.tableCible ? [eq(schema.journalAudit.tableCible, filtre.tableCible)] : [];
   return (conditions.length > 0 ? requete.where(and(...conditions)) : requete).all();
 }
+
+export type ActionAudit = "CREATION" | "MODIFICATION" | "SUPPRESSION";
+
+// 11.5 : écrit une ligne immuable du journal d'audit (auteur, horodatage, valeurs
+// avant/après). `acteurId` null = action système.
+export function journaliserAudit(
+  db: Db,
+  params: { acteurId: number | null; action: ActionAudit; tableCible: string; idCible: string | number; avant?: unknown; apres?: unknown }
+): void {
+  db.insert(schema.journalAudit)
+    .values({
+      utilisateurId: params.acteurId,
+      action: params.action,
+      tableCible: params.tableCible,
+      idCible: String(params.idCible),
+      ...(params.avant !== undefined && { valeurAvant: JSON.stringify(params.avant) }),
+      ...(params.apres !== undefined && { valeurApres: JSON.stringify(params.apres) }),
+    })
+    .run();
+}
+
+// Champs réellement modifiés entre deux états : null quand rien ne change, pour ne
+// pas polluer le journal avec des « modifications » identiques.
+export function differencesAudit(
+  avant: Record<string, unknown>,
+  apres: Record<string, unknown>,
+  champs: readonly string[]
+): { avant: Record<string, unknown>; apres: Record<string, unknown> } | null {
+  const diffAvant: Record<string, unknown> = {};
+  const diffApres: Record<string, unknown> = {};
+  for (const champ of champs) {
+    if (!Object.is(avant[champ], apres[champ])) {
+      diffAvant[champ] = avant[champ];
+      diffApres[champ] = apres[champ];
+    }
+  }
+  return Object.keys(diffAvant).length > 0 ? { avant: diffAvant, apres: diffApres } : null;
+}

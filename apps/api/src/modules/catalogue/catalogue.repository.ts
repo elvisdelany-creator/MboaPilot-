@@ -4,6 +4,7 @@ import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
 import { construireKitCalcul } from "./kit-mapper.js";
 import { verifierEntier } from "../../lib/validation.js";
+import { differencesAudit, journaliserAudit } from "../utilisateurs/audit.repository.js";
 
 export type CatalogueKit = KitCalcul & { idKit: number; idFamille: number; libelle: string };
 
@@ -69,7 +70,7 @@ export interface CreerFormuleInput {
   dureeCycles?: number;
 }
 
-export function creerFormule(db: Db, input: CreerFormuleInput) {
+export function creerFormule(db: Db, input: CreerFormuleInput, acteurId: number | null = null) {
   if (!input.libelle.trim()) throw new Error("Le libellé de la formule est obligatoire");
   // 7.4 : un prix négatif se propage tel quel dans le différentiel de
   // migration (cible.prix - actuelle.prix), sans garde-fou de ce côté
@@ -77,18 +78,28 @@ export function creerFormule(db: Db, input: CreerFormuleInput) {
   verifierEntier(input.rang, "Le rang de la formule", { requis: true, nullable: false });
   verifierEntier(input.dureeCycles, "La durée en cycles de la formule", { min: 1, nullable: false, message: "La durée en cycles de la formule doit être d'au moins 1" });
 
-  return db
-    .insert(schema.formule)
-    .values({
-      idFamille: input.idFamille,
-      libelle: input.libelle,
-      prix: input.prix,
-      rang: input.rang,
-      ...(input.modeDuree !== undefined && { modeDuree: input.modeDuree }),
-      ...(input.dureeCycles !== undefined && { dureeCycles: input.dureeCycles }),
-    })
-    .returning()
-    .get();
+  return db.transaction(() => {
+    const formule = db
+      .insert(schema.formule)
+      .values({
+        idFamille: input.idFamille,
+        libelle: input.libelle,
+        prix: input.prix,
+        rang: input.rang,
+        ...(input.modeDuree !== undefined && { modeDuree: input.modeDuree }),
+        ...(input.dureeCycles !== undefined && { dureeCycles: input.dureeCycles }),
+      })
+      .returning()
+      .get();
+    journaliserAudit(db, {
+      acteurId,
+      action: "CREATION",
+      tableCible: "formule",
+      idCible: formule.idFormule,
+      apres: { idFamille: formule.idFamille, libelle: formule.libelle, prix: formule.prix, rang: formule.rang },
+    });
+    return formule;
+  });
 }
 
 export interface ModifierFormuleInput {
@@ -102,25 +113,33 @@ export interface ModifierFormuleInput {
 
 // une formule désactivée reste dans l'historique (abonnements déjà vendus)
 // mais disparaît du catalogue de vente (listerCatalogue filtre actif = 1)
-export function modifierFormule(db: Db, idFormule: number, input: ModifierFormuleInput) {
+export function modifierFormule(db: Db, idFormule: number, input: ModifierFormuleInput, acteurId: number | null = null) {
   if (input.libelle !== undefined && !input.libelle.trim()) throw new Error("Le libellé de la formule est obligatoire");
   verifierEntier(input.prix, "Le prix de la formule", { nullable: false });
   verifierEntier(input.rang, "Le rang de la formule", { nullable: false });
   verifierEntier(input.dureeCycles, "La durée en cycles de la formule", { min: 1, nullable: false, message: "La durée en cycles de la formule doit être d'au moins 1" });
 
-  return db
-    .update(schema.formule)
-    .set({
-      ...(input.libelle !== undefined && { libelle: input.libelle }),
-      ...(input.prix !== undefined && { prix: input.prix }),
-      ...(input.rang !== undefined && { rang: input.rang }),
-      ...(input.modeDuree !== undefined && { modeDuree: input.modeDuree }),
-      ...(input.dureeCycles !== undefined && { dureeCycles: input.dureeCycles }),
-      ...(input.actif !== undefined && { actif: input.actif ? 1 : 0 }),
-    })
-    .where(eq(schema.formule.idFormule, idFormule))
-    .returning()
-    .get();
+  return db.transaction(() => {
+    const avant = db.select().from(schema.formule).where(eq(schema.formule.idFormule, idFormule)).get();
+    const apres = db
+      .update(schema.formule)
+      .set({
+        ...(input.libelle !== undefined && { libelle: input.libelle }),
+        ...(input.prix !== undefined && { prix: input.prix }),
+        ...(input.rang !== undefined && { rang: input.rang }),
+        ...(input.modeDuree !== undefined && { modeDuree: input.modeDuree }),
+        ...(input.dureeCycles !== undefined && { dureeCycles: input.dureeCycles }),
+        ...(input.actif !== undefined && { actif: input.actif ? 1 : 0 }),
+      })
+      .where(eq(schema.formule.idFormule, idFormule))
+      .returning()
+      .get();
+    if (avant && apres) {
+      const diff = differencesAudit(avant, apres, ["libelle", "prix", "rang", "modeDuree", "dureeCycles", "actif"]);
+      if (diff) journaliserAudit(db, { acteurId, action: "MODIFICATION", tableCible: "formule", idCible: idFormule, ...diff });
+    }
+    return apres;
+  });
 }
 
 // 8.8 : toutes les formules d'une famille, y compris désactivées — pour le
@@ -134,10 +153,14 @@ export interface CreerOptionInput {
   prix: number;
 }
 
-export function creerOption(db: Db, input: CreerOptionInput) {
+export function creerOption(db: Db, input: CreerOptionInput, acteurId: number | null = null) {
   if (!input.libelle.trim()) throw new Error("Le libellé de l'option est obligatoire");
   verifierEntier(input.prix, "Le prix de l'option", { requis: true, nullable: false });
-  return db.insert(schema.optionComplement).values({ libelle: input.libelle, prix: input.prix }).returning().get();
+  return db.transaction(() => {
+    const option = db.insert(schema.optionComplement).values({ libelle: input.libelle, prix: input.prix }).returning().get();
+    journaliserAudit(db, { acteurId, action: "CREATION", tableCible: "option_complement", idCible: option.idOption, apres: { libelle: option.libelle, prix: option.prix } });
+    return option;
+  });
 }
 
 export interface ModifierOptionInput {
@@ -145,19 +168,27 @@ export interface ModifierOptionInput {
   prix?: number;
 }
 
-export function modifierOption(db: Db, idOption: number, input: ModifierOptionInput) {
+export function modifierOption(db: Db, idOption: number, input: ModifierOptionInput, acteurId: number | null = null) {
   if (input.libelle !== undefined && !input.libelle.trim()) throw new Error("Le libellé de l'option est obligatoire");
   verifierEntier(input.prix, "Le prix de l'option", { nullable: false });
 
-  return db
-    .update(schema.optionComplement)
-    .set({
-      ...(input.libelle !== undefined && { libelle: input.libelle }),
-      ...(input.prix !== undefined && { prix: input.prix }),
-    })
-    .where(eq(schema.optionComplement.idOption, idOption))
-    .returning()
-    .get();
+  return db.transaction(() => {
+    const avant = db.select().from(schema.optionComplement).where(eq(schema.optionComplement.idOption, idOption)).get();
+    const apres = db
+      .update(schema.optionComplement)
+      .set({
+        ...(input.libelle !== undefined && { libelle: input.libelle }),
+        ...(input.prix !== undefined && { prix: input.prix }),
+      })
+      .where(eq(schema.optionComplement.idOption, idOption))
+      .returning()
+      .get();
+    if (avant && apres) {
+      const diff = differencesAudit(avant, apres, ["libelle", "prix"]);
+      if (diff) journaliserAudit(db, { acteurId, action: "MODIFICATION", tableCible: "option_complement", idCible: idOption, ...diff });
+    }
+    return apres;
+  });
 }
 
 export interface OptionAvecCompat {
@@ -188,8 +219,13 @@ export interface LierOptionFormuleInput {
 // lie une option à une formule (le prix de surcharge, s'il est fourni,
 // remplace le prix par défaut de l'option pour cette formule) — idempotent :
 // relier une paire déjà liée met simplement à jour le prix de surcharge
-export function lierOptionFormule(db: Db, input: LierOptionFormuleInput) {
+export function lierOptionFormule(db: Db, input: LierOptionFormuleInput, acteurId: number | null = null) {
   verifierEntier(input.prixSurcharge, "Le prix de surcharge de l'option");
+  return db.transaction(() => lierOptionFormuleSansTransaction(db, input, acteurId));
+}
+
+function lierOptionFormuleSansTransaction(db: Db, input: LierOptionFormuleInput, acteurId: number | null) {
+  const idCible = `${input.idFormule}:${input.idOption}`;
   const existant = db
     .select()
     .from(schema.formuleOptionCompat)
@@ -197,25 +233,40 @@ export function lierOptionFormule(db: Db, input: LierOptionFormuleInput) {
     .get();
 
   if (existant) {
-    return db
+    const apres = db
       .update(schema.formuleOptionCompat)
       .set({ prixSurcharge: input.prixSurcharge })
       .where(and(eq(schema.formuleOptionCompat.idFormule, input.idFormule), eq(schema.formuleOptionCompat.idOption, input.idOption)))
       .returning()
       .get();
+    const diff = differencesAudit(existant, apres, ["prixSurcharge"]);
+    if (diff) journaliserAudit(db, { acteurId, action: "MODIFICATION", tableCible: "formule_option_compat", idCible, ...diff });
+    return apres;
   }
 
-  return db
+  const cree = db
     .insert(schema.formuleOptionCompat)
     .values({ idFormule: input.idFormule, idOption: input.idOption, prixSurcharge: input.prixSurcharge })
     .returning()
     .get();
+  journaliserAudit(db, { acteurId, action: "CREATION", tableCible: "formule_option_compat", idCible, apres: { prixSurcharge: cree.prixSurcharge } });
+  return cree;
 }
 
-export function delierOptionFormule(db: Db, idFormule: number, idOption: number) {
-  db.delete(schema.formuleOptionCompat)
-    .where(and(eq(schema.formuleOptionCompat.idFormule, idFormule), eq(schema.formuleOptionCompat.idOption, idOption)))
-    .run();
+export function delierOptionFormule(db: Db, idFormule: number, idOption: number, acteurId: number | null = null) {
+  db.transaction(() => {
+    const existant = db
+      .select()
+      .from(schema.formuleOptionCompat)
+      .where(and(eq(schema.formuleOptionCompat.idFormule, idFormule), eq(schema.formuleOptionCompat.idOption, idOption)))
+      .get();
+    db.delete(schema.formuleOptionCompat)
+      .where(and(eq(schema.formuleOptionCompat.idFormule, idFormule), eq(schema.formuleOptionCompat.idOption, idOption)))
+      .run();
+    if (existant) {
+      journaliserAudit(db, { acteurId, action: "SUPPRESSION", tableCible: "formule_option_compat", idCible: `${idFormule}:${idOption}`, avant: { prixSurcharge: existant.prixSurcharge } });
+    }
+  });
 }
 
 // 5.1.1, 8.8 : règles de prix dynamique des kits — les trois variantes
@@ -239,23 +290,33 @@ function validerPrixKit(input: { prixFixe?: number; prixParaboleAccessoires?: nu
   verifierEntier(input.prixKitReference, "Le prix de référence du kit");
 }
 
-export function creerKit(db: Db, input: CreerKitInput) {
+export function creerKit(db: Db, input: CreerKitInput, acteurId: number | null = null) {
   if (!input.libelle.trim()) throw new Error("Le libellé du kit est obligatoire");
   validerPrixKit(input);
 
-  return db
-    .insert(schema.kit)
-    .values({
-      idFamille: input.idFamille,
-      libelle: input.libelle,
-      reglePrix: input.reglePrix,
-      prixFixe: input.prixFixe,
-      ...(input.prixParaboleAccessoires !== undefined && { prixParaboleAccessoires: input.prixParaboleAccessoires }),
-      idFormuleReference: input.idFormuleReference,
-      prixKitReference: input.prixKitReference,
-    })
-    .returning()
-    .get();
+  return db.transaction(() => {
+    const kit = db
+      .insert(schema.kit)
+      .values({
+        idFamille: input.idFamille,
+        libelle: input.libelle,
+        reglePrix: input.reglePrix,
+        prixFixe: input.prixFixe,
+        ...(input.prixParaboleAccessoires !== undefined && { prixParaboleAccessoires: input.prixParaboleAccessoires }),
+        idFormuleReference: input.idFormuleReference,
+        prixKitReference: input.prixKitReference,
+      })
+      .returning()
+      .get();
+    journaliserAudit(db, {
+      acteurId,
+      action: "CREATION",
+      tableCible: "kit",
+      idCible: kit.idKit,
+      apres: { libelle: kit.libelle, reglePrix: kit.reglePrix, prixFixe: kit.prixFixe, prixParaboleAccessoires: kit.prixParaboleAccessoires, prixKitReference: kit.prixKitReference },
+    });
+    return kit;
+  });
 }
 
 export interface ModifierKitInput {
@@ -267,23 +328,31 @@ export interface ModifierKitInput {
   prixKitReference?: number;
 }
 
-export function modifierKit(db: Db, idKit: number, input: ModifierKitInput) {
+export function modifierKit(db: Db, idKit: number, input: ModifierKitInput, acteurId: number | null = null) {
   if (input.libelle !== undefined && !input.libelle.trim()) throw new Error("Le libellé du kit est obligatoire");
   validerPrixKit(input);
 
-  return db
-    .update(schema.kit)
-    .set({
-      ...(input.libelle !== undefined && { libelle: input.libelle }),
-      ...(input.reglePrix !== undefined && { reglePrix: input.reglePrix }),
-      ...(input.prixFixe !== undefined && { prixFixe: input.prixFixe }),
-      ...(input.prixParaboleAccessoires !== undefined && { prixParaboleAccessoires: input.prixParaboleAccessoires }),
-      ...(input.idFormuleReference !== undefined && { idFormuleReference: input.idFormuleReference }),
-      ...(input.prixKitReference !== undefined && { prixKitReference: input.prixKitReference }),
-    })
-    .where(eq(schema.kit.idKit, idKit))
-    .returning()
-    .get();
+  return db.transaction(() => {
+    const avant = db.select().from(schema.kit).where(eq(schema.kit.idKit, idKit)).get();
+    const apres = db
+      .update(schema.kit)
+      .set({
+        ...(input.libelle !== undefined && { libelle: input.libelle }),
+        ...(input.reglePrix !== undefined && { reglePrix: input.reglePrix }),
+        ...(input.prixFixe !== undefined && { prixFixe: input.prixFixe }),
+        ...(input.prixParaboleAccessoires !== undefined && { prixParaboleAccessoires: input.prixParaboleAccessoires }),
+        ...(input.idFormuleReference !== undefined && { idFormuleReference: input.idFormuleReference }),
+        ...(input.prixKitReference !== undefined && { prixKitReference: input.prixKitReference }),
+      })
+      .where(eq(schema.kit.idKit, idKit))
+      .returning()
+      .get();
+    if (avant && apres) {
+      const diff = differencesAudit(avant, apres, ["libelle", "reglePrix", "prixFixe", "prixParaboleAccessoires", "idFormuleReference", "prixKitReference"]);
+      if (diff) journaliserAudit(db, { acteurId, action: "MODIFICATION", tableCible: "kit", idCible: idKit, ...diff });
+    }
+    return apres;
+  });
 }
 
 // 8.8 : kits d'une famille pour le back-office (lignes brutes, à la
@@ -300,9 +369,13 @@ export interface DefinirPrixDecodeurInput {
 
 // grille de prix décodeur par formule (règle PRIX_DECODEUR_VARIABLE_SELON_FORMULE) —
 // idempotent, comme lierOptionFormule
-export function definirPrixDecodeurKit(db: Db, input: DefinirPrixDecodeurInput) {
+export function definirPrixDecodeurKit(db: Db, input: DefinirPrixDecodeurInput, acteurId: number | null = null) {
   verifierEntier(input.prixDecodeur, "Le prix du décodeur", { requis: true, nullable: false });
+  return db.transaction(() => definirPrixDecodeurKitSansTransaction(db, input, acteurId));
+}
 
+function definirPrixDecodeurKitSansTransaction(db: Db, input: DefinirPrixDecodeurInput, acteurId: number | null) {
+  const idCible = `${input.idKit}:${input.idFormule}`;
   const existant = db
     .select()
     .from(schema.kitPrixDecodeur)
@@ -310,25 +383,40 @@ export function definirPrixDecodeurKit(db: Db, input: DefinirPrixDecodeurInput) 
     .get();
 
   if (existant) {
-    return db
+    const apres = db
       .update(schema.kitPrixDecodeur)
       .set({ prixDecodeur: input.prixDecodeur })
       .where(and(eq(schema.kitPrixDecodeur.idKit, input.idKit), eq(schema.kitPrixDecodeur.idFormule, input.idFormule)))
       .returning()
       .get();
+    const diff = differencesAudit(existant, apres, ["prixDecodeur"]);
+    if (diff) journaliserAudit(db, { acteurId, action: "MODIFICATION", tableCible: "kit_prix_decodeur", idCible, ...diff });
+    return apres;
   }
 
-  return db
+  const cree = db
     .insert(schema.kitPrixDecodeur)
     .values({ idKit: input.idKit, idFormule: input.idFormule, prixDecodeur: input.prixDecodeur })
     .returning()
     .get();
+  journaliserAudit(db, { acteurId, action: "CREATION", tableCible: "kit_prix_decodeur", idCible, apres: { prixDecodeur: cree.prixDecodeur } });
+  return cree;
 }
 
-export function supprimerPrixDecodeurKit(db: Db, idKit: number, idFormule: number) {
-  db.delete(schema.kitPrixDecodeur)
-    .where(and(eq(schema.kitPrixDecodeur.idKit, idKit), eq(schema.kitPrixDecodeur.idFormule, idFormule)))
-    .run();
+export function supprimerPrixDecodeurKit(db: Db, idKit: number, idFormule: number, acteurId: number | null = null) {
+  db.transaction(() => {
+    const existant = db
+      .select()
+      .from(schema.kitPrixDecodeur)
+      .where(and(eq(schema.kitPrixDecodeur.idKit, idKit), eq(schema.kitPrixDecodeur.idFormule, idFormule)))
+      .get();
+    db.delete(schema.kitPrixDecodeur)
+      .where(and(eq(schema.kitPrixDecodeur.idKit, idKit), eq(schema.kitPrixDecodeur.idFormule, idFormule)))
+      .run();
+    if (existant) {
+      journaliserAudit(db, { acteurId, action: "SUPPRESSION", tableCible: "kit_prix_decodeur", idCible: `${idKit}:${idFormule}`, avant: { prixDecodeur: existant.prixDecodeur } });
+    }
+  });
 }
 
 export interface ComposantKitInput {

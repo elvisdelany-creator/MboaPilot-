@@ -423,3 +423,106 @@ describe("catalogue : montants et entiers invalides refusés (8.8)", () => {
     expect(listerComposantsKit(db, kit.idKit)).toHaveLength(0);
   });
 });
+
+// 11.5 : « Toute action sensible doit être journalisée de façon immuable (utilisateur,
+// horodatage, valeur avant/après) : … modification de tarif catalogue » — constaté en
+// test grandeur nature : seuls les produits avaient un historique de prix ; changer le
+// prix d'une formule, d'une option ou d'un kit ne laissait aucune trace.
+describe("journal d'audit du catalogue (11.5)", () => {
+  const ACTEUR = 1;
+
+  function journal(tableCible: string) {
+    return db.select().from(schema.journalAudit).all().filter((j) => j.tableCible === tableCible);
+  }
+
+  beforeEach(() => {
+    const ent = db.insert(schema.entreprise).values({ nom: "Boutique Audit" }).returning().get();
+    const site = db.insert(schema.site).values({ idEntreprise: ent.idEntreprise, nom: "Site A" }).returning().get();
+    db.insert(schema.utilisateur).values({ siteId: site.idSite, nom: "A", prenom: "B", identifiant: "acteur", motDePasseHash: "h", role: "GERANT" }).run();
+  });
+
+  it("modifierFormule journalise le prix avant/après avec l'auteur", () => {
+    const f = creerFamille(db, { libelle: "DSTV" });
+    const formule = creerFormule(db, { idFamille: f.idFamille, libelle: "COMPAQ", prix: 13000, rang: 3 }, ACTEUR);
+
+    modifierFormule(db, formule.idFormule, { prix: 14500 }, ACTEUR);
+
+    const lignes = journal("formule");
+    expect(lignes.map((l) => l.action)).toEqual(["CREATION", "MODIFICATION"]);
+    const modification = lignes[1];
+    expect(modification.utilisateurId).toBe(ACTEUR);
+    expect(modification.idCible).toBe(String(formule.idFormule));
+    expect(JSON.parse(modification.valeurAvant!)).toEqual({ prix: 13000 });
+    expect(JSON.parse(modification.valeurApres!)).toEqual({ prix: 14500 });
+  });
+
+  it("modifierFormule ne journalise rien quand rien ne change réellement", () => {
+    const f = creerFamille(db, { libelle: "DSTV" });
+    const formule = creerFormule(db, { idFamille: f.idFamille, libelle: "COMPAQ", prix: 13000, rang: 3 }, ACTEUR);
+
+    modifierFormule(db, formule.idFormule, { prix: 13000, libelle: "COMPAQ" }, ACTEUR);
+
+    expect(journal("formule").map((l) => l.action)).toEqual(["CREATION"]);
+  });
+
+  it("la désactivation d'une formule est journalisée (actif avant/après)", () => {
+    const f = creerFamille(db, { libelle: "DSTV" });
+    const formule = creerFormule(db, { idFamille: f.idFamille, libelle: "COMPAQ", prix: 13000, rang: 3 }, ACTEUR);
+
+    modifierFormule(db, formule.idFormule, { actif: false }, ACTEUR);
+
+    const derniere = journal("formule").at(-1)!;
+    expect(JSON.parse(derniere.valeurAvant!)).toEqual({ actif: 1 });
+    expect(JSON.parse(derniere.valeurApres!)).toEqual({ actif: 0 });
+  });
+
+  it("creerOption et modifierOption journalisent le prix", () => {
+    const option = creerOption(db, { libelle: "English Plus", prix: 2000 }, ACTEUR);
+    modifierOption(db, option.idOption, { prix: 2500 }, ACTEUR);
+
+    const lignes = journal("option_complement");
+    expect(lignes.map((l) => l.action)).toEqual(["CREATION", "MODIFICATION"]);
+    expect(JSON.parse(lignes[1].valeurAvant!)).toEqual({ prix: 2000 });
+    expect(JSON.parse(lignes[1].valeurApres!)).toEqual({ prix: 2500 });
+  });
+
+  it("creerKit et modifierKit journalisent les prix du kit", () => {
+    const f = creerFamille(db, { libelle: "CANAL+" });
+    const kit = creerKit(db, { idFamille: f.idFamille, libelle: "Kit", reglePrix: "PRIX_FIXE", prixFixe: 10000 }, ACTEUR);
+    modifierKit(db, kit.idKit, { prixFixe: 11000, prixParaboleAccessoires: 500 }, ACTEUR);
+
+    const lignes = journal("kit");
+    expect(lignes.map((l) => l.action)).toEqual(["CREATION", "MODIFICATION"]);
+    expect(JSON.parse(lignes[1].valeurAvant!)).toEqual({ prixFixe: 10000, prixParaboleAccessoires: 0 });
+    expect(JSON.parse(lignes[1].valeurApres!)).toEqual({ prixFixe: 11000, prixParaboleAccessoires: 500 });
+  });
+
+  it("le prix décodeur d'un kit et la surcharge d'une option par formule sont journalisés", () => {
+    const f = creerFamille(db, { libelle: "CANAL+" });
+    const formule = creerFormule(db, { idFamille: f.idFamille, libelle: "EVASION", prix: 10500, rang: 2 }, ACTEUR);
+    const kit = creerKit(db, { idFamille: f.idFamille, libelle: "Kit", reglePrix: "PRIX_DECODEUR_VARIABLE_SELON_FORMULE" }, ACTEUR);
+    const option = creerOption(db, { libelle: "English Plus", prix: 2000 }, ACTEUR);
+
+    definirPrixDecodeurKit(db, { idKit: kit.idKit, idFormule: formule.idFormule, prixDecodeur: 7000 }, ACTEUR);
+    definirPrixDecodeurKit(db, { idKit: kit.idKit, idFormule: formule.idFormule, prixDecodeur: 7500 }, ACTEUR);
+    lierOptionFormule(db, { idFormule: formule.idFormule, idOption: option.idOption, prixSurcharge: 1500 }, ACTEUR);
+
+    const decodeur = journal("kit_prix_decodeur");
+    expect(decodeur.map((l) => l.action)).toEqual(["CREATION", "MODIFICATION"]);
+    expect(decodeur[1].idCible).toBe(`${kit.idKit}:${formule.idFormule}`);
+    expect(JSON.parse(decodeur[1].valeurAvant!)).toEqual({ prixDecodeur: 7000 });
+    expect(JSON.parse(decodeur[1].valeurApres!)).toEqual({ prixDecodeur: 7500 });
+    expect(journal("formule_option_compat")).toHaveLength(1);
+  });
+
+  it("délier une option d'une formule est journalisé (suppression)", () => {
+    const f = creerFamille(db, { libelle: "CANAL+" });
+    const formule = creerFormule(db, { idFamille: f.idFamille, libelle: "EVASION", prix: 10500, rang: 2 }, ACTEUR);
+    const option = creerOption(db, { libelle: "English Plus", prix: 2000 }, ACTEUR);
+    lierOptionFormule(db, { idFormule: formule.idFormule, idOption: option.idOption, prixSurcharge: 1500 }, ACTEUR);
+
+    delierOptionFormule(db, formule.idFormule, option.idOption, ACTEUR);
+
+    expect(journal("formule_option_compat").map((l) => l.action)).toEqual(["CREATION", "SUPPRESSION"]);
+  });
+});

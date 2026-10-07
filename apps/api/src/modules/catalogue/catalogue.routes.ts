@@ -80,7 +80,7 @@ export function registerCatalogueRoutes(app: FastifyInstance, db: Db, guards: { 
     { preHandler: [guards.authRequis, guards.gestionCatalogue] },
     async (request, reply) => {
       try {
-        reply.code(201).send(creerFormule(db, request.body));
+        reply.code(201).send(creerFormule(db, request.body, request.user.idUser));
       } catch (erreur) {
         envoyerErreur(reply, erreur);
       }
@@ -92,7 +92,7 @@ export function registerCatalogueRoutes(app: FastifyInstance, db: Db, guards: { 
     { preHandler: [guards.authRequis, guards.gestionCatalogue] },
     async (request, reply) => {
       try {
-        const formule = modifierFormule(db, Number(request.params.idFormule), request.body);
+        const formule = modifierFormule(db, Number(request.params.idFormule), request.body, request.user.idUser);
         if (!formule) throw new Error(`Formule ${request.params.idFormule} introuvable`);
         reply.code(200).send(formule);
       } catch (erreur) {
@@ -110,7 +110,7 @@ export function registerCatalogueRoutes(app: FastifyInstance, db: Db, guards: { 
     { preHandler: [guards.authRequis, guards.gestionCatalogue] },
     async (request, reply) => {
       try {
-        reply.code(201).send(creerOption(db, request.body));
+        reply.code(201).send(creerOption(db, request.body, request.user.idUser));
       } catch (erreur) {
         envoyerErreur(reply, erreur);
       }
@@ -122,7 +122,7 @@ export function registerCatalogueRoutes(app: FastifyInstance, db: Db, guards: { 
     { preHandler: [guards.authRequis, guards.gestionCatalogue] },
     async (request, reply) => {
       try {
-        const option = modifierOption(db, Number(request.params.idOption), request.body);
+        const option = modifierOption(db, Number(request.params.idOption), request.body, request.user.idUser);
         if (!option) throw new Error(`Option ${request.params.idOption} introuvable`);
         reply.code(200).send(option);
       } catch (erreur) {
@@ -136,7 +136,7 @@ export function registerCatalogueRoutes(app: FastifyInstance, db: Db, guards: { 
     { preHandler: [guards.authRequis, guards.gestionCatalogue] },
     async (request, reply) => {
       try {
-        reply.code(200).send(lierOptionFormule(db, request.body));
+        reply.code(200).send(lierOptionFormule(db, request.body, request.user.idUser));
       } catch (erreur) {
         envoyerErreur(reply, erreur);
       }
@@ -147,7 +147,7 @@ export function registerCatalogueRoutes(app: FastifyInstance, db: Db, guards: { 
     "/api/v1/catalogue/options/:idOption/compat/:idFormule",
     { preHandler: [guards.authRequis, guards.gestionCatalogue] },
     async (request, reply) => {
-      delierOptionFormule(db, Number(request.params.idFormule), Number(request.params.idOption));
+      delierOptionFormule(db, Number(request.params.idFormule), Number(request.params.idOption), request.user.idUser);
       reply.code(204).send();
     }
   );
@@ -167,7 +167,7 @@ export function registerCatalogueRoutes(app: FastifyInstance, db: Db, guards: { 
     { preHandler: [guards.authRequis, guards.gestionCatalogue] },
     async (request, reply) => {
       try {
-        reply.code(201).send(creerKit(db, request.body));
+        reply.code(201).send(creerKit(db, request.body, request.user.idUser));
       } catch (erreur) {
         envoyerErreur(reply, erreur);
       }
@@ -179,7 +179,7 @@ export function registerCatalogueRoutes(app: FastifyInstance, db: Db, guards: { 
     { preHandler: [guards.authRequis, guards.gestionCatalogue] },
     async (request, reply) => {
       try {
-        const kit = modifierKit(db, Number(request.params.idKit), request.body);
+        const kit = modifierKit(db, Number(request.params.idKit), request.body, request.user.idUser);
         if (!kit) throw new Error(`Kit ${request.params.idKit} introuvable`);
         reply.code(200).send(kit);
       } catch (erreur) {
@@ -193,7 +193,7 @@ export function registerCatalogueRoutes(app: FastifyInstance, db: Db, guards: { 
     { preHandler: [guards.authRequis, guards.gestionCatalogue] },
     async (request, reply) => {
       try {
-        reply.code(200).send(definirPrixDecodeurKit(db, request.body));
+        reply.code(200).send(definirPrixDecodeurKit(db, request.body, request.user.idUser));
       } catch (erreur) {
         envoyerErreur(reply, erreur);
       }

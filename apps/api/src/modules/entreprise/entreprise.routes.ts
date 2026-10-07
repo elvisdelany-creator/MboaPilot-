@@ -40,7 +40,7 @@ export function registerEntrepriseRoutes(app: FastifyInstance, db: Db, dossierLo
         return;
       }
       try {
-        const entreprise = modifierEntreprise(db, infosActuelles.entreprise.idEntreprise, request.body);
+        const entreprise = modifierEntreprise(db, infosActuelles.entreprise.idEntreprise, request.body, request.user.idUser);
         reply.code(200).send(entreprise);
       } catch (erreur) {
         envoyerErreur(reply, erreur);

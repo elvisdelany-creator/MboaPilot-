@@ -3,6 +3,7 @@ import { JALONS_PAR_DEFAUT, POLITIQUE_MDP_PAR_DEFAUT, type JalonsAlerte, type Po
 import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
 import { verifierBooleen, verifierEntier } from "../../lib/validation.js";
+import { differencesAudit, journaliserAudit } from "../utilisateurs/audit.repository.js";
 
 export interface InfosEntreprise {
   entreprise: {
@@ -182,7 +183,7 @@ export interface ModifierEntrepriseInput {
 // 6.1, 6.2, 4.4, 8.8 : paramétrage des taxes applicables (le cas échéant),
 // des mentions légales figurant sur les documents commerciaux (6.7), du
 // taux de commission vendeur par défaut et des jalons d'alerte d'échéance
-export function modifierEntreprise(db: Db, idEntreprise: number, input: ModifierEntrepriseInput) {
+export function modifierEntreprise(db: Db, idEntreprise: number, input: ModifierEntrepriseInput, acteurId: number | null = null) {
   const actuelle = db.select().from(schema.entreprise).where(eq(schema.entreprise.idEntreprise, idEntreprise)).get();
   if (!actuelle) return undefined;
 
@@ -252,7 +253,8 @@ export function modifierEntreprise(db: Db, idEntreprise: number, input: Modifier
     throw new Error("Le taux de commission vendeur par défaut ne peut pas être négatif");
   }
 
-  return db
+  // 11.5 : valeurs avant/après journalisées (taxes, garantie, jalons, politique de mot de passe…)
+  const apres = db
     .update(schema.entreprise)
     .set({
       ...(input.tauxTva !== undefined && { tauxTva: input.tauxTva }),
@@ -275,4 +277,25 @@ export function modifierEntreprise(db: Db, idEntreprise: number, input: Modifier
     .where(eq(schema.entreprise.idEntreprise, idEntreprise))
     .returning()
     .get();
+
+  const diff = differencesAudit(actuelle, apres, CHAMPS_AUDITES_ENTREPRISE);
+  if (diff) journaliserAudit(db, { acteurId, action: "MODIFICATION", tableCible: "entreprise", idCible: idEntreprise, ...diff });
+  return apres;
 }
+
+const CHAMPS_AUDITES_ENTREPRISE = [
+  "tauxTva",
+  "mentionsLegales",
+  "tauxCommissionVendeurDefaut",
+  "jalonAlerteUrgent",
+  "jalonAlerteModere",
+  "jalonAlerteAnticipe",
+  "dureeRetentionExpiresJours",
+  "dureeConservationDonneesJours",
+  "politiqueMdpLongueurMin",
+  "politiqueMdpExigerMajuscule",
+  "politiqueMdpExigerChiffre",
+  "politiqueMdpExigerCaractereSpecial",
+  "delaiGraceReabonnementJours",
+  "tauxGarantiePourcent",
+] as const;

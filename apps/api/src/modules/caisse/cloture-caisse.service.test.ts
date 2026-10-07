@@ -162,3 +162,48 @@ describe("obtenirClotureOuverte (13.1)", () => {
     expect(obtenirClotureOuverte(db, siteId)).toBeUndefined();
   });
 });
+
+// 13.1 : constaté en test grandeur nature — « create validates, modify doesn't » :
+// le fond d'ouverture « abc » était stocké tel quel dans une colonne entière, et
+// la fermeture acceptait des comptages vides, négatifs, décimaux ou mal formés
+// (un comptage null valait 0 : écart fantôme de tout le tiroir, caisse fermée).
+describe("validation des montants de clôture (13.1)", () => {
+  it.each([["abc"], [1.5], [Number.NaN], [null], [undefined]])("refuse un fond d'ouverture non entier : %s", (fond) => {
+    expect(() => ouvrirCaisse(db, { siteId, userId: caissierId, fondOuverture: fond as never })).toThrow(/fond de caisse/i);
+    expect(obtenirClotureOuverte(db, siteId)).toBeUndefined();
+  });
+
+  it.each([
+    ["comptages absent", undefined],
+    ["comptages null", null],
+    ["comptages non tableau", "x"],
+    ["élément null", [null]],
+    ["mode inconnu", [{ mode: "BITCOIN", montantCompte: 5 }]],
+    ["mode répété", [{ mode: "CASH", montantCompte: 5 }, { mode: "CASH", montantCompte: 6 }]],
+    ["montant texte", [{ mode: "CASH", montantCompte: "abc" }]],
+    ["montant null", [{ mode: "CASH", montantCompte: null }]],
+    ["montant négatif", [{ mode: "CASH", montantCompte: -5000 }]],
+    ["montant décimal", [{ mode: "CASH", montantCompte: 1.5 }]],
+  ])("refuse un comptage invalide (%s) sans fermer la session ni écrire de ligne", (_libelle, comptages) => {
+    const cloture = ouvrirCaisse(db, { siteId, userId: caissierId, fondOuverture: 10000 });
+
+    expect(() => fermerCaisse(db, { idCloture: cloture.idCloture, userId: caissierId, comptages: comptages as never })).toThrow(/Comptage invalide/);
+
+    expect(obtenirClotureOuverte(db, siteId)?.idCloture).toBe(cloture.idCloture);
+    expect(db.select().from(schema.clotureCaisseComptage).all()).toHaveLength(0);
+  });
+
+  it("ne laisse aucune ligne de comptage orpheline quand un mode suivant est invalide", () => {
+    const cloture = ouvrirCaisse(db, { siteId, userId: caissierId, fondOuverture: 10000 });
+
+    expect(() =>
+      fermerCaisse(db, {
+        idCloture: cloture.idCloture,
+        userId: caissierId,
+        comptages: [{ mode: "CASH", montantCompte: 10000 }, { mode: "CHEQUE", montantCompte: "abc" as never }],
+      })
+    ).toThrow(/Comptage invalide/);
+
+    expect(db.select().from(schema.clotureCaisseComptage).all()).toHaveLength(0);
+  });
+});

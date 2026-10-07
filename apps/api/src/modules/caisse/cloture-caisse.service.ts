@@ -25,6 +25,7 @@ export interface FermerCaisseParams {
 // 13.1 : "fond de caisse d'ouverture" — une seule session ouverte à la fois
 // par site, pour que le calcul du théorique (fermerCaisse) reste sans ambiguïté.
 export function ouvrirCaisse(db: Db, params: OuvrirCaisseParams) {
+  if (!Number.isInteger(params.fondOuverture)) throw new Error("Le fond de caisse d'ouverture doit être un montant entier en FCFA");
   if (params.fondOuverture < 0) throw new Error("Le fond de caisse d'ouverture ne peut pas être négatif");
 
   const dejaOuverte = obtenirClotureOuverte(db, params.siteId);
@@ -56,10 +57,29 @@ export function obtenirComptagesCloture(db: Db, idCloture: number) {
 // 13.1 : "comptage de fermeture, écart théorique/réel par mode de paiement" —
 // le théorique CASH inclut le fond d'ouverture (physiquement présent dans le
 // tiroir sans être un encaissement) ; les autres modes n'ont pas de fond.
+// valide les comptages saisis AVANT toute écriture : un montant illisible ne
+// doit ni compter pour 0 (écart fantôme sur tout le tiroir), ni laisser des
+// lignes de comptage orphelines si la fermeture échoue en cours de route.
+function verifierComptages(comptages: unknown): ComptageInput[] {
+  if (!Array.isArray(comptages)) throw new Error("Comptage invalide : la liste des comptages par mode de paiement est obligatoire");
+  const modesVus = new Set<string>();
+  for (const c of comptages) {
+    const mode = c?.mode as string | undefined;
+    if (!mode || !(MODES_PAIEMENT as readonly string[]).includes(mode)) throw new Error(`Comptage invalide : mode de paiement inconnu (${String(mode)})`);
+    if (modesVus.has(mode)) throw new Error(`Comptage invalide : le mode ${mode} est compté deux fois`);
+    modesVus.add(mode);
+    if (!Number.isInteger(c.montantCompte) || c.montantCompte < 0) {
+      throw new Error(`Comptage invalide : le montant compté (${mode}) doit être un entier positif ou nul en FCFA`);
+    }
+  }
+  return comptages as ComptageInput[];
+}
+
 export function fermerCaisse(db: Db, params: FermerCaisseParams) {
   const cloture = db.select().from(schema.clotureCaisse).where(eq(schema.clotureCaisse.idCloture, params.idCloture)).get();
   if (!cloture) throw new Error(`Session de caisse ${params.idCloture} introuvable`);
   if (cloture.statut !== "OUVERTE") throw new Error("Cette session de caisse est déjà fermée");
+  const comptagesSaisis = verifierComptages(params.comptages);
 
   // 13.1 : rien n'empêche un encaissement pendant que la caisse est "fermée"
   // (aucune session ouverte) — le théorique doit donc rattraper tout ce qui a
@@ -82,7 +102,7 @@ export function fermerCaisse(db: Db, params: FermerCaisseParams) {
       .where(and(eq(schema.facture.siteId, cloture.siteId), eq(schema.paiement.mode, mode), gte(schema.paiement.datePaiement, depuis)))
       .get();
     const montantTheorique = (mode === "CASH" ? cloture.fondOuverture : 0) + Number(paiements?.total ?? 0);
-    const montantCompte = params.comptages.find((c) => c.mode === mode)?.montantCompte ?? 0;
+    const montantCompte = comptagesSaisis.find((c) => c.mode === mode)?.montantCompte ?? 0;
     return { mode, montantTheorique, montantCompte, ecart: montantCompte - montantTheorique };
   });
 

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { decrireEntreeAudit } from "@mboapilot/shared";
 import { Plus, ShieldCheck } from "lucide-react";
 import {
   chargerJournalAudit,
@@ -272,23 +273,37 @@ export function AdministrationPage({ onNaviguer }: Props) {
               </div>
               {journal?.length === 0 && <p className="text-sm text-muted-foreground">Aucune entrée.</p>}
               <ul className="space-y-1.5">
-                {journal?.map((entree) => (
-                  <li key={entree.idAudit}>
-                    <Card className="gap-1 p-3">
-                      <div className="flex items-center justify-between gap-2 text-sm">
-                        <span className="font-medium text-card-foreground">
-                          {LIBELLES_ACTION[entree.action]} — {entree.tableCible} n° {entree.idCible}
-                        </span>
-                        <span className="text-xs text-muted-foreground">{formateurDateHeure.format(new Date(entree.dateAction))}</span>
-                      </div>
-                      <p className="text-sm text-muted-foreground">
-                        {entree.utilisateurId === null
-                          ? "Action système (tâche automatique quotidienne)"
-                          : `Par ${entree.utilisateurPrenom} ${entree.utilisateurNom}`}
-                      </p>
-                    </Card>
-                  </li>
-                ))}
+                {journal?.map((entree) => {
+                  // 11.5 : valeur avant/après de chaque changement, en clair
+                  const description = decrireEntreeAudit(entree);
+                  return (
+                    <li key={entree.idAudit}>
+                      <Card className="gap-1 p-3">
+                        <div className="flex items-center justify-between gap-2 text-sm">
+                          <span className="font-medium text-card-foreground">
+                            {LIBELLES_ACTION[entree.action]} — {description.objet} n° {description.reference}
+                          </span>
+                          <span className="text-xs text-muted-foreground">{formateurDateHeure.format(new Date(entree.dateAction))}</span>
+                        </div>
+                        <p className="text-sm text-muted-foreground">
+                          {entree.utilisateurId === null
+                            ? "Action système (tâche automatique quotidienne)"
+                            : `Par ${entree.utilisateurPrenom} ${entree.utilisateurNom}`}
+                        </p>
+                        {description.changements.length > 0 && (
+                          <ul className="mt-1 space-y-0.5 border-t border-border pt-1.5 text-xs text-muted-foreground">
+                            {description.changements.map((c) => (
+                              <li key={c.champ}>
+                                <span className="font-medium text-card-foreground">{c.champ} : </span>
+                                {c.avant !== null && c.apres !== null ? `${c.avant} → ${c.apres}` : (c.apres ?? `${c.avant} (supprimé)`)}
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </Card>
+                    </li>
+                  );
+                })}
               </ul>
             </TabsContent>
             )}

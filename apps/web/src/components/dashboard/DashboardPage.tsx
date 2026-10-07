@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
+import { peutAccederVue, type RoleUtilisateur } from "@mboapilot/shared";
 import { AlertTriangle, History, PackageX, RotateCw, TrendingDown, Users } from "lucide-react";
 import {
   chargerAbonnementsExpires,
@@ -84,6 +85,8 @@ export function DashboardPage({ onNaviguer, onReabonnerDepuisAlerte, onReabonner
   // 5.2 : mouvements correctifs de stock (achat, transfert) réservés à
   // l'encadrement, comme sur la page Catalogue elle-même (gestionStock)
   const peutGererStock = ["ADMINISTRATEUR", "GERANT"].includes(session!.utilisateur.role);
+  // « Réabonner » ouvre la Caisse : proposé seulement aux rôles qui y ont accès (2.5.1)
+  const peutVendre = peutAccederVue(session!.utilisateur.role as RoleUtilisateur, "caisse");
 
   const [alertes, setAlertes] = useState<AlerteEcheance[] | null>(null);
   // 4.4, 8.8 : liste dédiée « Abonnements expirés », filtrable par famille
@@ -425,9 +428,11 @@ export function DashboardPage({ onNaviguer, onReabonnerDepuisAlerte, onReabonner
                       </p>
                     </div>
                   </div>
-                  <Button className="shrink-0 cursor-pointer" onClick={() => onReabonnerDepuisAlerte(alerte)}>
-                    Réabonner
-                  </Button>
+                  {peutVendre && (
+                    <Button className="shrink-0 cursor-pointer" onClick={() => onReabonnerDepuisAlerte(alerte)}>
+                      Réabonner
+                    </Button>
+                  )}
                 </Card>
               </li>
             ))}
@@ -460,9 +465,11 @@ export function DashboardPage({ onNaviguer, onReabonnerDepuisAlerte, onReabonner
                         </p>
                       </div>
                     </div>
-                    <Button className="shrink-0 cursor-pointer" onClick={() => onReabonnerDepuisExpire(a)}>
-                      Réabonner
-                    </Button>
+                    {peutVendre && (
+                      <Button className="shrink-0 cursor-pointer" onClick={() => onReabonnerDepuisExpire(a)}>
+                        Réabonner
+                      </Button>
+                    )}
                   </Card>
                 </li>
               ))}

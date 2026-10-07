@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { LogOut } from "lucide-react";
+import { peutAccederVue, type RoleUtilisateur, type VueApplication } from "@mboapilot/shared";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth-context";
 
@@ -12,7 +13,19 @@ const LIBELLES_ROLES: Record<string, string> = {
   APPORTEUR: "Apporteur d'affaires",
 };
 
-export type Vue = "dashboard" | "caisse" | "sav" | "apporteurs" | "stock" | "clients" | "administration";
+export type Vue = VueApplication;
+
+// ordre d'affichage de la navigation principale ; les écrans proposés dépendent
+// du rôle (2.5.1, matrice partagée avec l'API dans packages/shared/acces-vues.ts)
+const ONGLETS: { vue: Vue; libelle: string }[] = [
+  { vue: "dashboard", libelle: "Tableau de bord" },
+  { vue: "caisse", libelle: "Caisse" },
+  { vue: "sav", libelle: "SAV" },
+  { vue: "clients", libelle: "Clients" },
+  { vue: "apporteurs", libelle: "Apporteurs" },
+  { vue: "stock", libelle: "Catalogue" },
+  { vue: "administration", libelle: "Administration" },
+];
 
 interface Props {
   vueActive: Vue;
@@ -27,73 +40,17 @@ export function AppHeader({ vueActive, onNaviguer, children }: Props) {
   return (
     <header className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-2 border-b border-border bg-card px-4 py-3">
       <nav aria-label="Navigation principale" className="flex flex-wrap items-center gap-1">
-        <Button
-          variant={vueActive === "dashboard" ? "default" : "ghost"}
-          className="h-9 cursor-pointer"
-          aria-current={vueActive === "dashboard" ? "page" : undefined}
-          onClick={() => onNaviguer("dashboard")}
-        >
-          Tableau de bord
-        </Button>
-        <Button
-          variant={vueActive === "caisse" ? "default" : "ghost"}
-          className="h-9 cursor-pointer"
-          aria-current={vueActive === "caisse" ? "page" : undefined}
-          onClick={() => onNaviguer("caisse")}
-        >
-          Caisse
-        </Button>
-        <Button
-          variant={vueActive === "sav" ? "default" : "ghost"}
-          className="h-9 cursor-pointer"
-          aria-current={vueActive === "sav" ? "page" : undefined}
-          onClick={() => onNaviguer("sav")}
-        >
-          SAV
-        </Button>
-        {(utilisateur.role === "ADMINISTRATEUR" ||
-          utilisateur.role === "GERANT" ||
-          utilisateur.role === "CAISSIER" ||
-          utilisateur.role === "COMPTABLE") && (
+        {ONGLETS.filter(({ vue }) => peutAccederVue(utilisateur.role as RoleUtilisateur, vue)).map(({ vue, libelle }) => (
           <Button
-            variant={vueActive === "clients" ? "default" : "ghost"}
+            key={vue}
+            variant={vueActive === vue ? "default" : "ghost"}
             className="h-9 cursor-pointer"
-            aria-current={vueActive === "clients" ? "page" : undefined}
-            onClick={() => onNaviguer("clients")}
+            aria-current={vueActive === vue ? "page" : undefined}
+            onClick={() => onNaviguer(vue)}
           >
-            Clients
+            {libelle}
           </Button>
-        )}
-        {(utilisateur.role === "ADMINISTRATEUR" || utilisateur.role === "GERANT") && (
-          <Button
-            variant={vueActive === "apporteurs" ? "default" : "ghost"}
-            className="h-9 cursor-pointer"
-            aria-current={vueActive === "apporteurs" ? "page" : undefined}
-            onClick={() => onNaviguer("apporteurs")}
-          >
-            Apporteurs
-          </Button>
-        )}
-        {(utilisateur.role === "ADMINISTRATEUR" || utilisateur.role === "GERANT") && (
-          <Button
-            variant={vueActive === "stock" ? "default" : "ghost"}
-            className="h-9 cursor-pointer"
-            aria-current={vueActive === "stock" ? "page" : undefined}
-            onClick={() => onNaviguer("stock")}
-          >
-            Catalogue
-          </Button>
-        )}
-        {(utilisateur.role === "ADMINISTRATEUR" || utilisateur.role === "GERANT") && (
-          <Button
-            variant={vueActive === "administration" ? "default" : "ghost"}
-            className="h-9 cursor-pointer"
-            aria-current={vueActive === "administration" ? "page" : undefined}
-            onClick={() => onNaviguer("administration")}
-          >
-            Administration
-          </Button>
-        )}
+        ))}
       </nav>
 
       {children}

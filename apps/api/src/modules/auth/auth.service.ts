@@ -29,6 +29,11 @@ export interface UtilisateurAuthentifie {
 // permettre l'énumération des identifiants existants. Verrouillage temporaire
 // après plusieurs échecs consécutifs (11.2), horloge injectée pour testabilité.
 export function authentifier(db: Db, identifiant: string, motDePasse: string, maintenant = new Date().toISOString()): UtilisateurAuthentifie {
+  // un identifiant ou un mot de passe qui n'est pas un texte (objet, nombre, tableau,
+  // absent) ne peut correspondre à aucun compte : même message générique, sans
+  // laisser remonter l'erreur interne de bcrypt ou de SQLite, et sans compter d'échec
+  if (typeof identifiant !== "string" || typeof motDePasse !== "string") throw new Error(MESSAGE_ERREUR);
+
   const utilisateur = trouverUtilisateurParIdentifiant(db, identifiant);
 
   if (utilisateur && utilisateur.verrouilleJusqua !== null && utilisateur.verrouilleJusqua > maintenant) {

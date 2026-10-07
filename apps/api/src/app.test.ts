@@ -4905,3 +4905,26 @@ describe("erreurs générées par Fastify (format commun)", () => {
     expect(reponse.json().erreur.length).toBeGreaterThan(0);
   });
 });
+
+describe("POST /api/v1/auth/login : corps mal formés (11.2)", () => {
+  it.each([
+    ["identifiant objet", { identifiant: { x: 1 }, motDePasse: "abc" }],
+    ["mot de passe nombre", { identifiant: "caissier1", motDePasse: 123 }],
+    ["mot de passe objet", { identifiant: "caissier1", motDePasse: { $ne: "" } }],
+    ["corps vide", {}],
+    ["tableau", [1, 2]],
+    ["null", null],
+  ])("%s : 401 et message générique, sans détail interne", async (_libelle, payload) => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+
+    const reponse = await app.inject({
+      method: "POST",
+      url: "/api/v1/auth/login",
+      headers: { "content-type": "application/json" },
+      payload: JSON.stringify(payload),
+    });
+
+    expect(reponse.statusCode).toBe(401);
+    expect(reponse.json().erreur).toBe("Identifiants invalides");
+  });
+});

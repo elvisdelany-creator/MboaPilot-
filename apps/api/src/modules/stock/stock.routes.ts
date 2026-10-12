@@ -19,6 +19,16 @@ import { envoyerErreur } from "../../lib/erreurs-api.js";
 
 const ERREUR_SITE_PRODUIT = { erreur: "Ce produit n'appartient pas à votre site" };
 
+// 2.5.2, 11.5 : le site du mouvement est celui de l'article (un mouvement ne se rattache jamais
+// à une autre boutique que la sienne) et l'auteur est l'utilisateur authentifié — le client
+// n'a ni à les fournir, ni le pouvoir de les choisir
+type CorpsStock<T extends { siteId: number; userId: number }> = Omit<T, "siteId" | "userId">;
+
+function contexteMouvement(db: Db, request: { user: { idUser: number; siteId: number }; body: { idProduit: number } }) {
+  const produit = trouverProduit(db, request.body.idProduit);
+  return { siteId: produit?.siteId ?? request.user.siteId, userId: request.user.idUser };
+}
+
 // 5.2, 8.6, 9.3 : suivi de stock — consultation (alertes, historique) ouverte
 // aux rôles de vente/SAV, mouvements correctifs (achat, casse, inventaire)
 // réservés à Administrateur/Gérant (validation par un rôle habilité, 5.2).
@@ -63,7 +73,7 @@ export function registerStockRoutes(app: FastifyInstance, db: Db, guards: RouteG
     }
   );
 
-  app.post<{ Body: ReceptionnerAchatParams }>(
+  app.post<{ Body: CorpsStock<ReceptionnerAchatParams> }>(
     "/api/v1/stock/achats",
     { preHandler: [guards.authRequis, guards.gestionStock] },
     async (request, reply) => {
@@ -73,14 +83,14 @@ export function registerStockRoutes(app: FastifyInstance, db: Db, guards: RouteG
         return;
       }
       try {
-        reply.code(201).send(receptionnerAchat(db, request.body));
+        reply.code(201).send(receptionnerAchat(db, { ...request.body, ...contexteMouvement(db, request) }));
       } catch (erreur) {
         envoyerErreur(reply, erreur);
       }
     }
   );
 
-  app.post<{ Body: EnregistrerCasseParams }>(
+  app.post<{ Body: CorpsStock<EnregistrerCasseParams> }>(
     "/api/v1/stock/casses",
     { preHandler: [guards.authRequis, guards.gestionStock] },
     async (request, reply) => {
@@ -90,14 +100,14 @@ export function registerStockRoutes(app: FastifyInstance, db: Db, guards: RouteG
         return;
       }
       try {
-        reply.code(201).send(enregistrerCasse(db, request.body));
+        reply.code(201).send(enregistrerCasse(db, { ...request.body, ...contexteMouvement(db, request) }));
       } catch (erreur) {
         envoyerErreur(reply, erreur);
       }
     }
   );
 
-  app.post<{ Body: AjusterInventaireParams }>(
+  app.post<{ Body: CorpsStock<AjusterInventaireParams> }>(
     "/api/v1/stock/inventaires",
     { preHandler: [guards.authRequis, guards.gestionStock] },
     async (request, reply) => {
@@ -107,14 +117,14 @@ export function registerStockRoutes(app: FastifyInstance, db: Db, guards: RouteG
         return;
       }
       try {
-        reply.code(201).send(ajusterInventaire(db, request.body));
+        reply.code(201).send(ajusterInventaire(db, { ...request.body, ...contexteMouvement(db, request) }));
       } catch (erreur) {
         envoyerErreur(reply, erreur);
       }
     }
   );
 
-  app.post<{ Body: TransfererStockParams }>(
+  app.post<{ Body: Omit<TransfererStockParams, "userId"> }>(
     "/api/v1/stock/transferts",
     { preHandler: [guards.authRequis, guards.gestionStock] },
     async (request, reply) => {
@@ -124,7 +134,7 @@ export function registerStockRoutes(app: FastifyInstance, db: Db, guards: RouteG
         return;
       }
       try {
-        reply.code(201).send(transfererStock(db, request.body));
+        reply.code(201).send(transfererStock(db, { ...request.body, userId: request.user.idUser }));
       } catch (erreur) {
         envoyerErreur(reply, erreur);
       }

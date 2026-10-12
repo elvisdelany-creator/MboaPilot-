@@ -7,6 +7,7 @@ import {
   creerComptePartage,
   listerComptesPartages,
   modifierComptePartage,
+  trouverComptePartage,
   type CreerComptePartageInput,
   type ModifierComptePartageInput,
 } from "./compte-partage.repository.js";
@@ -45,8 +46,14 @@ export function registerComptesPartagesRoutes(app: FastifyInstance, db: Db, guar
     "/api/v1/comptes-partages/:idComptePartage",
     { preHandler: [guards.authRequis, guards.gestionComptesPartages] },
     async (request, reply) => {
+      const idComptePartage = Number(request.params.idComptePartage);
+      const existant = trouverComptePartage(db, idComptePartage);
+      if (existant && !siteAutorise(request.user, existant.siteId)) {
+        reply.code(403).send(ERREUR_SITE_COMPTE_PARTAGE);
+        return;
+      }
       try {
-        const compte = modifierComptePartage(db, Number(request.params.idComptePartage), request.body);
+        const compte = modifierComptePartage(db, idComptePartage, request.body);
         if (!compte) throw new Error(`Compte partagé ${request.params.idComptePartage} introuvable`);
         reply.code(200).send(compte);
       } catch (erreur) {

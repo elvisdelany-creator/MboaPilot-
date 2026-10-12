@@ -45,12 +45,22 @@ export function registerAbonnesRoutes(
     }
   );
 
-  app.post<{ Body: FusionnerAbonnesParams }>(
+  app.post<{ Body: Omit<FusionnerAbonnesParams, "userId"> }>(
     "/api/v1/abonnes/fusion",
     { preHandler: [guards.authRequis, guards.fusionAbonnes] },
     async (request, reply) => {
+      // 2.5.2 : les deux fiches doivent être du site de l'appelant (l'Administrateur, lui, reste
+      // exempté du cloisonnement) ; un identifiant inconnu est laissé au service (« introuvable »)
+      for (const idAbonne of [request.body.idAbonnePrincipal, request.body.idAbonneDoublon]) {
+        const abonne = trouverAbonne(db, idAbonne);
+        if (abonne && !siteAutorise(request.user, abonne.siteId)) {
+          reply.code(403).send({ erreur: "Cet abonné n'appartient pas à votre site" });
+          return;
+        }
+      }
       try {
-        reply.code(200).send(fusionnerAbonnes(db, request.body));
+        // 11.5 : l'auteur de la suppression du doublon est l'utilisateur authentifié
+        reply.code(200).send(fusionnerAbonnes(db, { ...request.body, userId: request.user.idUser }));
       } catch (erreur) {
         envoyerErreur(reply, erreur);
       }

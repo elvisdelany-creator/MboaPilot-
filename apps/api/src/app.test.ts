@@ -5069,3 +5069,207 @@ describe("Création d'article et de compte partagé : cloisonnement multi-site (
     expect(historique[0].utilisateurId).not.toBeNull();
   });
 });
+
+// 2.5.2 : PATCH /comptes-partages/:id ne vérifiait pas le site du compte ciblé (contrairement à
+// la fiche, en GET) : un gérant lié au site A pouvait désactiver un compte de la boutique B,
+// en changer le libellé, le nombre d'écrans ou les identifiants de connexion.
+describe("Modification d'un compte partagé : cloisonnement multi-site (2.5.2)", () => {
+  async function gerantEtCompteAutreSite() {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    creerUtilisateur(db, { siteId, nom: "Gerant", prenom: "G", identifiant: "gerant1", motDePasse: "motdepasse-secret", role: "GERANT" });
+    const token = await connecter(app, "gerant1");
+    const idEntreprise = db.select().from(schema.site).where(eq(schema.site.idSite, siteId)).get()!.idEntreprise;
+    const autreSite = db.insert(schema.site).values({ idEntreprise, nom: "Site B" }).returning().get().idSite;
+    const compte = db
+      .insert(schema.comptePartageStreaming)
+      .values({ siteId: autreSite, idFamille: 1, libelle: "Compte du site B", nombreEcransMax: 3 })
+      .returning()
+      .get();
+    return { app, token, compte };
+  }
+
+  it("refuse (403) de modifier un compte partagé d'un autre site, sans rien changer", async () => {
+    const { app, token, compte } = await gerantEtCompteAutreSite();
+
+    const reponse = await app.inject({
+      method: "PATCH",
+      url: `/api/v1/comptes-partages/${compte.idComptePartage}`,
+      headers: authHeader(token),
+      payload: { libelle: "Détourné", actif: false },
+    });
+
+    expect(reponse.statusCode).toBe(403);
+    const apres = db.select().from(schema.comptePartageStreaming).where(eq(schema.comptePartageStreaming.idComptePartage, compte.idComptePartage)).get()!;
+    expect(apres.libelle).toBe("Compte du site B");
+    expect(apres.actif).toBe(1);
+  });
+
+  it("un compte partagé inconnu reste signalé en 404, pas en 403", async () => {
+    const { app, token } = await gerantEtCompteAutreSite();
+
+    const reponse = await app.inject({ method: "PATCH", url: "/api/v1/comptes-partages/99999", headers: authHeader(token), payload: { libelle: "X" } });
+
+    expect(reponse.statusCode).toBe(404);
+  });
+
+  it("autorise toujours la modification d'un compte de son propre site", async () => {
+    const { app, token } = await gerantEtCompteAutreSite();
+    const propre = db.insert(schema.comptePartageStreaming).values({ siteId, idFamille: 1, libelle: "Compte A", nombreEcransMax: 2 }).returning().get();
+
+    const reponse = await app.inject({ method: "PATCH", url: `/api/v1/comptes-partages/${propre.idComptePartage}`, headers: authHeader(token), payload: { libelle: "Compte A bis" } });
+
+    expect(reponse.statusCode).toBe(200);
+    expect(reponse.json().libelle).toBe("Compte A bis");
+  });
+});
+
+// 2.5.2 : POST /abonnes/fusion vérifiait seulement que les deux fiches sont du même site
+// entre elles, pas que ce site est celui de l'appelant : un gérant du site A pouvait fusionner
+// (donc supprimer) deux clients de la boutique B. Et sans userId dans le corps, la suppression
+// était journalisée sans auteur.
+describe("Fusion de doublons : cloisonnement multi-site et auteur (2.5.2, 11.5)", () => {
+  async function gerantEtSites() {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const gerant = creerUtilisateur(db, { siteId, nom: "Gerant", prenom: "G", identifiant: "gerant1", motDePasse: "motdepasse-secret", role: "GERANT" });
+    const token = await connecter(app, "gerant1");
+    const idEntreprise = db.select().from(schema.site).where(eq(schema.site.idSite, siteId)).get()!.idEntreprise;
+    const autreSite = db.insert(schema.site).values({ idEntreprise, nom: "Site B" }).returning().get().idSite;
+    const abonne = (site: number, nom: string, telephone: string) =>
+      db.insert(schema.abonne).values({ siteId: site, nom, prenom: "X", telephone }).returning().get().idAbonne;
+    return { app, token, gerant, autreSite, abonne };
+  }
+
+  it("refuse (403) de fusionner deux fiches d'un autre site, sans rien supprimer", async () => {
+    const { app, token, autreSite, abonne } = await gerantEtSites();
+    const principal = abonne(autreSite, "ClientB1", "691000001");
+    const doublon = abonne(autreSite, "ClientB2", "691000002");
+
+    const reponse = await app.inject({
+      method: "POST",
+      url: "/api/v1/abonnes/fusion",
+      headers: authHeader(token),
+      payload: { idAbonnePrincipal: principal, idAbonneDoublon: doublon },
+    });
+
+    expect(reponse.statusCode).toBe(403);
+    expect(db.select().from(schema.abonne).where(eq(schema.abonne.siteId, autreSite)).all()).toHaveLength(2);
+    expect(db.select().from(schema.journalAudit).where(eq(schema.journalAudit.tableCible, "abonne")).all()).toHaveLength(0);
+  });
+
+  it("refuse aussi quand une seule des deux fiches est d'un autre site", async () => {
+    const { app, token, autreSite, abonne } = await gerantEtSites();
+    const propre = abonne(siteId, "ClientA", "691000003");
+    const etranger = abonne(autreSite, "ClientB", "691000004");
+
+    const reponse = await app.inject({
+      method: "POST",
+      url: "/api/v1/abonnes/fusion",
+      headers: authHeader(token),
+      payload: { idAbonnePrincipal: propre, idAbonneDoublon: etranger },
+    });
+
+    expect(reponse.statusCode).toBe(403);
+    expect(db.select().from(schema.abonne).all()).toHaveLength(2);
+  });
+
+  it("fusionne deux fiches de son site et journalise l'appelant même sans userId dans le corps", async () => {
+    const { app, token, gerant, abonne } = await gerantEtSites();
+    const principal = abonne(siteId, "ClientA1", "691000005");
+    const doublon = abonne(siteId, "ClientA2", "691000006");
+
+    const reponse = await app.inject({
+      method: "POST",
+      url: "/api/v1/abonnes/fusion",
+      headers: authHeader(token),
+      payload: { idAbonnePrincipal: principal, idAbonneDoublon: doublon },
+    });
+
+    expect(reponse.statusCode).toBe(200);
+    const audit = db.select().from(schema.journalAudit).where(eq(schema.journalAudit.tableCible, "abonne")).all();
+    expect(audit).toHaveLength(1);
+    expect(audit[0].utilisateurId).toBe(gerant.idUser);
+  });
+});
+
+// 2.5.2, 11.5 : les opérations de stock enregistraient le siteId et l'auteur du CORPS. Un gérant
+// pouvait rattacher un mouvement de stock d'un article de son site à une autre boutique (le
+// stock de la boutique B se retrouvait faussé), et sans userId la requête échouait en
+// « champs obligatoires manquants » alors que l'auteur est connu de la session.
+describe("Opérations de stock : site de l'article et auteur de la session (2.5.2, 11.5)", () => {
+  async function contexte() {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const gerant = creerUtilisateur(db, { siteId, nom: "Gerant", prenom: "G", identifiant: "gerant1", motDePasse: "motdepasse-secret", role: "GERANT" });
+    const token = await connecter(app, "gerant1");
+    const idEntreprise = db.select().from(schema.site).where(eq(schema.site.idSite, siteId)).get()!.idEntreprise;
+    const autreSite = db.insert(schema.site).values({ idEntreprise, nom: "Site B" }).returning().get().idSite;
+    const produit = db.insert(schema.produit).values({ siteId, type: "BIEN", libelle: "Câble", prixVente: 2000, coutRevient: 700, suiviStock: 1 }).returning().get();
+    const mouvements = () => db.select().from(schema.stockMouvement).where(eq(schema.stockMouvement.idProduit, produit.idProduit)).all();
+    return { app, token, gerant, autreSite, produit, mouvements };
+  }
+
+  it("rattache l'achat au site de l'article et à l'appelant, malgré un siteId et un userId étrangers dans le corps", async () => {
+    const { app, token, gerant, autreSite, produit, mouvements } = await contexte();
+
+    const reponse = await app.inject({
+      method: "POST",
+      url: "/api/v1/stock/achats",
+      headers: authHeader(token),
+      payload: { idProduit: produit.idProduit, siteId: autreSite, quantite: 4, coutUnitaire: 900, userId: userId },
+    });
+
+    expect(reponse.statusCode).toBe(201);
+    expect(mouvements()).toHaveLength(1);
+    expect(mouvements()[0].siteId).toBe(siteId);
+    expect(mouvements()[0].utilisateurId).toBe(gerant.idUser);
+  });
+
+  it.each([
+    ["l'achat", "/api/v1/stock/achats", { quantite: 2, coutUnitaire: 900 }],
+    ["la casse", "/api/v1/stock/casses", { quantite: 1, motif: "Cassé au transport" }],
+    ["l'inventaire", "/api/v1/stock/inventaires", { quantiteComptee: 3, motif: "Comptage" }],
+  ])("accepte %s sans siteId ni userId dans le corps, et les déduit de l'article et de la session", async (_nom, url, corps) => {
+    const { app, token, gerant, produit, mouvements } = await contexte();
+
+    const reponse = await app.inject({ method: "POST", url, headers: authHeader(token), payload: { idProduit: produit.idProduit, ...corps } });
+
+    expect(reponse.statusCode).toBe(201);
+    expect(mouvements()).toHaveLength(1);
+    expect(mouvements()[0].siteId).toBe(siteId);
+    expect(mouvements()[0].utilisateurId).toBe(gerant.idUser);
+  });
+
+  it("accepte le transfert sans userId dans le corps et journalise l'appelant", async () => {
+    const { app, token, gerant, autreSite, produit } = await contexte();
+    await app.inject({ method: "POST", url: "/api/v1/stock/achats", headers: authHeader(token), payload: { idProduit: produit.idProduit, quantite: 10, coutUnitaire: 700 } });
+
+    const reponse = await app.inject({
+      method: "POST",
+      url: "/api/v1/stock/transferts",
+      headers: authHeader(token),
+      payload: { idProduitSource: produit.idProduit, siteDestinationId: autreSite, quantite: 3 },
+    });
+
+    expect(reponse.statusCode).toBe(201);
+    const sortie = db.select().from(schema.stockMouvement).where(eq(schema.stockMouvement.typeMouvement, "TRANSFERT_SORTIE")).all();
+    expect(sortie).toHaveLength(1);
+    expect(sortie[0].utilisateurId).toBe(gerant.idUser);
+  });
+
+  it("un administrateur qui réceptionne un article d'un autre site rattache le mouvement à ce site", async () => {
+    const { app, autreSite } = await contexte();
+    creerUtilisateur(db, { siteId, nom: "Admin", prenom: "D", identifiant: "admin1", motDePasse: "motdepasse-secret", role: "ADMINISTRATEUR" });
+    const tokenAdmin = await connecter(app, "admin1");
+    const articleB = db.insert(schema.produit).values({ siteId: autreSite, type: "BIEN", libelle: "Câble B", prixVente: 2000, coutRevient: 700, suiviStock: 1 }).returning().get();
+
+    const reponse = await app.inject({
+      method: "POST",
+      url: "/api/v1/stock/achats",
+      headers: authHeader(tokenAdmin),
+      payload: { idProduit: articleB.idProduit, quantite: 5, coutUnitaire: 700 },
+    });
+
+    expect(reponse.statusCode).toBe(201);
+    const mouvement = db.select().from(schema.stockMouvement).where(eq(schema.stockMouvement.idProduit, articleB.idProduit)).get()!;
+    expect(mouvement.siteId).toBe(autreSite);
+  });
+});

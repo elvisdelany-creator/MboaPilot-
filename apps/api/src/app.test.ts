@@ -4976,3 +4976,96 @@ describe("POST /api/v1/entreprise/logo : contenu et taille (11.2)", () => {
     expect(reponse.json().erreur).toMatch(/2 Mo/);
   });
 });
+
+// 2.5.2 : constaté en test grandeur nature — POST /produits et POST /comptes-partages
+// enregistraient le siteId du CORPS : un gérant lié au site A pouvait créer un article ou un
+// compte partagé dans la boutique B. Comme pour les ventes, le SAV et les recrutements, le
+// siteId transmis n'est qu'une indication client : celui de l'appelant fait foi.
+describe("Création d'article et de compte partagé : cloisonnement multi-site (2.5.2)", () => {
+  async function gerantEtAutreSite() {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    creerUtilisateur(db, { siteId, nom: "Gerant", prenom: "G", identifiant: "gerant1", motDePasse: "motdepasse-secret", role: "GERANT" });
+    const token = await connecter(app, "gerant1");
+    const idEntreprise = db.select().from(schema.site).where(eq(schema.site.idSite, siteId)).get()!.idEntreprise;
+    const autreSite = db.insert(schema.site).values({ idEntreprise, nom: "Site B" }).returning().get().idSite;
+    return { app, token, autreSite };
+  }
+
+  it("crée l'article sur le site de l'appelant, même si le corps désigne un autre site", async () => {
+    const { app, token, autreSite } = await gerantEtAutreSite();
+
+    const reponse = await app.inject({
+      method: "POST",
+      url: "/api/v1/produits",
+      headers: authHeader(token),
+      payload: { siteId: autreSite, type: "BIEN", libelle: "Câble piégé", prixVente: 1000 },
+    });
+
+    expect(reponse.statusCode).toBe(201);
+    expect(reponse.json().siteId).toBe(siteId);
+    expect(db.select().from(schema.produit).where(eq(schema.produit.siteId, autreSite)).all()).toHaveLength(0);
+  });
+
+  it("crée le compte partagé sur le site de l'appelant, même si le corps désigne un autre site", async () => {
+    const { app, token, autreSite } = await gerantEtAutreSite();
+
+    const reponse = await app.inject({
+      method: "POST",
+      url: "/api/v1/comptes-partages",
+      headers: authHeader(token),
+      payload: { siteId: autreSite, idFamille: 1, libelle: "Compte piégé", nombreEcransMax: 2 },
+    });
+
+    expect(reponse.statusCode).toBe(201);
+    expect(reponse.json().siteId).toBe(siteId);
+    expect(db.select().from(schema.comptePartageStreaming).where(eq(schema.comptePartageStreaming.siteId, autreSite)).all()).toHaveLength(0);
+  });
+
+  it("crée l'article sur le site de l'appelant quand le corps ne donne pas de siteId", async () => {
+    const { app, token } = await gerantEtAutreSite();
+
+    const reponse = await app.inject({
+      method: "POST",
+      url: "/api/v1/produits",
+      headers: authHeader(token),
+      payload: { type: "BIEN", libelle: "Câble sans site", prixVente: 1000 },
+    });
+
+    expect(reponse.statusCode).toBe(201);
+    expect(reponse.json().siteId).toBe(siteId);
+  });
+
+  // le serveur n'écrasait l'auteur que si le client avait envoyé un userId : sans lui, la
+  // modification d'un prix échouait en « champs obligatoires manquants » (400) alors que
+  // l'auteur est connu de la session
+  it("modifie le prix d'un article sans que le client ait à fournir userId, et historise l'appelant", async () => {
+    const { app, token } = await gerantEtAutreSite();
+    const article = db.insert(schema.produit).values({ siteId, type: "BIEN", libelle: "Câble", prixVente: 1000, coutRevient: 400 }).returning().get();
+
+    const reponse = await app.inject({ method: "PATCH", url: `/api/v1/produits/${article.idProduit}`, headers: authHeader(token), payload: { prixVente: 1500 } });
+
+    expect(reponse.statusCode).toBe(200);
+    const historique = db.select().from(schema.historiquePrixProduit).where(eq(schema.historiquePrixProduit.idProduit, article.idProduit)).all();
+    expect(historique).toHaveLength(1);
+    expect(historique[0].utilisateurId).not.toBeNull();
+    expect(historique[0].utilisateurId).not.toBe(userId);
+  });
+
+  it("met à jour un prix par import CSV sans userId dans le corps, et historise l'appelant", async () => {
+    const { app, token } = await gerantEtAutreSite();
+    const article = db.insert(schema.produit).values({ siteId, type: "BIEN", libelle: "Câble", prixVente: 1000, coutRevient: 400 }).returning().get();
+
+    const reponse = await app.inject({
+      method: "POST",
+      url: "/api/v1/produits/import-csv",
+      headers: authHeader(token),
+      payload: { contenuCsv: "Type,Libelle,Categorie,PrixVente,CoutRevient,SuiviStock,SeuilAlerte\r\nBIEN,Câble,,1800,,0," },
+    });
+
+    expect(reponse.statusCode).toBe(200);
+    expect(reponse.json()).toEqual({ crees: 0, misAJour: 1, erreurs: [] });
+    const historique = db.select().from(schema.historiquePrixProduit).where(eq(schema.historiquePrixProduit.idProduit, article.idProduit)).all();
+    expect(historique).toHaveLength(1);
+    expect(historique[0].utilisateurId).not.toBeNull();
+  });
+});

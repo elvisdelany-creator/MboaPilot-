@@ -2,7 +2,7 @@ import { desc, eq } from "drizzle-orm";
 import { calculerMarge, type MargeType } from "@mboapilot/shared";
 import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
-import { verifierEntier } from "../../lib/validation.js";
+import { verifierBooleen, verifierEntier } from "../../lib/validation.js";
 
 // 5.2, 7.3 : catalogue des produits/pièces détachées d'un site
 export function listerProduits(db: Db, siteId: number) {
@@ -11,6 +11,30 @@ export function listerProduits(db: Db, siteId: number) {
 
 export function trouverProduit(db: Db, idProduit: number) {
   return db.select().from(schema.produit).where(eq(schema.produit.idProduit, idProduit)).get();
+}
+
+const TYPES_PRODUIT = ["BIEN", "SERVICE", "SAV", "KIT"] as const;
+const TYPES_MARGE = ["VALEUR", "POURCENTAGE"] as const;
+// plafond d'un prix unitaire : au-delà, les totaux de facture perdent leur précision (entiers sûrs de JS)
+const PLAFOND_PRIX_FCFA = 1_000_000_000;
+
+function verifierTexteBorne(valeur: unknown, libelle: string, longueurMax: number) {
+  if (valeur === undefined || valeur === null) return;
+  if (typeof valeur !== "string") throw new Error(`${libelle} doit être un texte`);
+  if (valeur.length > longueurMax) throw new Error(`${libelle} ne peut pas dépasser ${longueurMax} caractères`);
+}
+
+// les types TypeScript n'existent pas à l'exécution : une valeur venue de l'API doit être
+// vérifiée, sinon un type « PIZZA » ou un suivi de stock "non" (texte = vrai) est enregistré tel quel
+function verifierChampsProduit(input: { libelle?: unknown; categorie?: unknown; codeBarres?: unknown; margeType?: unknown; prixVente?: unknown; coutRevient?: unknown }) {
+  verifierTexteBorne(input.libelle, "Le libellé de l'article", 200);
+  verifierTexteBorne(input.categorie, "La catégorie", 100);
+  verifierTexteBorne(input.codeBarres, "Le code-barres", 50);
+  if (input.margeType !== undefined && !(TYPES_MARGE as readonly unknown[]).includes(input.margeType)) {
+    throw new Error(`Type de marge inconnu — attendu : ${TYPES_MARGE.join(", ")}`);
+  }
+  verifierEntier(input.prixVente, "Le prix de vente", { max: PLAFOND_PRIX_FCFA, nullable: false });
+  verifierEntier(input.coutRevient, "Le coût de revient", { max: PLAFOND_PRIX_FCFA, nullable: false });
 }
 
 export interface CreerProduitInput {
@@ -33,6 +57,9 @@ export interface CreerProduitInput {
 // remplit que par réception d'achat (5.2), jamais saisi directement ici.
 export function creerProduit(db: Db, input: CreerProduitInput) {
   if (typeof input.libelle !== "string" || !input.libelle.trim()) throw new Error("Le libellé de l'article est obligatoire");
+  if (!(TYPES_PRODUIT as readonly unknown[]).includes(input.type)) throw new Error(`Type d'article inconnu — attendu : ${TYPES_PRODUIT.join(", ")}`);
+  verifierBooleen(input.suiviStock, "Le suivi de stock");
+  verifierChampsProduit(input);
   // 5.2, 6.1 : un prix de vente négatif se propage tel quel dans les
   // opérations qui l'utilisent directement (échange de matériel, pièce SAV),
   // produisant une facture au montant négatif
@@ -88,6 +115,7 @@ export function modifierProduit(db: Db, idProduit: number, input: ModifierProdui
   const avant = trouverProduit(db, idProduit);
   if (!avant) throw new Error(`Produit ${idProduit} introuvable`);
   if (input.libelle !== undefined && (typeof input.libelle !== "string" || !input.libelle.trim())) throw new Error("Le libellé de l'article est obligatoire");
+  verifierChampsProduit(input);
   verifierEntier(input.prixVente, "Le prix de vente", { nullable: false });
   verifierEntier(input.coutRevient, "Le coût de revient", { nullable: false });
   verifierEntier(input.seuilAlerte, "Le seuil d'alerte");

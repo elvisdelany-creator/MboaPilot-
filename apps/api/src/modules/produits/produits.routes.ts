@@ -34,19 +34,21 @@ export function registerProduitsRoutes(app: FastifyInstance, db: Db, guards: Rou
     }
   );
 
-  app.post<{ Body: CreerProduitInput }>(
+  app.post<{ Body: Omit<CreerProduitInput, "siteId"> & { siteId?: number } }>(
     "/api/v1/produits",
     { preHandler: [guards.authRequis, guards.gestionCatalogue] },
     async (request, reply) => {
       try {
-        reply.code(201).send(creerProduit(db, request.body));
+        // 2.5.2 : le siteId du corps n'est qu'une indication client — celui de
+        // l'appelant (relu en base à chaque requête) fait seul foi
+        reply.code(201).send(creerProduit(db, { ...request.body, siteId: request.user.siteId }));
       } catch (erreur) {
         envoyerErreur(reply, erreur);
       }
     }
   );
 
-  app.patch<{ Params: { idProduit: string }; Body: ModifierProduitInput }>(
+  app.patch<{ Params: { idProduit: string }; Body: Omit<ModifierProduitInput, "userId"> }>(
     "/api/v1/produits/:idProduit",
     { preHandler: [guards.authRequis, guards.gestionCatalogue] },
     async (request, reply) => {
@@ -57,7 +59,8 @@ export function registerProduitsRoutes(app: FastifyInstance, db: Db, guards: Rou
         return;
       }
       try {
-        reply.code(200).send(modifierProduit(db, idProduit, request.body));
+        // 11.5 : l'auteur est l'utilisateur authentifié, que le client l'ait envoyé ou non
+        reply.code(200).send(modifierProduit(db, idProduit, { ...request.body, userId: request.user.idUser }));
       } catch (erreur) {
         envoyerErreur(reply, erreur);
       }
@@ -93,12 +96,12 @@ export function registerProduitsRoutes(app: FastifyInstance, db: Db, guards: Rou
     }
   );
 
-  app.post<{ Body: { userId: number; contenuCsv: string } }>(
+  app.post<{ Body: { contenuCsv: string } }>(
     "/api/v1/produits/import-csv",
     { preHandler: [guards.authRequis, guards.gestionCatalogue] },
     async (request, reply) => {
       try {
-        reply.code(200).send(importerCatalogueCsv(db, request.user.siteId, request.body.contenuCsv, request.body.userId));
+        reply.code(200).send(importerCatalogueCsv(db, request.user.siteId, request.body.contenuCsv, request.user.idUser));
       } catch (erreur) {
         envoyerErreur(reply, erreur);
       }

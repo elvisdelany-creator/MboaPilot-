@@ -213,3 +213,44 @@ describe("masquerCoutHistoriquePrix (8.2)", () => {
     expect(masque.prixVenteApres).toBe(16000);
   });
 });
+
+// Constaté en test grandeur nature : l'API enregistrait un type « PIZZA », un margeType « XX »,
+// un libellé de 100 000 caractères, un prix de 9 007 199 254 740 991 FCFA et suiviStock: "non"
+// (texte non vide = vrai : l'article se retrouvait suivi en stock). Seuls les montants négatifs
+// et décimaux étaient refusés.
+describe("creerProduit / modifierProduit : valeurs hors domaine", () => {
+  const base = { type: "BIEN" as const, libelle: "Câble HDMI", prixVente: 2500 };
+
+  it.each([
+    ["un type inconnu", { type: "PIZZA" }, /type/i],
+    ["un type de marge inconnu", { margeType: "XX" }, /marge/i],
+    ["un suivi de stock non booléen", { suiviStock: "non" }, /suivi.*vrai ou faux/i],
+    ["un libellé de plus de 200 caractères", { libelle: "Y".repeat(201) }, /libellé.*200/i],
+    ["une catégorie de plus de 100 caractères", { categorie: "C".repeat(101) }, /catégorie.*100/i],
+    ["un code-barres de plus de 50 caractères", { codeBarres: "9".repeat(51) }, /code-barres.*50/i],
+    ["un prix de vente au-delà du plafond", { prixVente: 9007199254740991 }, /prix de vente/i],
+    ["un coût de revient au-delà du plafond", { coutRevient: 2_000_000_000 }, /coût de revient/i],
+  ])("refuse à la création %s", (_libelle, surcharge, message) => {
+    expect(() => creerProduit(db, { siteId, ...base, ...surcharge } as never)).toThrow(message);
+    expect(listerProduits(db, siteId)).toHaveLength(0);
+  });
+
+  it("accepte les valeurs limites : libellé de 200 caractères, prix d'un milliard", () => {
+    const produit = creerProduit(db, { siteId, ...base, libelle: "Y".repeat(200), prixVente: 1_000_000_000 });
+
+    expect(produit.libelle).toHaveLength(200);
+  });
+
+  it.each([
+    ["un type de marge inconnu", { margeType: "XX" }, /marge/i],
+    ["un libellé de plus de 200 caractères", { libelle: "Y".repeat(201) }, /libellé.*200/i],
+    ["une catégorie de plus de 100 caractères", { categorie: "C".repeat(101) }, /catégorie.*100/i],
+    ["un code-barres de plus de 50 caractères", { codeBarres: "9".repeat(51) }, /code-barres.*50/i],
+    ["un prix de vente au-delà du plafond", { prixVente: 9007199254740991 }, /prix de vente/i],
+  ])("refuse à la modification %s, sans toucher à l'article", (_libelle, surcharge, message) => {
+    const produit = creerProduit(db, { siteId, ...base });
+
+    expect(() => modifierProduit(db, produit.idProduit, { ...surcharge, userId } as never)).toThrow(message);
+    expect(listerProduits(db, siteId)[0]).toMatchObject({ libelle: "Câble HDMI", prixVente: 2500 });
+  });
+});

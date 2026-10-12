@@ -1,5 +1,14 @@
 @import "tailwindcss";
-@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=Poppins:wght@500;600;700&display=swap');
+/* Polices embarquées (hors ligne, mode local 2.2). L'ancien @import Google Fonts, placé
+   après l'inclusion de Tailwind, était supprimé à la construction : les polices ne se
+   chargeaient jamais, ni en ligne ni hors ligne. */
+@import "@fontsource/ibm-plex-sans/latin-400.css";
+@import "@fontsource/ibm-plex-sans/latin-500.css";
+@import "@fontsource/ibm-plex-sans/latin-600.css";
+@import "@fontsource/ibm-plex-sans/latin-700.css";
+@import "@fontsource/poppins/latin-500.css";
+@import "@fontsource/poppins/latin-600.css";
+@import "@fontsource/poppins/latin-700.css";
 
 @custom-variant dark (&:is(.dark *));
 

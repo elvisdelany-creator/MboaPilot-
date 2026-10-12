@@ -10,6 +10,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@fontsource/ibm-plex-sans": "^5.3.0",
+    "@fontsource/poppins": "^5.3.0",
     "@mboapilot/shared": "*",
     "@tailwindcss/vite": "^4.3.3",
     "class-variance-authority": "^0.7.1",

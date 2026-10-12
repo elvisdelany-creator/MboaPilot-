@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { AlertTriangle, Download, Package, Pencil, Plus, Upload } from "lucide-react";
+import { decoderTexteCsv } from "@mboapilot/shared";
 import {
   chargerAlertesStock,
   chargerHistoriquePrixProduit,
@@ -139,7 +140,8 @@ export function StockPage({ onNaviguer, idProduitInitial, actionInitiale }: Prop
   async function exporterCsv() {
     try {
       const contenuCsv = await exporterCatalogueCsvRequete(token, siteId);
-      const url = URL.createObjectURL(new Blob([contenuCsv], { type: "text/csv;charset=utf-8" }));
+      // le BOM UTF-8 en tête du fichier : sans lui, Excel lit les accents comme du Windows-1252 (« CÃ¢ble »)
+      const url = URL.createObjectURL(new Blob(["﻿", contenuCsv], { type: "text/csv;charset=utf-8" }));
       const lien = document.createElement("a");
       lien.href = url;
       lien.download = "catalogue.csv";
@@ -153,7 +155,8 @@ export function StockPage({ onNaviguer, idProduitInitial, actionInitiale }: Prop
   async function importerCsv(fichier: File) {
     setImportEnCours(true);
     try {
-      const contenuCsv = await fichier.text();
+      // Excel (version française) enregistre en Windows-1252 : lire en UTF-8 abîmerait les accents en silence
+      const contenuCsv = decoderTexteCsv(new Uint8Array(await fichier.arrayBuffer()));
       const resultat = await importerCatalogueCsvRequete(token, { siteId, userId: utilisateur.idUser, contenuCsv });
       if (resultat.erreurs.length === 0) {
         toast.success(`Import réussi : ${resultat.crees} créé(s), ${resultat.misAJour} mis à jour.`);

@@ -85,12 +85,25 @@ export function analyserCsv(texte: string): Record<string, string>[] {
 const DEBUT_FORMULE = /^'*[=+\-@\t\r]/;
 const DEBUT_FORMULE_NEUTRALISE = /^'+[=+\-@\t\r]/;
 
-function echapperChampCsv(valeur: string | number): string {
+function echapperChampCsv(valeur: string | number, separateur: string): string {
   const brut = String(valeur);
   const s = typeof valeur === "string" && DEBUT_FORMULE.test(brut) ? `'${brut}` : brut;
-  return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  return s.includes(separateur) || /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 
-export function construireCsv(entetes: string[], lignes: (string | number)[][]): string {
-  return [entetes, ...lignes].map((ligne) => ligne.map(echapperChampCsv).join(",")).join("\r\n");
+// Excel en version française attend « ; » (avec « , » tout le fichier s'ouvre dans une seule
+// colonne) : l'appelant choisit le séparateur, « , » par défaut. analyserCsv reconnaît les deux.
+export function construireCsv(entetes: string[], lignes: (string | number)[][], separateur: "," | ";" = ","): string {
+  return [entetes, ...lignes].map((ligne) => ligne.map((champ) => echapperChampCsv(champ, separateur)).join(separateur)).join("\r\n");
+}
+
+// Décode un fichier CSV choisi par l'utilisateur. Excel (version française) enregistre par défaut
+// en Windows-1252 : lu en UTF-8, « Câble » devenait « C�ble » sans aucun message. Un fichier
+// qui est de l'UTF-8 valide est lu comme tel (BOM retiré), sinon il est lu en Windows-1252.
+export function decoderTexteCsv(octets: Uint8Array): string {
+  try {
+    return new TextDecoder("utf-8", { fatal: true }).decode(octets).replace(/^﻿/, "");
+  } catch {
+    return new TextDecoder("windows-1252").decode(octets);
+  }
 }

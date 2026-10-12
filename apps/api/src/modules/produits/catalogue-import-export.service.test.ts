@@ -29,7 +29,8 @@ describe("exporterCatalogueCsv (8.2)", () => {
 
     const csv = exporterCatalogueCsv(db, siteId);
     const lignes = csv.trim().split("\r\n");
-    expect(lignes[0]).toBe("Type,Libelle,Categorie,PrixVente,CoutRevient,SuiviStock,SeuilAlerte");
+    // séparé par « ; » : avec des virgules, Excel en version française ouvre tout dans une seule colonne
+    expect(lignes[0]).toBe("Type;Libelle;Categorie;PrixVente;CoutRevient;SuiviStock;SeuilAlerte");
     expect(lignes).toHaveLength(3);
     expect(lignes[1]).toContain("Télécommande");
     expect(lignes[1]).toContain("2500");
@@ -43,6 +44,16 @@ describe("exporterCatalogueCsv (8.2)", () => {
     const csv = exporterCatalogueCsv(db, siteId);
     expect(csv).toContain(`"'=HYPERLINK(""http://exemple.test"";""clic"")"`);
 
+    const resultat = importerCatalogueCsv(db, siteId, csv, userId);
+
+    expect(resultat).toMatchObject({ crees: 0, misAJour: 1, erreurs: [] });
+    expect(db.select().from(schema.produit).all()).toHaveLength(1);
+  });
+
+  it("aller-retour avec libellés à virgule, point-virgule et guillemets : aucun doublon, aucune perte", () => {
+    creerProduit(db, { siteId, type: "BIEN", libelle: 'Décodeur, "G11"; promo', categorie: "Matériel; neuf", prixVente: 15000 });
+
+    const csv = exporterCatalogueCsv(db, siteId);
     const resultat = importerCatalogueCsv(db, siteId, csv, userId);
 
     expect(resultat).toMatchObject({ crees: 0, misAJour: 1, erreurs: [] });

@@ -18,7 +18,8 @@ export function exporterCatalogueCsv(db: Db, siteId: number): string {
     p.suiviStock,
     p.seuilAlerte ?? "",
   ]);
-  return construireCsv([...COLONNES], lignes);
+  // « ; » plutôt que « , » : Excel en version française n'ouvre sinon qu'une seule colonne
+  return construireCsv([...COLONNES], lignes, ";");
 }
 
 export interface ErreurImportCsv {

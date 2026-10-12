@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { analyserCsv, construireCsv } from "./csv.js";
+import { analyserCsv, construireCsv, decoderTexteCsv } from "./csv.js";
 
 describe("analyserCsv (8.2 : import de catalogue)", () => {
   it("découpe un CSV simple en objets indexés par en-tête", () => {
@@ -88,5 +88,50 @@ describe("construireCsv (8.2 : export de catalogue)", () => {
       { Libelle: "Décodeur, modèle G11", Categorie: 'catégorie "premium"' },
       { Libelle: "Câble HDMI", Categorie: "" },
     ]);
+  });
+});
+
+// Excel en version française ouvre un CSV séparé par des virgules dans UNE SEULE colonne, et un
+// fichier UTF-8 sans BOM avec des accents cassés (« CÃ¢ble ») ; il enregistre à son tour ses
+// CSV en Windows-1252 par défaut, que la lecture UTF-8 stricte transformait en « C�ble ».
+describe("construireCsv avec un séparateur point-virgule (Excel version française)", () => {
+  it("sépare les champs par « ; » et met entre guillemets ceux qui en contiennent", () => {
+    const csv = construireCsv(["Libelle", "Prix"], [["Câble; HDMI", 2500], ["Antenne", 100]], ";");
+
+    expect(csv).toBe('Libelle;Prix\r\n"Câble; HDMI";2500\r\nAntenne;100');
+  });
+
+  it("round-trip : un CSV construit avec « ; » est relu à l'identique, virgules comprises", () => {
+    const donnees: (string | number)[][] = [["Décodeur, modèle G11; promo", 'catégorie "premium"'], ["=HYPERLINK(\"x\";\"y\")", ""]];
+
+    const relu = analyserCsv(construireCsv(["Libelle", "Categorie"], donnees, ";"));
+
+    expect(relu).toEqual([
+      { Libelle: "Décodeur, modèle G11; promo", Categorie: 'catégorie "premium"' },
+      { Libelle: "=HYPERLINK(\"x\";\"y\")", Categorie: "" },
+    ]);
+  });
+});
+
+describe("decoderTexteCsv (fichier choisi par l'utilisateur)", () => {
+  it("lit un fichier UTF-8", () => {
+    expect(decoderTexteCsv(new TextEncoder().encode("Libelle;Prix\r\nCâble HDMI;2500 €"))).toBe("Libelle;Prix\r\nCâble HDMI;2500 €");
+  });
+
+  it("retire le BOM UTF-8 que laisse Excel (« CSV UTF-8 »)", () => {
+    const octets = new Uint8Array([0xef, 0xbb, 0xbf, ...new TextEncoder().encode("Type;Libelle")]);
+
+    expect(decoderTexteCsv(octets)).toBe("Type;Libelle");
+  });
+
+  it("lit en Windows-1252 un fichier qui n'est pas de l'UTF-8 valide (« CSV » d'Excel par défaut)", () => {
+    // « Câble » et « 5 € » encodés en Windows-1252 : â = 0xE2, € = 0x80
+    const octets = new Uint8Array([0x43, 0xe2, 0x62, 0x6c, 0x65, 0x3b, 0x35, 0x20, 0x80]);
+
+    expect(decoderTexteCsv(octets)).toBe("Câble;5 €");
+  });
+
+  it("renvoie un texte vide pour un fichier vide", () => {
+    expect(decoderTexteCsv(new Uint8Array())).toBe("");
   });
 });

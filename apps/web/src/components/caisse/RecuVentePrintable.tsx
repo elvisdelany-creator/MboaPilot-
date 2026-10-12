@@ -1,4 +1,5 @@
 import { Printer, RotateCcw } from "lucide-react";
+import { lireDateServeur } from "@mboapilot/shared";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { QrCode } from "@/components/ui/qr-code";
@@ -74,7 +75,7 @@ export function RecuVentePrintable({ infosEntreprise, logoUrl, recu, onNouvelleV
 
         <Separator />
 
-        <p className="text-xs">{formateurDateHeure.format(new Date(recu.dateHeure))}</p>
+        <p className="text-xs">{formateurDateHeure.format(lireDateServeur(recu.dateHeure))}</p>
         <p className="text-xs">{recu.numeroAbonnement !== null ? `${recu.operation} — abonnement n° ${recu.numeroAbonnement}` : recu.operation}</p>
 
         <Separator />

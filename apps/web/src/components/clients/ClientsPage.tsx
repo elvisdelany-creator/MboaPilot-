@@ -17,7 +17,7 @@ import {
   Wallet,
   Wrench,
 } from "lucide-react";
-import { peutTransitionnerSav, validerMigrationFormule, type StatutSav } from "@mboapilot/shared";
+import { peutTransitionnerSav, validerMigrationFormule, type StatutSav, lireDateServeur } from "@mboapilot/shared";
 import { chargerCatalogue, chargerDossierSav, chargerFiche360, rechercherAbonnes, ErreurAuthentification } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { AppHeader, type Vue } from "@/components/layout/AppHeader";
@@ -376,7 +376,7 @@ export function ClientsPage({ onNaviguer, onReabonnerDepuisFiche }: Props) {
                                   {a.familleLibelle} — {a.formuleLibelle}
                                 </p>
                                 <p className="text-sm text-muted-foreground">
-                                  n° {a.numeroAbonnement} · {formateurDate.format(new Date(a.dateDebut))} → {formateurDate.format(new Date(a.dateFin))}
+                                  n° {a.numeroAbonnement} · {formateurDate.format(lireDateServeur(a.dateDebut))} → {formateurDate.format(lireDateServeur(a.dateFin))}
                                   {materielActif ? ` · ${materielActif.typeMateriel}${materielActif.numeroSerie ? ` (S/N ${materielActif.numeroSerie})` : ""}` : ""}
                                 </p>
                               </div>
@@ -463,7 +463,7 @@ export function ClientsPage({ onNaviguer, onReabonnerDepuisFiche }: Props) {
                                 <div className="flex items-center justify-between text-sm">
                                   <span className="text-muted-foreground">
                                     {f.type === "AVOIR" ? `Avoir n° ${f.idFacture} sur facture n° ${f.factureOrigineId}` : `Facture n° ${f.idFacture}`} —{" "}
-                                    {formateurDate.format(new Date(f.dateCreation))}
+                                    {formateurDate.format(lireDateServeur(f.dateCreation))}
                                   </span>
                                   <span className="flex items-center gap-2">
                                     <span className="tabular-nums font-medium text-card-foreground">{formateurFcfa.format(f.montantTotal)} FCFA</span>
@@ -479,7 +479,7 @@ export function ClientsPage({ onNaviguer, onReabonnerDepuisFiche }: Props) {
                                 {paiementsFacture.map((p) => (
                                   <div key={p.idPaiement} className="flex items-center justify-between gap-2 pl-3">
                                     <p className="text-xs text-muted-foreground">
-                                      {formateurDateHeure.format(new Date(p.datePaiement))} — {LIBELLE_MODE_PAIEMENT[p.mode]} — {formateurFcfa.format(p.montant)} FCFA
+                                      {formateurDateHeure.format(lireDateServeur(p.datePaiement))} — {LIBELLE_MODE_PAIEMENT[p.mode]} — {formateurFcfa.format(p.montant)} FCFA
                                       {p.statutRapprochement && (
                                         <Badge variant={p.statutRapprochement === "RAPPROCHE" ? "outline" : "secondary"} className="ml-2 align-middle">
                                           {p.statutRapprochement === "RAPPROCHE" ? "Rapproché" : "En attente de rapprochement"}
@@ -566,7 +566,7 @@ export function ClientsPage({ onNaviguer, onReabonnerDepuisFiche }: Props) {
                             >
                               <div>
                                 <p className="font-medium text-card-foreground">Dossier n° {d.idDossierSav} — {d.descriptionPanne}</p>
-                                <p className="text-sm text-muted-foreground">Reçu le {formateurDateHeure.format(new Date(d.dateReception))}</p>
+                                <p className="text-sm text-muted-foreground">Reçu le {formateurDateHeure.format(lireDateServeur(d.dateReception))}</p>
                               </div>
                               <span className="flex shrink-0 items-center gap-2">
                                 <Badge variant={VARIANTE_STATUT_SAV[d.statut]}>{LIBELLE_STATUT_SAV[d.statut]}</Badge>
@@ -614,7 +614,7 @@ export function ClientsPage({ onNaviguer, onReabonnerDepuisFiche }: Props) {
                         <li key={c.idSuivi}>
                           <Card className="flex-row items-center justify-between gap-3 p-3">
                             <span className="text-sm text-muted-foreground">
-                              Abonnement n° {c.numeroAbonnement} · fin probatoire {formateurDate.format(new Date(c.dateFinProbatoire))}
+                              Abonnement n° {c.numeroAbonnement} · fin probatoire {formateurDate.format(lireDateServeur(c.dateFinProbatoire))}
                             </span>
                             <div className="flex shrink-0 items-center gap-2">
                               <span className="tabular-nums font-medium text-card-foreground">{formateurFcfa.format(c.montantCommission)} FCFA</span>
@@ -644,7 +644,7 @@ export function ClientsPage({ onNaviguer, onReabonnerDepuisFiche }: Props) {
                             <div>
                               <p className="text-sm font-medium text-card-foreground">{LIBELLE_EVENEMENT_NOTIFICATION[n.evenement]}</p>
                               <p className="text-xs text-muted-foreground">
-                                {n.destinataire} · {formateurDateHeure.format(new Date(n.dateEnvoi))}
+                                {n.destinataire} · {formateurDateHeure.format(lireDateServeur(n.dateEnvoi))}
                               </p>
                               <p className="mt-1 text-xs italic text-muted-foreground">« {n.message} »</p>
                             </div>

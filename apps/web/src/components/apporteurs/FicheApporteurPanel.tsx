@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { lireDateServeur } from "@mboapilot/shared";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -108,7 +109,7 @@ export function FicheApporteurPanel({ fiche, onEnregistrerReglement }: Props) {
           {fiche.commissionsCanalplus.map((c) => (
             <li key={c.idSuivi} className="flex items-center justify-between gap-3 text-sm">
               <span className="text-muted-foreground">
-                Abonnement n° {c.numeroAbonnement} · fin probatoire {formateurDate.format(new Date(c.dateFinProbatoire))}
+                Abonnement n° {c.numeroAbonnement} · fin probatoire {formateurDate.format(lireDateServeur(c.dateFinProbatoire))}
               </span>
               <div className="flex shrink-0 items-center gap-2">
                 <span className="tabular-nums font-medium text-card-foreground">{formateurFcfa.format(c.montantCommission)} FCFA</span>
@@ -143,7 +144,7 @@ export function FicheApporteurPanel({ fiche, onEnregistrerReglement }: Props) {
           {fiche.reglements.map((r) => (
             <li key={r.idReglement} className="flex items-center justify-between gap-3 text-sm text-muted-foreground">
               <span>
-                {formateurDateHeure.format(new Date(r.dateReglement))} — {LIBELLE_MODE_PAIEMENT[r.modePaiement]}
+                {formateurDateHeure.format(lireDateServeur(r.dateReglement))} — {LIBELLE_MODE_PAIEMENT[r.modePaiement]}
                 {r.reference ? ` (${r.reference})` : ""}
               </span>
               <span className="tabular-nums font-medium text-card-foreground">{formateurFcfa.format(r.montant)} FCFA</span>

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { lireDateServeur } from "@mboapilot/shared";
 import { CheckCircle2, XCircle } from "lucide-react";
 import { chargerVerificationFacture } from "@/lib/api";
 import { Card } from "@/components/ui/card";
@@ -71,7 +72,7 @@ export function VerificationFacturePage() {
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-muted-foreground">Émise le</span>
-                <span className="font-medium text-card-foreground">{formateurDateHeure.format(new Date(resultat.facture.dateCreation))}</span>
+                <span className="font-medium text-card-foreground">{formateurDateHeure.format(lireDateServeur(resultat.facture.dateCreation))}</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-muted-foreground">Montant</span>

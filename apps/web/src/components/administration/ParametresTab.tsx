@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { lireDateServeur } from "@mboapilot/shared";
 import { toast } from "sonner";
 import { Download, ImagePlus } from "lucide-react";
 import {
@@ -540,7 +541,7 @@ export function ParametresTab() {
             <ul className="space-y-1 text-sm text-muted-foreground">
               {sauvegardes.slice(0, 5).map((s) => (
                 <li key={s.nomFichier} className="flex items-center justify-between gap-3">
-                  <span>{formateurDateHeure.format(new Date(s.dateCreation))}</span>
+                  <span>{formateurDateHeure.format(lireDateServeur(s.dateCreation))}</span>
                   <span className="tabular-nums">{formateurTaille(s.tailleOctets)}</span>
                 </li>
               ))}

@@ -1,4 +1,5 @@
 import type { PointEvolutionCA } from "@/lib/types";
+import { lireDateServeur } from "@mboapilot/shared";
 
 interface Props {
   points: PointEvolutionCA[];
@@ -36,7 +37,7 @@ export function EvolutionCaChart({ points }: Props) {
         <g key={c.point.date}>
           <circle cx={c.x} cy={c.y} r={2.5} className="fill-primary" />
           <title>
-            {formateurDateCourte.format(new Date(c.point.date))} — {formateurFcfa.format(c.point.montant)} FCFA
+            {formateurDateCourte.format(lireDateServeur(c.point.date))} — {formateurFcfa.format(c.point.montant)} FCFA
           </title>
         </g>
       ))}

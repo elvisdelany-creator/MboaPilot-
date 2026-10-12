@@ -21,6 +21,7 @@ export { calculerMontantTaxe, extraireTaxeDuTTC } from "./taxe.js";
 export { analyserCsv, construireCsv, decoderTexteCsv } from "./csv.js";
 export { validerMotDePasse, POLITIQUE_MDP_PAR_DEFAUT, type PolitiqueMotDePasse } from "./politique-mot-de-passe.js";
 export { normaliserLibelle } from "./normaliser-libelle.js";
+export { lireDateServeur } from "./date-serveur.js";
 export { excedentEncaissementSuspect, SEUIL_EXCEDENT_ENCAISSEMENT_SUSPECT } from "./excedent-encaissement.js";
 export { peutAccederVue, vuesAccessibles, type RoleUtilisateur, type VueApplication } from "./acces-vues.js";
 export { decrireEntreeAudit, type ChangementAudit, type DescriptionAudit, type EntreeAuditBrute } from "./description-audit.js";

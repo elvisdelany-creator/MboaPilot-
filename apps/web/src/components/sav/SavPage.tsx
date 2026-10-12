@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { ImagePlus, Plus, Wrench } from "lucide-react";
-import { peutTransitionnerSav, type StatutSav } from "@mboapilot/shared";
+import { peutTransitionnerSav, type StatutSav, lireDateServeur } from "@mboapilot/shared";
 import { chargerDossierSav, chargerDossiersSav, chargerUrlPhotoSav, televerserPhotoSav, ErreurAuthentification } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { AppHeader, type Vue } from "@/components/layout/AppHeader";
@@ -197,7 +197,7 @@ export function SavPage({ onNaviguer }: Props) {
               <div className="flex items-start justify-between">
                 <div>
                   <h2 className="font-heading text-lg font-semibold text-foreground">Dossier n° {detail.idDossierSav}</h2>
-                  <p className="text-sm text-muted-foreground">Reçu le {formateurDate.format(new Date(detail.dateReception))}</p>
+                  <p className="text-sm text-muted-foreground">Reçu le {formateurDate.format(lireDateServeur(detail.dateReception))}</p>
                 </div>
                 <Badge variant={VARIANTE_STATUT[detail.statut]}>{LIBELLES_STATUT[detail.statut]}</Badge>
               </div>
@@ -299,7 +299,7 @@ export function SavPage({ onNaviguer }: Props) {
                 <ul className="space-y-1 text-sm text-muted-foreground">
                   {detail.historique.map((h) => (
                     <li key={h.idHistoSav}>
-                      {formateurDate.format(new Date(h.dateChangement))} — {h.statutAvant ? `${LIBELLES_STATUT[h.statutAvant]} → ` : ""}
+                      {formateurDate.format(lireDateServeur(h.dateChangement))} — {h.statutAvant ? `${LIBELLES_STATUT[h.statutAvant]} → ` : ""}
                       {LIBELLES_STATUT[h.statutApres]}
                       {h.motif ? ` (${h.motif})` : ""}
                     </li>

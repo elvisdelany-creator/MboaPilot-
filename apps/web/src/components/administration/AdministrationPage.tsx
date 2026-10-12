@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { decrireEntreeAudit } from "@mboapilot/shared";
+import { decrireEntreeAudit, lireDateServeur } from "@mboapilot/shared";
 import { Plus, ShieldCheck } from "lucide-react";
 import {
   chargerJournalAudit,
@@ -283,7 +283,7 @@ export function AdministrationPage({ onNaviguer }: Props) {
                           <span className="font-medium text-card-foreground">
                             {LIBELLES_ACTION[entree.action]} — {description.objet} n° {description.reference}
                           </span>
-                          <span className="text-xs text-muted-foreground">{formateurDateHeure.format(new Date(entree.dateAction))}</span>
+                          <span className="text-xs text-muted-foreground">{formateurDateHeure.format(lireDateServeur(entree.dateAction))}</span>
                         </div>
                         <p className="text-sm text-muted-foreground">
                           {entree.utilisateurId === null

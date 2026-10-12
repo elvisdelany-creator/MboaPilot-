@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { peutAccederVue, type RoleUtilisateur } from "@mboapilot/shared";
+import { peutAccederVue, type RoleUtilisateur, lireDateServeur } from "@mboapilot/shared";
 import { AlertTriangle, History, PackageX, RotateCw, TrendingDown, Users } from "lucide-react";
 import {
   chargerAbonnementsExpires,
@@ -338,7 +338,7 @@ export function DashboardPage({ onNaviguer, onReabonnerDepuisAlerte, onReabonner
                           {c.abonne.prenom} {c.abonne.nom}
                         </p>
                         <p className="text-sm text-muted-foreground">
-                          Abonnement n° {c.commission.numeroAbonnement} · fin probatoire {formateurDateCourte.format(new Date(c.commission.dateFinProbatoire))}
+                          Abonnement n° {c.commission.numeroAbonnement} · fin probatoire {formateurDateCourte.format(lireDateServeur(c.commission.dateFinProbatoire))}
                         </p>
                       </div>
                       <span className="tabular-nums font-medium text-primary">{formateurFcfa.format(c.commission.montantCommission)} FCFA</span>

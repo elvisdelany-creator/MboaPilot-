@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { AlertTriangle, Download, Package, Pencil, Plus, Upload } from "lucide-react";
-import { decoderTexteCsv } from "@mboapilot/shared";
+import { decoderTexteCsv, lireDateServeur } from "@mboapilot/shared";
 import {
   chargerAlertesStock,
   chargerHistoriquePrixProduit,
@@ -336,7 +336,7 @@ export function StockPage({ onNaviguer, idProduitInitial, actionInitiale }: Prop
                     {mouvements.map((m) => (
                       <li key={m.idMouvement} className="flex items-center justify-between gap-3">
                         <span className="text-muted-foreground">
-                          {formateurDate.format(new Date(m.dateMouvement))} — {LIBELLE_MOUVEMENT[m.typeMouvement]}
+                          {formateurDate.format(lireDateServeur(m.dateMouvement))} — {LIBELLE_MOUVEMENT[m.typeMouvement]}
                           {m.motif ? ` (${m.motif})` : ""}
                         </span>
                         <span className="shrink-0 tabular-nums font-medium text-card-foreground">
@@ -356,7 +356,7 @@ export function StockPage({ onNaviguer, idProduitInitial, actionInitiale }: Prop
                 <ul className="space-y-1 text-sm text-muted-foreground">
                   {historiquePrix.map((h) => (
                     <li key={h.idHistoPrix}>
-                      {formateurDateCourte.format(new Date(h.dateChangement))} — prix {formateurFcfa.format(h.prixVenteAvant)} → {formateurFcfa.format(h.prixVenteApres)} FCFA
+                      {formateurDateCourte.format(lireDateServeur(h.dateChangement))} — prix {formateurFcfa.format(h.prixVenteAvant)} → {formateurFcfa.format(h.prixVenteApres)} FCFA
                       {h.coutRevientAvant !== h.coutRevientApres &&
                         ` · coût ${formateurFcfa.format(h.coutRevientAvant)} → ${formateurFcfa.format(h.coutRevientApres)} FCFA`}
                     </li>

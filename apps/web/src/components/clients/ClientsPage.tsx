@@ -17,7 +17,14 @@ import {
   Wallet,
   Wrench,
 } from "lucide-react";
-import { peutTransitionnerSav, validerMigrationFormule, type StatutSav, lireDateServeur } from "@mboapilot/shared";
+import {
+  peutTransitionnerSav,
+  validerMigrationFormule,
+  type StatutSav,
+  lireDateServeur,
+  soldeFacture as calculerSoldeFacture,
+  soldeTotalDu,
+} from "@mboapilot/shared";
 import { chargerCatalogue, chargerDossierSav, chargerFiche360, rechercherAbonnes, ErreurAuthentification } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { AppHeader, type Vue } from "@/components/layout/AppHeader";
@@ -223,11 +230,7 @@ export function ClientsPage({ onNaviguer, onReabonnerDepuisFiche }: Props) {
   // montant dû — l'ignorer ferait apparaître comme "impayé" un montant que
   // l'avoir a précisément pour but d'annuler.
   function soldeFacture(f: Facture) {
-    const totalPaye = (fiche?.paiements ?? []).filter((p) => p.idFacture === f.idFacture).reduce((total, p) => total + p.montant, 0);
-    const totalAvoirs = (fiche?.factures ?? [])
-      .filter((autre) => autre.factureOrigineId === f.idFacture)
-      .reduce((total, avoir) => total + avoir.montantTotal, 0);
-    return f.montantTotal + totalAvoirs - totalPaye;
+    return calculerSoldeFacture(f, fiche?.factures ?? [], fiche?.paiements ?? []);
   }
 
   return (
@@ -439,7 +442,7 @@ export function ClientsPage({ onNaviguer, onReabonnerDepuisFiche }: Props) {
                   </div>
 
                   {(() => {
-                    const soldeTotal = fiche.factures.reduce((total, f) => total + soldeFacture(f), 0);
+                    const soldeTotal = soldeTotalDu(fiche.factures, fiche.paiements);
                     return (
                       soldeTotal > 0 && (
                         <p className="text-sm font-medium text-alert-j1-fg">Solde total dû : {formateurFcfa.format(soldeTotal)} FCFA</p>

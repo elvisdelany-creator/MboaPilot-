@@ -4768,6 +4768,56 @@ describe("Attribution des actions à l'utilisateur authentifié (11.5)", () => {
     const reglement = db.select().from(schema.reglementCommission).get()!;
     expect(reglement.utilisateurId).toBe(idGerant);
   });
+
+  // constaté en test grandeur nature : le serveur n'imposait l'auteur que si le client en avait
+  // envoyé un. Sans userId, l'anonymisation d'un client (action destructrice, 11.3) était
+  // journalisée SANS auteur, l'annulation d'un paiement recevait NaN et la clôture de caisse
+  // échouait en « champs obligatoires » : l'auteur vient toujours de la session.
+  it("journalise l'anonymisation d'un client au nom de l'appelant, même sans userId dans le corps", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const idAdmin = creerUtilisateur(db, { siteId, nom: "Admin", prenom: "D", identifiant: "admin1", motDePasse: "motdepasse-secret", role: "ADMINISTRATEUR" }).idUser;
+    const token = await connecter(app, "admin1");
+    const abonne = db.insert(schema.abonne).values({ siteId, nom: "Nga", prenom: "Paul", telephone: "690000000" }).returning().get();
+
+    const reponse = await app.inject({ method: "POST", url: `/api/v1/abonnes/${abonne.idAbonne}/anonymiser`, headers: authHeader(token), payload: {} });
+
+    expect(reponse.statusCode).toBe(200);
+    const audit = db.select().from(schema.journalAudit).where(eq(schema.journalAudit.tableCible, "abonne")).all();
+    expect(audit.length).toBeGreaterThan(0);
+    expect(audit.every((ligne) => ligne.utilisateurId === idAdmin)).toBe(true);
+  });
+
+  it("journalise l'annulation d'un paiement au nom de l'appelant, même sans ?userId= dans l'adresse", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const idGerant = creerUtilisateur(db, { siteId, nom: "Gerant", prenom: "G", identifiant: "gerant1", motDePasse: "motdepasse-secret", role: "GERANT" }).idUser;
+    const token = await connecter(app, "gerant1");
+    const facture = db.insert(schema.facture).values({ siteId, statut: "VALIDEE", montantTotal: 5000, creePar: userId }).returning().get();
+    const paiement = db.insert(schema.paiement).values({ idFacture: facture.idFacture, mode: "CASH", montant: 5000, utilisateurId: userId }).returning().get();
+
+    const reponse = await app.inject({ method: "DELETE", url: `/api/v1/paiements/${paiement.idPaiement}`, headers: authHeader(token) });
+
+    expect(reponse.statusCode).toBe(200);
+    const audit = db.select().from(schema.journalAudit).where(eq(schema.journalAudit.tableCible, "paiement")).all();
+    expect(audit).toHaveLength(1);
+    expect(audit[0].utilisateurId).toBe(idGerant);
+  });
+
+  it("répond 400 (message lisible), jamais 500, quand une écriture arrive sans corps ou avec un corps vide, nul ou en tableau", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    creerUtilisateur(db, { siteId, nom: "Gerant", prenom: "G", identifiant: "gerant1", motDePasse: "motdepasse-secret", role: "GERANT" });
+    const token = await connecter(app, "gerant1");
+
+    for (const url of ["/api/v1/ventes", "/api/v1/stock/achats", "/api/v1/abonnes/fusion", "/api/v1/sav/dossiers", "/api/v1/paiements-mobiles"]) {
+      const entetes = { ...authHeader(token), "content-type": "application/json" };
+      const sansCorps = await app.inject({ method: "POST", url, headers: authHeader(token) });
+      const nul = await app.inject({ method: "POST", url, headers: entetes, payload: "null" });
+      const tableau = await app.inject({ method: "POST", url, headers: entetes, payload: "[1,2]" });
+      for (const reponse of [sansCorps, nul, tableau]) {
+        expect(reponse.statusCode, url).toBeLessThan(500);
+        expect(reponse.json().erreur, url).toEqual(expect.any(String));
+      }
+    }
+  });
 });
 
 // 11.1 : le tableau de bord filtre désormais les factures par plage de dates

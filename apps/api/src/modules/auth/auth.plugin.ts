@@ -29,6 +29,7 @@ export function registerAuthPlugin(app: FastifyInstance, jwtSecret: string) {
 
 // noms sous lesquels les routes acceptent aujourd'hui l'auteur d'une action
 const CHAMPS_AUTEUR = ["userId", "utilisateurId"];
+const METHODES_ECRITURE = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 
 // 11.2 : RBAC de bout en bout — jamais appliqué uniquement côté interface.
 // Le jeton ne prouve que l'identité (idUser) ; rôle, site et statut actif
@@ -61,11 +62,18 @@ export function creerAuthRequis(db: Db) {
     // est toujours l'utilisateur authentifié — un userId fourni par le client,
     // dans le corps ou en paramètre, est écrasé plutôt que cru, sinon un
     // compte pourrait imputer une opération à un autre.
+    // Un client qui n'envoie pas d'auteur n'a pas à échouer ni à laisser une action sans auteur
+    // (anonymisation journalisée sans nom, annulation de paiement avec NaN) : pour toute écriture,
+    // les champs d'auteur sont imposés même absents. Les lectures (GET) restent intactes.
+    const ecriture = METHODES_ECRITURE.has(request.method);
+    // Une écriture sans corps (ou « null ») faisait échouer les routes qui lisent request.body.xxx
+    // avant leur contrôle métier : TypeError, donc « Erreur interne » (500) au lieu d'un message clair.
+    if (ecriture && (request.body === undefined || request.body === null)) request.body = {};
     for (const champ of CHAMPS_AUTEUR) {
-      if (request.body && typeof request.body === "object" && champ in request.body) {
+      if (request.body && typeof request.body === "object" && !Array.isArray(request.body) && (ecriture || champ in request.body)) {
         (request.body as Record<string, unknown>)[champ] = utilisateurCourant.idUser;
       }
-      if (request.query && typeof request.query === "object" && champ in request.query) {
+      if (request.query && typeof request.query === "object" && (champ in request.query || (request.method === "DELETE" && champ === "userId"))) {
         (request.query as Record<string, unknown>)[champ] = String(utilisateurCourant.idUser);
       }
     }

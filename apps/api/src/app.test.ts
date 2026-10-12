@@ -5,6 +5,7 @@ import { mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { creerDbTest, type Db } from "./test-utils/db.js";
+import { JPEG_FACTICE, PNG_FACTICE } from "./test-utils/images.js";
 import { buildApp } from "./app.js";
 import { creerUtilisateur } from "./modules/utilisateurs/utilisateur.repository.js";
 import { SimulateurImpression } from "./modules/impression/simulateur-impression.js";
@@ -1026,7 +1027,7 @@ describe("Module SAV (5.10, 8.4)", () => {
       const frontiere = "----mboapilot-test-boundary";
       const corpsMultipart = Buffer.concat([
         Buffer.from(`--${frontiere}\r\nContent-Disposition: form-data; name="file"; filename="avant.jpg"\r\nContent-Type: image/jpeg\r\n\r\n`),
-        Buffer.from("contenu-image-factice"),
+        JPEG_FACTICE,
         Buffer.from(`\r\n--${frontiere}--\r\n`),
       ]);
 
@@ -1046,7 +1047,7 @@ describe("Module SAV (5.10, 8.4)", () => {
       const fichier = await app.inject({ method: "GET", url: `/api/v1/sav/photos/${idPhoto}`, headers: authHeader(token) });
       expect(fichier.statusCode).toBe(200);
       expect(fichier.headers["content-type"]).toBe("image/jpeg");
-      expect(fichier.rawPayload.toString()).toBe("contenu-image-factice");
+      expect(fichier.rawPayload.equals(JPEG_FACTICE)).toBe(true);
     } finally {
       rmSync(dossierTemp, { recursive: true, force: true });
     }
@@ -1059,7 +1060,7 @@ describe("Module SAV (5.10, 8.4)", () => {
     const frontiere = "----mboapilot-test-boundary";
     const corps = Buffer.concat([
       Buffer.from(`--${frontiere}\r\nContent-Disposition: form-data; name="file"; filename="photo.jpg"\r\nContent-Type: image/jpeg\r\n\r\n`),
-      Buffer.alloc(tailleOctets, 1),
+      Buffer.concat([JPEG_FACTICE, Buffer.alloc(tailleOctets, 1)]),
       Buffer.from(`\r\n--${frontiere}--\r\n`),
     ]);
     return app.inject({
@@ -4034,7 +4035,7 @@ describe("GET /api/v1/entreprise (6.7)", () => {
       const frontiere = "----mboapilot-test-boundary";
       const corpsMultipart = Buffer.concat([
         Buffer.from(`--${frontiere}\r\nContent-Disposition: form-data; name="file"; filename="logo.png"\r\nContent-Type: image/png\r\n\r\n`),
-        Buffer.from("contenu-logo-factice"),
+        PNG_FACTICE,
         Buffer.from(`\r\n--${frontiere}--\r\n`),
       ]);
 
@@ -4172,7 +4173,7 @@ describe("GET /api/v1/entreprise (6.7)", () => {
       const frontiere = "----mboapilot-test-boundary";
       const corpsMultipart = Buffer.concat([
         Buffer.from(`--${frontiere}\r\nContent-Disposition: form-data; name="file"; filename="logo.png"\r\nContent-Type: image/png\r\n\r\n`),
-        Buffer.from("contenu-logo-factice"),
+        PNG_FACTICE,
         Buffer.from(`\r\n--${frontiere}--\r\n`),
       ]);
 
@@ -4191,7 +4192,7 @@ describe("GET /api/v1/entreprise (6.7)", () => {
       const fichier = await app.inject({ method: "GET", url: "/api/v1/entreprise/logo", headers: authHeader(tokenAdmin) });
       expect(fichier.statusCode).toBe(200);
       expect(fichier.headers["content-type"]).toBe("image/png");
-      expect(fichier.rawPayload.toString()).toBe("contenu-logo-factice");
+      expect(fichier.rawPayload.equals(PNG_FACTICE)).toBe(true);
     } finally {
       rmSync(dossierTemp, { recursive: true, force: true });
     }
@@ -4926,5 +4927,52 @@ describe("POST /api/v1/auth/login : corps mal formés (11.2)", () => {
 
     expect(reponse.statusCode).toBe(401);
     expect(reponse.json().erreur).toBe("Identifiants invalides");
+  });
+});
+
+// 11.2 : le logo (et les photos SAV) doit être contrôlé sur son CONTENU, et le logo avoir un
+// plafond de taille explicite (la limite par défaut du multipart refusait tout logo > 1 Mo
+// avec un message technique en anglais).
+describe("POST /api/v1/entreprise/logo : contenu et taille (11.2)", () => {
+  function multipart(contenu: Buffer, typeMime = "image/png", nom = "logo.png") {
+    const frontiere = "----mboapilot-test-boundary";
+    return {
+      headers: { "content-type": `multipart/form-data; boundary=${frontiere}` },
+      payload: Buffer.concat([
+        Buffer.from(`--${frontiere}\r\nContent-Disposition: form-data; name="file"; filename="${nom}"\r\nContent-Type: ${typeMime}\r\n\r\n`),
+        contenu,
+        Buffer.from(`\r\n--${frontiere}--\r\n`),
+      ]),
+    };
+  }
+
+  async function envoyer(contenu: Buffer, typeMime?: string) {
+    const dossierTemp = mkdtempSync(join(tmpdir(), "mboapilot-test-logo-route-"));
+    try {
+      const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST, dossierLogos: dossierTemp });
+      creerUtilisateur(db, { siteId, nom: "Admin", prenom: "D", identifiant: "admin-logo", motDePasse: "motdepasse-secret", role: "ADMINISTRATEUR" });
+      const token = await connecter(app, "admin-logo");
+      const { headers, payload } = multipart(contenu, typeMime);
+      return await app.inject({ method: "POST", url: "/api/v1/entreprise/logo", headers: { ...authHeader(token), ...headers }, payload });
+    } finally {
+      rmSync(dossierTemp, { recursive: true, force: true });
+    }
+  }
+
+  it("refuse un HTML annoncé « image/png » (400, message lisible)", async () => {
+    const reponse = await envoyer(Buffer.from("<html><script>alert(1)</script></html>"));
+    expect(reponse.statusCode).toBe(400);
+    expect(reponse.json().erreur).toMatch(/image valide/i);
+  });
+
+  it("accepte un logo de 1,5 Mo (au-dessus de l'ancienne limite par défaut)", async () => {
+    const reponse = await envoyer(Buffer.concat([PNG_FACTICE, Buffer.alloc(1_500_000)]));
+    expect(reponse.statusCode).toBe(201);
+  });
+
+  it("refuse un logo de plus de 2 Mo avec un message en français (413)", async () => {
+    const reponse = await envoyer(Buffer.concat([PNG_FACTICE, Buffer.alloc(3_000_000)]));
+    expect(reponse.statusCode).toBe(413);
+    expect(reponse.json().erreur).toMatch(/2 Mo/);
   });
 });

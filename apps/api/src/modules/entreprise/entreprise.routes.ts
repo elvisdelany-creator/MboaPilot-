@@ -7,6 +7,9 @@ import { modifierEntreprise, trouverInfosEntrepriseParSite, type ModifierEntrepr
 import { enregistrerLogoEntreprise, resoudreTypeMimeLogo } from "./logo.service.js";
 import { modifierSite } from "../utilisateurs/site.repository.js";
 import { envoyerErreur } from "../../lib/erreurs-api.js";
+import { FichierTropGrosError, lireFichierTeleverse } from "../../lib/televersement.js";
+
+const TAILLE_MAX_LOGO_OCTETS = 2 * 1024 * 1024;
 
 // 6.7 : identification de l'entreprise/site pour l'en-tête des documents
 // commerciaux (ticket de caisse, pro-forma) — accessible à tout rôle
@@ -55,15 +58,19 @@ export function registerEntrepriseRoutes(app: FastifyInstance, db: Db, dossierLo
       return;
     }
     try {
-      const fichier = await request.file();
-      if (!fichier) throw new Error("Aucun fichier fourni");
+      // plafond explicite (la limite par défaut du multipart refusait des logos ordinaires)
+      const fichier = await lireFichierTeleverse(request, TAILLE_MAX_LOGO_OCTETS);
       const entreprise = enregistrerLogoEntreprise(db, dossierLogos, {
         idEntreprise: infos.entreprise.idEntreprise,
-        contenu: await fichier.toBuffer(),
-        typeMime: fichier.mimetype,
+        contenu: fichier.contenu,
+        typeMime: fichier.typeMime,
       });
       reply.code(201).send(entreprise);
     } catch (erreur) {
+      if (erreur instanceof FichierTropGrosError) {
+        reply.code(413).send({ erreur: "Le logo dépasse la taille maximale autorisée de 2 Mo" });
+        return;
+      }
       envoyerErreur(reply, erreur);
     }
   });

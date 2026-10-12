@@ -1,11 +1,12 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { creerDbTest, type Db } from "../../test-utils/db.js";
 import * as schema from "../../db/schema.js";
 import { creerDossierSav } from "./sav.repository.js";
 import { enregistrerPhotoSav, listerPhotosSav } from "./sav-photo.service.js";
+import { JPEG_FACTICE, PNG_FACTICE } from "../../test-utils/images.js";
 
 let db: Db;
 let dossireTemp: string;
@@ -35,7 +36,7 @@ afterEach(() => {
 
 describe("enregistrerPhotoSav (5.10 : photos optionnelles du dossier SAV)", () => {
   it("écrit le fichier sur disque et journalise ses métadonnées", () => {
-    const contenu = Buffer.from("contenu-image-factice");
+    const contenu = JPEG_FACTICE;
 
     const photo = enregistrerPhotoSav(db, dossierPhotos, {
       idDossierSav,
@@ -51,13 +52,13 @@ describe("enregistrerPhotoSav (5.10 : photos optionnelles du dossier SAV)", () =
 
   it("crée le dossier de stockage s'il n'existe pas encore", () => {
     expect(existsSync(dossierPhotos)).toBe(false);
-    enregistrerPhotoSav(db, dossierPhotos, { idDossierSav, contenu: Buffer.from("x"), nomFichierOriginal: "photo.png", typeMime: "image/png" });
+    enregistrerPhotoSav(db, dossierPhotos, { idDossierSav, contenu: PNG_FACTICE, nomFichierOriginal: "photo.png", typeMime: "image/png" });
     expect(existsSync(dossierPhotos)).toBe(true);
   });
 
   it("génère un nom de fichier unique et non devinable, distinct du nom original", () => {
-    const p1 = enregistrerPhotoSav(db, dossierPhotos, { idDossierSav, contenu: Buffer.from("a"), nomFichierOriginal: "photo.jpg", typeMime: "image/jpeg" });
-    const p2 = enregistrerPhotoSav(db, dossierPhotos, { idDossierSav, contenu: Buffer.from("b"), nomFichierOriginal: "photo.jpg", typeMime: "image/jpeg" });
+    const p1 = enregistrerPhotoSav(db, dossierPhotos, { idDossierSav, contenu: JPEG_FACTICE, nomFichierOriginal: "photo.jpg", typeMime: "image/jpeg" });
+    const p2 = enregistrerPhotoSav(db, dossierPhotos, { idDossierSav, contenu: JPEG_FACTICE, nomFichierOriginal: "photo.jpg", typeMime: "image/jpeg" });
 
     expect(p1.nomFichier).not.toBe(p2.nomFichier);
     expect(p1.nomFichier).not.toBe("photo.jpg");
@@ -70,12 +71,31 @@ describe("enregistrerPhotoSav (5.10 : photos optionnelles du dossier SAV)", () =
   });
 });
 
+// 11.2 : même défaut que pour le logo — le type MIME déclaré par le client suffisait.
+describe("enregistrerPhotoSav : le contenu fait foi (11.2)", () => {
+  it.each([
+    ["HTML", Buffer.from("<html><script>alert(1)</script></html>")],
+    ["exécutable Windows", Buffer.from("MZ\x90\x00\x03")],
+    ["texte quelconque", Buffer.from("contenu-image-factice")],
+  ])("refuse un fichier %s annoncé « image/jpeg », sans rien écrire ni enregistrer", (_nom, contenu) => {
+    expect(() => enregistrerPhotoSav(db, dossierPhotos, { idDossierSav, contenu, nomFichierOriginal: "photo.jpg", typeMime: "image/jpeg" })).toThrow(/image valide/i);
+    expect(listerPhotosSav(db, idDossierSav)).toEqual([]);
+    expect(existsSync(dossierPhotos) ? readdirSync(dossierPhotos) : []).toEqual([]);
+  });
+
+  it("enregistre le type réel du contenu (un PNG annoncé JPEG est stocké en .png)", () => {
+    const photo = enregistrerPhotoSav(db, dossierPhotos, { idDossierSav, contenu: PNG_FACTICE, nomFichierOriginal: "photo.jpg", typeMime: "image/jpeg" });
+    expect(photo.typeMime).toBe("image/png");
+    expect(photo.nomFichier).toMatch(/\.png$/);
+  });
+});
+
 describe("listerPhotosSav (5.10)", () => {
   it("liste les photos d'un dossier, la plus récente en dernier, sans mélanger avec un autre dossier", () => {
     const autreDossier = creerDossierSav(db, { siteId, descriptionPanne: "Autre panne", sousGarantie: false, userId }).idDossierSav;
-    enregistrerPhotoSav(db, dossierPhotos, { idDossierSav, contenu: Buffer.from("a"), nomFichierOriginal: "1.jpg", typeMime: "image/jpeg" });
-    enregistrerPhotoSav(db, dossierPhotos, { idDossierSav, contenu: Buffer.from("b"), nomFichierOriginal: "2.jpg", typeMime: "image/jpeg" });
-    enregistrerPhotoSav(db, dossierPhotos, { idDossierSav: autreDossier, contenu: Buffer.from("c"), nomFichierOriginal: "3.jpg", typeMime: "image/jpeg" });
+    enregistrerPhotoSav(db, dossierPhotos, { idDossierSav, contenu: JPEG_FACTICE, nomFichierOriginal: "1.jpg", typeMime: "image/jpeg" });
+    enregistrerPhotoSav(db, dossierPhotos, { idDossierSav, contenu: JPEG_FACTICE, nomFichierOriginal: "2.jpg", typeMime: "image/jpeg" });
+    enregistrerPhotoSav(db, dossierPhotos, { idDossierSav: autreDossier, contenu: JPEG_FACTICE, nomFichierOriginal: "3.jpg", typeMime: "image/jpeg" });
 
     const photos = listerPhotosSav(db, idDossierSav);
 

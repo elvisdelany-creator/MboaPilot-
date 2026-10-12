@@ -19,6 +19,7 @@ import { listerPaiementsFacture } from "../factures/paiement.repository.js";
 import { listerAvoirsFacture } from "../factures/avoir.service.js";
 import { trouverAbonne } from "../abonnes/abonne.repository.js";
 import { envoyerErreur } from "../../lib/erreurs-api.js";
+import { FichierTropGrosError, lireFichierTeleverse } from "../../lib/televersement.js";
 
 const TAILLE_MAX_PHOTO_OCTETS = 10 * 1024 * 1024;
 
@@ -143,17 +144,16 @@ export function registerSavRoutes(app: FastifyInstance, db: Db, dossierPhotos: s
       try {
         // la limite par défaut du multipart (≈ 1 Mo) refusait toute photo de
         // téléphone (2 à 6 Mo) : plafond explicite, propre à cette route
-        const fichier = await request.file({ limits: { fileSize: TAILLE_MAX_PHOTO_OCTETS } });
-        if (!fichier) throw new Error("Aucun fichier fourni");
+        const fichier = await lireFichierTeleverse(request, TAILLE_MAX_PHOTO_OCTETS);
         const photo = enregistrerPhotoSav(db, dossierPhotos, {
           idDossierSav,
-          contenu: await fichier.toBuffer(),
-          nomFichierOriginal: fichier.filename,
-          typeMime: fichier.mimetype,
+          contenu: fichier.contenu,
+          nomFichierOriginal: fichier.nomFichierOriginal,
+          typeMime: fichier.typeMime,
         });
         reply.code(201).send(photo);
       } catch (erreur) {
-        if ((erreur as { code?: string }).code === "FST_REQ_FILE_TOO_LARGE") {
+        if (erreur instanceof FichierTropGrosError) {
           reply.code(413).send({ erreur: "La photo dépasse la taille maximale autorisée de 10 Mo" });
           return;
         }

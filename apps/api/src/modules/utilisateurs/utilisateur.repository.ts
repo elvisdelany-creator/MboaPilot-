@@ -84,7 +84,9 @@ export function reinitialiserMotDePasse(db: Db, idUser: number, nouveauMotDePass
   const motDePasseHash = bcrypt.hashSync(nouveauMotDePasse, TOURS_HACHAGE);
   const apres = db
     .update(schema.utilisateur)
-    .set({ motDePasseHash })
+    // un administrateur qui réinitialise le mot de passe d'un utilisateur verrouillé après des
+    // échecs de connexion le débloque aussi : sinon il resterait bloqué jusqu'à 15 minutes
+    .set({ motDePasseHash, tentativesEchouees: 0, verrouilleJusqua: null })
     .where(eq(schema.utilisateur.idUser, idUser))
     .returning(COLONNES_SANS_HASH)
     .get();

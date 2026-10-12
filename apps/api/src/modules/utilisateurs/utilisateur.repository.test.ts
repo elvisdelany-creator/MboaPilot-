@@ -4,6 +4,7 @@ import bcrypt from "bcryptjs";
 import { creerDbTest, type Db } from "../../test-utils/db.js";
 import { creerUtilisateur, listerUtilisateurs, modifierUtilisateur, reinitialiserMotDePasse, trouverUtilisateurParIdentifiant } from "./utilisateur.repository.js";
 import * as schema from "../../db/schema.js";
+import { authentifier } from "../auth/auth.service.js";
 
 let db: Db;
 let siteId: number;
@@ -219,5 +220,36 @@ describe("reinitialiserMotDePasse (8.7, 11.2)", () => {
 
   it("renvoie undefined pour un utilisateur inconnu", () => {
     expect(reinitialiserMotDePasse(db, 999999, "nouveau-motdepasse")).toBeUndefined();
+  });
+});
+
+// 8.7, 11.2 : constaté à la relecture de la procédure de dépannage — réinitialiser le mot de
+// passe d'un utilisateur verrouillé (5 échecs) ne le débloquait pas : il restait bloqué jusqu'à
+// 15 minutes (« Réessayez dans quelques minutes ») malgré le nouveau mot de passe.
+describe("reinitialiserMotDePasse : déblocage du compte (11.2)", () => {
+  it("lève le verrouillage et remet le compteur d'échecs à zéro, pour pouvoir se connecter aussitôt", () => {
+    const u = creerUtilisateur(db, { siteId, nom: "Nga", prenom: "V", identifiant: "vnga", motDePasse: "ancien-motdepasse", role: "CAISSIER" });
+    db.update(schema.utilisateur)
+      .set({ tentativesEchouees: 3, verrouilleJusqua: new Date(Date.now() + 15 * 60_000).toISOString() })
+      .where(eq(schema.utilisateur.idUser, u.idUser))
+      .run();
+
+    reinitialiserMotDePasse(db, u.idUser, "nouveau-motdepasse");
+
+    const apres = db.select().from(schema.utilisateur).where(eq(schema.utilisateur.idUser, u.idUser)).get()!;
+    expect(apres.verrouilleJusqua).toBeNull();
+    expect(apres.tentativesEchouees).toBe(0);
+    expect(authentifier(db, "vnga", "nouveau-motdepasse").identifiant).toBe("vnga");
+  });
+
+  it("ne débloque rien quand la réinitialisation est refusée (mot de passe trop court)", () => {
+    const u = creerUtilisateur(db, { siteId, nom: "Nga", prenom: "V", identifiant: "vnga", motDePasse: "ancien-motdepasse", role: "CAISSIER" });
+    const verrou = new Date(Date.now() + 15 * 60_000).toISOString();
+    db.update(schema.utilisateur).set({ tentativesEchouees: 3, verrouilleJusqua: verrou }).where(eq(schema.utilisateur.idUser, u.idUser)).run();
+
+    expect(() => reinitialiserMotDePasse(db, u.idUser, "court1")).toThrow();
+
+    const apres = db.select().from(schema.utilisateur).where(eq(schema.utilisateur.idUser, u.idUser)).get()!;
+    expect(apres.verrouilleJusqua).toBe(verrou);
   });
 });

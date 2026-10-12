@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import { validerMotDePasse } from "@mboapilot/shared";
 import type { Db } from "../../db/types.js";
@@ -14,6 +14,16 @@ export type Role = (typeof ROLES)[number];
 // être vérifiée à l'exécution, sinon un rôle inexistant est enregistré tel quel
 function exigerRoleValide(role: string) {
   if (!(ROLES as readonly string[]).includes(role)) throw new Error(`Rôle inconnu "${role}" — attendu : ${ROLES.join(", ")}`);
+}
+
+// un identifiant de connexion : lettres latines, chiffres et . _ - @ — jamais d'espace, de
+// caractère de contrôle ou de lettre d'un autre alphabet (un « а » cyrillique est identique à
+// l'œil à un « a » latin : deux comptes « admin » distincts permettraient l'usurpation)
+const FORME_IDENTIFIANT = /^[a-z0-9._@-]{3,50}$/;
+
+// espaces retirés, minuscules : « Admin », « ADMIN » et « admin » désignent le même compte
+export function normaliserIdentifiant(identifiant: string) {
+  return identifiant.trim().toLowerCase();
 }
 
 export interface CreerUtilisateurInput {
@@ -34,9 +44,13 @@ export interface CreerUtilisateurInput {
 export function creerUtilisateur(db: Db, input: CreerUtilisateurInput, acteurId: number | null = null) {
   if (!input.nom.trim()) throw new Error("Le nom de l'utilisateur est obligatoire");
   if (!input.prenom.trim()) throw new Error("Le prénom de l'utilisateur est obligatoire");
-  if (!input.identifiant.trim()) throw new Error("L'identifiant de l'utilisateur est obligatoire");
+  const identifiant = normaliserIdentifiant(input.identifiant);
+  if (!identifiant) throw new Error("L'identifiant de l'utilisateur est obligatoire");
+  if (!FORME_IDENTIFIANT.test(identifiant)) {
+    throw new Error("L'identifiant doit contenir de 3 à 50 caractères : lettres sans accent, chiffres, point, tiret, tiret bas ou @ (ni espace ni autre symbole)");
+  }
   exigerRoleValide(input.role);
-  if (trouverUtilisateurParIdentifiant(db, input.identifiant)) throw new Error("Cet identifiant est déjà utilisé par un autre compte");
+  if (trouverUtilisateurParIdentifiant(db, identifiant)) throw new Error("Cet identifiant est déjà utilisé par un autre compte");
 
   const politique = trouverPolitiqueMotDePasseParSite(db, input.siteId);
   const erreurs = validerMotDePasse(input.motDePasse, politique);
@@ -49,7 +63,7 @@ export function creerUtilisateur(db: Db, input: CreerUtilisateurInput, acteurId:
       siteId: input.siteId,
       nom: input.nom,
       prenom: input.prenom,
-      identifiant: input.identifiant,
+      identifiant,
       motDePasseHash,
       role: input.role,
       idApporteur: input.idApporteur,
@@ -104,8 +118,10 @@ export function reinitialiserMotDePasse(db: Db, idUser: number, nouveauMotDePass
   return apres;
 }
 
+// insensible à la casse et aux espaces : un compte ancien enregistré avec des majuscules
+// reste retrouvable, et la création ne peut pas en dupliquer l'identifiant
 export function trouverUtilisateurParIdentifiant(db: Db, identifiant: string) {
-  return db.select().from(schema.utilisateur).where(eq(schema.utilisateur.identifiant, identifiant)).get();
+  return db.select().from(schema.utilisateur).where(sql`lower(${schema.utilisateur.identifiant}) = ${normaliserIdentifiant(identifiant)}`).get();
 }
 
 const COLONNES_SANS_HASH = {

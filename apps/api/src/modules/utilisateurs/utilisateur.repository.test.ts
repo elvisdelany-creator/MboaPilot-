@@ -253,3 +253,58 @@ describe("reinitialiserMotDePasse : déblocage du compte (11.2)", () => {
     expect(apres.verrouilleJusqua).toBe(verrou);
   });
 });
+
+// Constaté en test grandeur nature : l'API acceptait « ADMIN », « Admin », « admin » entouré
+// d'espaces, un « а » cyrillique (identique à l'œil), des tabulations, 300 caractères ou « ; ».
+// Deux comptes à l'identifiant visuellement identique permettent l'usurpation (un caissier
+// nommé « Admin ») et rendent la connexion ambiguë : l'identifiant doit être normalisé.
+describe("identifiant de connexion : forme et unicité", () => {
+  const base = { nom: "Nga", prenom: "Valentin", motDePasse: "motdepasse-secret", role: "CAISSIER" as const };
+
+  it("retire les espaces autour et enregistre l'identifiant en minuscules", () => {
+    const u = creerUtilisateur(db, { siteId, ...base, identifiant: "  VNga  " });
+
+    expect(u.identifiant).toBe("vnga");
+  });
+
+  it("refuse un identifiant qui ne diffère d'un compte existant que par la casse ou les espaces", () => {
+    creerUtilisateur(db, { siteId, ...base, identifiant: "admin" });
+
+    for (const variante of ["ADMIN", "Admin", "  admin  "]) {
+      expect(() => creerUtilisateur(db, { siteId, ...base, identifiant: variante }), variante).toThrow(/identifiant.*déjà/i);
+    }
+  });
+
+  it.each([
+    ["un caractère cyrillique imitant une lettre latine", "аdmin"],
+    ["un espace au milieu", "zz ident"],
+    ["une tabulation", "zz\tident"],
+    ["un espace de largeur nulle", "admin\u200b"],
+    ["un point-virgule", "zz;drop"],
+    ["moins de 3 caractères", "ab"],
+    ["plus de 50 caractères", "x".repeat(51)],
+  ])("refuse un identifiant contenant %s", (_libelle, identifiant) => {
+    expect(() => creerUtilisateur(db, { siteId, ...base, identifiant })).toThrow(/identifiant/i);
+  });
+
+  it.each(["vnga", "v.nga", "v_nga-2", "valentin@boutique.cm", "caissier01"])("accepte l'identifiant « %s »", (identifiant) => {
+    expect(creerUtilisateur(db, { siteId, ...base, identifiant }).identifiant).toBe(identifiant);
+  });
+
+  it("retrouve un compte quelle que soit la casse ou les espaces saisis à la connexion", () => {
+    creerUtilisateur(db, { siteId, ...base, identifiant: "vnga" });
+
+    expect(trouverUtilisateurParIdentifiant(db, "VNGA")?.identifiant).toBe("vnga");
+    expect(trouverUtilisateurParIdentifiant(db, "  vnga ")?.identifiant).toBe("vnga");
+    expect(authentifier(db, " VNga ", "motdepasse-secret").identifiant).toBe("vnga");
+  });
+
+  it("retrouve un ancien compte enregistré avec des majuscules avant cette règle", () => {
+    db.insert(schema.utilisateur)
+      .values({ siteId, nom: "Ancien", prenom: "Compte", identifiant: "Ancien.Compte", motDePasseHash: bcrypt.hashSync("motdepasse-secret", 4), role: "CAISSIER" })
+      .run();
+
+    expect(trouverUtilisateurParIdentifiant(db, "ancien.compte")?.identifiant).toBe("Ancien.Compte");
+    expect(() => creerUtilisateur(db, { siteId, ...base, identifiant: "ANCIEN.compte" })).toThrow(/identifiant.*déjà/i);
+  });
+});

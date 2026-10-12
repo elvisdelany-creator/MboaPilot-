@@ -19,14 +19,22 @@ export function planifierSauvegardeQuotidienne(
   db: Db,
   dossierSauvegardes: string,
   joursConservation = JOURS_CONSERVATION_PAR_DEFAUT,
-  intervalleVerificationMs = 60 * 60 * 1000
+  intervalleVerificationMs = 60 * 60 * 1000,
+  creer: typeof creerSauvegarde = creerSauvegarde
 ): NodeJS.Timeout {
+  // Robustesse : un disque plein ou un dossier inaccessible (clé USB retirée) ne doit
+  // jamais arrêter le serveur de caisse — l'erreur est journalisée et la sauvegarde
+  // retentée à la vérification suivante (le repère « déjà fait » étant relu des fichiers).
   function executerSiNecessaire() {
     const aujourdHui = new Date().toISOString().slice(0, 10);
-    if (dejaSauvegardeAujourdhui(dossierSauvegardes, aujourdHui)) return;
-    const sauvegarde = creerSauvegarde(db, dossierSauvegardes);
-    const supprimees = nettoyerAnciennesSauvegardes(dossierSauvegardes, joursConservation);
-    console.log(`Sauvegarde quotidienne (${aujourdHui}) : ${sauvegarde.nomFichier}, ${supprimees.length} ancienne(s) supprimée(s).`);
+    try {
+      if (dejaSauvegardeAujourdhui(dossierSauvegardes, aujourdHui)) return;
+      const sauvegarde = creer(db, dossierSauvegardes);
+      const supprimees = nettoyerAnciennesSauvegardes(dossierSauvegardes, joursConservation);
+      console.log(`Sauvegarde quotidienne (${aujourdHui}) : ${sauvegarde.nomFichier}, ${supprimees.length} ancienne(s) supprimée(s).`);
+    } catch (erreur) {
+      console.error(`Sauvegarde quotidienne (${aujourdHui}) en échec — nouvelle tentative à la prochaine vérification :`, erreur);
+    }
   }
 
   executerSiNecessaire();

@@ -31,6 +31,8 @@ export function NouvelApporteurDialog({ ouvert, onFerme, onSucces }: Props) {
   const [tauxCommission, setTauxCommission] = useState("");
   const [enCours, setEnCours] = useState(false);
 
+  const tauxEnPourcent = tauxCommission.trim() !== "" && Number.isFinite(Number(tauxCommission)) ? Number(tauxCommission) / 10 : null;
+
   function reinitialiser() {
     setNom("");
     setTelephone("");
@@ -80,11 +82,11 @@ export function NouvelApporteurDialog({ ouvert, onFerme, onSucces }: Props) {
         <div className="space-y-4">
           <div>
             <Label htmlFor="apporteur-nom">Nom</Label>
-            <Input id="apporteur-nom" value={nom} onChange={(e) => setNom(e.target.value)} className="mt-1" />
+            <Input id="apporteur-nom" value={nom} onChange={(e) => setNom(e.target.value)} maxLength={100} className="mt-1" />
           </div>
           <div>
             <Label htmlFor="apporteur-telephone">Téléphone</Label>
-            <Input id="apporteur-telephone" value={telephone} onChange={(e) => setTelephone(e.target.value)} className="mt-1" />
+            <Input id="apporteur-telephone" type="tel" value={telephone} onChange={(e) => setTelephone(e.target.value)} className="mt-1" />
           </div>
           <div>
             <Label htmlFor="apporteur-taux">Taux de commission par défaut (‰, optionnel)</Label>
@@ -95,8 +97,20 @@ export function NouvelApporteurDialog({ ouvert, onFerme, onSucces }: Props) {
               value={tauxCommission}
               onChange={(e) => setTauxCommission(e.target.value)}
               placeholder="Taux global de la configuration si vide"
+              aria-describedby="apporteur-taux-equivalent"
               className="mt-1"
             />
+            {/* le taux se saisit en pour-mille : « 5 » donne 0,5 %, pas 5 % — l'équivalent est donc affiché */}
+            <p
+              id="apporteur-taux-equivalent"
+              className={tauxEnPourcent !== null && tauxEnPourcent > 100 ? "mt-1 text-xs text-destructive" : "mt-1 text-xs text-muted-foreground"}
+            >
+              {tauxEnPourcent === null
+                ? "500 ‰ = 50 % de commission ; 50 ‰ = 5 %."
+                : tauxEnPourcent > 100
+                  ? "Maximum 1 000 ‰ (100 %)."
+                  : `${tauxCommission} ‰ = ${tauxEnPourcent.toLocaleString("fr-FR")} % de commission.`}
+            </p>
           </div>
         </div>
 

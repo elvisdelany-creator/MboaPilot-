@@ -1,4 +1,5 @@
 import { desc, eq } from "drizzle-orm";
+import { normaliserLibelle } from "@mboapilot/shared";
 import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
 
@@ -20,17 +21,38 @@ function verifierTauxCommission(taux: unknown): void {
   }
 }
 
+const LONGUEUR_MAX_NOM = 100;
+const CARACTERES_TELEPHONE = /^[0-9 +().-]+$/;
+
+// chiffres, espaces et + ( ) . - seulement, de 6 à 15 chiffres (norme E.164, indicatif compris) :
+// « abcdef » ou un texte de 5 000 caractères n'est pas un numéro que l'on peut appeler
+function normaliserTelephone(telephone: unknown): string | undefined {
+  if (telephone === undefined || telephone === null) return undefined;
+  if (typeof telephone !== "string") throw new Error("Le téléphone de l'apporteur doit être un texte");
+  const propre = telephone.trim();
+  if (propre === "") return undefined;
+  const nbChiffres = propre.replace(/\D/g, "").length;
+  if (!CARACTERES_TELEPHONE.test(propre) || nbChiffres < 6 || nbChiffres > 15) {
+    throw new Error("Le téléphone de l'apporteur doit contenir de 6 à 15 chiffres (espaces, +, ( ), . et - autorisés)");
+  }
+  return propre;
+}
+
 // 6.3 : sous-distributeurs et apporteurs d'affaires
 export function creerApporteur(db: Db, input: CreerApporteurInput) {
   if (typeof input.nom !== "string" || !input.nom.trim()) throw new Error("Le nom de l'apporteur est obligatoire");
-  if (input.telephone !== undefined && input.telephone !== null && typeof input.telephone !== "string") {
-    throw new Error("Le téléphone de l'apporteur doit être un texte");
-  }
+  const nom = input.nom.trim().replace(/\s+/g, " ");
+  if (nom.length > LONGUEUR_MAX_NOM) throw new Error(`Le nom de l'apporteur ne peut pas dépasser ${LONGUEUR_MAX_NOM} caractères`);
+  const telephone = normaliserTelephone(input.telephone);
   verifierTauxCommission(input.tauxCommissionDefaut);
+
+  // deux apporteurs homonymes (même désactivés) feraient verser une commission au mauvais
+  const homonyme = listerApporteurs(db).find((a) => normaliserLibelle(a.nom) === normaliserLibelle(nom));
+  if (homonyme) throw new Error("Un apporteur porte déjà ce nom");
 
   return db
     .insert(schema.sousDistributeur)
-    .values({ nom: input.nom, telephone: input.telephone, tauxCommissionDefaut: input.tauxCommissionDefaut })
+    .values({ nom, telephone, tauxCommissionDefaut: input.tauxCommissionDefaut })
     .returning()
     .get();
 }

@@ -142,3 +142,54 @@ describe("validation des champs apporteur (6.3)", () => {
     expect(() => modifierApporteur(db, 999999, { actif: false })).toThrow(/introuvable/i);
   });
 });
+
+// Constaté en test grandeur nature : l'API acceptait un nom de 100 000 caractères, deux apporteurs
+// de même nom (à la casse ou aux espaces près) — une commission pouvait être versée au mauvais —,
+// un téléphone « abcdef » ou de 5 000 caractères, et gardait les espaces autour du nom.
+describe("creerApporteur : nom et téléphone (6.3)", () => {
+  it("retire les espaces autour du nom et du téléphone", () => {
+    const apporteur = creerApporteur(db, { nom: "  Ateba Distribution  ", telephone: " 677 12 34 56 " });
+
+    expect(apporteur.nom).toBe("Ateba Distribution");
+    expect(apporteur.telephone).toBe("677 12 34 56");
+  });
+
+  it("refuse un nom déjà porté par un autre apporteur, à la casse, aux accents et aux espaces près", () => {
+    creerApporteur(db, { nom: "Ateba Distribution" });
+
+    for (const homonyme of ["Ateba Distribution", "  ateba distribution ", "ATÉBA  distribution"]) {
+      expect(() => creerApporteur(db, { nom: homonyme }), homonyme).toThrow(/porte déjà ce nom/i);
+    }
+    expect(listerApporteurs(db)).toHaveLength(1);
+  });
+
+  it("refuse le nom d'un apporteur désactivé : il reste dans les règlements et les fiches", () => {
+    const ancien = creerApporteur(db, { nom: "Ateba Distribution" });
+    modifierApporteur(db, ancien.idApporteur, { actif: false });
+
+    expect(() => creerApporteur(db, { nom: "Ateba Distribution" })).toThrow(/porte déjà ce nom/i);
+  });
+
+  it("refuse un nom de plus de 100 caractères, et accepte exactement 100", () => {
+    expect(() => creerApporteur(db, { nom: "N".repeat(101) })).toThrow(/nom.*100 caractères/i);
+    expect(creerApporteur(db, { nom: "N".repeat(100) }).nom).toHaveLength(100);
+  });
+
+  it.each([
+    ["des lettres", "abcdef"],
+    ["un point-virgule", "677;123456"],
+    ["trop peu de chiffres", "12345"],
+    ["trop de chiffres", "1".repeat(16)],
+    ["un texte de 5 000 caractères", "6".repeat(5000)],
+  ])("refuse un téléphone contenant %s", (_libelle, telephone) => {
+    expect(() => creerApporteur(db, { nom: "ZZ App", telephone })).toThrow(/téléphone/i);
+  });
+
+  it.each(["677123456", "+237 677 12 34 56", "(237) 677-12-34-56", "677.12.34.56"])("accepte le téléphone « %s »", (telephone) => {
+    expect(creerApporteur(db, { nom: "ZZ App", telephone }).telephone).toBe(telephone);
+  });
+
+  it("enregistre un téléphone vide comme « non renseigné »", () => {
+    expect(creerApporteur(db, { nom: "ZZ App", telephone: "   " }).telephone).toBeNull();
+  });
+});

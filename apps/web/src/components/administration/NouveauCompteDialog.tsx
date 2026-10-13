@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { POLITIQUE_MDP_PAR_DEFAUT, validerMotDePasse, type PolitiqueMotDePasse } from "@mboapilot/shared";
+import { POLITIQUE_MDP_PAR_DEFAUT, erreurIdentifiantConnexion, validerMotDePasse, type PolitiqueMotDePasse } from "@mboapilot/shared";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -78,7 +78,9 @@ export function NouveauCompteDialog({ ouvert, sites, onFerme, onSucces }: Props)
     ...(politique.exigerCaractereSpecial ? ["un caractère spécial"] : []),
   ].join(", ");
 
-  const pretAValider = nom.trim() && prenom.trim() && identifiant.trim() && validerMotDePasse(motDePasse, politique).length === 0;
+  // la règle de l'API, annoncée et vérifiée pendant la saisie plutôt qu'après la validation
+  const erreurIdentifiant = erreurIdentifiantConnexion(identifiant);
+  const pretAValider = nom.trim() && prenom.trim() && identifiant.trim() && !erreurIdentifiant && validerMotDePasse(motDePasse, politique).length === 0;
 
   async function valider() {
     if (!pretAValider) return;
@@ -127,7 +129,17 @@ export function NouveauCompteDialog({ ouvert, sites, onFerme, onSucces }: Props)
           </div>
           <div>
             <Label htmlFor="compte-identifiant">Identifiant de connexion</Label>
-            <Input id="compte-identifiant" value={identifiant} onChange={(e) => setIdentifiant(e.target.value)} className="mt-1" />
+            <Input
+              id="compte-identifiant"
+              value={identifiant}
+              onChange={(e) => setIdentifiant(e.target.value)}
+              aria-invalid={erreurIdentifiant ? true : undefined}
+              aria-describedby="compte-identifiant-aide"
+              className="mt-1"
+            />
+            <p id="compte-identifiant-aide" className={erreurIdentifiant ? "mt-1 text-xs text-destructive" : "mt-1 text-xs text-muted-foreground"}>
+              {erreurIdentifiant ?? "3 à 50 caractères : lettres sans accent, chiffres, point, tiret, tiret bas ou @. Enregistré en minuscules."}
+            </p>
           </div>
           <div>
             <Label htmlFor="compte-mot-de-passe">Mot de passe</Label>

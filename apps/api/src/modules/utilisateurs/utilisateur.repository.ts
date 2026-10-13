@@ -1,6 +1,6 @@
 import { eq, sql } from "drizzle-orm";
 import bcrypt from "bcryptjs";
-import { validerMotDePasse } from "@mboapilot/shared";
+import { erreurIdentifiantConnexion, normaliserIdentifiant, validerMotDePasse } from "@mboapilot/shared";
 import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
 import { trouverPolitiqueMotDePasseParSite } from "../entreprise/entreprise.repository.js";
@@ -14,16 +14,6 @@ export type Role = (typeof ROLES)[number];
 // être vérifiée à l'exécution, sinon un rôle inexistant est enregistré tel quel
 function exigerRoleValide(role: string) {
   if (!(ROLES as readonly string[]).includes(role)) throw new Error(`Rôle inconnu "${role}" — attendu : ${ROLES.join(", ")}`);
-}
-
-// un identifiant de connexion : lettres latines, chiffres et . _ - @ — jamais d'espace, de
-// caractère de contrôle ou de lettre d'un autre alphabet (un « а » cyrillique est identique à
-// l'œil à un « a » latin : deux comptes « admin » distincts permettraient l'usurpation)
-const FORME_IDENTIFIANT = /^[a-z0-9._@-]{3,50}$/;
-
-// espaces retirés, minuscules : « Admin », « ADMIN » et « admin » désignent le même compte
-export function normaliserIdentifiant(identifiant: string) {
-  return identifiant.trim().toLowerCase();
 }
 
 export interface CreerUtilisateurInput {
@@ -46,9 +36,8 @@ export function creerUtilisateur(db: Db, input: CreerUtilisateurInput, acteurId:
   if (!input.prenom.trim()) throw new Error("Le prénom de l'utilisateur est obligatoire");
   const identifiant = normaliserIdentifiant(input.identifiant);
   if (!identifiant) throw new Error("L'identifiant de l'utilisateur est obligatoire");
-  if (!FORME_IDENTIFIANT.test(identifiant)) {
-    throw new Error("L'identifiant doit contenir de 3 à 50 caractères : lettres sans accent, chiffres, point, tiret, tiret bas ou @ (ni espace ni autre symbole)");
-  }
+  const erreurIdentifiant = erreurIdentifiantConnexion(identifiant);
+  if (erreurIdentifiant) throw new Error(erreurIdentifiant);
   exigerRoleValide(input.role);
   if (trouverUtilisateurParIdentifiant(db, identifiant)) throw new Error("Cet identifiant est déjà utilisé par un autre compte");
 

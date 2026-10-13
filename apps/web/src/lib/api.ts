@@ -182,9 +182,10 @@ export interface ModifierAbonnePayload {
   nom?: string;
   prenom?: string;
   telephone?: string;
-  email?: string;
-  numeroCni?: string;
-  adresse?: string;
+  // facultatifs : absent = inchangé ; null = effacé
+  email?: string | null;
+  numeroCni?: string | null;
+  adresse?: string | null;
   // 6.3, 14.2 : "non modifiable après création sans droit administrateur" — rejeté par l'API pour tout autre rôle
   apporteurId?: number | null;
 }

@@ -66,9 +66,10 @@ export function ModifierAbonneDialog({ abonne, onFerme, onSucces }: Props) {
         nom,
         prenom,
         telephone,
-        email: email || undefined,
-        numeroCni: numeroCni || undefined,
-        adresse: adresse || undefined,
+        // un champ vidé est effacé (null) ; envoyer undefined le laissait silencieusement inchangé
+        email: email.trim() || null,
+        numeroCni: numeroCni.trim() || null,
+        adresse: adresse.trim() || null,
         ...(estAdministrateur && { apporteurId }),
       });
       toast.success("Fiche abonné mise à jour.");
@@ -96,27 +97,27 @@ export function ModifierAbonneDialog({ abonne, onFerme, onSucces }: Props) {
         <div className="grid grid-cols-2 gap-3">
           <div>
             <Label htmlFor="modif-nom">Nom</Label>
-            <Input id="modif-nom" value={nom} onChange={(e) => setNom(e.target.value)} className="mt-1" />
+            <Input id="modif-nom" value={nom} onChange={(e) => setNom(e.target.value)} maxLength={100} className="mt-1" />
           </div>
           <div>
             <Label htmlFor="modif-prenom">Prénom</Label>
-            <Input id="modif-prenom" value={prenom} onChange={(e) => setPrenom(e.target.value)} className="mt-1" />
+            <Input id="modif-prenom" value={prenom} onChange={(e) => setPrenom(e.target.value)} maxLength={100} className="mt-1" />
           </div>
           <div className="col-span-2">
             <Label htmlFor="modif-telephone">Téléphone</Label>
-            <Input id="modif-telephone" value={telephone} onChange={(e) => setTelephone(e.target.value)} className="mt-1" />
+            <Input id="modif-telephone" type="tel" value={telephone} onChange={(e) => setTelephone(e.target.value)} maxLength={30} className="mt-1" />
           </div>
           <div className="col-span-2">
             <Label htmlFor="modif-email">E-mail</Label>
-            <Input id="modif-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="mt-1" />
+            <Input id="modif-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} maxLength={254} className="mt-1" />
           </div>
           <div>
             <Label htmlFor="modif-cni">Numéro CNI</Label>
-            <Input id="modif-cni" value={numeroCni} onChange={(e) => setNumeroCni(e.target.value)} className="mt-1" />
+            <Input id="modif-cni" value={numeroCni} onChange={(e) => setNumeroCni(e.target.value)} maxLength={30} className="mt-1" />
           </div>
           <div>
             <Label htmlFor="modif-adresse">Adresse</Label>
-            <Input id="modif-adresse" value={adresse} onChange={(e) => setAdresse(e.target.value)} className="mt-1" />
+            <Input id="modif-adresse" value={adresse} onChange={(e) => setAdresse(e.target.value)} maxLength={300} className="mt-1" />
           </div>
 
           {estAdministrateur && (

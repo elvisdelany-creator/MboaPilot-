@@ -304,3 +304,65 @@ describe("listerAbonnesEligiblesAnonymisationAutomatique (11.3)", () => {
     expect(requetes).toBeLessThanOrEqual(3);
   });
 });
+
+// Constaté en test grandeur nature : la fiche client acceptait un nom de 100 000 caractères, un
+// téléphone « abcdef » (qui casse les SMS de notification et la recherche par numéro) ou de
+// 5 000 caractères, un e-mail « pas-un-email », une adresse de 100 000 caractères, et gardait les
+// espaces autour des noms — à la création comme à la modification.
+describe("fiche abonné : formats et longueurs", () => {
+  const valide = { nom: "Nga", prenom: "Valentin", telephone: "690000000" };
+
+  it("retire les espaces autour des champs texte", () => {
+    const abonne = creerAbonne(db, { siteId, nom: "  Nga  ", prenom: " Valentin ", telephone: " 690 00 00 00 ", email: " v@exemple.cm ", adresse: " Akwa " });
+
+    expect(abonne).toMatchObject({ nom: "Nga", prenom: "Valentin", telephone: "690 00 00 00", email: "v@exemple.cm", adresse: "Akwa" });
+  });
+
+  it.each([
+    ["un nom de plus de 100 caractères", { nom: "N".repeat(101) }, /nom.*100 caractères/i],
+    ["un prénom de plus de 100 caractères", { prenom: "P".repeat(101) }, /prénom.*100 caractères/i],
+    ["un téléphone avec des lettres", { telephone: "abcdef" }, /téléphone/i],
+    ["un téléphone de 5 000 caractères", { telephone: "6".repeat(5000) }, /téléphone/i],
+    ["un téléphone de moins de 6 chiffres", { telephone: "12345" }, /téléphone/i],
+    ["un e-mail sans arobase", { email: "pas-un-email" }, /e-mail/i],
+    ["un e-mail de plus de 254 caractères", { email: `${"a".repeat(250)}@x.cm` }, /e-mail.*254 caractères/i],
+    ["une adresse de plus de 300 caractères", { adresse: "A".repeat(301) }, /adresse.*300 caractères/i],
+    ["un numéro de CNI de plus de 30 caractères", { numeroCni: "1".repeat(31) }, /CNI.*30 caractères/i],
+    ["un nom qui n'est pas un texte", { nom: 123 }, /nom/i],
+  ])("refuse à la création %s", (_libelle, surcharge, message) => {
+    expect(() => creerAbonne(db, { siteId, ...valide, ...surcharge } as never)).toThrow(message);
+  });
+
+  it.each([
+    ["un téléphone avec des lettres", { telephone: "abc" }, /téléphone/i],
+    ["un e-mail invalide", { email: "x" }, /e-mail/i],
+    ["un nom de plus de 100 caractères", { nom: "N".repeat(101) }, /nom.*100 caractères/i],
+    ["une adresse de plus de 300 caractères", { adresse: "A".repeat(301) }, /adresse.*300 caractères/i],
+  ])("refuse à la modification %s, sans toucher à la fiche", (_libelle, surcharge, message) => {
+    const abonne = creerAbonne(db, { siteId, ...valide });
+
+    expect(() => modifierAbonne(db, abonne.idAbonne, surcharge)).toThrow(message);
+    expect(trouverAbonne(db, abonne.idAbonne)).toMatchObject({ nom: "Nga", telephone: "690000000" });
+  });
+
+  it("efface un champ facultatif quand on envoie une valeur nulle ou vide, et ne touche à rien si le champ est absent", () => {
+    const abonne = creerAbonne(db, { siteId, ...valide, email: "v@exemple.cm", adresse: "Akwa", numeroCni: "123456" });
+
+    const apres = modifierAbonne(db, abonne.idAbonne, { email: null, adresse: "   " } as never);
+
+    expect(apres).toMatchObject({ email: null, adresse: null, numeroCni: "123456", nom: "Nga" });
+  });
+
+  it("n'efface jamais le nom, le prénom ni le téléphone avec une valeur nulle", () => {
+    const abonne = creerAbonne(db, { siteId, ...valide });
+
+    expect(() => modifierAbonne(db, abonne.idAbonne, { nom: null } as never)).toThrow(/nom.*obligatoire/i);
+    expect(() => modifierAbonne(db, abonne.idAbonne, { telephone: null } as never)).toThrow(/téléphone.*obligatoire/i);
+  });
+
+  it("accepte les formats usuels de téléphone et un e-mail valide", () => {
+    for (const telephone of ["690000000", "+237 690 00 00 00", "(237) 690-00-00-00", "690.00.00.00"]) {
+      expect(creerAbonne(db, { siteId, ...valide, telephone, email: "v.nga@boutique.cm" }).telephone).toBe(telephone);
+    }
+  });
+});

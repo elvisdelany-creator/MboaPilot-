@@ -2,6 +2,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { joursAvantEcheance, normaliserLibelle } from "@mboapilot/shared";
 import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
+import { emailFacultatif, telephoneFacultatif, telephoneObligatoire, texteFacultatif, texteObligatoire } from "../../lib/champs-texte.js";
 
 export interface AbonneInput {
   siteId: number;
@@ -15,20 +16,20 @@ export interface AbonneInput {
 }
 
 export function creerAbonne(db: Db, input: AbonneInput) {
-  if (typeof input.nom !== "string" || !input.nom.trim()) throw new Error("Le nom de l'abonné est obligatoire");
-  if (typeof input.prenom !== "string" || !input.prenom.trim()) throw new Error("Le prénom de l'abonné est obligatoire");
-  if (typeof input.telephone !== "string" || !input.telephone.trim()) throw new Error("Le téléphone de l'abonné est obligatoire");
+  const nom = texteObligatoire(input.nom, "Le nom de l'abonné", 100);
+  const prenom = texteObligatoire(input.prenom, "Le prénom de l'abonné", 100);
+  const telephone = telephoneObligatoire(input.telephone, "Le téléphone de l'abonné");
 
   return db
     .insert(schema.abonne)
     .values({
       siteId: input.siteId,
-      nom: input.nom,
-      prenom: input.prenom,
-      telephone: input.telephone,
-      email: input.email,
-      numeroCni: input.numeroCni,
-      adresse: input.adresse,
+      nom,
+      prenom,
+      telephone,
+      email: emailFacultatif(input.email, "L'adresse e-mail de l'abonné") ?? undefined,
+      numeroCni: texteFacultatif(input.numeroCni, "Le numéro de CNI de l'abonné", 30) ?? undefined,
+      adresse: texteFacultatif(input.adresse, "L'adresse de l'abonné", 300) ?? undefined,
       apporteurId: input.apporteurId,
     })
     .returning()
@@ -43,9 +44,10 @@ export interface ModifierAbonneInput {
   nom?: string;
   prenom?: string;
   telephone?: string;
-  email?: string;
-  numeroCni?: string;
-  adresse?: string;
+  // facultatifs : absent = inchangé ; null ou texte vide = effacé
+  email?: string | null;
+  numeroCni?: string | null;
+  adresse?: string | null;
   // 6.3, 14.2 : "non modifiable après création sans droit administrateur" —
   // la restriction de rôle est vérifiée côté route (abonnes.routes.ts), pas ici.
   apporteurId?: number | null;
@@ -56,22 +58,25 @@ export function modifierAbonne(db: Db, idAbonne: number, input: ModifierAbonneIn
   const existant = trouverAbonne(db, idAbonne);
   if (!existant) throw new Error(`Abonné ${idAbonne} introuvable`);
 
-  // 8.1 : même garde-fou qu'à la création (creerAbonne) — une chaîne vide
-  // n'est pas "nullish" (?? existant.xxx ne s'applique pas dans ce cas),
-  // donc { nom: "" } écraserait silencieusement l'identité réelle du client.
-  if (input.nom !== undefined && !input.nom.trim()) throw new Error("Le nom de l'abonné est obligatoire");
-  if (input.prenom !== undefined && !input.prenom.trim()) throw new Error("Le prénom de l'abonné est obligatoire");
-  if (input.telephone !== undefined && !input.telephone.trim()) throw new Error("Le téléphone de l'abonné est obligatoire");
+  // 8.1 : mêmes contrôles qu'à la création (creerAbonne) — une chaîne vide n'est pas "nullish"
+  // (?? existant.xxx ne s'applique pas dans ce cas), donc { nom: "" } écraserait silencieusement
+  // l'identité réelle du client ; un champ absent reste inchangé, un champ facultatif nul est effacé.
+  const nom = input.nom === undefined ? undefined : texteObligatoire(input.nom, "Le nom de l'abonné", 100);
+  const prenom = input.prenom === undefined ? undefined : texteObligatoire(input.prenom, "Le prénom de l'abonné", 100);
+  const telephone = input.telephone === undefined ? undefined : telephoneObligatoire(input.telephone, "Le téléphone de l'abonné");
+  const email = emailFacultatif(input.email, "L'adresse e-mail de l'abonné");
+  const numeroCni = texteFacultatif(input.numeroCni, "Le numéro de CNI de l'abonné", 30);
+  const adresse = texteFacultatif(input.adresse, "L'adresse de l'abonné", 300);
 
   return db
     .update(schema.abonne)
     .set({
-      nom: input.nom ?? existant.nom,
-      prenom: input.prenom ?? existant.prenom,
-      telephone: input.telephone ?? existant.telephone,
-      email: input.email ?? existant.email,
-      numeroCni: input.numeroCni ?? existant.numeroCni,
-      adresse: input.adresse ?? existant.adresse,
+      nom: nom ?? existant.nom,
+      prenom: prenom ?? existant.prenom,
+      telephone: telephone ?? existant.telephone,
+      email: email === undefined ? existant.email : email,
+      numeroCni: numeroCni === undefined ? existant.numeroCni : numeroCni,
+      adresse: adresse === undefined ? existant.adresse : adresse,
       ...(input.apporteurId !== undefined && { apporteurId: input.apporteurId }),
     })
     .where(eq(schema.abonne.idAbonne, idAbonne))

@@ -53,3 +53,10 @@ export function emailFacultatif(valeur: unknown, libelle: string): string | null
   if (typeof propre === "string" && !FORME_EMAIL.test(propre)) throw new Error(`${libelle} n'est pas valide`);
   return propre;
 }
+
+// Contrôle de type et de longueur SANS nettoyage : pour un secret (mot de passe), les espaces en font partie.
+export function verifierLongueurTexte(valeur: unknown, libelle: string, longueurMax: number): void {
+  if (valeur === undefined) return;
+  if (typeof valeur !== "string") throw new Error(`${libelle} doit être un texte`);
+  if (valeur.length > longueurMax) throw new Error(`${libelle} ne peut pas dépasser ${longueurMax} caractères`);
+}

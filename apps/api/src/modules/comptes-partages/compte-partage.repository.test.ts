@@ -203,3 +203,75 @@ describe("nombreEcransMax invalide (5.9)", () => {
     expect(trouverComptePartage(db, compte.idComptePartage)?.nombreEcransMax).toBe(4);
   });
 });
+
+// Constaté en test grandeur nature : un compte partagé acceptait un libellé de 100 000 caractères,
+// des identifiants de 100 000 caractères, le nom d'un compte existant (le personnel ne distingue
+// plus quel compte choisir au recrutement), une capacité de 1 milliard d'écrans (le contrôle
+// d'occupation devenait sans effet), et « actif: "non" » était lu comme vrai.
+describe("compte partagé : libellé, identifiants, capacité, activation", () => {
+  const base = () => ({ siteId, idFamille, libelle: "Compte Netflix #1", nombreEcransMax: 4 });
+
+  it("retire les espaces autour du libellé", () => {
+    expect(creerComptePartage(db, { ...base(), libelle: "  Compte Netflix #1  " }).libelle).toBe("Compte Netflix #1");
+  });
+
+  it("refuse le libellé d'un compte du même site, à la casse et aux espaces près, désactivé ou non", () => {
+    const existant = creerComptePartage(db, base());
+    modifierComptePartage(db, existant.idComptePartage, { actif: false });
+
+    for (const homonyme of ["Compte Netflix #1", "  compte netflix #1 ", "COMPTE  NETFLIX #1"]) {
+      expect(() => creerComptePartage(db, { ...base(), libelle: homonyme }), homonyme).toThrow(/porte déjà ce libellé/i);
+    }
+  });
+
+  it("autorise le même libellé dans un autre site", () => {
+    const entreprise = db.select().from(schema.entreprise).get()!;
+    const autreSite = db.insert(schema.site).values({ idEntreprise: entreprise.idEntreprise, nom: "Site B" }).returning().get().idSite;
+    creerComptePartage(db, base());
+
+    expect(creerComptePartage(db, { ...base(), siteId: autreSite }).libelle).toBe("Compte Netflix #1");
+  });
+
+  it("refuse à la modification un libellé déjà pris par un autre compte, mais pas son propre libellé", () => {
+    const a = creerComptePartage(db, base());
+    const b = creerComptePartage(db, { ...base(), libelle: "Compte Prime" });
+
+    expect(() => modifierComptePartage(db, b.idComptePartage, { libelle: "compte netflix #1" })).toThrow(/porte déjà ce libellé/i);
+    expect(modifierComptePartage(db, a.idComptePartage, { libelle: "Compte Netflix #1", nombreEcransMax: 5 })?.nombreEcransMax).toBe(5);
+  });
+
+  it.each([
+    ["un libellé de plus de 100 caractères", { libelle: "L".repeat(101) }, /libellé.*100 caractères/i],
+    ["un identifiant de plus de 200 caractères", { identifiant: "i".repeat(201) }, /identifiant.*200 caractères/i],
+    ["un mot de passe de plus de 200 caractères", { motDePasse: "m".repeat(201) }, /mot de passe.*200 caractères/i],
+    ["une capacité de plus de 100 écrans", { nombreEcransMax: 101 }, /écrans.*100/i],
+  ])("refuse à la création %s", (_libelle, surcharge, message) => {
+    expect(() => creerComptePartage(db, { ...base(), ...surcharge })).toThrow(message);
+    expect(listerComptesPartages(db, siteId)).toHaveLength(0);
+  });
+
+  it("accepte les valeurs limites : 100 caractères de libellé, 200 de mot de passe, 100 écrans", () => {
+    const compte = creerComptePartage(db, { ...base(), libelle: "L".repeat(100), motDePasse: "m".repeat(200), nombreEcransMax: 100 });
+
+    expect(compte.motDePasse).toHaveLength(200);
+  });
+
+  it("garde les espaces d'un mot de passe : ils en font partie", () => {
+    expect(creerComptePartage(db, { ...base(), motDePasse: " secret " }).motDePasse).toBe(" secret ");
+  });
+
+  it.each([
+    ["un libellé de plus de 100 caractères", { libelle: "L".repeat(101) }, /libellé.*100 caractères/i],
+    ["une capacité de plus de 100 écrans", { nombreEcransMax: 101 }, /écrans.*100/i],
+    ["un champ actif qui n'est pas un booléen", { actif: "non" }, /actif.*vrai ou faux/i],
+  ])("refuse à la modification %s, sans toucher au compte", (_libelle, surcharge, message) => {
+    const compte = creerComptePartage(db, base());
+
+    expect(() => modifierComptePartage(db, compte.idComptePartage, surcharge as never)).toThrow(message);
+    expect(trouverComptePartage(db, compte.idComptePartage)).toMatchObject({ libelle: "Compte Netflix #1", nombreEcransMax: 4, actif: 1 });
+  });
+
+  it("renvoie undefined pour un compte inconnu", () => {
+    expect(modifierComptePartage(db, 99999, { libelle: "X" })).toBeUndefined();
+  });
+});

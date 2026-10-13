@@ -106,16 +106,16 @@ export function NouveauComptePartageDialog({ ouvert, familles, compte, onFerme, 
           </div>
           <div>
             <Label htmlFor="compte-partage-libelle">Libellé</Label>
-            <Input id="compte-partage-libelle" value={libelle} onChange={(e) => setLibelle(e.target.value)} placeholder="Compte Netflix Premium #1" className="mt-1" />
+            <Input id="compte-partage-libelle" value={libelle} onChange={(e) => setLibelle(e.target.value)} maxLength={100} placeholder="Compte Netflix Premium #1" className="mt-1" />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <Label htmlFor="compte-partage-identifiant">Identifiant</Label>
-              <Input id="compte-partage-identifiant" value={identifiant} onChange={(e) => setIdentifiant(e.target.value)} className="mt-1" />
+              <Input id="compte-partage-identifiant" value={identifiant} onChange={(e) => setIdentifiant(e.target.value)} maxLength={200} className="mt-1" />
             </div>
             <div>
               <Label htmlFor="compte-partage-mot-de-passe">Mot de passe / code d'accès</Label>
-              <Input id="compte-partage-mot-de-passe" value={motDePasse} onChange={(e) => setMotDePasse(e.target.value)} className="mt-1" />
+              <Input id="compte-partage-mot-de-passe" value={motDePasse} onChange={(e) => setMotDePasse(e.target.value)} maxLength={200} className="mt-1" />
             </div>
           </div>
           <div>
@@ -124,6 +124,7 @@ export function NouveauComptePartageDialog({ ouvert, familles, compte, onFerme, 
               id="compte-partage-ecrans"
               type="number"
               min={1}
+              max={100}
               value={nombreEcransMax}
               onChange={(e) => setNombreEcransMax(e.target.value)}
               className="mt-1"

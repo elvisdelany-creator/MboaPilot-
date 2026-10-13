@@ -2,7 +2,9 @@ import { and, eq } from "drizzle-orm";
 import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
 import { chiffrer, dechiffrer } from "../../config/chiffrement.js";
-import { verifierEntier } from "../../lib/validation.js";
+import { normaliserLibelle } from "@mboapilot/shared";
+import { texteObligatoire, verifierLongueurTexte } from "../../lib/champs-texte.js";
+import { verifierBooleen, verifierEntier } from "../../lib/validation.js";
 
 export interface CreerComptePartageInput {
   siteId: number;
@@ -37,16 +39,42 @@ function dechiffrerCompte<T extends { identifiant: string | null; motDePasse: st
 // 5.9, 11.2 : compte fournisseur mutualisé (Netflix, Prime Vidéo, IPTV…) —
 // identifiant et mot de passe chiffrés au repos (chiffrement.ts) ; la
 // visibilité en clair reste restreinte au niveau des routes aux rôles de vente.
+const LONGUEUR_MAX_LIBELLE = 100;
+const LONGUEUR_MAX_IDENTIFIANT = 200;
+// un compte fournisseur n'ouvre que quelques écrans : au-delà, le contrôle d'occupation (5.9) n'a plus de sens
+const ECRANS_MAX = 100;
+
+function verifierIdentifiantsCompte(input: { identifiant?: unknown; motDePasse?: unknown }) {
+  verifierLongueurTexte(input.identifiant, "L'identifiant du compte partagé", LONGUEUR_MAX_IDENTIFIANT);
+  verifierLongueurTexte(input.motDePasse, "Le mot de passe du compte partagé", LONGUEUR_MAX_IDENTIFIANT);
+}
+
+// deux comptes de même libellé (même désactivés) : le personnel ne sait plus lequel choisir au recrutement
+function exigerLibelleLibre(db: Db, siteId: number, libelle: string, idComptePartageIgnore?: number) {
+  const homonyme = db
+    .select()
+    .from(schema.comptePartageStreaming)
+    .where(eq(schema.comptePartageStreaming.siteId, siteId))
+    .all()
+    .find((c) => c.idComptePartage !== idComptePartageIgnore && normaliserLibelle(c.libelle) === normaliserLibelle(libelle));
+  if (homonyme) throw new Error("Un compte partagé de ce site porte déjà ce libellé");
+}
+
+// 5.9, 11.2 : compte fournisseur mutualisé (Netflix, Prime Vidéo, IPTV…) —
+// identifiant et mot de passe chiffrés au repos (chiffrement.ts) ; la
+// visibilité en clair reste restreinte au niveau des routes aux rôles de vente.
 export function creerComptePartage(db: Db, input: CreerComptePartageInput) {
-  if (!input.libelle.trim()) throw new Error("Le libellé du compte partagé est obligatoire");
-  verifierEntier(input.nombreEcransMax, "Le nombre d'écrans autorisés", { min: 1, requis: true, nullable: false, message: "Le nombre d'écrans autorisés doit être positif" });
+  const libelle = texteObligatoire(input.libelle, "Le libellé du compte partagé", LONGUEUR_MAX_LIBELLE).replace(/\s+/g, " ");
+  verifierEntier(input.nombreEcransMax, "Le nombre d'écrans autorisés", { min: 1, max: ECRANS_MAX, requis: true, nullable: false, message: "Le nombre d'écrans autorisés doit être positif" });
+  verifierIdentifiantsCompte(input);
+  exigerLibelleLibre(db, input.siteId, libelle);
 
   const compte = db
     .insert(schema.comptePartageStreaming)
     .values({
       siteId: input.siteId,
       idFamille: input.idFamille,
-      libelle: input.libelle,
+      libelle,
       identifiant: input.identifiant !== undefined ? chiffrer(input.identifiant) : undefined,
       motDePasse: input.motDePasse !== undefined ? chiffrer(input.motDePasse) : undefined,
       nombreEcransMax: input.nombreEcransMax,
@@ -87,8 +115,14 @@ export interface ModifierComptePartageInput {
 }
 
 export function modifierComptePartage(db: Db, idComptePartage: number, input: ModifierComptePartageInput) {
-  if (input.libelle !== undefined && !input.libelle.trim()) throw new Error("Le libellé du compte partagé est obligatoire");
-  verifierEntier(input.nombreEcransMax, "Le nombre d'écrans autorisés", { min: 1, nullable: false, message: "Le nombre d'écrans autorisés doit être positif" });
+  const existant = db.select().from(schema.comptePartageStreaming).where(eq(schema.comptePartageStreaming.idComptePartage, idComptePartage)).get();
+  if (!existant) return undefined;
+
+  const libelle = input.libelle === undefined ? undefined : texteObligatoire(input.libelle, "Le libellé du compte partagé", LONGUEUR_MAX_LIBELLE).replace(/\s+/g, " ");
+  if (libelle !== undefined) exigerLibelleLibre(db, existant.siteId, libelle, idComptePartage);
+  verifierEntier(input.nombreEcransMax, "Le nombre d'écrans autorisés", { min: 1, max: ECRANS_MAX, nullable: false, message: "Le nombre d'écrans autorisés doit être positif" });
+  verifierIdentifiantsCompte(input);
+  verifierBooleen(input.actif, "Le champ actif");
 
   // 5.9 : une capacité réduite en dessous des écrans déjà occupés recréerait,
   // par un autre chemin, l'état que le recrutement (peutAffecterEcran) est
@@ -103,7 +137,7 @@ export function modifierComptePartage(db: Db, idComptePartage: number, input: Mo
   const compte = db
     .update(schema.comptePartageStreaming)
     .set({
-      ...(input.libelle !== undefined && { libelle: input.libelle }),
+      ...(libelle !== undefined && { libelle }),
       ...(input.identifiant !== undefined && { identifiant: chiffrer(input.identifiant) }),
       ...(input.motDePasse !== undefined && { motDePasse: chiffrer(input.motDePasse) }),
       ...(input.nombreEcransMax !== undefined && { nombreEcransMax: input.nombreEcransMax }),

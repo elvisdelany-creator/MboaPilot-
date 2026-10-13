@@ -526,3 +526,87 @@ describe("journal d'audit du catalogue (11.5)", () => {
     expect(journal("formule_option_compat").map((l) => l.action)).toEqual(["CREATION", "SUPPRESSION"]);
   });
 });
+
+// Constaté en test grandeur nature : le catalogue acceptait des libellés de 100 000 caractères et
+// deux familles « CANAL+ », deux formules ou deux kits de même nom dans une famille, deux options
+// identiques : le caissier ne sait plus laquelle choisir, et les tarifs divergent sans qu'on le voie.
+describe("catalogue : libellés (5.1, 8.8)", () => {
+  const nouvelleFamille = (libelle = "CANAL+") => creerFamille(db, { libelle });
+  const formule = (idFamille: number, libelle: string, rang = 1) => creerFormule(db, { idFamille, libelle, prix: 5000, rang });
+  const kit = (idFamille: number, libelle: string) => creerKit(db, { idFamille, libelle, reglePrix: "PRIX_FIXE", prixFixe: 1000 });
+
+  it("retire les espaces autour des libellés et réduit les espaces internes", () => {
+    const famille = nouvelleFamille("  CANAL+  ");
+    expect(famille.libelle).toBe("CANAL+");
+    expect(formule(famille.idFamille, "  TOUT   CANAL+ ").libelle).toBe("TOUT CANAL+");
+    expect(creerOption(db, { libelle: " Option  English ", prix: 500 }).libelle).toBe("Option English");
+    expect(kit(famille.idFamille, " KIT  GLOBALZ ").libelle).toBe("KIT GLOBALZ");
+  });
+
+  it.each([
+    ["famille", (d: Db) => creerFamille(d, { libelle: "L".repeat(101) })],
+    ["formule", (d: Db) => creerFormule(d, { idFamille: creerFamille(d, { libelle: "F" }).idFamille, libelle: "L".repeat(101), prix: 1, rang: 1 })],
+    ["option", (d: Db) => creerOption(d, { libelle: "L".repeat(101), prix: 1 })],
+    ["kit", (d: Db) => creerKit(d, { idFamille: creerFamille(d, { libelle: "F" }).idFamille, libelle: "L".repeat(101), reglePrix: "PRIX_FIXE", prixFixe: 1 })],
+  ])("refuse un libellé de %s de plus de 100 caractères", (_nom, creer) => {
+    expect(() => creer(db)).toThrow(/libellé.*100 caractères/i);
+  });
+
+  it("refuse une famille de même libellé, à la casse, aux accents et aux espaces près", () => {
+    nouvelleFamille("CANAL+");
+
+    for (const homonyme of ["CANAL+", "  canal+ ", "Canal+"]) {
+      expect(() => nouvelleFamille(homonyme), homonyme).toThrow(/famille porte déjà ce libellé/i);
+    }
+    expect(listerFamilles(db)).toHaveLength(1);
+  });
+
+  it("distingue « ACCESS » de « ACCESS+ » : le plus est une différence réelle", () => {
+    const famille = nouvelleFamille();
+    formule(famille.idFamille, "ACCESS", 1);
+
+    expect(formule(famille.idFamille, "ACCESS+", 2).libelle).toBe("ACCESS+");
+  });
+
+  it("refuse une formule de même libellé dans la même famille, mais l'accepte dans une autre", () => {
+    const canal = nouvelleFamille("CANAL+");
+    const dstv = nouvelleFamille("DSTV");
+    formule(canal.idFamille, "COMPAQ", 1);
+
+    expect(() => formule(canal.idFamille, " compaq ", 2)).toThrow(/formule de cette famille porte déjà ce libellé/i);
+    expect(formule(dstv.idFamille, "COMPAQ", 1).libelle).toBe("COMPAQ");
+  });
+
+  it("refuse une option ou un kit de même libellé (kit : dans la même famille)", () => {
+    const famille = nouvelleFamille();
+    creerOption(db, { libelle: "Option English", prix: 500 });
+    kit(famille.idFamille, "KIT GLOBALZ");
+
+    expect(() => creerOption(db, { libelle: "option  english", prix: 700 })).toThrow(/option porte déjà ce libellé/i);
+    expect(() => kit(famille.idFamille, "kit globalz")).toThrow(/kit de cette famille porte déjà ce libellé/i);
+  });
+
+  it("refuse à la modification un libellé déjà pris, mais pas son propre libellé", () => {
+    const famille = nouvelleFamille();
+    const a = formule(famille.idFamille, "ACCESS", 1);
+    formule(famille.idFamille, "EVASION", 2);
+    const o = creerOption(db, { libelle: "Option A", prix: 500 });
+    creerOption(db, { libelle: "Option B", prix: 500 });
+    const k = kit(famille.idFamille, "KIT A");
+    kit(famille.idFamille, "KIT B");
+
+    expect(() => modifierFormule(db, a.idFormule, { libelle: "evasion" })).toThrow(/porte déjà ce libellé/i);
+    expect(() => modifierOption(db, o.idOption, { libelle: "option b" })).toThrow(/porte déjà ce libellé/i);
+    expect(() => modifierKit(db, k.idKit, { libelle: "kit b" })).toThrow(/porte déjà ce libellé/i);
+    expect(modifierFormule(db, a.idFormule, { libelle: "ACCESS", prix: 5500 })?.prix).toBe(5500);
+    expect(modifierOption(db, o.idOption, { libelle: "Option A", prix: 600 })?.prix).toBe(600);
+    expect(modifierKit(db, k.idKit, { libelle: "KIT A", prixFixe: 1200 })?.prixFixe).toBe(1200);
+  });
+
+  it("refuse à la modification un libellé de plus de 100 caractères", () => {
+    const famille = nouvelleFamille();
+    const f = formule(famille.idFamille, "ACCESS", 1);
+
+    expect(() => modifierFormule(db, f.idFormule, { libelle: "L".repeat(101) })).toThrow(/libellé.*100 caractères/i);
+  });
+});

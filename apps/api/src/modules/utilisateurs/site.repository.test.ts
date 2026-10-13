@@ -124,3 +124,47 @@ describe("modifierSite : imprimante invalide (11.4)", () => {
     expect(() => modifierSite(db, site.idSite, { actif: "non" as never })).toThrow(/actif/i);
   });
 });
+
+// Constaté en test grandeur nature : un site acceptait un nom de 100 000 caractères, une adresse
+// de 100 000 caractères et un second « Site principal » (en-tête, reçus et sélecteurs ne
+// distinguent plus les boutiques).
+describe("site : nom et adresse (8.7)", () => {
+  it("retire les espaces autour du nom et de l'adresse", () => {
+    const site = creerSite(db, { idEntreprise, nom: "  Boutique Akwa ", adresse: " Rue des Écoles " });
+
+    expect(site).toMatchObject({ nom: "Boutique Akwa", adresse: "Rue des Écoles" });
+  });
+
+  it.each([
+    ["un nom de plus de 100 caractères", { nom: "N".repeat(101) }, /nom.*100 caractères/i],
+    ["une adresse de plus de 300 caractères", { adresse: "A".repeat(301) }, /adresse.*300 caractères/i],
+  ])("refuse à la création %s", (_libelle, surcharge, message) => {
+    expect(() => creerSite(db, { idEntreprise, nom: "Site", ...surcharge })).toThrow(message);
+  });
+
+  it("refuse un second site de même nom dans l'entreprise, à la casse et aux espaces près, désactivé ou non", () => {
+    const premier = creerSite(db, { idEntreprise, nom: "Site principal" });
+    modifierSite(db, premier.idSite, { actif: false });
+
+    for (const homonyme of ["Site principal", "  site  PRINCIPAL "]) {
+      expect(() => creerSite(db, { idEntreprise, nom: homonyme }), homonyme).toThrow(/site porte déjà ce nom/i);
+    }
+    expect(listerSites(db, idEntreprise)).toHaveLength(1);
+  });
+
+  it("refuse à la modification un nom déjà pris par un autre site, mais pas son propre nom", () => {
+    const a = creerSite(db, { idEntreprise, nom: "Site A" });
+    creerSite(db, { idEntreprise, nom: "Site B" });
+
+    expect(() => modifierSite(db, a.idSite, { nom: "site b" })).toThrow(/site porte déjà ce nom/i);
+    expect(modifierSite(db, a.idSite, { nom: "Site A", adresse: "Douala" })?.adresse).toBe("Douala");
+  });
+
+  it("refuse à la modification un nom ou une adresse trop longs", () => {
+    const site = creerSite(db, { idEntreprise, nom: "Site A" });
+
+    expect(() => modifierSite(db, site.idSite, { nom: "N".repeat(101) })).toThrow(/nom.*100 caractères/i);
+    expect(() => modifierSite(db, site.idSite, { adresse: "A".repeat(301) })).toThrow(/adresse.*300 caractères/i);
+    expect(trouverSite(db, site.idSite)?.nom).toBe("Site A");
+  });
+});

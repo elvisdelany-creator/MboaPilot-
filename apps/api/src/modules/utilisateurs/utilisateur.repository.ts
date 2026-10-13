@@ -4,6 +4,7 @@ import { erreurIdentifiantConnexion, normaliserIdentifiant, validerMotDePasse } 
 import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
 import { trouverPolitiqueMotDePasseParSite } from "../entreprise/entreprise.repository.js";
+import { texteObligatoire } from "../../lib/champs-texte.js";
 
 const TOURS_HACHAGE = 12;
 
@@ -32,8 +33,8 @@ export interface CreerUtilisateurInput {
 // action sensible à journaliser (auteur nullable — fixtures de test, sans
 // acteur humain identifié, sur le même modèle que le job automatique 11.3).
 export function creerUtilisateur(db: Db, input: CreerUtilisateurInput, acteurId: number | null = null) {
-  if (!input.nom.trim()) throw new Error("Le nom de l'utilisateur est obligatoire");
-  if (!input.prenom.trim()) throw new Error("Le prénom de l'utilisateur est obligatoire");
+  const nom = texteObligatoire(input.nom, "Le nom de l'utilisateur", 100);
+  const prenom = texteObligatoire(input.prenom, "Le prénom de l'utilisateur", 100);
   const identifiant = normaliserIdentifiant(input.identifiant);
   if (!identifiant) throw new Error("L'identifiant de l'utilisateur est obligatoire");
   const erreurIdentifiant = erreurIdentifiantConnexion(identifiant);
@@ -50,8 +51,8 @@ export function creerUtilisateur(db: Db, input: CreerUtilisateurInput, acteurId:
     .insert(schema.utilisateur)
     .values({
       siteId: input.siteId,
-      nom: input.nom,
-      prenom: input.prenom,
+      nom,
+      prenom,
       identifiant,
       motDePasseHash,
       role: input.role,

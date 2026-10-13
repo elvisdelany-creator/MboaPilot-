@@ -120,11 +120,11 @@ export function NouveauCompteDialog({ ouvert, sites, onFerme, onSucces }: Props)
           <div className="grid grid-cols-2 gap-3">
             <div>
               <Label htmlFor="compte-nom">Nom</Label>
-              <Input id="compte-nom" value={nom} onChange={(e) => setNom(e.target.value)} className="mt-1" />
+              <Input id="compte-nom" value={nom} onChange={(e) => setNom(e.target.value)} maxLength={100} className="mt-1" />
             </div>
             <div>
               <Label htmlFor="compte-prenom">Prénom</Label>
-              <Input id="compte-prenom" value={prenom} onChange={(e) => setPrenom(e.target.value)} className="mt-1" />
+              <Input id="compte-prenom" value={prenom} onChange={(e) => setPrenom(e.target.value)} maxLength={100} className="mt-1" />
             </div>
           </div>
           <div>

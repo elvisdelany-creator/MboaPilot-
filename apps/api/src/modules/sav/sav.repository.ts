@@ -1,6 +1,8 @@
 import { eq } from "drizzle-orm";
 import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
+import { telephoneFacultatif, texteFacultatif, texteObligatoire } from "../../lib/champs-texte.js";
+import { verifierBooleen } from "../../lib/validation.js";
 
 export interface OuvrirDossierInput {
   siteId: number;
@@ -17,15 +19,19 @@ export interface OuvrirDossierInput {
 
 // 5.10, 8.4 : ouverture de dossier, avec ou sans rattachement à un abonné
 export function creerDossierSav(db: Db, input: OuvrirDossierInput) {
+  const descriptionPanne = texteObligatoire(input.descriptionPanne, "La panne annoncée", 500);
+  // un texte non vide ("non") est « vrai » : le dossier passerait sous garantie, donc facture gratuite
+  verifierBooleen(input.sousGarantie, "Le champ sous garantie");
+
   const dossier = db
     .insert(schema.savDossier)
     .values({
       siteId: input.siteId,
       idAbonne: input.idAbonne,
-      clientNom: input.clientNom,
-      clientTelephone: input.clientTelephone,
-      descriptionPanne: input.descriptionPanne,
-      etatReception: input.etatReception,
+      clientNom: texteFacultatif(input.clientNom, "Le nom du client", 100) ?? undefined,
+      clientTelephone: telephoneFacultatif(input.clientTelephone, "Le téléphone du client") ?? undefined,
+      descriptionPanne,
+      etatReception: texteFacultatif(input.etatReception, "L'état à la réception", 500) ?? undefined,
       sousGarantie: input.sousGarantie ? 1 : 0,
     })
     .returning()

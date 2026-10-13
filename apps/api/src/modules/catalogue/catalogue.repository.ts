@@ -1,10 +1,21 @@
 import { and, eq } from "drizzle-orm";
-import type { Kit as KitCalcul } from "@mboapilot/shared";
+import { normaliserLibelle, type Kit as KitCalcul } from "@mboapilot/shared";
 import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
 import { construireKitCalcul } from "./kit-mapper.js";
 import { verifierEntier } from "../../lib/validation.js";
+import { texteObligatoire } from "../../lib/champs-texte.js";
 import { differencesAudit, journaliserAudit } from "../utilisateurs/audit.repository.js";
+
+// libellé de catalogue : nettoyé (espaces réduits) et borné — un libellé de 100 000 caractères
+// ou deux libellés identiques rendent le choix du caissier ambigu
+function libelleCatalogue(valeur: unknown, libelle: string): string {
+  return texteObligatoire(valeur, libelle, 100).replace(/\s+/g, " ");
+}
+
+function exigerLibelleUnique(existants: { id: number; libelle: string }[], libelle: string, message: string, idIgnore?: number) {
+  if (existants.some((e) => e.id !== idIgnore && normaliserLibelle(e.libelle) === normaliserLibelle(libelle))) throw new Error(message);
+}
 
 export type CatalogueKit = KitCalcul & { idKit: number; idFamille: number; libelle: string };
 
@@ -53,8 +64,9 @@ export interface CreerFamilleInput {
 }
 
 export function creerFamille(db: Db, input: CreerFamilleInput) {
-  if (!input.libelle.trim()) throw new Error("Le libellé de la famille est obligatoire");
-  return db.insert(schema.familleAbonnement).values({ libelle: input.libelle }).returning().get();
+  const libelle = libelleCatalogue(input.libelle, "Le libellé de la famille");
+  exigerLibelleUnique(listerFamilles(db).map((f) => ({ id: f.idFamille, libelle: f.libelle })), libelle, "Une famille porte déjà ce libellé");
+  return db.insert(schema.familleAbonnement).values({ libelle }).returning().get();
 }
 
 export function listerFamilles(db: Db) {
@@ -71,7 +83,8 @@ export interface CreerFormuleInput {
 }
 
 export function creerFormule(db: Db, input: CreerFormuleInput, acteurId: number | null = null) {
-  if (!input.libelle.trim()) throw new Error("Le libellé de la formule est obligatoire");
+  const libelle = libelleCatalogue(input.libelle, "Le libellé de la formule");
+  exigerLibelleUnique(listerFormules(db, input.idFamille).map((f) => ({ id: f.idFormule, libelle: f.libelle })), libelle, "Une formule de cette famille porte déjà ce libellé");
   // 7.4 : un prix négatif se propage tel quel dans le différentiel de
   // migration (cible.prix - actuelle.prix), sans garde-fou de ce côté
   verifierEntier(input.prix, "Le prix de la formule", { requis: true, nullable: false });
@@ -83,7 +96,7 @@ export function creerFormule(db: Db, input: CreerFormuleInput, acteurId: number 
       .insert(schema.formule)
       .values({
         idFamille: input.idFamille,
-        libelle: input.libelle,
+        libelle,
         prix: input.prix,
         rang: input.rang,
         ...(input.modeDuree !== undefined && { modeDuree: input.modeDuree }),
@@ -114,7 +127,13 @@ export interface ModifierFormuleInput {
 // une formule désactivée reste dans l'historique (abonnements déjà vendus)
 // mais disparaît du catalogue de vente (listerCatalogue filtre actif = 1)
 export function modifierFormule(db: Db, idFormule: number, input: ModifierFormuleInput, acteurId: number | null = null) {
-  if (input.libelle !== undefined && !input.libelle.trim()) throw new Error("Le libellé de la formule est obligatoire");
+  const libelle = input.libelle === undefined ? undefined : libelleCatalogue(input.libelle, "Le libellé de la formule");
+  if (libelle !== undefined) {
+    const existante = db.select().from(schema.formule).where(eq(schema.formule.idFormule, idFormule)).get();
+    if (existante) {
+      exigerLibelleUnique(listerFormules(db, existante.idFamille).map((f) => ({ id: f.idFormule, libelle: f.libelle })), libelle, "Une formule de cette famille porte déjà ce libellé", idFormule);
+    }
+  }
   verifierEntier(input.prix, "Le prix de la formule", { nullable: false });
   verifierEntier(input.rang, "Le rang de la formule", { nullable: false });
   verifierEntier(input.dureeCycles, "La durée en cycles de la formule", { min: 1, nullable: false, message: "La durée en cycles de la formule doit être d'au moins 1" });
@@ -124,7 +143,7 @@ export function modifierFormule(db: Db, idFormule: number, input: ModifierFormul
     const apres = db
       .update(schema.formule)
       .set({
-        ...(input.libelle !== undefined && { libelle: input.libelle }),
+        ...(libelle !== undefined && { libelle }),
         ...(input.prix !== undefined && { prix: input.prix }),
         ...(input.rang !== undefined && { rang: input.rang }),
         ...(input.modeDuree !== undefined && { modeDuree: input.modeDuree }),
@@ -154,10 +173,11 @@ export interface CreerOptionInput {
 }
 
 export function creerOption(db: Db, input: CreerOptionInput, acteurId: number | null = null) {
-  if (!input.libelle.trim()) throw new Error("Le libellé de l'option est obligatoire");
+  const libelle = libelleCatalogue(input.libelle, "Le libellé de l'option");
+  exigerLibelleUnique(db.select().from(schema.optionComplement).all().map((o) => ({ id: o.idOption, libelle: o.libelle })), libelle, "Une option porte déjà ce libellé");
   verifierEntier(input.prix, "Le prix de l'option", { requis: true, nullable: false });
   return db.transaction(() => {
-    const option = db.insert(schema.optionComplement).values({ libelle: input.libelle, prix: input.prix }).returning().get();
+    const option = db.insert(schema.optionComplement).values({ libelle, prix: input.prix }).returning().get();
     journaliserAudit(db, { acteurId, action: "CREATION", tableCible: "option_complement", idCible: option.idOption, apres: { libelle: option.libelle, prix: option.prix } });
     return option;
   });
@@ -169,7 +189,10 @@ export interface ModifierOptionInput {
 }
 
 export function modifierOption(db: Db, idOption: number, input: ModifierOptionInput, acteurId: number | null = null) {
-  if (input.libelle !== undefined && !input.libelle.trim()) throw new Error("Le libellé de l'option est obligatoire");
+  const libelle = input.libelle === undefined ? undefined : libelleCatalogue(input.libelle, "Le libellé de l'option");
+  if (libelle !== undefined) {
+    exigerLibelleUnique(db.select().from(schema.optionComplement).all().map((o) => ({ id: o.idOption, libelle: o.libelle })), libelle, "Une option porte déjà ce libellé", idOption);
+  }
   verifierEntier(input.prix, "Le prix de l'option", { nullable: false });
 
   return db.transaction(() => {
@@ -177,7 +200,7 @@ export function modifierOption(db: Db, idOption: number, input: ModifierOptionIn
     const apres = db
       .update(schema.optionComplement)
       .set({
-        ...(input.libelle !== undefined && { libelle: input.libelle }),
+        ...(libelle !== undefined && { libelle }),
         ...(input.prix !== undefined && { prix: input.prix }),
       })
       .where(eq(schema.optionComplement.idOption, idOption))
@@ -291,7 +314,8 @@ function validerPrixKit(input: { prixFixe?: number; prixParaboleAccessoires?: nu
 }
 
 export function creerKit(db: Db, input: CreerKitInput, acteurId: number | null = null) {
-  if (!input.libelle.trim()) throw new Error("Le libellé du kit est obligatoire");
+  const libelle = libelleCatalogue(input.libelle, "Le libellé du kit");
+  exigerLibelleUnique(listerKits(db, input.idFamille).map((k) => ({ id: k.idKit, libelle: k.libelle })), libelle, "Un kit de cette famille porte déjà ce libellé");
   validerPrixKit(input);
 
   return db.transaction(() => {
@@ -299,7 +323,7 @@ export function creerKit(db: Db, input: CreerKitInput, acteurId: number | null =
       .insert(schema.kit)
       .values({
         idFamille: input.idFamille,
-        libelle: input.libelle,
+        libelle,
         reglePrix: input.reglePrix,
         prixFixe: input.prixFixe,
         ...(input.prixParaboleAccessoires !== undefined && { prixParaboleAccessoires: input.prixParaboleAccessoires }),
@@ -329,7 +353,13 @@ export interface ModifierKitInput {
 }
 
 export function modifierKit(db: Db, idKit: number, input: ModifierKitInput, acteurId: number | null = null) {
-  if (input.libelle !== undefined && !input.libelle.trim()) throw new Error("Le libellé du kit est obligatoire");
+  const libelle = input.libelle === undefined ? undefined : libelleCatalogue(input.libelle, "Le libellé du kit");
+  if (libelle !== undefined) {
+    const existant = db.select().from(schema.kit).where(eq(schema.kit.idKit, idKit)).get();
+    if (existant) {
+      exigerLibelleUnique(listerKits(db, existant.idFamille).map((k) => ({ id: k.idKit, libelle: k.libelle })), libelle, "Un kit de cette famille porte déjà ce libellé", idKit);
+    }
+  }
   validerPrixKit(input);
 
   return db.transaction(() => {
@@ -337,7 +367,7 @@ export function modifierKit(db: Db, idKit: number, input: ModifierKitInput, acte
     const apres = db
       .update(schema.kit)
       .set({
-        ...(input.libelle !== undefined && { libelle: input.libelle }),
+        ...(libelle !== undefined && { libelle }),
         ...(input.reglePrix !== undefined && { reglePrix: input.reglePrix }),
         ...(input.prixFixe !== undefined && { prixFixe: input.prixFixe }),
         ...(input.prixParaboleAccessoires !== undefined && { prixParaboleAccessoires: input.prixParaboleAccessoires }),

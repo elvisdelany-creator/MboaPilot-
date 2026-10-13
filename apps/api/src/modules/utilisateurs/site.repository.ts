@@ -1,6 +1,8 @@
 import { eq } from "drizzle-orm";
 import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
+import { normaliserLibelle } from "@mboapilot/shared";
+import { texteFacultatif, texteObligatoire } from "../../lib/champs-texte.js";
 import { verifierEntier } from "../../lib/validation.js";
 
 export interface CreerSiteInput {
@@ -13,10 +15,18 @@ export interface CreerSiteInput {
 // V1 est le multi-site centralisé décrit en 2.5.2 (un seul fichier SQLite,
 // chaque enregistrement porte un site_id) ; la bascule de supervision entre
 // sites pour un rôle multi-boutiques est différée en V2 (12.1).
-export function creerSite(db: Db, input: CreerSiteInput) {
-  if (!input.nom.trim()) throw new Error("Le nom du site est obligatoire");
+// deux sites de même nom (même désactivés) : en-tête, reçus et sélecteurs ne distinguent plus les boutiques
+function exigerNomSiteLibre(db: Db, idEntreprise: number, nom: string, idSiteIgnore?: number) {
+  const homonyme = listerSites(db, idEntreprise).find((s) => s.idSite !== idSiteIgnore && normaliserLibelle(s.nom) === normaliserLibelle(nom));
+  if (homonyme) throw new Error("Un site porte déjà ce nom");
+}
 
-  return db.insert(schema.site).values({ idEntreprise: input.idEntreprise, nom: input.nom, adresse: input.adresse }).returning().get();
+export function creerSite(db: Db, input: CreerSiteInput) {
+  const nom = texteObligatoire(input.nom, "Le nom du site", 100).replace(/\s+/g, " ");
+  const adresse = texteFacultatif(input.adresse, "L'adresse du site", 300) ?? undefined;
+  exigerNomSiteLibre(db, input.idEntreprise, nom);
+
+  return db.insert(schema.site).values({ idEntreprise: input.idEntreprise, nom, adresse }).returning().get();
 }
 
 export function trouverSite(db: Db, idSite: number) {
@@ -41,8 +51,12 @@ export interface ModifierSiteInput {
 export function modifierSite(db: Db, idSite: number, input: ModifierSiteInput) {
   // 8.7 : même garde-fou qu'à la création (creerSite) — le nom du site est
   // affiché partout (en-tête, reçus, sélecteurs de site).
-  if (input.nom !== undefined && (typeof input.nom !== "string" || !input.nom.trim())) throw new Error("Le nom du site est obligatoire");
-  if (input.adresse !== undefined && input.adresse !== null && typeof input.adresse !== "string") throw new Error("L'adresse du site doit être un texte");
+  const nom = input.nom === undefined ? undefined : texteObligatoire(input.nom, "Le nom du site", 100).replace(/\s+/g, " ");
+  if (nom !== undefined) {
+    const existant = trouverSite(db, idSite);
+    if (existant) exigerNomSiteLibre(db, existant.idEntreprise, nom, idSite);
+  }
+  const adresse = texteFacultatif(input.adresse, "L'adresse du site", 300);
   if (input.actif !== undefined && typeof input.actif !== "boolean") throw new Error("Le champ actif doit être vrai ou faux");
   if (input.imprimanteHote !== undefined && typeof input.imprimanteHote !== "string") throw new Error("L'hôte de l'imprimante doit être un texte");
   verifierEntier(input.imprimantePort, "Le port de l'imprimante", { min: 1, max: 65535, nullable: false });
@@ -51,8 +65,8 @@ export function modifierSite(db: Db, idSite: number, input: ModifierSiteInput) {
   return db
     .update(schema.site)
     .set({
-      ...(input.nom !== undefined && { nom: input.nom }),
-      ...(input.adresse !== undefined && { adresse: input.adresse }),
+      ...(nom !== undefined && { nom }),
+      ...(adresse !== undefined && { adresse }),
       ...(input.actif !== undefined && { actif: input.actif ? 1 : 0 }),
       ...(efface && { imprimanteHote: null, imprimantePort: null }),
       ...(!efface && input.imprimanteHote !== undefined && { imprimanteHote: input.imprimanteHote }),

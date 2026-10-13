@@ -96,3 +96,41 @@ describe("listerPiecesUtilisees", () => {
     expect(pieces[0].libelleProduit).toBe("Télécommande universelle");
   });
 });
+
+// Constaté en test grandeur nature : l'ouverture d'un dossier acceptait sousGarantie: "non" (texte
+// non vide = vrai : le dossier passait SOUS GARANTIE, donc facture gratuite ou à tarif réduit), un
+// téléphone « abcdef » (le SMS « appareil prêt » partait dans le vide), une panne vide ou de
+// 100 000 caractères, et gardait les espaces autour des textes.
+describe("creerDossierSav : champs saisis", () => {
+  const base = () => ({ siteId, descriptionPanne: "Ne s'allume plus", sousGarantie: false, userId });
+
+  it("retire les espaces autour des textes saisis", () => {
+    const dossier = creerDossierSav(db, { ...base(), descriptionPanne: "  Écran noir  ", etatReception: " Rayure ", clientNom: " Mendo ", clientTelephone: " 690 00 00 00 " });
+
+    expect(dossier).toMatchObject({ descriptionPanne: "Écran noir", etatReception: "Rayure", clientNom: "Mendo", clientTelephone: "690 00 00 00" });
+  });
+
+  it.each([
+    ["une sous-garantie qui n'est pas un booléen", { sousGarantie: "non" }, /garantie.*vrai ou faux/i],
+    ["une panne vide", { descriptionPanne: "   " }, /panne.*obligatoire/i],
+    ["une panne de plus de 500 caractères", { descriptionPanne: "P".repeat(501) }, /panne.*500 caractères/i],
+    ["un état à la réception de plus de 500 caractères", { etatReception: "E".repeat(501) }, /état.*500 caractères/i],
+    ["un nom de client de plus de 100 caractères", { clientNom: "N".repeat(101) }, /nom.*100 caractères/i],
+    ["un téléphone de client avec des lettres", { clientTelephone: "abcdef" }, /téléphone/i],
+    ["un téléphone de client de 5 000 caractères", { clientTelephone: "6".repeat(5000) }, /téléphone/i],
+  ])("refuse %s, sans ouvrir de dossier", (_libelle, surcharge, message) => {
+    expect(() => creerDossierSav(db, { ...base(), ...surcharge } as never)).toThrow(message);
+    expect(listerDossiersSav(db, siteId)).toHaveLength(0);
+  });
+
+  it("accepte l'absence de garantie renseignée (hors garantie) et les champs facultatifs vides", () => {
+    const dossier = creerDossierSav(db, { siteId, descriptionPanne: "Panne", userId } as never);
+
+    expect(dossier.sousGarantie).toBe(0);
+    expect(dossier.clientTelephone).toBeNull();
+  });
+
+  it("enregistre une sous-garantie vraie", () => {
+    expect(creerDossierSav(db, { ...base(), sousGarantie: true }).sousGarantie).toBe(1);
+  });
+});

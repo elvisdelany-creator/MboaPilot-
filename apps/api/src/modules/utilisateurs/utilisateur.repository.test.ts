@@ -308,3 +308,21 @@ describe("identifiant de connexion : forme et unicité", () => {
     expect(() => creerUtilisateur(db, { siteId, ...base, identifiant: "ANCIEN.compte" })).toThrow(/identifiant.*déjà/i);
   });
 });
+
+// Constaté en test grandeur nature : un compte acceptait un nom ou un prénom de 100 000 caractères
+// et gardait les espaces autour (affichés partout : en-tête, journal d'audit, reçus).
+describe("creerUtilisateur : nom et prénom", () => {
+  const base = { siteId: 0, nom: "Nga", prenom: "Valentin", identifiant: "vnga2", motDePasse: "motdepasse-secret", role: "CAISSIER" as const };
+
+  it("retire les espaces autour du nom et du prénom", () => {
+    const u = creerUtilisateur(db, { ...base, siteId, nom: "  Nga  ", prenom: " Valentin " });
+
+    expect(u).toMatchObject({ nom: "Nga", prenom: "Valentin" });
+  });
+
+  it("refuse un nom ou un prénom de plus de 100 caractères, et accepte exactement 100", () => {
+    expect(() => creerUtilisateur(db, { ...base, siteId, nom: "N".repeat(101) })).toThrow(/nom.*100 caractères/i);
+    expect(() => creerUtilisateur(db, { ...base, siteId, prenom: "P".repeat(101) })).toThrow(/prénom.*100 caractères/i);
+    expect(creerUtilisateur(db, { ...base, siteId, nom: "N".repeat(100) }).nom).toHaveLength(100);
+  });
+});

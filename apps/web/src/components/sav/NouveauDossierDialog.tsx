@@ -156,23 +156,23 @@ export function NouveauDossierDialog({ ouvert, onFerme, onSucces }: Props) {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label htmlFor="sav-client-nom">Nom du client (optionnel)</Label>
-                <Input id="sav-client-nom" value={clientNom} onChange={(e) => setClientNom(e.target.value)} className="mt-1" />
+                <Input id="sav-client-nom" value={clientNom} onChange={(e) => setClientNom(e.target.value)} maxLength={100} className="mt-1" />
               </div>
               <div>
                 <Label htmlFor="sav-client-telephone">Téléphone du client (optionnel)</Label>
-                <Input id="sav-client-telephone" value={clientTelephone} onChange={(e) => setClientTelephone(e.target.value)} className="mt-1" />
+                <Input id="sav-client-telephone" type="tel" value={clientTelephone} onChange={(e) => setClientTelephone(e.target.value)} maxLength={30} className="mt-1" />
               </div>
             </div>
           )}
 
           <div>
             <Label htmlFor="sav-panne">Panne annoncée par le client</Label>
-            <Input id="sav-panne" value={descriptionPanne} onChange={(e) => setDescriptionPanne(e.target.value)} className="mt-1" required />
+            <Input id="sav-panne" value={descriptionPanne} onChange={(e) => setDescriptionPanne(e.target.value)} maxLength={500} className="mt-1" required />
           </div>
 
           <div>
             <Label htmlFor="sav-etat">État à la réception (accessoires, esthétique)</Label>
-            <Input id="sav-etat" value={etatReception} onChange={(e) => setEtatReception(e.target.value)} className="mt-1" />
+            <Input id="sav-etat" value={etatReception} onChange={(e) => setEtatReception(e.target.value)} maxLength={500} className="mt-1" />
           </div>
 
           <label className="flex items-center gap-2 text-sm text-foreground">

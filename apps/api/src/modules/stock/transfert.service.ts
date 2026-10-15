@@ -25,6 +25,11 @@ export interface TransfertResultat {
 // source s'il n'existe pas encore là-bas — un gérant qui déplace un article
 // vers une autre boutique ne doit pas d'abord aller le créer manuellement là-bas.
 export function transfererStock(db: Db, params: TransfererStockParams): TransfertResultat {
+  // atomique : le produit de destination était créé avant les mouvements — un échec laissait un article orphelin
+  return db.transaction(() => transfererStockSansTransaction(db, params));
+}
+
+function transfererStockSansTransaction(db: Db, params: TransfererStockParams): TransfertResultat {
   if (params.quantite <= 0) throw new Error("La quantité transférée doit être positive");
 
   const source = db.select().from(schema.produit).where(eq(schema.produit.idProduit, params.idProduitSource)).get();

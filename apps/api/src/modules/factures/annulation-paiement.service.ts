@@ -20,6 +20,12 @@ export interface AnnulerPaiementResultat {
 // paiement est retiré et journalisé (SUPPRESSION) ; la facture repasse
 // BROUILLON si plus aucun encaissement ne subsiste.
 export function annulerPaiement(db: Db, params: AnnulerPaiementParams): AnnulerPaiementResultat {
+  // atomique : le paiement était supprimé avant la mise à jour de la facture — un échec effaçait l'encaissement
+  // tout en laissant la facture « VALIDEE »
+  return db.transaction(() => annulerPaiementSansTransaction(db, params));
+}
+
+function annulerPaiementSansTransaction(db: Db, params: AnnulerPaiementParams): AnnulerPaiementResultat {
   const paiement = db.select().from(schema.paiement).where(eq(schema.paiement.idPaiement, params.idPaiement)).get();
   if (!paiement) throw new Error(`Paiement ${params.idPaiement} introuvable`);
 

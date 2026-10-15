@@ -31,6 +31,11 @@ export interface AvoirResultat {
 // commission CANAL+ (6.2) ni le cycle de vie de l'abonnement : l'avoir est
 // une correction comptable, pas une résiliation.
 export function creerAvoir(db: Db, params: CreerAvoirParams): AvoirResultat {
+  // atomique : un échec à la restitution de stock laissait une facture d'avoir (et ses lignes) sans mouvement de stock
+  return db.transaction(() => creerAvoirSansTransaction(db, params));
+}
+
+function creerAvoirSansTransaction(db: Db, params: CreerAvoirParams): AvoirResultat {
   const origine = db.select().from(schema.facture).where(eq(schema.facture.idFacture, params.idFactureOrigine)).get();
   if (!origine) throw new Error(`Facture ${params.idFactureOrigine} introuvable`);
   if (origine.type === "AVOIR") throw new Error("Un avoir ne peut pas lui-même faire l'objet d'un avoir");

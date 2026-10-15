@@ -4,6 +4,18 @@ import * as schema from "../../db/schema.js";
 import type { CanalNotification, FournisseurNotification } from "./fournisseur.js";
 import { PLACEHOLDER_TELEPHONE } from "../abonnes/anonymisation.service.js";
 
+// Une passerelle réelle peut lever une exception (réseau coupé, délai dépassé) : elle remontait au job
+// quotidien après l'enregistrement de l'alerte du jour, et le SMS n'était jamais renvoyé. Un problème
+// d'acheminement est donc journalisé comme un échec d'envoi, jamais propagé.
+function envoyerSansException(fournisseur: FournisseurNotification, canal: CanalNotification, params: { destinataire: string; message: string }): boolean {
+  try {
+    return fournisseur.envoyer(canal, params).reussi;
+  } catch (erreur) {
+    console.error(`[API] échec d'acheminement de la notification (${canal})`, erreur);
+    return false;
+  }
+}
+
 export interface EnvoyerNotificationParams {
   idAbonne: number;
   evenement: "ALERTE_ECHEANCE" | "SAV_PRET";
@@ -28,7 +40,7 @@ export function envoyerNotificationAbonne(db: Db, fournisseur: FournisseurNotifi
   if (abonne.email) canaux.push({ canal: "EMAIL", destinataire: abonne.email });
 
   return canaux.map(({ canal, destinataire }) => {
-    const { reussi } = fournisseur.envoyer(canal, { destinataire, message: params.message });
+    const reussi = envoyerSansException(fournisseur, canal, { destinataire, message: params.message });
     return db
       .insert(schema.notification)
       .values({
@@ -58,7 +70,7 @@ export interface EnvoyerNotificationClientPonctuelParams {
 // via le seul canal disponible pour lui (SMS, pas de fiche e-mail) —
 // idAbonne reste NULL, contrairement à envoyerNotificationAbonne ci-dessus.
 export function envoyerNotificationClientPonctuel(db: Db, fournisseur: FournisseurNotification, params: EnvoyerNotificationClientPonctuelParams) {
-  const { reussi } = fournisseur.envoyer("SMS", { destinataire: params.telephone, message: params.message });
+  const reussi = envoyerSansException(fournisseur, "SMS", { destinataire: params.telephone, message: params.message });
   return db
     .insert(schema.notification)
     .values({

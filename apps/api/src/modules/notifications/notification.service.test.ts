@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { eq } from "drizzle-orm";
 import { creerDbTest, type Db } from "../../test-utils/db.js";
 import * as schema from "../../db/schema.js";
-import { envoyerNotificationAbonne, listerNotificationsAbonne } from "./notification.service.js";
+import { envoyerNotificationAbonne, envoyerNotificationClientPonctuel, listerNotificationsAbonne } from "./notification.service.js";
 import { anonymiserAbonne } from "../abonnes/anonymisation.service.js";
 import type { FournisseurNotification } from "./fournisseur.js";
 
@@ -129,5 +129,47 @@ describe("listerNotificationsAbonne (8.3)", () => {
     const liste = listerNotificationsAbonne(db, abonne.idAbonne);
     expect(liste).toHaveLength(4); // 2 événements x (SMS + EMAIL)
     expect(liste[0].message).toBe("second");
+  });
+});
+
+// Le service promet « jamais d'exception pour un problème d'acheminement » mais ne gérait que
+// { reussi: false } : une passerelle SMS réelle qui lève une exception (réseau coupé, délai dépassé)
+// remontait au job quotidien APRÈS l'enregistrement de l'alerte, et le SMS n'était jamais renvoyé
+// (l'alerte du jour est déjà notée comme envoyée).
+describe("notifications : fournisseur qui lève une exception", () => {
+  const enPanne: FournisseurNotification = {
+    envoyer() {
+      throw new Error("connect ETIMEDOUT passerelle-sms");
+    },
+  };
+
+  it("journalise l'envoi comme ECHOUEE au lieu de lever l'exception, pour chaque canal", () => {
+    const abonne = db.insert(schema.abonne).values({ siteId, nom: "Nga", prenom: "Paul", telephone: "690000000", email: "paul@example.cm" }).returning().get();
+
+    const resultats = envoyerNotificationAbonne(db, enPanne, { idAbonne: abonne.idAbonne, evenement: "ALERTE_ECHEANCE", message: "Échéance proche." });
+
+    expect(resultats.map((n) => [n.canal, n.statutEnvoi])).toEqual([["SMS", "ECHOUEE"], ["EMAIL", "ECHOUEE"]]);
+  });
+
+  it("continue avec le canal suivant quand le premier échoue par exception", () => {
+    const abonne = db.insert(schema.abonne).values({ siteId, nom: "Nga", prenom: "Paul", telephone: "690000000", email: "paul@example.cm" }).returning().get();
+    const smsEnPanne: FournisseurNotification = {
+      envoyer(canal) {
+        if (canal === "SMS") throw new Error("passerelle SMS injoignable");
+        return { reussi: true };
+      },
+    };
+
+    const resultats = envoyerNotificationAbonne(db, smsEnPanne, { idAbonne: abonne.idAbonne, evenement: "ALERTE_ECHEANCE", message: "Échéance proche." });
+
+    expect(resultats.map((n) => [n.canal, n.statutEnvoi])).toEqual([["SMS", "ECHOUEE"], ["EMAIL", "ENVOYEE"]]);
+  });
+
+  it("journalise aussi comme ECHOUEE l'envoi à un client ponctuel (SAV prêt)", () => {
+    const dossier = db.insert(schema.savDossier).values({ siteId, descriptionPanne: "Ne s'allume plus" }).returning().get();
+
+    const resultat = envoyerNotificationClientPonctuel(db, enPanne, { telephone: "690000000", evenement: "SAV_PRET", message: "Appareil prêt.", idDossierSav: dossier.idDossierSav });
+
+    expect(resultat.statutEnvoi).toBe("ECHOUEE");
   });
 });

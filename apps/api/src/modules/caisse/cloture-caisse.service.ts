@@ -5,6 +5,11 @@ import * as schema from "../../db/schema.js";
 const MODES_PAIEMENT = ["CASH", "CHEQUE", "VIREMENT", "MOBILE_MONEY"] as const;
 export type ModePaiement = (typeof MODES_PAIEMENT)[number];
 
+// un tiroir-caisse ne contient pas des milliards de milliards : au-delà, les additions de l'écart total
+// perdent leur précision (entiers sûrs de JS)
+const PLAFOND_MONTANT_CAISSE = 10_000_000_000;
+const PLAFOND_TEXTE = String(PLAFOND_MONTANT_CAISSE).replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+
 export interface OuvrirCaisseParams {
   siteId: number;
   userId: number;
@@ -27,6 +32,7 @@ export interface FermerCaisseParams {
 export function ouvrirCaisse(db: Db, params: OuvrirCaisseParams) {
   if (!Number.isSafeInteger(params.fondOuverture)) throw new Error("Le fond de caisse d'ouverture doit être un montant entier en FCFA");
   if (params.fondOuverture < 0) throw new Error("Le fond de caisse d'ouverture ne peut pas être négatif");
+  if (params.fondOuverture > PLAFOND_MONTANT_CAISSE) throw new Error(`Le fond de caisse d'ouverture ne peut pas dépasser ${PLAFOND_TEXTE} FCFA`);
 
   const dejaOuverte = obtenirClotureOuverte(db, params.siteId);
   if (dejaOuverte) throw new Error("Une session de caisse est déjà ouverte pour ce site");
@@ -71,6 +77,7 @@ function verifierComptages(comptages: unknown): ComptageInput[] {
     if (!Number.isSafeInteger(c.montantCompte) || c.montantCompte < 0) {
       throw new Error(`Comptage invalide : le montant compté (${mode}) doit être un entier positif ou nul en FCFA`);
     }
+    if (c.montantCompte > PLAFOND_MONTANT_CAISSE) throw new Error(`Comptage invalide : le montant compté (${mode}) ne peut pas dépasser ${PLAFOND_TEXTE} FCFA`);
   }
   return comptages as ComptageInput[];
 }
@@ -106,37 +113,42 @@ export function fermerCaisse(db: Db, params: FermerCaisseParams) {
     return { mode, montantTheorique, montantCompte, ecart: montantCompte - montantTheorique };
   });
 
-  for (const c of comptages) {
-    db.insert(schema.clotureCaisseComptage)
-      .values({ idCloture: params.idCloture, mode: c.mode, montantTheorique: c.montantTheorique, montantCompte: c.montantCompte, ecart: c.ecart })
+  // comptages, clôture et journal d'audit s'écrivent ensemble ou pas du tout : un échec en cours de route
+  // laissait des lignes de comptage orphelines, doublonnées à la nouvelle tentative
+  const clotureFermee = db.transaction(() => {
+    for (const c of comptages) {
+      db.insert(schema.clotureCaisseComptage)
+        .values({ idCloture: params.idCloture, mode: c.mode, montantTheorique: c.montantTheorique, montantCompte: c.montantCompte, ecart: c.ecart })
+        .run();
+    }
+
+    const ecartTotal = comptages.reduce((total, c) => total + c.ecart, 0);
+    // même format que le défaut SQL datetime('now') des autres colonnes de date
+    // (date_ouverture, date_paiement…) — sinon la comparaison de chaînes entre
+    // un dateFermeture au format ISO ("...T...Z") et un datePaiement au format
+    // SQL ("... ...") est incorrecte dès qu'ils tombent le même jour.
+    const dateFermeture = new Date().toISOString().replace("T", " ").slice(0, 19);
+
+    const fermee = db
+      .update(schema.clotureCaisse)
+      .set({ statut: "FERMEE", fermePar: params.userId, dateFermeture, ecartTotal })
+      .where(eq(schema.clotureCaisse.idCloture, params.idCloture))
+      .returning()
+      .get();
+
+    // 11.5 : "toute action sensible doit être journalisée" — la clôture fige un écart financier
+    db.insert(schema.journalAudit)
+      .values({
+        utilisateurId: params.userId,
+        action: "MODIFICATION",
+        tableCible: "cloture_caisse",
+        idCible: String(params.idCloture),
+        valeurAvant: JSON.stringify({ statut: "OUVERTE" }),
+        valeurApres: JSON.stringify({ statut: "FERMEE", ecartTotal }),
+      })
       .run();
-  }
-
-  const ecartTotal = comptages.reduce((total, c) => total + c.ecart, 0);
-  // même format que le défaut SQL datetime('now') des autres colonnes de date
-  // (date_ouverture, date_paiement…) — sinon la comparaison de chaînes entre
-  // un dateFermeture au format ISO ("...T...Z") et un datePaiement au format
-  // SQL ("... ...") est incorrecte dès qu'ils tombent le même jour.
-  const dateFermeture = new Date().toISOString().replace("T", " ").slice(0, 19);
-
-  const clotureFermee = db
-    .update(schema.clotureCaisse)
-    .set({ statut: "FERMEE", fermePar: params.userId, dateFermeture, ecartTotal })
-    .where(eq(schema.clotureCaisse.idCloture, params.idCloture))
-    .returning()
-    .get();
-
-  // 11.5 : "toute action sensible doit être journalisée" — la clôture fige un écart financier
-  db.insert(schema.journalAudit)
-    .values({
-      utilisateurId: params.userId,
-      action: "MODIFICATION",
-      tableCible: "cloture_caisse",
-      idCible: String(params.idCloture),
-      valeurAvant: JSON.stringify({ statut: "OUVERTE" }),
-      valeurApres: JSON.stringify({ statut: "FERMEE", ecartTotal }),
-    })
-    .run();
+    return fermee;
+  });
 
   return { cloture: clotureFermee!, comptages };
 }

@@ -221,3 +221,42 @@ describe("montants de clôture géants (13.1)", () => {
     expect(obtenirClotureOuverte(db, siteId)?.idCloture).toBe(cloture.idCloture);
   });
 });
+
+// Constaté en test grandeur nature : un fond de caisse de 9 007 199 254 740 991 FCFA (limite des entiers sûrs)
+// était accepté, et l'écart total de la clôture dépassait alors la précision des additions. Et une fermeture
+// qui échoue en cours de route laissait des lignes de comptage orphelines (doublonnées au second essai).
+describe("clôture : plafond des montants et fermeture atomique (13.1)", () => {
+  const PLAFOND = 10_000_000_000;
+
+  it("refuse un fond d'ouverture au-delà de 10 milliards de FCFA, et accepte exactement le plafond", () => {
+    expect(() => ouvrirCaisse(db, { siteId, userId: caissierId, fondOuverture: PLAFOND + 1 })).toThrow(/fond de caisse.*10 000 000 000/i);
+    expect(ouvrirCaisse(db, { siteId, userId: caissierId, fondOuverture: PLAFOND }).fondOuverture).toBe(PLAFOND);
+  });
+
+  it("refuse un montant compté au-delà du plafond, sans fermer la session", () => {
+    const cloture = ouvrirCaisse(db, { siteId, userId: caissierId, fondOuverture: 1000 });
+
+    expect(() => fermerCaisse(db, { idCloture: cloture.idCloture, userId: caissierId, comptages: [{ mode: "CASH", montantCompte: PLAFOND + 1 }] })).toThrow(/montant compté.*10 000 000 000/i);
+    expect(obtenirClotureOuverte(db, siteId)?.idCloture).toBe(cloture.idCloture);
+  });
+
+  it("n'écrit rien quand la fermeture échoue en cours de route (aucune ligne de comptage orpheline)", () => {
+    const cloture = ouvrirCaisse(db, { siteId, userId: caissierId, fondOuverture: 1000 });
+
+    // un auteur inexistant fait échouer la mise à jour finale, APRÈS l'écriture des comptages
+    expect(() => fermerCaisse(db, { idCloture: cloture.idCloture, userId: 99999, comptages: [{ mode: "CASH", montantCompte: 1000 }] })).toThrow();
+
+    expect(db.select().from(schema.clotureCaisseComptage).all()).toHaveLength(0);
+    expect(obtenirClotureOuverte(db, siteId)?.idCloture).toBe(cloture.idCloture);
+    expect(db.select().from(schema.journalAudit).all()).toHaveLength(0);
+  });
+
+  it("permet de refermer normalement après un échec : un seul jeu de comptages", () => {
+    const cloture = ouvrirCaisse(db, { siteId, userId: caissierId, fondOuverture: 1000 });
+    expect(() => fermerCaisse(db, { idCloture: cloture.idCloture, userId: 99999, comptages: [] })).toThrow();
+
+    fermerCaisse(db, { idCloture: cloture.idCloture, userId: caissierId, comptages: [{ mode: "CASH", montantCompte: 1000 }] });
+
+    expect(db.select().from(schema.clotureCaisseComptage).all()).toHaveLength(4);
+  });
+});

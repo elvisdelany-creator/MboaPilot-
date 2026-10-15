@@ -188,7 +188,7 @@ export function FicheApporteurPanel({ fiche, onEnregistrerReglement }: Props) {
               <Label htmlFor="reglement-reference" className="text-xs">
                 Référence (optionnel)
               </Label>
-              <Input id="reglement-reference" value={reference} onChange={(e) => setReference(e.target.value)} className="mt-1 h-9" />
+              <Input id="reglement-reference" value={reference} onChange={(e) => setReference(e.target.value)} maxLength={100} className="mt-1 h-9" />
             </div>
             <Button
               className="h-9 cursor-pointer"

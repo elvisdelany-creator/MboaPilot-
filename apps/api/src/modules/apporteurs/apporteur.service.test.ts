@@ -251,3 +251,38 @@ describe("enregistrerReglement : montants et mode invalides (6.3)", () => {
     ).toThrow(/référence/i);
   });
 });
+
+// la référence d'un règlement (n° de virement, de chèque…) était libre : aucune limite de longueur,
+// espaces conservés, et une référence vide enregistrée comme texte vide au lieu de « non renseignée »
+describe("enregistrerReglement : référence (6.3)", () => {
+  function apporteurAvecSolde(montantCommission = 10000) {
+    const apporteur = creerApporteur(db, { nom: "Jean Apporteur", tauxCommissionDefaut: 500 });
+    const abonne = db.insert(schema.abonne).values({ siteId, nom: "Nga", prenom: "Paul", telephone: "690000000" }).returning().get();
+    const abonnement = db
+      .insert(schema.abonnement)
+      .values({ idAbonne: abonne.idAbonne, idFormule: idFormuleCanal, siteId, dateDebut: "2025-01-01", dateFin: "2025-01-30", creePar: userId })
+      .returning()
+      .get();
+    db.insert(schema.suiviCommissionCanalplus)
+      .values({ numeroAbonnement: abonnement.numeroAbonnement, vendeurId: userId, apporteurId: apporteur.idApporteur, montantCommission, dateFinProbatoire: "2025-05-01", statut: "CONFIRMEE" })
+      .run();
+    return apporteur;
+  }
+  const reglement = (apporteur: { idApporteur: number }, reference?: string) =>
+    enregistrerReglement(db, { apporteurId: apporteur.idApporteur, montant: 1000, modePaiement: "VIREMENT", reference, utilisateurId: userId });
+
+  it("retire les espaces autour de la référence", () => {
+    expect(reglement(apporteurAvecSolde(), "  VIR-42  ").reference).toBe("VIR-42");
+  });
+
+  it("enregistre une référence vide comme « non renseignée »", () => {
+    expect(reglement(apporteurAvecSolde(), "   ").reference).toBeNull();
+  });
+
+  it("refuse une référence de plus de 100 caractères, et accepte exactement 100", () => {
+    const apporteur = apporteurAvecSolde();
+
+    expect(() => reglement(apporteur, "R".repeat(101))).toThrow(/référence.*100 caractères/i);
+    expect(reglement(apporteur, "R".repeat(100)).reference).toHaveLength(100);
+  });
+});

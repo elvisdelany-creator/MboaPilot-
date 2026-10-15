@@ -1,6 +1,7 @@
 import { and, eq, inArray } from "drizzle-orm";
 import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
+import { texteFacultatif } from "../../lib/champs-texte.js";
 import {
   enregistrerReglementCommission,
   listerApporteurs,
@@ -107,14 +108,13 @@ export function enregistrerReglement(db: Db, params: EnregistrerReglementCommiss
     throw new Error("Le montant du règlement doit être un entier positif en FCFA");
   }
   if (!MODES_PAIEMENT.includes(params.modePaiement)) throw new Error("Mode de paiement du règlement invalide");
-  if (params.reference !== undefined && params.reference !== null && typeof params.reference !== "string") {
-    throw new Error("La référence du règlement doit être un texte");
-  }
+  // référence (n° de virement, de chèque…) : nettoyée, 100 caractères maximum, vide = non renseignée
+  const reference = texteFacultatif(params.reference, "La référence du règlement", 100) ?? undefined;
 
   const { soldeCommissionDu } = calculerSoldeCommission(db, params.apporteurId);
   if (params.montant > soldeCommissionDu) {
     throw new Error(`Le règlement (${params.montant}) dépasse le solde de commissions dû (${soldeCommissionDu})`);
   }
 
-  return enregistrerReglementCommission(db, params);
+  return enregistrerReglementCommission(db, { ...params, reference });
 }

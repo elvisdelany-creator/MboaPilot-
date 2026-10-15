@@ -85,6 +85,8 @@ function recruterAbonneSansTransaction(db: Db, params: RecruterAbonneParams): Re
 
   const formule = db.select().from(schema.formule).where(eq(schema.formule.idFormule, params.idFormule)).get();
   if (!formule) throw new Error(`Formule ${params.idFormule} introuvable`);
+  // 8.8 : une formule désactivée disparaît du catalogue de vente — l'API la refuse aussi (appel direct, page non rafraîchie)
+  if (formule.actif !== 1) throw new Error(`La formule "${formule.libelle}" n'est plus en vente`);
 
   const remise = params.remise ?? 0;
   if (remise < 0) throw new Error("La remise ne peut pas être négative");

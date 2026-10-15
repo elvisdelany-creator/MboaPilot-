@@ -226,3 +226,12 @@ describe("changerFormule — TVA figée sur la facture (3.2.3, 6.1, 8.8)", () =>
     expect(facture?.montantTaxe).toBe(917); // 5500 TTC -> HT 4583, taxe 917
   });
 });
+
+describe("changerFormule — formule cible retirée de la vente (7.4, 8.8)", () => {
+  it("refuse une migration vers une formule désactivée, sans modifier l'abonnement", () => {
+    db.update(schema.formule).set({ actif: 0 }).where(eq(schema.formule.idFormule, idEvasion)).run();
+
+    expect(() => changerFormule(db, { siteId, userId, aujourdHui, numeroAbonnement, idNouvelleFormule: idEvasion, montantEncaisse: 5500 })).toThrow(/plus en vente/i);
+    expect(db.select().from(schema.abonnement).where(eq(schema.abonnement.numeroAbonnement, numeroAbonnement)).get()?.idFormule).toBe(idAccess);
+  });
+});

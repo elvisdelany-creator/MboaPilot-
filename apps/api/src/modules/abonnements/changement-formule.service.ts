@@ -68,6 +68,8 @@ function changerFormuleSansTransaction(db: Db, params: ChangerFormuleParams): Ch
   if (!formuleActuelle) throw new Error(`Formule ${abonnement.idFormule} introuvable`);
   const nouvelleFormule = db.select().from(schema.formule).where(eq(schema.formule.idFormule, params.idNouvelleFormule)).get();
   if (!nouvelleFormule) throw new Error(`Formule ${params.idNouvelleFormule} introuvable`);
+  // 8.8 : une formule retirée de la vente ne se vend plus, migration comprise
+  if (nouvelleFormule.actif !== 1) throw new Error(`La formule "${nouvelleFormule.libelle}" n'est plus en vente`);
 
   const validation = validerMigrationFormule(formuleActuelle, nouvelleFormule);
   if (!validation.autorise) throw new Error(validation.motif);

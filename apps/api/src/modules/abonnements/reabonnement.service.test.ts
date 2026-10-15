@@ -301,3 +301,38 @@ describe("reabonner — TVA figée sur la facture (3.2.3, 6.1, 8.8)", () => {
     expect(facture?.montantTaxe).toBe(2167); // 13000 TTC -> HT 10833, taxe 2167
   });
 });
+
+// Constaté à la lecture du service : la formule choisie au réabonnement n'était contrôlée ni sur sa famille ni sur
+// son état de vente. Un abonnement DSTV pouvait basculer sur une formule CANAL+ (compte partagé, matériel et
+// commissions restant rattachés à l'ancienne famille), ou sur une formule retirée de la vente.
+describe("reabonner — formule choisie : famille et état de vente (7.2, 8.8)", () => {
+  const reabonnerSur = (idFormule?: number) =>
+    reabonner(db, { siteId, userId, aujourdHui: "2025-12-20", numeroAbonnement, idFormule, montantEncaisse: 0 });
+
+  it("refuse une formule d'une autre famille, sans modifier l'abonnement", () => {
+    const familleCanal = db.insert(schema.familleAbonnement).values({ libelle: "CANAL+" }).returning().get().idFamille;
+    const evasion = db.insert(schema.formule).values({ idFamille: familleCanal, libelle: "EVASION", prix: 10500, rang: 2 }).returning().get().idFormule;
+    const avant = db.select().from(schema.abonnement).where(eq(schema.abonnement.numeroAbonnement, numeroAbonnement)).get()!;
+
+    expect(() => reabonnerSur(evasion)).toThrow(/même famille/i);
+    expect(db.select().from(schema.abonnement).where(eq(schema.abonnement.numeroAbonnement, numeroAbonnement)).get()).toEqual(avant);
+  });
+
+  it("refuse de basculer sur une formule retirée de la vente", () => {
+    db.update(schema.formule).set({ actif: 0 }).where(eq(schema.formule.idFormule, premium)).run();
+
+    expect(() => reabonnerSur(premium)).toThrow(/plus en vente/i);
+  });
+
+  it("autorise la reconduction de la formule actuelle même retirée de la vente : le client n'est pas bloqué", () => {
+    db.update(schema.formule).set({ actif: 0 }).where(eq(schema.formule.idFormule, compaq)).run();
+
+    expect(reabonnerSur().numeroAbonnement).toBe(numeroAbonnement);
+  });
+
+  it("autorise un changement de formule dans la même famille (rétrogradation ou montée)", () => {
+    reabonnerSur(premium);
+
+    expect(db.select().from(schema.abonnement).where(eq(schema.abonnement.numeroAbonnement, numeroAbonnement)).get()?.idFormule).toBe(premium);
+  });
+});

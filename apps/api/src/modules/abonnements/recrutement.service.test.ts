@@ -874,3 +874,17 @@ describe("recruterAbonne — compte partagé : famille et site (5.9, 2.5.2)", ()
     expect(abonnement?.idComptePartage).toBe(compte.idComptePartage);
   });
 });
+
+// une formule désactivée « disparaît du catalogue de vente » : l'interface ne la propose plus, mais l'API la
+// vendait encore (appel direct, page non rafraîchie)
+describe("recruterAbonne — formule désactivée (8.8)", () => {
+  it("refuse de vendre une formule désactivée, sans rien enregistrer", () => {
+    db.update(schema.formule).set({ actif: 0 }).where(eq(schema.formule.idFormule, formuleToutCanalPlus)).run();
+
+    expect(() =>
+      recruterAbonne(db, { siteId, userId, aujourdHui: "2025-11-16", abonne: { nom: "Nga", prenom: "Paul", telephone: "690000000" }, idFormule: formuleToutCanalPlus, montantEncaisse: 28000 })
+    ).toThrow(/plus en vente/i);
+    expect(db.select().from(schema.abonne).all()).toHaveLength(0);
+    expect(db.select().from(schema.abonnement).all()).toHaveLength(0);
+  });
+});

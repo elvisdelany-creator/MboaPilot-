@@ -57,6 +57,16 @@ function reabonnerSansTransaction(db: Db, params: ReabonnerParams): Reabonnement
   const idFormule = params.idFormule ?? abonnementActuel.idFormule;
   const formule = db.select().from(schema.formule).where(eq(schema.formule.idFormule, idFormule)).get();
   if (!formule) throw new Error(`Formule ${idFormule} introuvable`);
+  // changer de formule au réabonnement : même famille (compte partagé, matériel et commissions restent
+  // rattachés à l'abonnement) et formule encore en vente. La reconduction à l'identique, elle, reste permise
+  // même si la formule a été retirée de la vente : le client n'est pas bloqué (8.8).
+  if (idFormule !== abonnementActuel.idFormule) {
+    const formuleActuelle = db.select().from(schema.formule).where(eq(schema.formule.idFormule, abonnementActuel.idFormule)).get();
+    if (formuleActuelle && formuleActuelle.idFamille !== formule.idFamille) {
+      throw new Error("La nouvelle formule doit appartenir à la même famille d'abonnement que l'abonnement renouvelé");
+    }
+    if (formule.actif !== 1) throw new Error(`La formule "${formule.libelle}" n'est plus en vente`);
+  }
 
   const remise = params.remise ?? 0;
   if (remise < 0) throw new Error("La remise ne peut pas être négative");

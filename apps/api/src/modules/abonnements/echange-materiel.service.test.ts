@@ -266,3 +266,65 @@ describe("echangerMateriel — TVA figée sur la facture (3.2.3, 6.1, 8.8)", () 
     expect(facture?.montantTaxe).toBe(2500); // 15000 TTC -> HT 12500, taxe 2500
   });
 });
+
+// Constaté à la lecture du service : sousGarantie était évalué comme vrai/faux (le texte "non" donnait donc un
+// échange SOUS GARANTIE, gratuit ou à tarif réduit), le motif « obligatoire » n'était contrôlé que sur son type
+// (un motif vide passait), les textes n'avaient ni limite ni nettoyage, le produit d'un autre site pouvait sortir du
+// stock de ce site, et l'opération n'était pas atomique (matériel marqué remplacé avant la fin).
+describe("echangerMateriel — saisies, site du produit et atomicité (7.3)", () => {
+  const echange = (surcharge: object = {}) => ({
+    siteId,
+    userId,
+    numeroAbonnement,
+    idProduit: idProduitDecodeur,
+    typeMateriel: "DECODEUR",
+    numeroSerie: "SN-001",
+    sousGarantie: false,
+    motif: "panne",
+    montantEncaisse: 15000,
+    ...surcharge,
+  });
+  const materiels = () => db.select().from(schema.materielAbonne).where(eq(schema.materielAbonne.numeroAbonnement, numeroAbonnement)).all();
+
+  it.each([
+    ["une garantie qui n'est pas un booléen", { sousGarantie: "non" }, /garantie.*vrai ou faux/i],
+    ["un motif vide", { motif: "   " }, /motif.*obligatoire/i],
+    ["un motif de plus de 200 caractères", { motif: "M".repeat(201) }, /motif.*200 caractères/i],
+    ["un type de matériel de plus de 50 caractères", { typeMateriel: "T".repeat(51) }, /type de matériel.*50 caractères/i],
+    ["un numéro de série de plus de 100 caractères", { numeroSerie: "S".repeat(101) }, /numéro de série.*100 caractères/i],
+  ])("refuse %s, sans rien modifier", (_libelle, surcharge, message) => {
+    expect(() => echangerMateriel(db, echange(surcharge) as never)).toThrow(message);
+    expect(materiels()).toHaveLength(0);
+    expect(db.select().from(schema.facture).all()).toHaveLength(1); // celle du recrutement seulement
+  });
+
+  it("retire les espaces autour du type, du numéro de série et du motif", () => {
+    echangerMateriel(db, echange({ typeMateriel: "  DECODEUR ", numeroSerie: " SN-009 ", motif: " panne " }));
+
+    expect(materiels()[0]).toMatchObject({ typeMateriel: "DECODEUR", numeroSerie: "SN-009" });
+    expect(db.select().from(schema.historiqueAbonnement).where(eq(schema.historiqueAbonnement.typeChangement, "MATERIEL")).get()?.motif).toBe("panne");
+  });
+
+  it("refuse un produit d'un autre site : il ne sortirait pas du stock de celui-ci", () => {
+    const ent = db.select().from(schema.entreprise).get()!;
+    const autreSite = db.insert(schema.site).values({ idEntreprise: ent.idEntreprise, nom: "Site B" }).returning().get().idSite;
+    const produitAutreSite = db.insert(schema.produit).values({ siteId: autreSite, type: "BIEN", libelle: "Décodeur B", prixVente: 15000 }).returning().get().idProduit;
+
+    expect(() => echangerMateriel(db, echange({ idProduit: produitAutreSite }))).toThrow(/n'appartient pas à ce site/i);
+    expect(materiels()).toHaveLength(0);
+  });
+
+  it("n'écrit rien quand l'opération échoue en cours de route (l'ancien matériel reste actif)", () => {
+    db.update(schema.produit).set({ suiviStock: 1 }).where(eq(schema.produit.idProduit, idProduitDecodeur)).run();
+    echangerMateriel(db, echange({ numeroSerie: "SN-ANCIEN" }));
+    const avant = materiels();
+    const nbFactures = db.select().from(schema.facture).all().length;
+
+    // un auteur inexistant fait échouer l'écriture du mouvement de stock, APRÈS le marquage de l'ancien matériel
+    expect(() => echangerMateriel(db, echange({ userId: 99999, numeroSerie: "SN-NOUVEAU" }))).toThrow();
+
+    expect(materiels()).toEqual(avant);
+    expect(materiels().filter((m) => m.statut === "ACTIF")).toHaveLength(1);
+    expect(db.select().from(schema.facture).all()).toHaveLength(nbFactures);
+  });
+});

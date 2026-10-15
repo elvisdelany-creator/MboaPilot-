@@ -188,7 +188,7 @@ export function EchangeMaterielDialog({ numeroAbonnement, onFerme, onSucces }: P
 
           <div>
             <Label htmlFor="numero-serie">Numéro de série (optionnel)</Label>
-            <Input id="numero-serie" value={numeroSerie} onChange={(e) => setNumeroSerie(e.target.value)} className="mt-1" />
+            <Input id="numero-serie" value={numeroSerie} onChange={(e) => setNumeroSerie(e.target.value)} maxLength={100} className="mt-1" />
           </div>
 
           <div>

@@ -5,7 +5,8 @@ import * as schema from "../../db/schema.js";
 import { enregistrerMouvement } from "../stock/stock.repository.js";
 import { trouverTauxGarantieEntreprise, trouverTauxTvaParSite } from "../entreprise/entreprise.repository.js";
 import { creerPaiement } from "../factures/paiement.repository.js";
-import { verifierEncaissementSaisi } from "../../lib/validation.js";
+import { verifierBooleen, verifierEncaissementSaisi } from "../../lib/validation.js";
+import { texteFacultatif, texteObligatoire } from "../../lib/champs-texte.js";
 
 export interface EchangerMaterielParams {
   siteId: number;
@@ -43,9 +44,18 @@ export interface EchangeMaterielResultat {
 // non tranchée arbitrairement ici.
 export function echangerMateriel(db: Db, params: EchangerMaterielParams): EchangeMaterielResultat {
   verifierEncaissementSaisi(params);
-  if (typeof params.typeMateriel !== "string" || !params.typeMateriel.trim()) throw new Error("Le type de matériel est obligatoire");
-  if (typeof params.motif !== "string") throw new Error("Le motif de l'échange est obligatoire");
-  if (params.numeroSerie !== undefined && params.numeroSerie !== null && typeof params.numeroSerie !== "string") throw new Error("Le numéro de série doit être un texte");
+  // un texte non vide ("non") est « vrai » : l'échange passerait sous garantie, donc gratuit ou à tarif réduit
+  verifierBooleen(params.sousGarantie, "Le champ sous garantie");
+  const saisie = {
+    typeMateriel: texteObligatoire(params.typeMateriel, "Le type de matériel", 50),
+    motif: texteObligatoire(params.motif, "Le motif de l'échange", 200),
+    numeroSerie: texteFacultatif(params.numeroSerie, "Le numéro de série", 100) ?? undefined,
+  };
+  // atomique : l'ancien matériel était marqué « remplacé » et le stock sorti avant la fin de l'opération
+  return db.transaction(() => echangerMaterielSansTransaction(db, { ...params, ...saisie }));
+}
+
+function echangerMaterielSansTransaction(db: Db, params: EchangerMaterielParams): EchangeMaterielResultat {
   const abonnement = db
     .select()
     .from(schema.abonnement)
@@ -55,6 +65,8 @@ export function echangerMateriel(db: Db, params: EchangerMaterielParams): Echang
 
   const produit = db.select().from(schema.produit).where(eq(schema.produit.idProduit, params.idProduit)).get();
   if (!produit) throw new Error(`Produit ${params.idProduit} introuvable`);
+  // 2.5.2 : le matériel de remplacement sort du stock de CE site — le produit d'une autre boutique est refusé
+  if (produit.siteId !== params.siteId) throw new Error("Ce produit n'appartient pas à ce site");
 
   const ancienMateriel = db
     .select()

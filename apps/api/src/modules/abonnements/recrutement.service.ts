@@ -142,6 +142,9 @@ function recruterAbonneSansTransaction(db: Db, params: RecruterAbonneParams): Re
   if (params.idKit !== undefined) {
     kitRow = db.select().from(schema.kit).where(eq(schema.kit.idKit, params.idKit)).get();
     if (!kitRow) throw new Error(`Kit ${params.idKit} introuvable`);
+    // 5.1, 6.2 : la commission CANAL+ dépend de la famille de la formule et de la vente d'un kit — un kit d'une
+    // autre famille déclencherait une commission sur un matériel qui n'est pas de cette famille
+    if (kitRow.idFamille !== formule.idFamille) throw new Error(`Le kit "${kitRow.libelle}" doit appartenir à la même famille que la formule "${formule.libelle}"`);
     prixKitHorsFormule = calculerPrixKitHorsFormule(construireKitCalcul(db, kitRow), { idFormule: formule.idFormule, prix: formule.prix });
   }
 

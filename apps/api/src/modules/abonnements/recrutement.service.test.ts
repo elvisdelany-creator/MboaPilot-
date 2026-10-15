@@ -888,3 +888,23 @@ describe("recruterAbonne — formule désactivée (8.8)", () => {
     expect(db.select().from(schema.abonnement).all()).toHaveLength(0);
   });
 });
+
+// la commission CANAL+ dépend de la famille de la formule ET de la vente d'un kit : un kit DSTV vendu avec une
+// formule CANAL+ déclenchait donc une commission CANAL+ sur un matériel qui n'est pas CANAL+. L'interface ne
+// propose que les kits de la famille, l'API ne le vérifiait pas.
+describe("recruterAbonne — kit de la même famille que la formule (5.1, 6.2)", () => {
+  const recruterAvecKit = (idFormule: number, idKit: number) =>
+    recruterAbonne(db, { siteId, userId, aujourdHui: "2025-11-16", abonne: { nom: "Nga", prenom: "Paul", telephone: "690000000" }, idFormule, idKit, montantEncaisse: 0 });
+
+  it("refuse un kit d'une autre famille que la formule, sans rien enregistrer ni générer de commission", () => {
+    expect(() => recruterAvecKit(formuleToutCanalPlus, kitDstvCompaq)).toThrow(/même famille/i);
+    expect(db.select().from(schema.abonne).all()).toHaveLength(0);
+    expect(db.select().from(schema.abonnement).all()).toHaveLength(0);
+    expect(db.select().from(schema.commissionCanalplusEnAttente).all()).toHaveLength(0);
+    expect(db.select().from(schema.suiviCommissionCanalplus).all()).toHaveLength(0);
+  });
+
+  it("accepte un kit de la même famille que la formule", () => {
+    expect(recruterAvecKit(formuleDstvCompaq, kitDstvCompaq).numeroAbonnement).toBeGreaterThan(0);
+  });
+});

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { lireDateServeur } from "@mboapilot/shared";
+import { lireDateServeur, lireEntierSaisi } from "@mboapilot/shared";
 import { toast } from "sonner";
 import { Download, ImagePlus } from "lucide-react";
 import {
@@ -153,7 +153,7 @@ export function ParametresTab() {
     try {
       // saisie en % courant (ex. 19,25), stocké en centièmes de % (1925)
       const tauxCentiemes = tauxTva.trim() === "" ? null : Math.round(Number(tauxTva.replace(",", ".")) * 100);
-      const tauxCommissionPourMille = tauxCommission.trim() === "" ? null : Number(tauxCommission);
+      const tauxCommissionPourMille = tauxCommission.trim() === "" ? null : lireEntierSaisi(tauxCommission, "Le taux de commission vendeur par défaut");
       await modifierEntrepriseRequete(token, {
         tauxTva: tauxCentiemes,
         mentionsLegales: mentionsLegales.trim() || null,
@@ -172,10 +172,10 @@ export function ParametresTab() {
     setEnCoursJalons(true);
     try {
       await modifierEntrepriseRequete(token, {
-        jalonAlerteUrgent: Number(jalonUrgent),
-        jalonAlerteModere: Number(jalonModere),
-        jalonAlerteAnticipe: Number(jalonAnticipe),
-        dureeRetentionExpiresJours: Number(dureeRetentionExpires),
+        jalonAlerteUrgent: lireEntierSaisi(jalonUrgent, "Le jalon d'alerte urgent"),
+        jalonAlerteModere: lireEntierSaisi(jalonModere, "Le jalon d'alerte modéré"),
+        jalonAlerteAnticipe: lireEntierSaisi(jalonAnticipe, "Le jalon d'alerte anticipé"),
+        dureeRetentionExpiresJours: lireEntierSaisi(dureeRetentionExpires, "La durée de rétention des abonnements expirés"),
       });
       toast.success("Jalons d'alerte enregistrés.");
       rechargerEntreprise();
@@ -191,7 +191,7 @@ export function ParametresTab() {
     setEnCoursMdp(true);
     try {
       await modifierEntrepriseRequete(token, {
-        politiqueMdpLongueurMin: Number(mdpLongueurMin),
+        politiqueMdpLongueurMin: lireEntierSaisi(mdpLongueurMin, "La longueur minimale du mot de passe"),
         politiqueMdpExigerMajuscule: mdpExigerMajuscule,
         politiqueMdpExigerChiffre: mdpExigerChiffre,
         politiqueMdpExigerCaractereSpecial: mdpExigerCaractereSpecial,
@@ -210,7 +210,7 @@ export function ParametresTab() {
   async function enregistrerDureeConservation() {
     setEnCoursConservation(true);
     try {
-      await modifierEntrepriseRequete(token, { dureeConservationDonneesJours: Number(dureeConservationDonnees) });
+      await modifierEntrepriseRequete(token, { dureeConservationDonneesJours: lireEntierSaisi(dureeConservationDonnees, "La durée de conservation des données") });
       toast.success("Durée de conservation enregistrée.");
       rechargerEntreprise();
     } catch (erreur) {
@@ -226,7 +226,7 @@ export function ParametresTab() {
   async function enregistrerDelaiGrace() {
     setEnCoursDelaiGrace(true);
     try {
-      await modifierEntrepriseRequete(token, { delaiGraceReabonnementJours: Number(delaiGrace) });
+      await modifierEntrepriseRequete(token, { delaiGraceReabonnementJours: lireEntierSaisi(delaiGrace, "Le délai de grâce") });
       toast.success("Délai de grâce enregistré.");
       rechargerEntreprise();
     } catch (erreur) {
@@ -242,7 +242,7 @@ export function ParametresTab() {
   async function enregistrerTauxGarantie() {
     setEnCoursTauxGarantie(true);
     try {
-      await modifierEntrepriseRequete(token, { tauxGarantiePourcent: Number(tauxGarantie) });
+      await modifierEntrepriseRequete(token, { tauxGarantiePourcent: lireEntierSaisi(tauxGarantie, "Le taux de garantie") });
       toast.success("Taux de garantie enregistré.");
       rechargerEntreprise();
     } catch (erreur) {
@@ -260,7 +260,7 @@ export function ParametresTab() {
     try {
       await configurerImprimanteRequete(token, {
         imprimanteHote: imprimanteHote.trim(),
-        ...(imprimanteHote.trim() !== "" && { imprimantePort: Number(imprimantePort) }),
+        ...(imprimanteHote.trim() !== "" && { imprimantePort: lireEntierSaisi(imprimantePort, "Le port de l'imprimante") }),
       });
       toast.success(imprimanteHote.trim() ? "Imprimante enregistrée." : "Configuration d'imprimante effacée.");
       rechargerEntreprise();

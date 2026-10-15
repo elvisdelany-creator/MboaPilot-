@@ -22,6 +22,7 @@ export { analyserCsv, construireCsv, decoderTexteCsv } from "./csv.js";
 export { validerMotDePasse, POLITIQUE_MDP_PAR_DEFAUT, type PolitiqueMotDePasse } from "./politique-mot-de-passe.js";
 export { normaliserLibelle } from "./normaliser-libelle.js";
 export { lireDateServeur } from "./date-serveur.js";
+export { MESSAGE_FORME_TELEPHONE, telephoneValide } from "./telephone.js";
 export { lireEntierSaisi } from "./saisie-entier.js";
 export { AIDE_IDENTIFIANT_CONNEXION, erreurIdentifiantConnexion, normaliserIdentifiant } from "./identifiant-connexion.js";
 export { soldeFacture, soldeTotalDu, type FactureSolde, type PaiementSolde } from "./solde-facture.js";

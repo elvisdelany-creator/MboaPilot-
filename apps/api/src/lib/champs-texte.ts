@@ -2,7 +2,8 @@
 // l'exécution, et rien n'empêchait un nom de 100 000 caractères, un téléphone « abcdef » ou un
 // e-mail « pas-un-email » d'être enregistré tel quel.
 
-const CARACTERES_TELEPHONE = /^[0-9 +().-]+$/;
+import { MESSAGE_FORME_TELEPHONE, telephoneValide } from "@mboapilot/shared";
+
 const FORME_EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 // Texte nettoyé (espaces autour retirés). `undefined` = champ absent ; chaîne vide = non renseigné.
@@ -29,13 +30,9 @@ export function texteFacultatif(valeur: unknown, libelle: string, longueurMax: n
   return propre === undefined ? undefined : propre === "" ? null : propre;
 }
 
-// chiffres, espaces et + ( ) . - seulement, de 6 à 15 chiffres (norme E.164, indicatif compris) :
-// « abcdef » ou un texte de 5 000 caractères n'est pas un numéro que l'on peut appeler
+// la règle (6 à 15 chiffres…) est partagée avec les formulaires : packages/shared/src/telephone.ts
 function verifierFormeTelephone(propre: string, libelle: string): string {
-  const nbChiffres = propre.replace(/\D/g, "").length;
-  if (!CARACTERES_TELEPHONE.test(propre) || nbChiffres < 6 || nbChiffres > 15) {
-    throw new Error(`${libelle} doit contenir de 6 à 15 chiffres (espaces, +, ( ), . et - autorisés)`);
-  }
+  if (!telephoneValide(propre)) throw new Error(`${libelle} ${MESSAGE_FORME_TELEPHONE}`);
   return propre;
 }
 

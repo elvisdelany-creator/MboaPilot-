@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { MESSAGE_FORME_TELEPHONE, telephoneValide } from "@mboapilot/shared";
 import { Search, UserPlus, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -23,6 +24,7 @@ export function RechercheAbonne({ siteId, abonneSelectionne, onSelectionner }: P
   const [resultats, setResultats] = useState<Abonne[]>([]);
   const [formulaireOuvert, setFormulaireOuvert] = useState(false);
   const [nouveau, setNouveau] = useState({ nom: "", prenom: "", telephone: "" });
+  const telephoneInvalide = nouveau.telephone.trim() !== "" && !telephoneValide(nouveau.telephone);
   const [idApporteur, setIdApporteur] = useState(AUCUN_APPORTEUR);
   const [apporteurs, setApporteurs] = useState<Apporteur[]>([]);
 
@@ -130,6 +132,7 @@ export function RechercheAbonne({ siteId, abonneSelectionne, onSelectionner }: P
                 id="nouveau-nom"
                 value={nouveau.nom}
                 onChange={(e) => setNouveau((n) => ({ ...n, nom: e.target.value }))}
+                maxLength={100}
                 className="mt-1"
               />
             </div>
@@ -139,6 +142,7 @@ export function RechercheAbonne({ siteId, abonneSelectionne, onSelectionner }: P
                 id="nouveau-prenom"
                 value={nouveau.prenom}
                 onChange={(e) => setNouveau((n) => ({ ...n, prenom: e.target.value }))}
+                maxLength={100}
                 className="mt-1"
               />
             </div>
@@ -146,10 +150,20 @@ export function RechercheAbonne({ siteId, abonneSelectionne, onSelectionner }: P
               <Label htmlFor="nouveau-telephone">Téléphone</Label>
               <Input
                 id="nouveau-telephone"
+                type="tel"
                 value={nouveau.telephone}
                 onChange={(e) => setNouveau((n) => ({ ...n, telephone: e.target.value }))}
+                maxLength={30}
+                aria-invalid={telephoneInvalide ? true : undefined}
+                aria-describedby={telephoneInvalide ? "nouveau-telephone-erreur" : undefined}
                 className="mt-1"
               />
+              {/* vérifié pendant la saisie : l'API ne le refusait qu'à la fin de la vente, après le paiement */}
+              {telephoneInvalide && (
+                <p id="nouveau-telephone-erreur" className="mt-1 text-xs text-destructive">
+                  Le téléphone {MESSAGE_FORME_TELEPHONE}.
+                </p>
+              )}
             </div>
             {apporteurs.length > 0 && (
               <div className="col-span-2">
@@ -174,10 +188,12 @@ export function RechercheAbonne({ siteId, abonneSelectionne, onSelectionner }: P
           <Button
             type="button"
             className="mt-3 w-full cursor-pointer"
-            disabled={!nouveau.nom || !nouveau.prenom || !nouveau.telephone}
+            disabled={!nouveau.nom.trim() || !nouveau.prenom.trim() || !telephoneValide(nouveau.telephone)}
             onClick={() => {
               onSelectionner({
-                ...nouveau,
+                nom: nouveau.nom.trim(),
+                prenom: nouveau.prenom.trim(),
+                telephone: nouveau.telephone.trim(),
                 apporteurId: idApporteur === AUCUN_APPORTEUR ? undefined : Number(idApporteur),
               });
               setFormulaireOuvert(false);

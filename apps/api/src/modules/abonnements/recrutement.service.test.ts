@@ -836,3 +836,41 @@ describe("recruterAbonne — TVA figée sur la facture (3.2.3, 6.1, 8.8)", () =>
     expect(facture?.montantTaxe).toBe(0);
   });
 });
+
+// Constaté à la lecture du service : seuls l'existence, l'activation et la capacité du compte partagé étaient
+// contrôlées. L'interface filtre les comptes par famille et par site, mais l'API acceptait un écran Netflix pour
+// un abonnement CANAL+ (la capacité du mauvais compte se remplit) ou le compte d'une autre boutique, dont un
+// simple numéro suffit à consommer la capacité.
+describe("recruterAbonne — compte partagé : famille et site (5.9, 2.5.2)", () => {
+  function creerComptePour(idFamille: number, site: number, libelle = "Compte test") {
+    return db.insert(schema.comptePartageStreaming).values({ siteId: site, idFamille, libelle, nombreEcransMax: 3 }).returning().get();
+  }
+  const recruter = (idFormule: number, idComptePartage: number) =>
+    recruterAbonne(db, { siteId, userId, aujourdHui: "2025-11-16", abonne: { nom: "Nga", prenom: "Paul", telephone: "690000000" }, idFormule, montantEncaisse: 5000, idComptePartage });
+
+  it("refuse un compte partagé d'une autre famille que la formule vendue, sans rien enregistrer", () => {
+    const compteDstv = creerComptePour(familleDstv, siteId, "Compte DSTV");
+
+    expect(() => recruter(formuleToutCanalPlus, compteDstv.idComptePartage)).toThrow(/famille/i);
+    expect(db.select().from(schema.abonnement).all()).toHaveLength(0);
+    expect(db.select().from(schema.abonne).all()).toHaveLength(0);
+  });
+
+  it("refuse le compte partagé d'un autre site, sans consommer sa capacité", () => {
+    const ent = db.select().from(schema.entreprise).get()!;
+    const autreSite = db.insert(schema.site).values({ idEntreprise: ent.idEntreprise, nom: "Site B" }).returning().get().idSite;
+    const compteAutreSite = creerComptePour(familleCanalPlus, autreSite, "Compte du site B");
+
+    expect(() => recruter(formuleToutCanalPlus, compteAutreSite.idComptePartage)).toThrow(/site/i);
+    expect(db.select().from(schema.abonnement).all()).toHaveLength(0);
+  });
+
+  it("accepte un compte de la bonne famille et du bon site", () => {
+    const compte = creerComptePour(familleCanalPlus, siteId, "Compte CANAL+");
+
+    const resultat = recruter(formuleToutCanalPlus, compte.idComptePartage);
+
+    const abonnement = db.select().from(schema.abonnement).where(eq(schema.abonnement.numeroAbonnement, resultat.numeroAbonnement)).get();
+    expect(abonnement?.idComptePartage).toBe(compte.idComptePartage);
+  });
+});

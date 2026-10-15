@@ -104,6 +104,10 @@ function recruterAbonneSansTransaction(db: Db, params: RecruterAbonneParams): Re
   if (params.idComptePartage !== undefined) {
     const comptePartage = trouverComptePartage(db, params.idComptePartage);
     if (!comptePartage) throw new Error(`Compte partagé ${params.idComptePartage} introuvable`);
+    // 2.5.2 : le compte d'une autre boutique ne se remplit pas depuis celle-ci (un simple numéro suffisait)
+    if (comptePartage.siteId !== params.siteId) throw new Error(`Le compte partagé "${comptePartage.libelle}" n'appartient pas à votre site`);
+    // 5.9 : un écran Netflix ne sert pas un abonnement CANAL+ — l'interface filtre par famille, l'API doit aussi
+    if (comptePartage.idFamille !== formule.idFamille) throw new Error(`Le compte partagé "${comptePartage.libelle}" n'est pas de la famille de cette formule`);
     // 5.9 : un compte désactivé n'apparaît déjà plus dans la liste de la
     // caisse — vérifié aussi ici pour ne pas dépendre uniquement du filtrage
     // côté client (page non rafraîchie, appel direct de l'API)

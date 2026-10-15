@@ -62,7 +62,7 @@ export function buildApp(db: Db, options: BuildAppOptions) {
   const authRequis = creerAuthRequis(db);
   // 5.10 : téléversement des photos optionnelles du dossier SAV (multipart/form-data)
   app.register(multipart);
-  registerAuthRoutes(app, db);
+  registerAuthRoutes(app, db, authRequis);
   const fournisseurPaiementMobile = options.fournisseurPaiementMobile ?? new SimulateurOrangeMoney();
   const fournisseurImpression = options.fournisseurImpression ?? new ImprimanteReseauTcp();
 

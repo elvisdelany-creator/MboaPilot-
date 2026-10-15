@@ -74,6 +74,12 @@ export async function login(identifiant: string, motDePasse: string): Promise<{ 
   return lireJson(reponse);
 }
 
+// 2.5.1 : profil COURANT (rôle, site) relu en base — celui reçu à la connexion peut avoir changé depuis
+export async function chargerProfilCourant(token: string): Promise<Utilisateur> {
+  const reponse = await fetch(`${BASE}/auth/moi`, { headers: headersAuth(token) });
+  return lireJson<Utilisateur>(reponse);
+}
+
 export async function rechercherAbonnes(token: string, siteId: number, q: string): Promise<Abonne[]> {
   if (!q.trim()) return [];
   const params = new URLSearchParams({ siteId: String(siteId), q });

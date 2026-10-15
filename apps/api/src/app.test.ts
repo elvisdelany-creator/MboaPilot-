@@ -5323,3 +5323,42 @@ describe("Opérations de stock : site de l'article et auteur de la session (2.5.
     expect(mouvement.siteId).toBe(autreSite);
   });
 });
+
+// Constaté en test grandeur nature : le navigateur garde le rôle reçu à la connexion et ne le relit jamais.
+// Un gérant rétrogradé en caissier pendant sa session voyait encore « Importer CSV », Administration…,
+// avec de faux états vides (« Aucun encaissement aujourd'hui ») au lieu d'un accès refusé. Cette route
+// lui permet de relire son profil réel (rôle et site de la base, jamais ceux figés dans le jeton).
+describe("GET /api/v1/auth/moi : profil courant (2.5.1, 11.2)", () => {
+  it("renvoie le profil de la base, sans le hash du mot de passe", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const token = await connecter(app);
+
+    const reponse = await app.inject({ method: "GET", url: "/api/v1/auth/moi", headers: authHeader(token) });
+
+    expect(reponse.statusCode).toBe(200);
+    expect(reponse.json()).toEqual({ idUser: userId, siteId, nom: "A", prenom: "B", identifiant: "caissier1", role: "CAISSIER", idApporteur: null });
+    expect(JSON.stringify(reponse.json())).not.toMatch(/hash|motDePasse/i);
+  });
+
+  it("renvoie le rôle ACTUEL de la base, même si le jeton en annonce un autre (rôle changé en cours de session)", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    creerUtilisateur(db, { siteId, nom: "Gerant", prenom: "G", identifiant: "gerant1", motDePasse: "motdepasse-secret", role: "GERANT" });
+    const token = await connecter(app, "gerant1");
+    db.update(schema.utilisateur).set({ role: "CAISSIER" }).where(eq(schema.utilisateur.identifiant, "gerant1")).run();
+
+    const reponse = await app.inject({ method: "GET", url: "/api/v1/auth/moi", headers: authHeader(token) });
+
+    expect(reponse.statusCode).toBe(200);
+    expect(reponse.json().role).toBe("CAISSIER");
+  });
+
+  it("refuse (401) sans jeton, et pour un compte désactivé depuis la connexion", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const token = await connecter(app);
+
+    expect((await app.inject({ method: "GET", url: "/api/v1/auth/moi" })).statusCode).toBe(401);
+
+    db.update(schema.utilisateur).set({ actif: 0 }).where(eq(schema.utilisateur.idUser, userId)).run();
+    expect((await app.inject({ method: "GET", url: "/api/v1/auth/moi", headers: authHeader(token) })).statusCode).toBe(401);
+  });
+});

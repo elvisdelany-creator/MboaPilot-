@@ -1,5 +1,6 @@
-import { createContext, useContext, useState, type ReactNode } from "react";
-import { login as loginRequete } from "./api";
+import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { toast } from "sonner";
+import { chargerProfilCourant, ErreurAuthentification, login as loginRequete } from "./api";
 import type { Utilisateur } from "./types";
 
 const CLE_SESSION = "mboapilot.session";
@@ -29,6 +30,7 @@ function lireSessionStockee(): Session | null {
 // 2.5.1 : authentification individuelle obligatoire — aucun compte générique partagé
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(lireSessionStockee);
+  const token = session?.token;
 
   async function connecter(identifiant: string, motDePasse: string) {
     const { token, utilisateur } = await loginRequete(identifiant, motDePasse);
@@ -41,6 +43,45 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setSession(null);
     localStorage.removeItem(CLE_SESSION);
   }
+
+  // Le rôle et le site reçus à la connexion sont gardés 12 h dans le navigateur : un gérant rétrogradé
+  // pendant sa session voyait encore « Importer CSV » et Administration, avec de faux états vides
+  // (« Aucun encaissement aujourd'hui ») au lieu d'un accès refusé. Le profil est donc relu à l'ouverture
+  // et à chaque retour sur la fenêtre ; un compte désactivé ou une session expirée ramène à la connexion.
+  useEffect(() => {
+    if (!token) return;
+    let annule = false;
+
+    async function verifierProfil() {
+      try {
+        const profil = await chargerProfilCourant(token as string);
+        if (annule) return;
+        setSession((courante) => {
+          if (!courante || courante.token !== token) return courante;
+          const u = courante.utilisateur;
+          const inchange = u.role === profil.role && u.siteId === profil.siteId && u.idApporteur === profil.idApporteur && u.nom === profil.nom && u.prenom === profil.prenom;
+          if (inchange) return courante;
+          if (u.role !== profil.role || u.siteId !== profil.siteId) toast.info("Vos droits d'accès ont changé : l'application a été mise à jour.");
+          const miseAJour = { token: courante.token, utilisateur: profil };
+          localStorage.setItem(CLE_SESSION, JSON.stringify(miseAJour));
+          return miseAJour;
+        });
+      } catch (erreur) {
+        if (annule || !(erreur instanceof ErreurAuthentification)) return; // une panne réseau ne déconnecte personne
+        toast.error("Session expirée — veuillez vous reconnecter.");
+        deconnecter();
+      }
+    }
+
+    verifierProfil();
+    window.addEventListener("focus", verifierProfil);
+    return () => {
+      annule = true;
+      window.removeEventListener("focus", verifierProfil);
+    };
+    // deconnecter ne dépend que de setters stables
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token]);
 
   return <AuthContext.Provider value={{ session, connecter, deconnecter }}>{children}</AuthContext.Provider>;
 }

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { peutAccederVue, vuesAccessibles, type RoleUtilisateur } from "@mboapilot/shared";
 import { Toaster } from "@/components/ui/sonner";
 import { AuthProvider, useAuth } from "@/lib/auth-context";
 import { LoginPage } from "@/components/auth/LoginPage";
@@ -26,7 +27,7 @@ type EtatVue =
 
 function Contenu() {
   const { session } = useAuth();
-  const [vue, setVue] = useState<EtatVue>({ nom: "dashboard" });
+  const [vueDemandee, setVue] = useState<EtatVue>({ nom: "dashboard" });
 
   if (!session) return <LoginPage />;
 
@@ -40,6 +41,11 @@ function Contenu() {
       </>
     );
   }
+
+  // le rôle peut changer pendant la session (relu par AuthProvider) : une vue devenue interdite est
+  // quittée au profit de la première vue autorisée, au lieu de rester affichée avec des données refusées
+  const role = session.utilisateur.role as RoleUtilisateur;
+  const vue: EtatVue = peutAccederVue(role, vueDemandee.nom) ? vueDemandee : { nom: vuesAccessibles(role)[0] ?? "dashboard" };
 
   function naviguer(cible: Vue) {
     setVue({ nom: cible });

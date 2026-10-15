@@ -319,3 +319,64 @@ describe("initierPaiementMobile : entrées invalides (6.6)", () => {
     ).rejects.toThrow(/parcours/i);
   });
 });
+
+// Constaté à la lecture du service et confirmé par test : le numéro de téléphone n'était pas contrôlé,
+// le montant n'avait aucun plafond et pouvait dépasser le solde dû de la facture (le client aurait été
+// débité de trop), une facture d'avoir pouvait être « payée », et une panne du fournisseur laissait la
+// transaction INITIEE sans référence, ce qui bloquait toute nouvelle tentative pendant 5 minutes.
+describe("initierPaiementMobile : contrôles de saisie et solde dû (6.6)", () => {
+  const params = (surcharge: object = {}) => ({ idFacture, numeroTelephone: "690000000", montant: 5000, parcours: "USSD_CLIENT" as const, ...surcharge });
+
+  it.each([
+    ["des lettres", "abcdef"],
+    ["moins de 6 chiffres", "12345"],
+    ["un texte de 5 000 caractères", "6".repeat(5000)],
+  ])("refuse un numéro de téléphone contenant %s", async (_libelle, numeroTelephone) => {
+    await expect(initierPaiementMobile(db, fournisseur, params({ numeroTelephone }))).rejects.toThrow(/téléphone/i);
+    expect(db.select().from(schema.transactionMobileMoney).all()).toHaveLength(0);
+  });
+
+  it("enregistre le numéro nettoyé", async () => {
+    const transaction = await initierPaiementMobile(db, fournisseur, params({ numeroTelephone: " 690 00 00 00 " }));
+
+    expect(transaction.numeroTelephone).toBe("690 00 00 00");
+  });
+
+  it("refuse un montant supérieur au solde dû de la facture, sans rien enregistrer", async () => {
+    await expect(initierPaiementMobile(db, fournisseur, params({ montant: 6000 }))).rejects.toThrow(/dépasse le solde dû/i);
+    expect(db.select().from(schema.transactionMobileMoney).all()).toHaveLength(0);
+  });
+
+  it("accepte un montant égal au solde, ou inférieur (paiement partiel)", async () => {
+    expect((await initierPaiementMobile(db, fournisseur, params({ montant: 5000 }))).montant).toBe(5000);
+  });
+
+  it("tient compte des paiements déjà encaissés et des avoirs pour calculer le solde dû", async () => {
+    db.insert(schema.paiement).values({ idFacture, mode: "CASH", montant: 2000, utilisateurId: userId }).run();
+    await expect(initierPaiementMobile(db, fournisseur, params({ montant: 4000 }))).rejects.toThrow(/solde dû.*3 ?000/i);
+
+    db.insert(schema.facture).values({ siteId, type: "AVOIR", factureOrigineId: idFacture, montantTotal: -1000, creePar: userId }).run();
+    await expect(initierPaiementMobile(db, fournisseur, params({ montant: 3000 }))).rejects.toThrow(/solde dû.*2 ?000/i);
+    expect((await initierPaiementMobile(db, fournisseur, params({ montant: 2000 }))).montant).toBe(2000);
+  });
+
+  it("refuse de payer une facture d'avoir", async () => {
+    const avoir = db.insert(schema.facture).values({ siteId, type: "AVOIR", factureOrigineId: idFacture, montantTotal: -1000, creePar: userId }).returning().get();
+
+    await expect(initierPaiementMobile(db, fournisseur, params({ idFacture: avoir.idFacture, montant: 500 }))).rejects.toThrow(/avoir/i);
+  });
+
+  it("refuse un montant au-delà du plafond", async () => {
+    await expect(initierPaiementMobile(db, fournisseur, params({ montant: 1_000_000_001 }))).rejects.toThrow(/ne peut pas dépasser/i);
+  });
+
+  it("marque la transaction ECHOUEE quand le fournisseur est injoignable, pour pouvoir réessayer aussitôt", async () => {
+    const enPanne = { initier: async () => { throw new Error("connect ECONNREFUSED 10.0.0.1:443"); }, consulterStatut: async () => "EN_ATTENTE" as StatutFournisseur };
+
+    await expect(initierPaiementMobile(db, enPanne, params())).rejects.toThrow(/Orange Money.*(joint|disponible)/i);
+
+    const [transaction] = db.select().from(schema.transactionMobileMoney).all();
+    expect(transaction.statut).toBe("ECHOUEE");
+    expect((await initierPaiementMobile(db, fournisseur, params())).statut).toBe("EN_ATTENTE");
+  });
+});

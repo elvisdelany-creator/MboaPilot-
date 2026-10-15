@@ -1,12 +1,25 @@
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { peutTransitionnerPaiementMobile } from "@mboapilot/shared";
 import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
 import type { FournisseurPaiementMobile, ParcoursPaiementMobile } from "./fournisseur.js";
 import { creerSuiviCommissionCanalplus } from "../abonnements/suivi-commission-canalplus.repository.js";
 import { verifierEntier } from "../../lib/validation.js";
+import { telephoneObligatoire } from "../../lib/champs-texte.js";
 
 const DELAI_EXPIRATION_MINUTES = 5; // délai de saisie de l'OTP (6.6)
+const MONTANT_MAX = 1_000_000_000;
+
+// espaces simples (et non l'espace fine insécable d'Intl) : le message s'affiche tel quel
+const formaterFcfa = (montant: number) => String(montant).replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+
+// 9.4, 6.4 : ce que le client doit encore sur la facture — total, moins les avoirs émis dessus (montants
+// négatifs), moins les paiements déjà encaissés
+function soldeDuFacture(db: Db, facture: typeof schema.facture.$inferSelect): number {
+  const paye = db.select({ total: sql<number>`coalesce(sum(${schema.paiement.montant}), 0)` }).from(schema.paiement).where(eq(schema.paiement.idFacture, facture.idFacture)).get();
+  const avoirs = db.select({ total: sql<number>`coalesce(sum(${schema.facture.montantTotal}), 0)` }).from(schema.facture).where(eq(schema.facture.factureOrigineId, facture.idFacture)).get();
+  return facture.montantTotal + Number(avoirs?.total ?? 0) - Number(paye?.total ?? 0);
+}
 
 export interface InitierPaiementMobileParams {
   idFacture: number;
@@ -18,13 +31,17 @@ export interface InitierPaiementMobileParams {
 // 6.6 : initie une transaction de paiement mobile sur une facture existante
 // (créée BROUILLON par le flux caisse/SAV concerné, avec montantEncaisse=0).
 export async function initierPaiementMobile(db: Db, fournisseur: FournisseurPaiementMobile, params: InitierPaiementMobileParams) {
-  verifierEntier(params.montant, "Le montant du paiement mobile", { min: 1, requis: true, nullable: false, message: "Le montant du paiement mobile doit être positif" });
-  if (typeof params.numeroTelephone !== "string" || !params.numeroTelephone.trim()) throw new Error("Le numéro de téléphone du paiement mobile est obligatoire");
+  verifierEntier(params.montant, "Le montant du paiement mobile", { min: 1, max: MONTANT_MAX, requis: true, nullable: false, message: "Le montant du paiement mobile doit être positif" });
+  const numeroTelephone = telephoneObligatoire(params.numeroTelephone, "Le numéro de téléphone du paiement mobile");
   if (params.parcours !== "USSD_CLIENT" && params.parcours !== "PUSH_MARCHAND") throw new Error("Le parcours de paiement mobile est invalide (USSD_CLIENT ou PUSH_MARCHAND)");
 
   const facture = db.select().from(schema.facture).where(eq(schema.facture.idFacture, params.idFacture)).get();
   if (!facture) throw new Error(`Facture ${params.idFacture} introuvable`);
   if (facture.statut === "VALIDEE") throw new Error("Cette facture est déjà validée");
+  if (facture.type === "AVOIR") throw new Error("Une facture d'avoir ne peut pas être payée par Mobile Money");
+  // un client débité au-delà de ce qu'il doit n'est remboursable que par un avoir : on refuse en amont
+  const solde = soldeDuFacture(db, facture);
+  if (params.montant > solde) throw new Error(`Le montant (${formaterFcfa(params.montant)} FCFA) dépasse le solde dû de la facture (${formaterFcfa(Math.max(0, solde))} FCFA)`);
 
   // 6.6 : une seule transaction à la fois par facture — sinon deux
   // confirmations aboutissent et le client est débité deux fois. Jugé sur la
@@ -45,7 +62,7 @@ export async function initierPaiementMobile(db: Db, fournisseur: FournisseurPaie
     .values({
       idFacture: params.idFacture,
       parcours: params.parcours,
-      numeroTelephone: params.numeroTelephone,
+      numeroTelephone,
       montant: params.montant,
       statut: "INITIEE",
       dateExpiration,
@@ -53,11 +70,16 @@ export async function initierPaiementMobile(db: Db, fournisseur: FournisseurPaie
     .returning()
     .get();
 
-  const { referenceFournisseur } = await fournisseur.initier({
-    numeroTelephone: params.numeroTelephone,
-    montant: params.montant,
-    parcours: params.parcours,
-  });
+  let referenceFournisseur: string;
+  try {
+    ({ referenceFournisseur } = await fournisseur.initier({ numeroTelephone, montant: params.montant, parcours: params.parcours }));
+  } catch (erreur) {
+    // fournisseur injoignable : sans cela la transaction restait INITIEE et bloquait toute nouvelle
+    // tentative pendant le délai d'expiration, et le message technique arrivait jusqu'au caissier
+    console.error("[API] échec de l'initiation du paiement Mobile Money", erreur);
+    db.update(schema.transactionMobileMoney).set({ statut: "ECHOUEE" }).where(eq(schema.transactionMobileMoney.idTransaction, transaction.idTransaction)).run();
+    throw new Error("Orange Money n'a pas pu être joint pour le moment — réessayez dans un instant");
+  }
 
   return db
     .update(schema.transactionMobileMoney)

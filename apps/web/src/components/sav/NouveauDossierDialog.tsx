@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { MESSAGE_FORME_TELEPHONE, telephoneValide } from "@mboapilot/shared";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -29,6 +30,8 @@ export function NouveauDossierDialog({ ouvert, onFerme, onSucces }: Props) {
   const [clientNom, setClientNom] = useState("");
   const [clientTelephone, setClientTelephone] = useState("");
   const [descriptionPanne, setDescriptionPanne] = useState("");
+  // facultatif, mais s'il est saisi il doit être un vrai numéro (le SMS « appareil prêt » y sera envoyé)
+  const telephoneInvalide = clientTelephone.trim() !== "" && !telephoneValide(clientTelephone);
   const [etatReception, setEtatReception] = useState("");
   const [sousGarantie, setSousGarantie] = useState(false);
   const [enCours, setEnCours] = useState(false);
@@ -160,13 +163,27 @@ export function NouveauDossierDialog({ ouvert, onFerme, onSucces }: Props) {
               </div>
               <div>
                 <Label htmlFor="sav-client-telephone">Téléphone du client (optionnel)</Label>
-                <Input id="sav-client-telephone" type="tel" value={clientTelephone} onChange={(e) => setClientTelephone(e.target.value)} maxLength={30} className="mt-1" />
+                <Input
+                  id="sav-client-telephone"
+                  type="tel"
+                  value={clientTelephone}
+                  onChange={(e) => setClientTelephone(e.target.value)}
+                  maxLength={30}
+                  aria-invalid={telephoneInvalide ? true : undefined}
+                  aria-describedby={telephoneInvalide ? "sav-client-telephone-erreur" : undefined}
+                  className="mt-1"
+                />
+                {telephoneInvalide && (
+                  <p id="sav-client-telephone-erreur" className="mt-1 text-xs text-destructive">
+                    Le téléphone {MESSAGE_FORME_TELEPHONE}.
+                  </p>
+                )}
               </div>
             </div>
           )}
 
           <div>
-            <Label htmlFor="sav-panne">Panne annoncée par le client</Label>
+            <Label htmlFor="sav-panne">Panne annoncée par le client (obligatoire)</Label>
             <Input id="sav-panne" value={descriptionPanne} onChange={(e) => setDescriptionPanne(e.target.value)} maxLength={500} className="mt-1" required />
           </div>
 
@@ -185,7 +202,7 @@ export function NouveauDossierDialog({ ouvert, onFerme, onSucces }: Props) {
           <Button variant="outline" className="cursor-pointer" onClick={onFerme}>
             Annuler
           </Button>
-          <Button className="cursor-pointer" disabled={!descriptionPanne.trim() || enCours} onClick={valider}>
+          <Button className="cursor-pointer" disabled={!descriptionPanne.trim() || (!abonneSelectionne && telephoneInvalide) || enCours} onClick={valider}>
             {enCours ? "Ouverture…" : "Ouvrir le dossier"}
           </Button>
         </DialogFooter>

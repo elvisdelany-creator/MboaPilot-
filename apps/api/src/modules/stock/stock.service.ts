@@ -17,6 +17,12 @@ export interface ReceptionnerAchatParams {
 // revient en coût moyen pondéré (CUMP) plutôt que de l'écraser par le
 // dernier prix d'achat.
 export function receptionnerAchat(db: Db, params: ReceptionnerAchatParams) {
+  // atomique : le mouvement d'achat était écrit avant le recalcul du coût moyen — un échec laissait du stock entré
+  // au coût d'avant
+  return db.transaction(() => receptionnerAchatSansTransaction(db, params));
+}
+
+function receptionnerAchatSansTransaction(db: Db, params: ReceptionnerAchatParams) {
   verifierEntier(params.quantite, "La quantité reçue", { min: 1, requis: true, nullable: false, message: "La quantité reçue doit être positive" });
   verifierEntier(params.coutUnitaire, "Le coût unitaire d'achat", { requis: true, nullable: false });
 

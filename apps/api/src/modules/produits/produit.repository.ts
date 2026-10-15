@@ -112,6 +112,12 @@ export interface ModifierProduitInput {
 // 8.2 : édition d'une fiche article — journalise le prix/coût avant-après
 // dès que l'un des deux change (historique des variations de prix).
 export function modifierProduit(db: Db, idProduit: number, input: ModifierProduitInput) {
+  // atomique : la ligne d'historique de prix était écrite avant la mise à jour — un échec laissait la trace d'un
+  // changement de prix qui n'a pas eu lieu
+  return db.transaction(() => modifierProduitSansTransaction(db, idProduit, input));
+}
+
+function modifierProduitSansTransaction(db: Db, idProduit: number, input: ModifierProduitInput) {
   const avant = trouverProduit(db, idProduit);
   if (!avant) throw new Error(`Produit ${idProduit} introuvable`);
   if (input.libelle !== undefined && (typeof input.libelle !== "string" || !input.libelle.trim())) throw new Error("Le libellé de l'article est obligatoire");

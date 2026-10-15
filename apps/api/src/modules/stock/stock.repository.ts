@@ -37,23 +37,27 @@ export function enregistrerMouvement(db: Db, params: EnregistrerMouvementParams)
 
   const delta = params.typeMouvement === "INVENTAIRE" ? params.quantite : SIGNE_PAR_TYPE[params.typeMouvement] * params.quantite;
 
-  db.insert(schema.stockMouvement)
-    .values({
-      idProduit: params.idProduit,
-      siteId: params.siteId,
-      typeMouvement: params.typeMouvement,
-      quantite: params.quantite,
-      motif: params.motif,
-      utilisateurId: params.utilisateurId,
-    })
-    .run();
+  // atomique : le mouvement et le cache du stock s'écrivent ensemble, sinon un échec entre les deux laissait un
+  // mouvement journalisé sans effet sur le stock
+  return db.transaction(() => {
+    db.insert(schema.stockMouvement)
+      .values({
+        idProduit: params.idProduit,
+        siteId: params.siteId,
+        typeMouvement: params.typeMouvement,
+        quantite: params.quantite,
+        motif: params.motif,
+        utilisateurId: params.utilisateurId,
+      })
+      .run();
 
-  return db
-    .update(schema.produit)
-    .set({ quantiteStock: produit.quantiteStock + delta })
-    .where(eq(schema.produit.idProduit, params.idProduit))
-    .returning()
-    .get();
+    return db
+      .update(schema.produit)
+      .set({ quantiteStock: produit.quantiteStock + delta })
+      .where(eq(schema.produit.idProduit, params.idProduit))
+      .returning()
+      .get();
+  });
 }
 
 export function listerMouvementsProduit(db: Db, idProduit: number) {

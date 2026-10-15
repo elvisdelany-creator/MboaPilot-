@@ -121,50 +121,55 @@ export async function actualiserStatutTransaction(db: Db, fournisseur: Fournisse
   const statutFournisseur = await fournisseur.consulterStatut(transaction.referenceTransaction);
   if (!peutTransitionnerPaiementMobile(transaction.statut, statutFournisseur)) return transaction;
 
-  if (statutFournisseur === "REUSSIE") {
-    const paiementExistant = db
-      .select()
-      .from(schema.paiement)
-      .where(eq(schema.paiement.referenceTransaction, transaction.referenceTransaction))
-      .get();
-
-    if (!paiementExistant) {
-      db.insert(schema.paiement)
-        .values({
-          idFacture: transaction.idFacture,
-          mode: "MOBILE_MONEY",
-          montant: transaction.montant,
-          utilisateurId: userId,
-          referenceTransaction: transaction.referenceTransaction,
-        })
-        .run();
-      db.update(schema.facture).set({ statut: "VALIDEE" }).where(eq(schema.facture.idFacture, transaction.idFacture)).run();
-
-      // 6.2, 6.6 : promeut la commission CANAL+ calculée au recrutement
-      // (mise en attente car le paiement était différé) en un vrai suivi,
-      // maintenant que la facture est réellement VALIDEE.
-      const enAttente = db
+  const referenceFournisseurTransaction = transaction.referenceTransaction; // déjà vérifiée non nulle plus haut
+  // atomique : le paiement, la validation de la facture, la promotion de la commission et le statut de la
+  // transaction s'écrivent ensemble — un échec laissait un paiement sans facture validée
+  return db.transaction(() => {
+    if (statutFournisseur === "REUSSIE") {
+      const paiementExistant = db
         .select()
-        .from(schema.commissionCanalplusEnAttente)
-        .where(eq(schema.commissionCanalplusEnAttente.idFacture, transaction.idFacture))
+        .from(schema.paiement)
+        .where(eq(schema.paiement.referenceTransaction, referenceFournisseurTransaction))
         .get();
-      if (enAttente) {
-        creerSuiviCommissionCanalplus(db, {
-          numeroAbonnement: enAttente.numeroAbonnement,
-          vendeurId: enAttente.vendeurId,
-          apporteurId: enAttente.apporteurId ?? undefined,
-          montantCommission: enAttente.montantCommission,
-          dateFinProbatoire: enAttente.dateFinProbatoire,
-        });
-        db.delete(schema.commissionCanalplusEnAttente).where(eq(schema.commissionCanalplusEnAttente.idFacture, transaction.idFacture)).run();
+
+      if (!paiementExistant) {
+        db.insert(schema.paiement)
+          .values({
+            idFacture: transaction.idFacture,
+            mode: "MOBILE_MONEY",
+            montant: transaction.montant,
+            utilisateurId: userId,
+            referenceTransaction: referenceFournisseurTransaction,
+          })
+          .run();
+        db.update(schema.facture).set({ statut: "VALIDEE" }).where(eq(schema.facture.idFacture, transaction.idFacture)).run();
+
+        // 6.2, 6.6 : promeut la commission CANAL+ calculée au recrutement
+        // (mise en attente car le paiement était différé) en un vrai suivi,
+        // maintenant que la facture est réellement VALIDEE.
+        const enAttente = db
+          .select()
+          .from(schema.commissionCanalplusEnAttente)
+          .where(eq(schema.commissionCanalplusEnAttente.idFacture, transaction.idFacture))
+          .get();
+        if (enAttente) {
+          creerSuiviCommissionCanalplus(db, {
+            numeroAbonnement: enAttente.numeroAbonnement,
+            vendeurId: enAttente.vendeurId,
+            apporteurId: enAttente.apporteurId ?? undefined,
+            montantCommission: enAttente.montantCommission,
+            dateFinProbatoire: enAttente.dateFinProbatoire,
+          });
+          db.delete(schema.commissionCanalplusEnAttente).where(eq(schema.commissionCanalplusEnAttente.idFacture, transaction.idFacture)).run();
+        }
       }
     }
-  }
 
-  return db
-    .update(schema.transactionMobileMoney)
-    .set({ statut: statutFournisseur })
-    .where(eq(schema.transactionMobileMoney.idTransaction, idTransaction))
-    .returning()
-    .get();
+    return db
+      .update(schema.transactionMobileMoney)
+      .set({ statut: statutFournisseur })
+      .where(eq(schema.transactionMobileMoney.idTransaction, idTransaction))
+      .returning()
+      .get();
+  });
 }

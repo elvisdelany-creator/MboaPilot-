@@ -117,7 +117,8 @@ export function calculerValorisationStock(db: Db, siteId: number): number {
     .from(schema.produit)
     .where(and(eq(schema.produit.siteId, siteId), eq(schema.produit.suiviStock, 1)))
     .all();
-  return produits.reduce((total, p) => total + p.quantiteStock * p.coutRevient, 0);
+  // un stock négatif (articles vendus avant leur réception) n'est pas une dette de stock : il ne retranche rien
+  return produits.reduce((total, p) => total + Math.max(0, p.quantiteStock) * p.coutRevient, 0);
 }
 
 export interface VentilationPaiement {

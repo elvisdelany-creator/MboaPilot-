@@ -124,6 +124,25 @@ describe("calculerValorisationStock (8.6 : état des stocks)", () => {
 
     expect(calculerValorisationStock(db, siteId)).toBe(40000);
   });
+
+  // constaté en test grandeur nature : un article vendu sans stock (quantité −12) retranchait
+  // 12 × 700 = 8 400 FCFA de la valorisation (29 100 au lieu de 37 500) — des articles que l'on
+  // n'a pas ne sont pas une dette de stock
+  it("ignore les quantités négatives (ventes sans stock) : elles ne retranchent rien de la valeur du stock", () => {
+    const decodeur = creerProduit(db, { siteId, type: "BIEN", libelle: "Décodeur", prixVente: 15000, coutRevient: 8000, suiviStock: true });
+    receptionnerAchat(db, { idProduit: decodeur.idProduit, siteId, quantite: 5, coutUnitaire: 8000, userId });
+    const cable = creerProduit(db, { siteId, type: "BIEN", libelle: "Câble", prixVente: 2200, coutRevient: 700, suiviStock: true });
+    db.update(schema.produit).set({ quantiteStock: -12 }).where(eq(schema.produit.idProduit, cable.idProduit)).run();
+
+    expect(calculerValorisationStock(db, siteId)).toBe(40000);
+  });
+
+  it("vaut 0 quand tous les stocks sont négatifs ou nuls", () => {
+    const cable = creerProduit(db, { siteId, type: "BIEN", libelle: "Câble", prixVente: 2200, coutRevient: 700, suiviStock: true });
+    db.update(schema.produit).set({ quantiteStock: -3 }).where(eq(schema.produit.idProduit, cable.idProduit)).run();
+
+    expect(calculerValorisationStock(db, siteId)).toBe(0);
+  });
 });
 
 describe("listerEncaissementsJour (8.6 : ventilation par mode de paiement)", () => {

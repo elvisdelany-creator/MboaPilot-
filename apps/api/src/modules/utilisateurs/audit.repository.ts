@@ -1,10 +1,15 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, lt } from "drizzle-orm";
 import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
 
 export interface JournalAuditFiltre {
   tableCible?: string;
+  limite?: number; // 200 par défaut, 1 000 au maximum
+  avantId?: number; // curseur : uniquement les entrées plus anciennes que celle-ci
 }
+
+const LIMITE_PAR_DEFAUT = 200;
+const LIMITE_MAX = 1000;
 
 // 11.5, 8.7 : journal d'audit consultable, le plus récent en tête, avec
 // l'identité de l'auteur — la table journal_audit elle-même est immuable
@@ -31,8 +36,15 @@ export function listerJournalAudit(db: Db, filtre: JournalAuditFiltre = {}) {
     .leftJoin(schema.utilisateur, eq(schema.journalAudit.utilisateurId, schema.utilisateur.idUser))
     .orderBy(desc(schema.journalAudit.idAudit));
 
-  const conditions = filtre.tableCible ? [eq(schema.journalAudit.tableCible, filtre.tableCible)] : [];
-  return (conditions.length > 0 ? requete.where(and(...conditions)) : requete).all();
+  // la liste n'était pas bornée : 51 Mo de JSON et 100 000 lignes à afficher avec 100 000 entrées
+  if (filtre.limite !== undefined && (!Number.isSafeInteger(filtre.limite) || filtre.limite < 1)) throw new Error("La limite du journal d'audit doit être un entier d'au moins 1");
+  if (filtre.avantId !== undefined && !Number.isSafeInteger(filtre.avantId)) throw new Error("Le curseur avantId du journal d'audit doit être un entier");
+  const limite = Math.min(filtre.limite ?? LIMITE_PAR_DEFAUT, LIMITE_MAX);
+
+  const conditions = [];
+  if (filtre.tableCible) conditions.push(eq(schema.journalAudit.tableCible, filtre.tableCible));
+  if (filtre.avantId !== undefined) conditions.push(lt(schema.journalAudit.idAudit, filtre.avantId));
+  return (conditions.length > 0 ? requete.where(and(...conditions)) : requete).limit(limite).all();
 }
 
 export type ActionAudit = "CREATION" | "MODIFICATION" | "SUPPRESSION";

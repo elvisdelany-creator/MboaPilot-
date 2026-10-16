@@ -40,6 +40,9 @@ const LIBELLES_ROLES: Record<Role, string> = {
 };
 const ROLES: Role[] = ["ADMINISTRATEUR", "GERANT", "CAISSIER", "TECHNICIEN_SAV", "COMPTABLE", "APPORTEUR"];
 const LIBELLES_ACTION: Record<string, string> = { CREATION: "Création", MODIFICATION: "Modification", SUPPRESSION: "Suppression" };
+// taille de page du serveur (audit.repository.ts)
+const TAILLE_PAGE_JOURNAL = 200;
+
 const formateurDateHeure = new Intl.DateTimeFormat("fr-FR", { dateStyle: "short", timeStyle: "short" });
 
 // 8.7 : gestion des comptes utilisateurs, des sites de l'entreprise et
@@ -58,6 +61,9 @@ export function AdministrationPage({ onNaviguer }: Props) {
   const [comptes, setComptes] = useState<CompteUtilisateur[] | null>(null);
   const [sites, setSites] = useState<Site[]>([]);
   const [journal, setJournal] = useState<EntreeJournalAudit[] | null>(null);
+  // le serveur renvoie les 200 entrées les plus récentes : une page pleine laisse supposer qu'il y en a d'anciennes
+  const [journalPeutRemonter, setJournalPeutRemonter] = useState(false);
+  const [journalEnCoursDeRemontee, setJournalEnCoursDeRemontee] = useState(false);
   const [filtreTable, setFiltreTable] = useState("");
   const [nouveauCompteOuvert, setNouveauCompteOuvert] = useState(false);
   const [nouveauSiteOuvert, setNouveauSiteOuvert] = useState(false);
@@ -86,8 +92,23 @@ export function AdministrationPage({ onNaviguer }: Props) {
 
   function rechargerJournal() {
     chargerJournalAudit(token, filtreTable.trim() || undefined)
-      .then(setJournal)
+      .then((entrees) => {
+        setJournal(entrees);
+        setJournalPeutRemonter(entrees.length >= TAILLE_PAGE_JOURNAL);
+      })
       .catch((e) => gererErreur(e, "Impossible de charger le journal d'audit."));
+  }
+
+  function remonterJournal() {
+    if (!journal || journal.length === 0) return;
+    setJournalEnCoursDeRemontee(true);
+    chargerJournalAudit(token, filtreTable.trim() || undefined, journal[journal.length - 1].idAudit)
+      .then((entrees) => {
+        setJournal((courant) => [...(courant ?? []), ...entrees]);
+        setJournalPeutRemonter(entrees.length >= TAILLE_PAGE_JOURNAL);
+      })
+      .catch((e) => gererErreur(e, "Impossible de charger les entrées plus anciennes."))
+      .finally(() => setJournalEnCoursDeRemontee(false));
   }
 
   useEffect(() => {
@@ -263,7 +284,7 @@ export function AdministrationPage({ onNaviguer }: Props) {
             {estAdministrateur && (
             <TabsContent value="audit" className="space-y-3">
               <div className="flex items-center justify-between gap-2">
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Entrées ({journal?.length ?? 0})</p>
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Entrées affichées ({journal?.length ?? 0})</p>
                 <Input
                   value={filtreTable}
                   onChange={(e) => setFiltreTable(e.target.value)}
@@ -305,6 +326,11 @@ export function AdministrationPage({ onNaviguer }: Props) {
                   );
                 })}
               </ul>
+              {journalPeutRemonter && (
+                <Button variant="outline" className="w-full cursor-pointer" disabled={journalEnCoursDeRemontee} onClick={remonterJournal}>
+                  {journalEnCoursDeRemontee ? "Chargement…" : "Voir les entrées plus anciennes"}
+                </Button>
+              )}
             </TabsContent>
             )}
           </Tabs>

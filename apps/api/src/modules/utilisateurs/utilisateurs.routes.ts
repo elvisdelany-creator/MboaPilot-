@@ -117,11 +117,22 @@ export function registerUtilisateursRoutes(app: FastifyInstance, db: Db, guards:
     }
   );
 
-  app.get<{ Querystring: { tableCible?: string } }>(
+  app.get<{ Querystring: { tableCible?: string; limite?: string; avantId?: string } }>(
     "/api/v1/audit",
     { preHandler: [guards.authRequis, guards.admin] },
     async (request, reply) => {
-      reply.code(200).send(listerJournalAudit(db, { tableCible: request.query.tableCible }));
+      const { tableCible, limite, avantId } = request.query;
+      try {
+        reply.code(200).send(
+          listerJournalAudit(db, {
+            tableCible,
+            limite: limite !== undefined ? Number(limite) : undefined,
+            avantId: avantId !== undefined ? Number(avantId) : undefined,
+          })
+        );
+      } catch (erreur) {
+        envoyerErreur(reply, erreur);
+      }
     }
   );
 }

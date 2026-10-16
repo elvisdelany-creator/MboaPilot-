@@ -5362,3 +5362,28 @@ describe("GET /api/v1/auth/moi : profil courant (2.5.1, 11.2)", () => {
     expect((await app.inject({ method: "GET", url: "/api/v1/auth/moi", headers: authHeader(token) })).statusCode).toBe(401);
   });
 });
+
+describe("GET /api/v1/audit : pagination (11.5)", () => {
+  it("borne la liste, remonte avec avantId et refuse une limite invalide (400)", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    creerUtilisateur(db, { siteId, nom: "Admin", prenom: "D", identifiant: "admin1", motDePasse: "motdepasse-secret", role: "ADMINISTRATEUR" });
+    const token = await connecter(app, "admin1");
+    const valeurs = Array.from({ length: 300 }, (_, i) => ({ utilisateurId: userId, action: "MODIFICATION" as const, tableCible: "produit", idCible: String(i) }));
+    db.insert(schema.journalAudit).values(valeurs).run();
+
+    const premiere = await app.inject({ method: "GET", url: "/api/v1/audit", headers: authHeader(token) });
+    expect(premiere.statusCode).toBe(200);
+    expect(premiere.json()).toHaveLength(200);
+
+    const derniere = premiere.json()[199].idAudit;
+    const suite = await app.inject({ method: "GET", url: `/api/v1/audit?limite=500&avantId=${derniere}`, headers: authHeader(token) });
+    expect(suite.json().every((e: { idAudit: number }) => e.idAudit < derniere)).toBe(true);
+    expect(suite.json().length).toBeGreaterThan(0);
+
+    for (const url of ["/api/v1/audit?limite=abc", "/api/v1/audit?limite=0", "/api/v1/audit?avantId=abc"]) {
+      const refus = await app.inject({ method: "GET", url, headers: authHeader(token) });
+      expect(refus.statusCode, url).toBe(400);
+      expect(refus.json().erreur).toEqual(expect.any(String));
+    }
+  });
+});

@@ -1,4 +1,3 @@
-import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { FastifyInstance, FastifyReply } from "fastify";
 import type { Db } from "../../db/types.js";
@@ -7,7 +6,7 @@ import { modifierEntreprise, trouverInfosEntrepriseParSite, type ModifierEntrepr
 import { enregistrerLogoEntreprise, resoudreTypeMimeLogo } from "./logo.service.js";
 import { modifierSite } from "../utilisateurs/site.repository.js";
 import { envoyerErreur } from "../../lib/erreurs-api.js";
-import { FichierTropGrosError, lireFichierTeleverse } from "../../lib/televersement.js";
+import { FichierTropGrosError, lireFichierStocke, lireFichierTeleverse } from "../../lib/televersement.js";
 
 const TAILLE_MAX_LOGO_OCTETS = 2 * 1024 * 1024;
 
@@ -81,7 +80,12 @@ export function registerEntrepriseRoutes(app: FastifyInstance, db: Db, dossierLo
       reply.code(404).send({ erreur: "Aucun logo enregistré" });
       return;
     }
-    reply.code(200).header("Content-Type", resoudreTypeMimeLogo(infos.entreprise.logoUrl)).send(readFileSync(join(dossierLogos, infos.entreprise.logoUrl)));
+    const contenu = lireFichierStocke(join(dossierLogos, infos.entreprise.logoUrl));
+    if (!contenu) {
+      reply.code(404).send({ erreur: "Le fichier du logo est introuvable sur ce poste : renvoyez le logo depuis les paramètres" });
+      return;
+    }
+    reply.code(200).header("Content-Type", resoudreTypeMimeLogo(infos.entreprise.logoUrl)).send(contenu);
   });
 
   // 11.4, 6.7 : "Compatibilité imprimante thermique 80mm (protocole

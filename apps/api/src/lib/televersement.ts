@@ -1,4 +1,5 @@
 import "@fastify/multipart";
+import { readFileSync } from "node:fs";
 import type { FastifyRequest } from "fastify";
 
 // 11.2 : lecture d'un fichier téléversé (multipart) avec plafond de taille.
@@ -32,4 +33,15 @@ export async function lireFichierTeleverse(request: FastifyRequest, tailleMaxOct
   if (fichier.file.truncated) throw new FichierTropGrosError(tailleMaxOctets);
 
   return { contenu, nomFichierOriginal: fichier.filename, typeMime: fichier.mimetype };
+}
+
+// Lecture d'un fichier déjà enregistré (logo, photo SAV). Après une restauration sur un autre poste, la base
+// peut référencer un fichier absent du disque (docs/exploitation.md §3) : `null` plutôt qu'une erreur 500.
+export function lireFichierStocke(chemin: string): Buffer | null {
+  try {
+    return readFileSync(chemin);
+  } catch (erreur) {
+    if ((erreur as { code?: string }).code === "ENOENT") return null;
+    throw erreur;
+  }
 }

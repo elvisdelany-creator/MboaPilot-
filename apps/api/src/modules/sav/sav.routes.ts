@@ -1,4 +1,3 @@
-import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { FastifyInstance } from "fastify";
 import type { Db } from "../../db/types.js";
@@ -19,7 +18,7 @@ import { listerPaiementsFacture } from "../factures/paiement.repository.js";
 import { listerAvoirsFacture } from "../factures/avoir.service.js";
 import { trouverAbonne } from "../abonnes/abonne.repository.js";
 import { envoyerErreur } from "../../lib/erreurs-api.js";
-import { FichierTropGrosError, lireFichierTeleverse } from "../../lib/televersement.js";
+import { FichierTropGrosError, lireFichierStocke, lireFichierTeleverse } from "../../lib/televersement.js";
 
 const TAILLE_MAX_PHOTO_OCTETS = 10 * 1024 * 1024;
 
@@ -176,7 +175,12 @@ export function registerSavRoutes(app: FastifyInstance, db: Db, dossierPhotos: s
         reply.code(403).send(ERREUR_SITE_DOSSIER);
         return;
       }
-      reply.code(200).header("Content-Type", photo.typeMime).send(readFileSync(join(dossierPhotos, photo.nomFichier)));
+      const contenu = lireFichierStocke(join(dossierPhotos, photo.nomFichier));
+      if (!contenu) {
+        reply.code(404).send({ erreur: `Le fichier de la photo ${photo.idPhoto} est introuvable sur ce poste` });
+        return;
+      }
+      reply.code(200).header("Content-Type", photo.typeMime).send(contenu);
     }
   );
 }

@@ -16,6 +16,16 @@ const EXTENSIONS_PAR_MIME: Record<string, string> = {
   "image/gif": "gif",
 };
 
+const LONGUEUR_MAX_NOM_ORIGINAL = 100;
+
+// nom d'origine fourni par le client : borné, en conservant l'extension à la fin
+function nomOriginalBorne(nom: string): string {
+  const propre = nom.trim();
+  if (propre.length <= LONGUEUR_MAX_NOM_ORIGINAL) return propre;
+  const extension = propre.match(/\.[A-Za-z0-9]{1,5}$/)?.[0] ?? "";
+  return propre.slice(0, LONGUEUR_MAX_NOM_ORIGINAL - extension.length) + extension;
+}
+
 export interface EnregistrerPhotoInput {
   idDossierSav: number;
   contenu: Buffer;
@@ -44,7 +54,7 @@ export function enregistrerPhotoSav(db: Db, dossierPhotos: string, input: Enregi
     .values({
       idDossierSav: input.idDossierSav,
       nomFichier,
-      nomFichierOriginal: input.nomFichierOriginal,
+      nomFichierOriginal: nomOriginalBorne(input.nomFichierOriginal),
       typeMime: typeDetecte,
     })
     .returning()

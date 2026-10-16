@@ -5387,3 +5387,73 @@ describe("GET /api/v1/audit : pagination (11.5)", () => {
     }
   });
 });
+
+// docs/exploitation.md §3 : restaurer sur un autre poste sans copier `logos/` ni `sav-photos/` est un cas
+// prévu. La base référence alors des fichiers absents ; l'API répondait « Erreur interne du serveur » (500).
+describe("Fichiers de logo et de photos SAV absents du disque (restauration sur un autre poste)", () => {
+  it("GET /entreprise/logo répond 404 lisible quand le fichier du logo a disparu", async () => {
+    const dossierVide = mkdtempSync(join(tmpdir(), "mboapilot-test-logo-absent-"));
+    try {
+      const idEntreprise = db.select().from(schema.site).where(eq(schema.site.idSite, siteId)).get()!.idEntreprise;
+      db.update(schema.entreprise).set({ logoUrl: "entreprise-1.png" }).where(eq(schema.entreprise.idEntreprise, idEntreprise)).run();
+      const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST, dossierLogos: dossierVide });
+      const token = await connecter(app);
+
+      const reponse = await app.inject({ method: "GET", url: "/api/v1/entreprise/logo", headers: authHeader(token) });
+
+      expect(reponse.statusCode).toBe(404);
+      expect(reponse.json().erreur).toMatch(/logo/i);
+    } finally {
+      rmSync(dossierVide, { recursive: true, force: true });
+    }
+  });
+
+  it("GET /sav/photos/:id répond 404 lisible quand le fichier de la photo a disparu", async () => {
+    const dossierVide = mkdtempSync(join(tmpdir(), "mboapilot-test-photo-absente-"));
+    try {
+      const dossier = db.insert(schema.savDossier).values({ siteId, clientNom: "Client", clientTelephone: "699999999", descriptionPanne: "Panne", sousGarantie: 0 }).returning().get();
+      const photo = db.insert(schema.savPhoto).values({ idDossierSav: dossier.idDossierSav, nomFichier: "absente.jpg", nomFichierOriginal: "avant.jpg", typeMime: "image/jpeg" }).returning().get();
+      const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST, dossierPhotosSav: dossierVide });
+      const token = await connecter(app);
+
+      const reponse = await app.inject({ method: "GET", url: `/api/v1/sav/photos/${photo.idPhoto}`, headers: authHeader(token) });
+
+      expect(reponse.statusCode).toBe(404);
+      expect(reponse.json().erreur).toMatch(/photo/i);
+    } finally {
+      rmSync(dossierVide, { recursive: true, force: true });
+    }
+  });
+});
+
+// Le nom d'origine de la photo vient du client et était enregistré tel quel (aucune limite de longueur) ; il est ensuite renvoyé dans le détail du dossier et affiché en infobulle.
+describe("Photo SAV : nom de fichier d'origine", () => {
+  async function envoyerPhotoNommee(nom: string) {
+    const dossierTemp = mkdtempSync(join(tmpdir(), "mboapilot-test-photo-nom-"));
+    try {
+      const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST, dossierPhotosSav: dossierTemp });
+      const token = await connecter(app);
+      const dossier = db.insert(schema.savDossier).values({ siteId, clientNom: "Client", clientTelephone: "699999999", descriptionPanne: "Panne", sousGarantie: 0 }).returning().get();
+      const frontiere = "----mboapilot-test-boundary";
+      const reponse = await app.inject({
+        method: "POST",
+        url: `/api/v1/sav/dossiers/${dossier.idDossierSav}/photos`,
+        headers: { ...authHeader(token), "content-type": `multipart/form-data; boundary=${frontiere}` },
+        payload: Buffer.concat([
+          Buffer.from(`--${frontiere}\r\nContent-Disposition: form-data; name="file"; filename="${nom}"\r\nContent-Type: image/jpeg\r\n\r\n`),
+          JPEG_FACTICE,
+          Buffer.from(`\r\n--${frontiere}--\r\n`),
+        ]),
+      });
+      return { reponse, fichiers: readdirSync(dossierTemp) };
+    } finally {
+      rmSync(dossierTemp, { recursive: true, force: true });
+    }
+  }
+
+  it("raccourcit un nom de 5 000 caractères à 100 au plus", async () => {
+    const { reponse } = await envoyerPhotoNommee(`${"a".repeat(5000)}.jpg`);
+    expect(reponse.statusCode).toBe(201);
+    expect(reponse.json().nomFichierOriginal.length).toBeLessThanOrEqual(100);
+  });
+});

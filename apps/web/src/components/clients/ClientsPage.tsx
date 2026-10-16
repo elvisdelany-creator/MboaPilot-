@@ -24,6 +24,7 @@ import {
   lireDateServeur,
   soldeFacture as calculerSoldeFacture,
   soldeTotalDu,
+  LIMITE_RESULTATS_RECHERCHE_ABONNES,
 } from "@mboapilot/shared";
 import { chargerCatalogue, chargerDossierSav, chargerFiche360, rechercherAbonnes, ErreurAuthentification } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
@@ -286,6 +287,11 @@ export function ClientsPage({ onNaviguer, onReabonnerDepuisFiche }: Props) {
                 )}
               </li>
             ))}
+            {resultats.length >= LIMITE_RESULTATS_RECHERCHE_ABONNES && (
+              <li role="status" className="p-4 text-xs text-muted-foreground">
+                {LIMITE_RESULTATS_RECHERCHE_ABONNES} premiers résultats — précisez le nom ou le téléphone pour affiner.
+              </li>
+            )}
           </ul>
         </div>
 

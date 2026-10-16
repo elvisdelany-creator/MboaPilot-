@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { MESSAGE_FORME_TELEPHONE, telephoneValide } from "@mboapilot/shared";
+import { LIMITE_RESULTATS_RECHERCHE_ABONNES, MESSAGE_FORME_TELEPHONE, telephoneValide } from "@mboapilot/shared";
 import { Search, UserPlus, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -120,6 +120,11 @@ export function RechercheAbonne({ siteId, abonneSelectionne, onSelectionner }: P
               </button>
             </li>
           ))}
+          {resultats.length >= LIMITE_RESULTATS_RECHERCHE_ABONNES && (
+            <li role="status" className="border-t border-border px-4 py-2 text-xs text-muted-foreground">
+              {LIMITE_RESULTATS_RECHERCHE_ABONNES} premiers résultats — précisez le nom ou le téléphone pour affiner.
+            </li>
+          )}
         </ul>
       )}
 

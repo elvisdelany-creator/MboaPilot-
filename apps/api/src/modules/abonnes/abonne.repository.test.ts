@@ -366,3 +366,48 @@ describe("fiche abonné : formats et longueurs", () => {
     }
   });
 });
+
+// Constaté en test grandeur nature (copie de la base, 50 000 clients) : taper « a » dans la caisse renvoyait
+// 40 037 résultats, soit 7,4 Mo de JSON à chaque frappe, à afficher dans une liste déroulante.
+describe("rechercherAbonnes : nombre de résultats borné (4.5)", () => {
+  function creerAbonnes(nombre: number, nomDeBase = "Nga") {
+    const valeurs = Array.from({ length: nombre }, (_, i) => ({ siteId, nom: `${nomDeBase} ${i}`, prenom: "Paul", telephone: `69${String(1000000 + i)}` }));
+    for (let debut = 0; debut < valeurs.length; debut += 100) db.insert(schema.abonne).values(valeurs.slice(debut, debut + 100)).run();
+  }
+
+  it("ne renvoie que les 50 premiers résultats par défaut", () => {
+    creerAbonnes(120);
+
+    expect(rechercherAbonnes(db, siteId, "nga")).toHaveLength(50);
+  });
+
+  it("respecte une limite demandée et ne la dépasse jamais", () => {
+    creerAbonnes(120);
+
+    expect(rechercherAbonnes(db, siteId, "nga", 10)).toHaveLength(10);
+    expect(rechercherAbonnes(db, siteId, "nga", 500)).toHaveLength(120);
+  });
+
+  it("garde un ordre stable : les premiers abonnés créés d'abord", () => {
+    creerAbonnes(80);
+
+    const resultats = rechercherAbonnes(db, siteId, "nga");
+
+    expect(resultats.map((a) => a.nom)).toEqual(Array.from({ length: 50 }, (_, i) => `Nga ${i}`));
+  });
+
+  it("renvoie tous les résultats quand il y en a moins que la limite", () => {
+    creerAbonnes(7);
+
+    expect(rechercherAbonnes(db, siteId, "nga")).toHaveLength(7);
+  });
+
+  it("résout toujours un numéro d'abonné exact vers cette seule fiche", () => {
+    creerAbonnes(60);
+    const cible = db.select().from(schema.abonne).all()[12];
+
+    const resultats = rechercherAbonnes(db, siteId, String(cible.idAbonne));
+
+    expect(resultats.map((a) => a.idAbonne)).toEqual([cible.idAbonne]);
+  });
+});

@@ -1,5 +1,5 @@
 import { and, eq, sql } from "drizzle-orm";
-import { joursAvantEcheance, normaliserLibelle } from "@mboapilot/shared";
+import { joursAvantEcheance, LIMITE_RESULTATS_RECHERCHE_ABONNES, normaliserLibelle } from "@mboapilot/shared";
 import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
 import { emailFacultatif, telephoneFacultatif, telephoneObligatoire, texteFacultatif, texteObligatoire } from "../../lib/champs-texte.js";
@@ -133,7 +133,11 @@ export function listerAbonnesEligiblesAnonymisationAutomatique(
 
 // 4.5 : recherche unifiée par numéro d'abonné, numéro d'abonnement en cours,
 // nom/prénom ou téléphone — résolution unique vers la fiche ABONNE.
-export function rechercherAbonnes(db: Db, siteId: number, terme: string) {
+// une recherche d'une seule lettre renvoyait 40 000 résultats (7,4 Mo à chaque frappe) sur 50 000 clients : la liste
+// est bornée, l'interface invite à affiner la recherche quand la limite est atteinte
+export const LIMITE_RESULTATS_RECHERCHE = LIMITE_RESULTATS_RECHERCHE_ABONNES;
+
+export function rechercherAbonnes(db: Db, siteId: number, terme: string, limite = LIMITE_RESULTATS_RECHERCHE) {
   const termeNumerique = /^\d+$/.test(terme) ? Number(terme) : null;
 
   if (termeNumerique !== null) {
@@ -142,7 +146,7 @@ export function rechercherAbonnes(db: Db, siteId: number, terme: string) {
       .from(schema.abonne)
       .where(and(eq(schema.abonne.siteId, siteId), eq(schema.abonne.idAbonne, termeNumerique)))
       .all();
-    if (parId.length > 0) return parId;
+    if (parId.length > 0) return parId.slice(0, limite);
 
     const parAbonnement = db
       .select({ abonne: schema.abonne })
@@ -150,7 +154,7 @@ export function rechercherAbonnes(db: Db, siteId: number, terme: string) {
       .innerJoin(schema.abonne, eq(schema.abonnement.idAbonne, schema.abonne.idAbonne))
       .where(and(eq(schema.abonne.siteId, siteId), eq(schema.abonnement.numeroAbonnement, termeNumerique)))
       .all();
-    if (parAbonnement.length > 0) return parAbonnement.map((r) => r.abonne);
+    if (parAbonnement.length > 0) return parAbonnement.map((r) => r.abonne).slice(0, limite);
   }
 
   // 4.5, 8.2 : même repère que l'import CSV et le transfert de stock — un
@@ -161,13 +165,18 @@ export function rechercherAbonnes(db: Db, siteId: number, terme: string) {
   const termeNormalise = normaliserLibelle(terme);
   const termeTelephone = /^[+\d\s().-]+$/.test(terme) ? chiffresTelephone(terme) : "";
   const abonnesSite = db.select().from(schema.abonne).where(eq(schema.abonne.siteId, siteId)).all();
-  return abonnesSite.filter(
-    (a) =>
+  const trouves: typeof abonnesSite = [];
+  for (const a of abonnesSite) {
+    const correspond =
       normaliserLibelle(a.nom).includes(termeNormalise) ||
       normaliserLibelle(a.prenom).includes(termeNormalise) ||
       a.telephone.includes(terme) ||
-      (termeTelephone !== "" && chiffresTelephone(a.telephone).includes(termeTelephone))
-  );
+      (termeTelephone !== "" && chiffresTelephone(a.telephone).includes(termeTelephone));
+    if (!correspond) continue;
+    trouves.push(a);
+    if (trouves.length >= limite) break; // inutile de normaliser le reste de la base
+  }
+  return trouves;
 }
 
 const INDICATIF_CAMEROUN = "237";

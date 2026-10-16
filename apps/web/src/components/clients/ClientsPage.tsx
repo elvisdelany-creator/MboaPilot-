@@ -658,8 +658,8 @@ export function ClientsPage({ onNaviguer, onReabonnerDepuisFiche }: Props) {
                               <p className="mt-1 text-xs italic text-muted-foreground">« {n.message} »</p>
                             </div>
                           </div>
-                          <Badge variant={n.statutEnvoi === "ENVOYEE" ? "secondary" : "destructive"} className="shrink-0">
-                            {n.statutEnvoi === "ENVOYEE" ? "Envoyée" : "Échouée"}
+                          <Badge variant={n.statutEnvoi === "ENVOYEE" ? "secondary" : n.statutEnvoi === "SIMULEE" ? "outline" : "destructive"} className="shrink-0">
+                            {n.statutEnvoi === "ENVOYEE" ? "Envoyée" : n.statutEnvoi === "SIMULEE" ? "Simulée : non envoyée" : "Échouée"}
                           </Badge>
                         </Card>
                       </li>

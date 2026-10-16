@@ -1,19 +1,25 @@
 import { desc, eq } from "drizzle-orm";
 import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
-import type { CanalNotification, FournisseurNotification } from "./fournisseur.js";
+import type { CanalNotification, FournisseurNotification, ResultatEnvoi } from "./fournisseur.js";
 import { PLACEHOLDER_TELEPHONE } from "../abonnes/anonymisation.service.js";
 
 // Une passerelle réelle peut lever une exception (réseau coupé, délai dépassé) : elle remontait au job
 // quotidien après l'enregistrement de l'alerte du jour, et le SMS n'était jamais renvoyé. Un problème
 // d'acheminement est donc journalisé comme un échec d'envoi, jamais propagé.
-function envoyerSansException(fournisseur: FournisseurNotification, canal: CanalNotification, params: { destinataire: string; message: string }): boolean {
+function envoyerSansException(fournisseur: FournisseurNotification, canal: CanalNotification, params: { destinataire: string; message: string }): ResultatEnvoi {
   try {
-    return fournisseur.envoyer(canal, params).reussi;
+    return fournisseur.envoyer(canal, params);
   } catch (erreur) {
     console.error(`[API] échec d'acheminement de la notification (${canal})`, erreur);
-    return false;
+    return { reussi: false };
   }
+}
+
+// un simulateur n'envoie rien : le journal ne doit jamais prétendre le contraire
+function statutDepuisResultat(resultat: ResultatEnvoi): "ENVOYEE" | "SIMULEE" | "ECHOUEE" {
+  if (!resultat.reussi) return "ECHOUEE";
+  return resultat.simule ? "SIMULEE" : "ENVOYEE";
 }
 
 export interface EnvoyerNotificationParams {
@@ -40,7 +46,7 @@ export function envoyerNotificationAbonne(db: Db, fournisseur: FournisseurNotifi
   if (abonne.email) canaux.push({ canal: "EMAIL", destinataire: abonne.email });
 
   return canaux.map(({ canal, destinataire }) => {
-    const reussi = envoyerSansException(fournisseur, canal, { destinataire, message: params.message });
+    const resultat = envoyerSansException(fournisseur, canal, { destinataire, message: params.message });
     return db
       .insert(schema.notification)
       .values({
@@ -49,7 +55,7 @@ export function envoyerNotificationAbonne(db: Db, fournisseur: FournisseurNotifi
         evenement: params.evenement,
         destinataire,
         message: params.message,
-        statutEnvoi: reussi ? "ENVOYEE" : "ECHOUEE",
+        statutEnvoi: statutDepuisResultat(resultat),
         idAlerte: params.idAlerte,
         idDossierSav: params.idDossierSav,
       })
@@ -70,7 +76,7 @@ export interface EnvoyerNotificationClientPonctuelParams {
 // via le seul canal disponible pour lui (SMS, pas de fiche e-mail) —
 // idAbonne reste NULL, contrairement à envoyerNotificationAbonne ci-dessus.
 export function envoyerNotificationClientPonctuel(db: Db, fournisseur: FournisseurNotification, params: EnvoyerNotificationClientPonctuelParams) {
-  const reussi = envoyerSansException(fournisseur, "SMS", { destinataire: params.telephone, message: params.message });
+  const resultat = envoyerSansException(fournisseur, "SMS", { destinataire: params.telephone, message: params.message });
   return db
     .insert(schema.notification)
     .values({
@@ -79,7 +85,7 @@ export function envoyerNotificationClientPonctuel(db: Db, fournisseur: Fournisse
       evenement: params.evenement,
       destinataire: params.telephone,
       message: params.message,
-      statutEnvoi: reussi ? "ENVOYEE" : "ECHOUEE",
+      statutEnvoi: statutDepuisResultat(resultat),
       idDossierSav: params.idDossierSav,
     })
     .returning()

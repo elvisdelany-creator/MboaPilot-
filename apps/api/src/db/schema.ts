@@ -320,7 +320,7 @@ export const notification = sqliteTable("notification", {
   evenement: text("evenement", { enum: ["ALERTE_ECHEANCE", "SAV_PRET"] }).notNull(),
   destinataire: text("destinataire").notNull(), // numéro ou e-mail au moment de l'envoi
   message: text("message").notNull(),
-  statutEnvoi: text("statut_envoi", { enum: ["ENVOYEE", "ECHOUEE"] }).notNull(),
+  statutEnvoi: text("statut_envoi", { enum: ["ENVOYEE", "SIMULEE", "ECHOUEE"] }).notNull(),
   idAlerte: integer("id_alerte").references(() => alerteEcheance.idAlerte),
   idDossierSav: integer("id_dossier_sav").references((): AnySQLiteColumn => savDossier.idDossierSav),
   dateEnvoi: text("date_envoi").notNull().default(now),

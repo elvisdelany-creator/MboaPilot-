@@ -1,4 +1,4 @@
-import type { CanalNotification, EnvoyerParams, FournisseurNotification } from "./fournisseur.js";
+import type { CanalNotification, EnvoyerParams, FournisseurNotification, ResultatEnvoi } from "./fournisseur.js";
 
 // ⚠️ Simulateur local — AUCUNE connexion réelle à une passerelle SMS ou à un
 // service d'e-mail. Toujours "réussi" : l'intégration officielle (passerelle
@@ -6,9 +6,9 @@ import type { CanalNotification, EnvoyerParams, FournisseurNotification } from "
 // hors de portée de cet environnement ; fournisseur.ts définit le contrat que
 // le véritable adaptateur devra respecter pour remplacer ce simulateur.
 export class SimulateurNotification implements FournisseurNotification {
-  envoyer(canal: CanalNotification, params: EnvoyerParams): { reussi: boolean } {
+  envoyer(canal: CanalNotification, params: EnvoyerParams): ResultatEnvoi {
     void canal;
     void params;
-    return { reussi: true };
+    return { reussi: true, simule: true };
   }
 }

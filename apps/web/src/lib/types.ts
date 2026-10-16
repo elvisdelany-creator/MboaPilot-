@@ -460,7 +460,7 @@ export interface Notification {
   evenement: "ALERTE_ECHEANCE" | "SAV_PRET";
   destinataire: string;
   message: string;
-  statutEnvoi: "ENVOYEE" | "ECHOUEE";
+  statutEnvoi: "ENVOYEE" | "SIMULEE" | "ECHOUEE";
   idAlerte: number | null;
   idDossierSav: number | null;
   dateEnvoi: string;

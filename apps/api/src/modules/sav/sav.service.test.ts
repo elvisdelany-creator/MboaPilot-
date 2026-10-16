@@ -215,7 +215,7 @@ describe("changerStatutSav — cycle de vie (5.10)", () => {
 
     const notifications = db.select().from(schema.notification).where(eq(schema.notification.idAbonne, abonne.idAbonne)).all();
     expect(notifications).toHaveLength(1);
-    expect(notifications[0]).toMatchObject({ canal: "SMS", evenement: "SAV_PRET", statutEnvoi: "ENVOYEE", idDossierSav: idDossierAvecAbonne });
+    expect(notifications[0]).toMatchObject({ canal: "SMS", evenement: "SAV_PRET", statutEnvoi: "SIMULEE", idDossierSav: idDossierAvecAbonne });
   });
 
   it("8.4 : n'envoie aucune notification pour un dossier sans abonné ni téléphone de client ponctuel", () => {
@@ -252,7 +252,7 @@ describe("changerStatutSav — cycle de vie (5.10)", () => {
       canal: "SMS",
       evenement: "SAV_PRET",
       destinataire: "677889900",
-      statutEnvoi: "ENVOYEE",
+      statutEnvoi: "SIMULEE",
     });
   });
 

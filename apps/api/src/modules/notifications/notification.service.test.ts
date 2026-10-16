@@ -5,6 +5,7 @@ import * as schema from "../../db/schema.js";
 import { envoyerNotificationAbonne, envoyerNotificationClientPonctuel, listerNotificationsAbonne } from "./notification.service.js";
 import { anonymiserAbonne } from "../abonnes/anonymisation.service.js";
 import type { FournisseurNotification } from "./fournisseur.js";
+import { SimulateurNotification } from "./simulateur-notification.js";
 
 let db: Db;
 let siteId: number;
@@ -171,5 +172,45 @@ describe("notifications : fournisseur qui lève une exception", () => {
     const resultat = envoyerNotificationClientPonctuel(db, enPanne, { telephone: "690000000", evenement: "SAV_PRET", message: "Appareil prêt.", idDossierSav: dossier.idDossierSav });
 
     expect(resultat.statutEnvoi).toBe("ECHOUEE");
+  });
+});
+
+// Aucune passerelle SMS ni service d'e-mail n'est branché : le simulateur répondait « réussi » et la fiche
+// client affichait « Envoyée » pour un message qui n'avait jamais quitté le poste. Le gérant croyait ses clients
+// prévenus de leur échéance. Le journal doit dire la vérité.
+describe("notifications simulées : statut d'envoi honnête", () => {
+  class FournisseurSimule implements FournisseurNotification {
+    envoyer() {
+      return { reussi: true, simule: true };
+    }
+  }
+
+  it("journalise « SIMULEE » (et non « ENVOYEE ») quand le fournisseur est un simulateur", () => {
+    const abonne = db.insert(schema.abonne).values({ siteId, nom: "Nga", prenom: "V", telephone: "690000000" }).returning().get();
+
+    const resultats = envoyerNotificationAbonne(db, new FournisseurSimule(), { idAbonne: abonne.idAbonne, evenement: "ALERTE_ECHEANCE", message: "Test" });
+
+    expect(resultats.map((n) => n.statutEnvoi)).toEqual(["SIMULEE"]);
+  });
+
+  it("le simulateur fourni avec l'application se déclare simulé", () => {
+    expect(new SimulateurNotification().envoyer("SMS", { destinataire: "690000000", message: "x" })).toEqual({ reussi: true, simule: true });
+  });
+
+  it("un client ponctuel (SAV prêt) est journalisé « SIMULEE » avec un fournisseur simulé", () => {
+    const dossier = db.insert(schema.savDossier).values({ siteId, clientNom: "Client", clientTelephone: "699999999", descriptionPanne: "Panne", sousGarantie: 0 }).returning().get();
+
+    const notification = envoyerNotificationClientPonctuel(db, new FournisseurSimule(), { telephone: "699999999", evenement: "SAV_PRET", message: "Prêt", idDossierSav: dossier.idDossierSav });
+
+    expect(notification.statutEnvoi).toBe("SIMULEE");
+  });
+
+  it("un échec reste « ECHOUEE » même avec un fournisseur simulé", () => {
+    const abonne = db.insert(schema.abonne).values({ siteId, nom: "Nga", prenom: "V", telephone: "690000000" }).returning().get();
+    const echec: FournisseurNotification = { envoyer: () => ({ reussi: false, simule: true }) };
+
+    const resultats = envoyerNotificationAbonne(db, echec, { idAbonne: abonne.idAbonne, evenement: "ALERTE_ECHEANCE", message: "Test" });
+
+    expect(resultats.map((n) => n.statutEnvoi)).toEqual(["ECHOUEE"]);
   });
 });

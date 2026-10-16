@@ -139,7 +139,7 @@ describe("executerJobQuotidien — alertes J-7/J-3/J-1 (4.4)", () => {
     const alerte = db.select().from(schema.alerteEcheance).where(eq(schema.alerteEcheance.numeroAbonnement, sub.numeroAbonnement)).get();
     const notifications = db.select().from(schema.notification).where(eq(schema.notification.idAbonne, abonne.idAbonne)).all();
     expect(notifications).toHaveLength(1);
-    expect(notifications[0]).toMatchObject({ canal: "SMS", evenement: "ALERTE_ECHEANCE", statutEnvoi: "ENVOYEE", idAlerte: alerte?.idAlerte });
+    expect(notifications[0]).toMatchObject({ canal: "SMS", evenement: "ALERTE_ECHEANCE", statutEnvoi: "SIMULEE", idAlerte: alerte?.idAlerte });
   });
 
   // 8.3 : le client lit ce SMS — la date d'échéance s'écrit à la française

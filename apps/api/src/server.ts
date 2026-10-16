@@ -2,6 +2,7 @@ import { db } from "./db/client.js";
 import { appliquerMigrations } from "./db/appliquer-migrations.js";
 import { buildApp } from "./app.js";
 import { obtenirSecretJwt } from "./config/jwt-secret.js";
+import { obtenirCleChiffrement } from "./config/encryption-key.js";
 import { planifierJobQuotidien } from "./jobs/planificateur.js";
 import { planifierSauvegardeQuotidienne } from "./jobs/planificateur-sauvegarde.js";
 import { revaliderLicence } from "./modules/licence/licence.service.js";
@@ -9,6 +10,14 @@ import { dossierSauvegardes as dossierSauvegardesConfigure } from "./config/chem
 
 // 2.6 : base restaurée ou application mise à jour — mise à niveau avant toute requête
 appliquerMigrations(db);
+
+// clé de chiffrement contrôlée dès le démarrage : un fichier illisible doit se voir tout de suite, pas à la première saisie d'un compte partagé
+try {
+  obtenirCleChiffrement();
+} catch (erreur) {
+  console.error(`[MboaPilot] Démarrage impossible : ${(erreur as Error).message}`);
+  process.exit(1);
+}
 
 const dossierSauvegardes = dossierSauvegardesConfigure();
 const app = buildApp(db, { jwtSecret: obtenirSecretJwt(), dossierSauvegardes });

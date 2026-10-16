@@ -10,7 +10,12 @@ import { cheminSecretJwt } from "./chemins.js";
 export function obtenirSecretJwt(cheminSecret = cheminSecretJwt()): string {
   if (process.env.JWT_SECRET) return process.env.JWT_SECRET;
 
-  if (existsSync(cheminSecret)) return readFileSync(cheminSecret, "utf-8").trim();
+  // un fichier vide (coupure de courant à la création, copie incomplète) ne doit jamais servir de secret :
+  // les sessions seraient signées avec une chaîne vide. Seules les sessions en cours sont perdues.
+  if (existsSync(cheminSecret)) {
+    const existant = readFileSync(cheminSecret, "utf-8").trim();
+    if (existant) return existant;
+  }
 
   const secret = randomBytes(32).toString("hex");
   mkdirSync(dirname(cheminSecret), { recursive: true });

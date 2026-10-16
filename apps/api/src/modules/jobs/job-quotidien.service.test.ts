@@ -250,6 +250,27 @@ describe("executerJobQuotidien — anonymisation automatique (11.3)", () => {
     expect(inchange?.nom).not.toBe("Anonymisé");
   });
 
+  // 10.3, 10.4 : le mode dégradé (lecture seule) n'efface jamais de données. L'anonymisation est
+  // irréversible : une boutique dont l'abonnement éditeur a expiré ne doit pas perdre ses clients en silence.
+  it("n'anonymise personne tant que la licence est en mode dégradé, puis rattrape à la réactivation", () => {
+    db.update(schema.entreprise).set({ dureeConservationDonneesJours: 30 }).run();
+    const abonne = creerAbonne("690000011");
+    creerAbonnement(abonne.idAbonne, "2025-01-01", "2025-01-31", "EXPIRE");
+    const licence = db
+      .insert(schema.licence)
+      .values({ empreinteInstallation: "empreinte-test", dateExpirationAbonnement: "2025-12-31", derniereRevalidationReussie: "2026-01-01T00:00:00.000Z" })
+      .returning()
+      .get();
+
+    const resultat = executerJobQuotidien(db, "2026-01-01");
+
+    expect(resultat.abonnesAnonymises).toBe(0);
+    expect(db.select().from(schema.abonne).where(eq(schema.abonne.idAbonne, abonne.idAbonne)).get()?.nom).not.toBe("Anonymisé");
+
+    db.update(schema.licence).set({ dateExpirationAbonnement: "2027-12-31" }).where(eq(schema.licence.idLicence, licence.idLicence)).run();
+    expect(executerJobQuotidien(db, "2026-01-02").abonnesAnonymises).toBe(1);
+  });
+
   it("n'anonymise pas un abonné avec un abonnement encore ACTIF", () => {
     db.update(schema.entreprise).set({ dureeConservationDonneesJours: 30 }).run();
     const abonne = creerAbonne("690000010");

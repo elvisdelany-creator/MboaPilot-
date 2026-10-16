@@ -8,11 +8,18 @@ import { anonymiserAbonne } from "../abonnes/anonymisation.service.js";
 import { envoyerNotificationAbonne } from "../notifications/notification.service.js";
 import { SimulateurNotification } from "../notifications/simulateur-notification.js";
 import type { FournisseurNotification } from "../notifications/fournisseur.js";
+import { calculerEtatLicence } from "../licence/licence.service.js";
 
 // 8.3 : le message est lu par le client — "2026-09-23" devient "23/09/2026"
 function formaterDateFrancaise(dateIso: string): string {
   const [annee, mois, jour] = dateIso.split("-");
   return `${jour}/${mois}/${annee}`;
+}
+
+// lecture seule : la licence n'est pas créée ici (elle l'est au premier accès de l'application)
+function licenceDegradee(db: Db, aujourdHui: string): boolean {
+  const licence = db.select().from(schema.licence).get();
+  return licence !== undefined && calculerEtatLicence(licence, `${aujourdHui}T12:00:00.000Z`).etat === "DEGRADE";
 }
 
 export interface JobQuotidienResultat {
@@ -132,11 +139,15 @@ export function executerJobQuotidien(
 
   // 11.3 : "durée de conservation définie et paramétrable, avec archivage ou
   // anonymisation au-delà" — mono-entreprise (2.2), pas de filtre par site
-  const dureeConservation = trouverDureeConservationDonneesEntreprise(db);
-  const eligibles = listerAbonnesEligiblesAnonymisationAutomatique(db, aujourdHui, dureeConservation);
-  for (const { abonne } of eligibles) {
-    anonymiserAbonne(db, { idAbonne: abonne.idAbonne });
-    resultat.abonnesAnonymises += 1;
+  // 10.3, 10.4 : le mode dégradé ne supprime jamais de données — l'anonymisation, irréversible, attend
+  // la réactivation (les abonnés restent éligibles et sont traités au premier job qui suit).
+  if (!licenceDegradee(db, aujourdHui)) {
+    const dureeConservation = trouverDureeConservationDonneesEntreprise(db);
+    const eligibles = listerAbonnesEligiblesAnonymisationAutomatique(db, aujourdHui, dureeConservation);
+    for (const { abonne } of eligibles) {
+      anonymiserAbonne(db, { idAbonne: abonne.idAbonne });
+      resultat.abonnesAnonymises += 1;
+    }
   }
 
   return resultat;

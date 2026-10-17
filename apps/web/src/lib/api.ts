@@ -1256,6 +1256,8 @@ export interface TicketImpressionPayload {
   modePaiement: "CASH" | "CHEQUE" | "VIREMENT" | "MOBILE_MONEY";
   montantEncaisse: number;
   dateHeure: string;
+  // 6.4 : seul le ticket d'une facture validée (au moins un encaissement) s'imprime
+  idFacture: number;
 }
 
 export async function imprimerTicketEscPosRequete(token: string, payload: TicketImpressionPayload): Promise<{ imprime: boolean }> {

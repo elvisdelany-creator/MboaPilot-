@@ -8,7 +8,7 @@ import { imprimerTicket } from "./impression.service.js";
 let db: Db;
 let siteId: number;
 
-const TICKET = {
+const TICKET_BASE = {
   operation: "Vente",
   numeroAbonnement: null as number | null,
   lignes: [{ libelle: "Installation à domicile", montant: 5000 }],
@@ -18,11 +18,16 @@ const TICKET = {
   montantEncaisse: 5000,
   dateHeure: "2026-09-13T12:00:00.000Z",
 };
+// complété à chaque test avec une facture VALIDEE du site (6.4 : seul un ticket de facture validée s'imprime)
+let TICKET = { ...TICKET_BASE, idFacture: 0 };
 
 beforeEach(() => {
   db = creerDbTest();
   const ent = db.insert(schema.entreprise).values({ nom: "Boutique Test" }).returning().get();
   siteId = db.insert(schema.site).values({ idEntreprise: ent.idEntreprise, nom: "Site A" }).returning().get().idSite;
+  const idUser = db.insert(schema.utilisateur).values({ siteId, nom: "A", prenom: "B", identifiant: "ab", motDePasseHash: "h", role: "CAISSIER" }).returning().get().idUser;
+  const idFacture = db.insert(schema.facture).values({ siteId, statut: "VALIDEE", montantTotal: 5000, creePar: idUser }).returning().get().idFacture;
+  TICKET = { ...TICKET_BASE, idFacture };
 });
 
 // 11.4, 6.7 : n'imprime réellement (ESC/POS réseau) que si une imprimante a
@@ -111,5 +116,43 @@ describe("imprimerTicket : contenu du ticket (11.4)", () => {
     const resultat = await imprimerTicket(db, new SimulateurImpression(), { siteId, ticket: { ...TICKET, total: "abc" } as never });
 
     expect(resultat).toEqual({ imprime: false });
+  });
+});
+
+// 6.4 (règle 2) : « une facture BROUILLON ne peut jamais être imprimée ni transmise au client — c'est une
+// contrainte système, pas seulement une convention d'usage ». Le ticket était du contenu libre, sans lien avec
+// une facture : rien côté serveur n'empêchait d'imprimer une vente non encaissée.
+describe("imprimerTicket : seules les factures validées s'impriment (6.4)", () => {
+  const facture = (statut: "BROUILLON" | "VALIDEE", site = siteId) =>
+    db.insert(schema.facture).values({ siteId: site, statut, montantTotal: 5000, creePar: db.select().from(schema.utilisateur).get()!.idUser }).returning().get().idFacture;
+
+  beforeEach(() => {
+    db.update(schema.site).set({ imprimanteHote: "192.168.1.50" }).where(eq(schema.site.idSite, siteId)).run();
+  });
+
+  it("imprime le ticket d'une facture VALIDEE", async () => {
+    const fournisseur = new SimulateurImpression();
+    const resultat = await imprimerTicket(db, fournisseur, { siteId, ticket: { ...TICKET, idFacture: facture("VALIDEE") } as never });
+    expect(resultat).toEqual({ imprime: true });
+  });
+
+  it("refuse le ticket d'une facture BROUILLON, sans rien envoyer à l'imprimante", async () => {
+    const fournisseur = new SimulateurImpression();
+    await expect(imprimerTicket(db, fournisseur, { siteId, ticket: { ...TICKET, idFacture: facture("BROUILLON") } as never })).rejects.toThrow(/brouillon/i);
+    expect(fournisseur.envois).toHaveLength(0);
+  });
+
+  it("refuse un ticket sans numéro de facture", async () => {
+    const fournisseur = new SimulateurImpression();
+    await expect(imprimerTicket(db, fournisseur, { siteId, ticket: { ...TICKET, idFacture: undefined } as never })).rejects.toThrow(/facture/i);
+    expect(fournisseur.envois).toHaveLength(0);
+  });
+
+  it("refuse une facture inexistante ou d'un autre site", async () => {
+    const autreSite = db.insert(schema.site).values({ idEntreprise: db.select().from(schema.entreprise).get()!.idEntreprise, nom: "Site B" }).returning().get().idSite;
+    const fournisseur = new SimulateurImpression();
+    await expect(imprimerTicket(db, fournisseur, { siteId, ticket: { ...TICKET, idFacture: 999999 } as never })).rejects.toThrow(/introuvable/i);
+    await expect(imprimerTicket(db, fournisseur, { siteId, ticket: { ...TICKET, idFacture: facture("VALIDEE", autreSite) } as never })).rejects.toThrow(/introuvable/i);
+    expect(fournisseur.envois).toHaveLength(0);
   });
 });

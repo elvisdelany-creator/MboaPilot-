@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
 import { construireTicketEscPos, type TicketEscPosInput } from "./escpos.js";
@@ -10,7 +10,8 @@ const PORT_PAR_DEFAUT = 9100; // "RAW/JetDirect" — port standard des imprimant
 
 export interface ImprimerTicketParams {
   siteId: number;
-  ticket: Omit<TicketEscPosInput, "entreprise" | "site">;
+  // idFacture : la facture dont on imprime le ticket (6.4, règle 2 : jamais d'impression d'un BROUILLON)
+  ticket: Omit<TicketEscPosInput, "entreprise" | "site"> & { idFacture: number };
 }
 
 export interface ImprimerTicketResultat {
@@ -48,6 +49,21 @@ function verifierTicket(ticket: unknown): void {
   if (typeof t.dateHeure !== "string" || Number.isNaN(new Date(t.dateHeure).getTime())) throw new Error("La date du ticket est invalide");
 }
 
+// 6.4 : « une facture BROUILLON ne peut jamais être imprimée ni transmise au client — contrainte système ».
+// Le ticket doit se rattacher à une facture VALIDEE du site de l'appelant (un encaissement, même partiel).
+function verifierFactureImprimable(db: Db, siteId: number, idFacture: unknown): void {
+  verifierEntier(idFacture, "Le numéro de facture du ticket", { min: 1, requis: true, nullable: false });
+  const facture = db
+    .select()
+    .from(schema.facture)
+    .where(and(eq(schema.facture.idFacture, idFacture as number), eq(schema.facture.siteId, siteId)))
+    .get();
+  if (!facture) throw new Error(`Facture ${idFacture} introuvable`);
+  if (facture.statut !== "VALIDEE") {
+    throw new Error(`La facture ${idFacture} est un brouillon : elle ne peut pas être imprimée avant un premier encaissement`);
+  }
+}
+
 // 11.4, 6.7 : n'imprime réellement (ESC/POS, réseau) que si une imprimante
 // a été configurée pour le site — sinon le caissier reste sur l'impression
 // navigateur existante (repli côté frontend, jamais un blocage de la vente).
@@ -59,6 +75,7 @@ export async function imprimerTicket(db: Db, fournisseur: FournisseurImpression,
   if (!entreprise) return { imprime: false };
 
   verifierTicket(params.ticket);
+  verifierFactureImprimable(db, params.siteId, params.ticket.idFacture);
 
   const donnees = construireTicketEscPos({
     ...params.ticket,

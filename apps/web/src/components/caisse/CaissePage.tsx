@@ -82,7 +82,7 @@ export function CaissePage({ onNaviguer, abonneInitial, idFamilleInitiale }: Pro
     // 6.7 : base du ticket de caisse, figée au moment de l'initiation du
     // paiement (l'état de la vente en cours aura été réinitialisé lorsque la
     // confirmation Mobile Money arrivera plus tard, de façon asynchrone)
-    recuBase: Omit<RecuVente, "montantEncaisse">;
+    recuBase: Omit<RecuVente, "montantEncaisse" | "statutFacture">;
   } | null>(null);
   const [infosEntreprise, setInfosEntreprise] = useState<InfosEntreprise | null>(null);
   // 3.2.1, 13.2 : logo affiché en en-tête du ticket de caisse et de la facture pro-forma
@@ -128,7 +128,8 @@ export function CaissePage({ onNaviguer, abonneInitial, idFamilleInitiale }: Pro
   // toujours disponible) — silencieux si aucune imprimante n'est configurée
   // (repli attendu), un échec réseau ne bloque jamais la vente déjà encaissée.
   useEffect(() => {
-    if (!recu) return;
+    // 6.4 : jamais d'impression d'une facture BROUILLON (aucun encaissement)
+    if (!recu || recu.statutFacture !== "VALIDEE") return;
     imprimerTicketEscPosRequete(token, {
       operation: recu.operation,
       numeroAbonnement: recu.numeroAbonnement,
@@ -138,6 +139,7 @@ export function CaissePage({ onNaviguer, abonneInitial, idFamilleInitiale }: Pro
       modePaiement: recu.modePaiement,
       montantEncaisse: recu.montantEncaisse,
       dateHeure: recu.dateHeure,
+      idFacture: recu.idFacture,
     }).catch(() => toast.error("Échec de l'impression réseau — utilisez le bouton « Imprimer le ticket »."));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [recu]);
@@ -392,6 +394,7 @@ export function CaissePage({ onNaviguer, abonneInitial, idFamilleInitiale }: Pro
         dateHeure: new Date().toISOString(),
         idFacture: resultat.idFacture,
         jetonVerification: resultat.jetonVerification,
+        statutFacture: resultat.statutFacture,
       });
       reinitialiserTicketProduits();
       // 5.2 : le stock vient peut-être d'être décrémenté — rafraîchit les quantités affichées
@@ -491,6 +494,7 @@ export function CaissePage({ onNaviguer, abonneInitial, idFamilleInitiale }: Pro
         dateHeure: new Date().toISOString(),
         idFacture: resultat.idFacture,
         jetonVerification: resultat.jetonVerification,
+        statutFacture: resultat.statutFacture,
       });
       reinitialiserTicket();
     } catch (erreur) {
@@ -618,7 +622,7 @@ export function CaissePage({ onNaviguer, abonneInitial, idFamilleInitiale }: Pro
         onFerme={() => setPaiementMobile(null)}
         onSucces={() => {
           toast.success("Paiement Mobile Money confirmé — facture encaissée.");
-          if (paiementMobile) setRecu({ ...paiementMobile.recuBase, montantEncaisse: paiementMobile.montant });
+          if (paiementMobile) setRecu({ ...paiementMobile.recuBase, montantEncaisse: paiementMobile.montant, statutFacture: "VALIDEE" });
           const venteProduits = paiementMobile?.recuBase.operation === "Vente";
           setPaiementMobile(null);
           if (venteProduits) {

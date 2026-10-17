@@ -26,6 +26,8 @@ export interface RecuVente {
   // et jeton de la facture réellement créée, pour construire l'URL publique
   idFacture: number;
   jetonVerification: string;
+  // 6.4 (règle 2) : une facture BROUILLON (aucun encaissement) ne s'imprime ni ne se transmet jamais
+  statutFacture: "BROUILLON" | "VALIDEE";
 }
 
 interface Props {
@@ -60,6 +62,26 @@ export function RecuVentePrintable({ infosEntreprise, logoUrl, recu, onNouvelleV
   const { montantTaxe } = recu;
   const montantHT = recu.total - montantTaxe;
   const taxeApplicable = montantTaxe !== 0;
+
+  if (recu.statutFacture === "BROUILLON") {
+    return (
+      <div className="flex h-dvh flex-col items-center justify-center bg-background p-6">
+        <div className="w-full max-w-sm space-y-3 rounded-lg border border-border bg-card p-6 text-card-foreground">
+          <h2 className="font-heading text-lg font-semibold">Vente enregistrée, en attente d'encaissement</h2>
+          <p className="text-sm">
+            {recu.operation} — facture n° {recu.idFacture} : {formateurFcfa.format(recu.total)} {infosEntreprise?.entreprise.devise ?? "FCFA"} restent dus.
+          </p>
+          <p className="text-sm text-muted-foreground">
+            Une facture sans encaissement ne s'imprime pas et ne se transmet pas au client. Le ticket sera disponible dès le premier encaissement, même partiel.
+          </p>
+          <Button className="cursor-pointer gap-2" onClick={onNouvelleVente}>
+            <RotateCcw className="size-4" />
+            Nouvelle vente
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-dvh flex-col items-center overflow-y-auto bg-background p-6">

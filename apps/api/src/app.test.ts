@@ -4587,6 +4587,7 @@ describe("Impression ESC/POS du ticket de caisse (11.4, 6.7)", () => {
     const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST, fournisseurImpression: fournisseur });
     const token = await connecter(app);
 
+    const idFacture = db.insert(schema.facture).values({ siteId, statut: "VALIDEE", montantTotal: 5000, creePar: userId }).returning().get().idFacture;
     const ticketPayload = {
       operation: "Vente",
       numeroAbonnement: null,
@@ -4596,6 +4597,7 @@ describe("Impression ESC/POS du ticket de caisse (11.4, 6.7)", () => {
       modePaiement: "CASH",
       montantEncaisse: 5000,
       dateHeure: "2026-09-13T12:00:00.000Z",
+      idFacture,
     };
 
     const sansImprimante = await app.inject({ method: "POST", url: "/api/v1/impression/ticket", headers: authHeader(token), payload: ticketPayload });
@@ -4608,6 +4610,26 @@ describe("Impression ESC/POS du ticket de caisse (11.4, 6.7)", () => {
     expect(avecImprimante.json()).toEqual({ imprime: true });
     expect(fournisseur.envois).toHaveLength(1);
     expect(fournisseur.envois[0].hote).toBe("192.168.1.50");
+  });
+
+  // 6.4 (règle 2) : jamais d'impression d'une facture BROUILLON (vente non encaissée)
+  it("refuse (400) d'imprimer le ticket d'une facture BROUILLON, sans rien envoyer à l'imprimante", async () => {
+    const fournisseur = new SimulateurImpression();
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST, fournisseurImpression: fournisseur });
+    const token = await connecter(app);
+    db.update(schema.site).set({ imprimanteHote: "192.168.1.50", imprimantePort: 9100 }).where(eq(schema.site.idSite, siteId)).run();
+    const brouillon = db.insert(schema.facture).values({ siteId, statut: "BROUILLON", montantTotal: 5000, creePar: userId }).returning().get();
+
+    const reponse = await app.inject({
+      method: "POST",
+      url: "/api/v1/impression/ticket",
+      headers: authHeader(token),
+      payload: { operation: "Vente", numeroAbonnement: null, lignes: [{ libelle: "Câble", montant: 5000 }], total: 5000, montantTaxe: 0, modePaiement: "CASH", montantEncaisse: 0, dateHeure: "2026-09-13T12:00:00.000Z", idFacture: brouillon.idFacture },
+    });
+
+    expect(reponse.statusCode).toBe(400);
+    expect(reponse.json().erreur).toMatch(/brouillon/i);
+    expect(fournisseur.envois).toHaveLength(0);
   });
 
   it("un technicien SAV ne peut pas déclencher l'impression (403)", async () => {

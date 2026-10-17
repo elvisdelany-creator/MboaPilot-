@@ -190,6 +190,23 @@ describe("creerVenteProduits (5.2, 5.3, 8.5)", () => {
     expect(ligne).toMatchObject({ prixApplique: 4500, remise: 500 });
   });
 
+  // Une vente offerte (remise = prix) n'a rien à encaisser : elle restait BROUILLON pour toujours, sans pouvoir
+  // être encaissée (0 FCFA) ni imprimée (6.4, règle 2), et le stock était pourtant sorti.
+  it("6.4 : une vente dont le total est 0 FCFA (remise totale) est validée d'emblée, rien n'étant dû", () => {
+    const resultat = creerVenteProduits(db, { siteId, userId, lignes: [{ idProduit: idService, quantite: 1, remise: 5000 }], montantEncaisse: 0 });
+
+    expect(resultat.montantTotal).toBe(0);
+    expect(resultat.statutFacture).toBe("VALIDEE");
+    expect(db.select().from(schema.facture).where(eq(schema.facture.idFacture, resultat.idFacture)).get()?.statut).toBe("VALIDEE");
+    expect(db.select().from(schema.paiement).all()).toHaveLength(0); // aucun paiement fictif de 0 FCFA
+  });
+
+  it("6.4 : une vente à total positif sans encaissement reste BROUILLON", () => {
+    const resultat = creerVenteProduits(db, { siteId, userId, lignes: [{ idProduit: idService, quantite: 1, remise: 1000 }], montantEncaisse: 0 });
+
+    expect(resultat.statutFacture).toBe("BROUILLON");
+  });
+
   it("6.4 : rejette une remise dépassant le prix catalogue de la ligne", () => {
     expect(() =>
       creerVenteProduits(db, { siteId, userId, lignes: [{ idProduit: idBien, quantite: 1, remise: 3000 }], montantEncaisse: 0 })

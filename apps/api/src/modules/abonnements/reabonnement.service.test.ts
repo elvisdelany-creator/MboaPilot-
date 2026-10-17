@@ -142,6 +142,15 @@ describe("reabonner (7.2)", () => {
     expect(ligne).toMatchObject({ prixApplique: 12000, remise: 1000 });
   });
 
+  // réabonnement offert (remise = prix de la formule) : rien n'est dû, la facture ne doit pas rester BROUILLON
+  it("6.4 : un réabonnement dont le total est 0 FCFA (remise totale) est validé d'emblée, sans paiement fictif", () => {
+    const resultat = reabonner(db, { siteId, userId, aujourdHui: "2025-12-20", numeroAbonnement, montantEncaisse: 0, remise: 13000 });
+
+    expect(resultat.statutFacture).toBe("VALIDEE");
+    expect(db.select().from(schema.facture).where(eq(schema.facture.idFacture, resultat.idFacture)).get()?.statut).toBe("VALIDEE");
+    expect(db.select().from(schema.paiement).where(eq(schema.paiement.idFacture, resultat.idFacture)).all()).toHaveLength(0);
+  });
+
   it("6.4 : rejette une remise dépassant le prix de la formule", () => {
     expect(() =>
       reabonner(db, { siteId, userId, aujourdHui: "2025-12-20", numeroAbonnement, montantEncaisse: 0, remise: 20000 })

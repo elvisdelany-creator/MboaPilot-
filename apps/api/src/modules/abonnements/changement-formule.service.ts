@@ -129,7 +129,11 @@ function changerFormuleSansTransaction(db: Db, params: ChangerFormuleParams): Ch
   }
 
   let statutFacture: "BROUILLON" | "VALIDEE" = "BROUILLON";
-  if (params.montantEncaisse > 0) {
+  if (montantTotal === 0) {
+    // rien à encaisser : une facture à 0 FCFA resterait sinon BROUILLON pour toujours (ni encaissable, ni imprimable — 6.4)
+    db.update(schema.facture).set({ statut: "VALIDEE" }).where(eq(schema.facture.idFacture, facture.idFacture)).run();
+    statutFacture = "VALIDEE";
+  } else if (params.montantEncaisse > 0) {
     creerPaiement(db, {
       idFacture: facture.idFacture,
       mode: params.modePaiement ?? "CASH",

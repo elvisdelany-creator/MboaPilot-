@@ -94,6 +94,17 @@ describe("changerFormule (7.4)", () => {
     expect(abonnement.idFormule).toBe(idEvasion);
   });
 
+  // deux formules au même prix : le différentiel est 0 FCFA, rien à encaisser — la facture ne doit pas rester BROUILLON
+  it("6.4 : un changement de formule sans différentiel à payer est validé d'emblée, sans paiement fictif", () => {
+    const canal = db.select().from(schema.formule).where(eq(schema.formule.idFormule, idAccess)).get()!;
+    const idJumelle = db.insert(schema.formule).values({ idFamille: canal.idFamille, libelle: "ACCESS BIS", prix: 5000, rang: 2 }).returning().get().idFormule;
+
+    const resultat = changerFormule(db, { siteId, userId, aujourdHui, numeroAbonnement, idNouvelleFormule: idJumelle, montantEncaisse: 0 });
+
+    expect(resultat.statutFacture).toBe("VALIDEE");
+    expect(db.select().from(schema.paiement).where(eq(schema.paiement.idFacture, resultat.idFacture)).all()).toHaveLength(0);
+  });
+
   it("journalise le changement dans l'historique de l'abonnement", () => {
     changerFormule(db, { siteId, userId, aujourdHui, numeroAbonnement, idNouvelleFormule: idEvasion, montantEncaisse: 5500 });
 

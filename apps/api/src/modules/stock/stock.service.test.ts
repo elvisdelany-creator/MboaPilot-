@@ -152,6 +152,38 @@ describe("listerProduitsRotationLente (8.6, 9.3)", () => {
     expect(listerProduitsRotationLente(db, siteId, "2026-01-31")).toHaveLength(0); // 16 jours
   });
 
+  // Un article réceptionné hier et pas encore vendu n'« immobilise » rien : il remontait pourtant en tête de
+  // la liste comme le plus critique (jamais vendu), et chaque réapprovisionnement noyait les vrais cas.
+  it("n'alerte pas un produit jamais vendu mais réceptionné il y a moins de 30 jours", () => {
+    db.insert(schema.stockMouvement)
+      .values({ idProduit, siteId, typeMouvement: "ACHAT", quantite: 10, utilisateurId: userId, dateMouvement: "2026-01-29 09:00:00" })
+      .run();
+
+    expect(listerProduitsRotationLente(db, siteId, "2026-01-31")).toHaveLength(0);
+  });
+
+  it("n'alerte pas un produit invendu depuis longtemps mais réapprovisionné récemment (achat ou transfert)", () => {
+    db.insert(schema.stockMouvement)
+      .values({ idProduit, siteId, typeMouvement: "VENTE", quantite: 1, utilisateurId: userId, dateMouvement: "2025-12-01 10:00:00" })
+      .run();
+    db.insert(schema.stockMouvement)
+      .values({ idProduit, siteId, typeMouvement: "TRANSFERT_ENTREE", quantite: 5, utilisateurId: userId, dateMouvement: "2026-01-26 10:00:00" })
+      .run();
+
+    expect(listerProduitsRotationLente(db, siteId, "2026-01-31")).toHaveLength(0);
+  });
+
+  it("signale toujours un produit jamais vendu et réceptionné il y a plus de 30 jours", () => {
+    db.insert(schema.stockMouvement)
+      .values({ idProduit, siteId, typeMouvement: "ACHAT", quantite: 10, utilisateurId: userId, dateMouvement: "2025-12-10 09:00:00" })
+      .run();
+
+    const rotationLente = listerProduitsRotationLente(db, siteId, "2026-01-31");
+
+    expect(rotationLente).toHaveLength(1);
+    expect(rotationLente[0].derniereVente).toBeNull();
+  });
+
   it("ignore un produit sans suivi de stock ou sans stock disponible", () => {
     db.insert(schema.produit).values({ siteId, type: "SERVICE", libelle: "Installation", prixVente: 5000, suiviStock: 0 }).run();
     db.insert(schema.produit).values({ siteId, type: "BIEN", libelle: "Câble", prixVente: 500, suiviStock: 1, quantiteStock: 0 }).run();

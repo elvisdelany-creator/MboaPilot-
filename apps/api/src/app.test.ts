@@ -2337,6 +2337,9 @@ describe("Module gestion du catalogue (8.2)", () => {
       payload: { idProduit: produit.idProduit, siteId, quantite: 2, coutUnitaire: 700, userId },
     });
 
+    // réceptionné il y a 40 jours et jamais vendu : réellement à rotation lente (un achat récent ne l'est pas)
+    db.update(schema.stockMouvement).set({ dateMouvement: new Date(Date.now() - 40 * 24 * 3600 * 1000).toISOString().replace("T", " ").slice(0, 19) }).where(eq(schema.stockMouvement.idProduit, produit.idProduit)).run();
+
     const alertes = await app.inject({ method: "GET", url: `/api/v1/stock/alertes?siteId=${siteId}`, headers: authHeader(tokenCaissier) });
     expect(alertes.json()).toHaveLength(1);
     expect(alertes.json()[0].coutRevient).toBe(0);

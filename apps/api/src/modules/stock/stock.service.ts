@@ -165,15 +165,20 @@ export function listerProduitsRotationLente(db: Db, siteId: number, aujourdHui: 
 
   return produits
     .map((produit) => {
-      const ventes = db
-        .select()
-        .from(schema.stockMouvement)
-        .where(and(eq(schema.stockMouvement.idProduit, produit.idProduit), eq(schema.stockMouvement.typeMouvement, "VENTE")))
-        .all();
-      const derniereVente = ventes.length > 0 ? ventes.map((v) => v.dateMouvement).sort().at(-1)! : null;
-      const joursDepuisDerniereVente = derniereVente !== null ? -joursAvantEcheance(derniereVente.slice(0, 10), aujourdHui) : null;
-      return { produit, derniereVente, joursDepuisDerniereVente };
+      const mouvements = db.select().from(schema.stockMouvement).where(eq(schema.stockMouvement.idProduit, produit.idProduit)).all();
+      const dateLaPlusRecente = (types: string[]) =>
+        mouvements.filter((m) => types.includes(m.typeMouvement)).map((m) => m.dateMouvement).sort().at(-1) ?? null;
+      const derniereVente = dateLaPlusRecente(["VENTE"]);
+      const joursDepuis = (date: string | null) => (date !== null ? -joursAvantEcheance(date.slice(0, 10), aujourdHui) : null);
+      const joursDepuisDerniereVente = joursDepuis(derniereVente);
+      // un article réceptionné récemment n'est pas « immobilisé » : le délai de 30 jours repart de la
+      // dernière entrée en stock (achat, transfert reçu) quand elle est plus récente que la dernière vente
+      const joursDepuisReception = joursDepuis(dateLaPlusRecente(["ACHAT", "TRANSFERT_ENTREE"]));
+      const joursSansActivite =
+        joursDepuisDerniereVente === null ? joursDepuisReception : joursDepuisReception === null ? joursDepuisDerniereVente : Math.min(joursDepuisDerniereVente, joursDepuisReception);
+      return { produit, derniereVente, joursDepuisDerniereVente, joursSansActivite };
     })
-    .filter((p) => p.joursDepuisDerniereVente === null || p.joursDepuisDerniereVente >= SEUIL_ROTATION_LENTE_JOURS)
-    .sort((a, b) => (b.joursDepuisDerniereVente ?? Infinity) - (a.joursDepuisDerniereVente ?? Infinity));
+    .filter((p) => p.joursSansActivite === null || p.joursSansActivite >= SEUIL_ROTATION_LENTE_JOURS)
+    .sort((a, b) => (b.joursDepuisDerniereVente ?? Infinity) - (a.joursDepuisDerniereVente ?? Infinity))
+    .map(({ produit, derniereVente, joursDepuisDerniereVente }) => ({ produit, derniereVente, joursDepuisDerniereVente }));
 }

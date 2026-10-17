@@ -22,7 +22,14 @@ export function affecterPieceSav(db: Db, params: AffecterPieceParams) {
   const dossier = db.select().from(schema.savDossier).where(eq(schema.savDossier.idDossierSav, params.idDossierSav)).get();
   if (!dossier) throw new Error(`Dossier SAV ${params.idDossierSav} introuvable`);
   verifierEntier(params.quantite, "La quantité de la pièce", { min: 1, requis: true, nullable: false });
-  if (!db.select().from(schema.produit).where(eq(schema.produit.idProduit, params.idProduit)).get()) throw new Error(`Produit ${params.idProduit} introuvable`);
+  // la facture est générée au passage en PRET à partir des pièces affectées à ce moment-là : une pièce ajoutée
+  // ensuite (ou à un dossier clos) sortirait du stock sans jamais être facturée
+  if (dossier.statut === "PRET" || dossier.statut === "LIVRE" || dossier.statut === "IRREPARABLE" || dossier.statut === "ABANDONNE") {
+    throw new Error(`Le dossier SAV ${params.idDossierSav} est en ${dossier.statut} : on ne peut plus y ajouter de pièce`);
+  }
+  // 2.5.2 : une pièce d'un autre site n'existe pas, du point de vue de ce dossier
+  const piece = db.select().from(schema.produit).where(eq(schema.produit.idProduit, params.idProduit)).get();
+  if (!piece || piece.siteId !== dossier.siteId) throw new Error(`Produit ${params.idProduit} introuvable`);
 
   // la pièce et son mouvement de stock vont ensemble : un produit inconnu ou
   // une erreur de stock ne doit pas laisser une pièce « utilisée » orpheline

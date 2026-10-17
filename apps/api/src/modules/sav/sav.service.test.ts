@@ -47,6 +47,34 @@ describe("affecterPieceSav (5.10)", () => {
   });
 });
 
+// La facture du dossier est générée au passage en PRET à partir des pièces affectées à ce moment-là. Une pièce
+// ajoutée ensuite sortait du stock (mouvement VENTE) sans jamais être facturée.
+describe("affecterPieceSav : état du dossier et site de la pièce (5.10, 2.5.2)", () => {
+  it.each(["DIAGNOSTIC", "DEVIS_ATTENTE", "REPARATION"] as const)("accepte une pièce tant que le dossier est en %s", (statut) => {
+    db.update(schema.savDossier).set({ statut }).where(eq(schema.savDossier.idDossierSav, idDossierSav)).run();
+    expect(() => affecterPieceSav(db, { idDossierSav, idProduit: idProduitPiece, quantite: 1, userId })).not.toThrow();
+  });
+
+  it.each(["PRET", "LIVRE", "IRREPARABLE", "ABANDONNE"] as const)("refuse une pièce quand le dossier est en %s, sans toucher au stock", (statut) => {
+    db.update(schema.savDossier).set({ statut }).where(eq(schema.savDossier.idDossierSav, idDossierSav)).run();
+
+    expect(() => affecterPieceSav(db, { idDossierSav, idProduit: idProduitPiece, quantite: 1, userId })).toThrow(/dossier/i);
+
+    expect(db.select().from(schema.savPieceUtilisee).all()).toHaveLength(0);
+    expect(db.select().from(schema.stockMouvement).all()).toHaveLength(0);
+    expect(db.select().from(schema.produit).where(eq(schema.produit.idProduit, idProduitPiece)).get()?.quantiteStock).toBe(10);
+  });
+
+  it("refuse une pièce qui appartient à un autre site que le dossier", () => {
+    const autreSite = db.insert(schema.site).values({ idEntreprise: db.select().from(schema.entreprise).get()!.idEntreprise, nom: "Site B" }).returning().get().idSite;
+    const pieceAutreSite = db.insert(schema.produit).values({ siteId: autreSite, type: "BIEN", libelle: "Alimentation B", prixVente: 3000, quantiteStock: 10 }).returning().get().idProduit;
+
+    expect(() => affecterPieceSav(db, { idDossierSav, idProduit: pieceAutreSite, quantite: 1, userId })).toThrow(/introuvable/i);
+
+    expect(db.select().from(schema.stockMouvement).all()).toHaveLength(0);
+  });
+});
+
 describe("changerStatutSav — cycle de vie (5.10)", () => {
   it("passe RECU -> DIAGNOSTIC et enregistre le diagnostic", () => {
     changerStatutSav(db, { idDossierSav, nouveauStatut: "DIAGNOSTIC", diagnostic: "Alimentation grillée", userId });

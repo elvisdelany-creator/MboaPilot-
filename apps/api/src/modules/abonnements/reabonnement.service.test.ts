@@ -345,3 +345,66 @@ describe("reabonner — formule choisie : famille et état de vente (7.2, 8.8)",
     expect(db.select().from(schema.abonnement).where(eq(schema.abonnement.numeroAbonnement, numeroAbonnement)).get()?.idFormule).toBe(premium);
   });
 });
+
+// 5.9 : un écran se libère à l'expiration de l'abonnement qui l'occupait ; un autre client peut alors le prendre.
+// Le réabonnement de l'ancien occupant le remettait ACTIF sans contrôle : le compte dépassait la limite du
+// fournisseur (5 profils sur 4 autorisés, quelqu'un est éjecté).
+describe("reabonner : capacité du compte partagé (5.9)", () => {
+  function creerCompte(nombreEcransMax: number, actif = 1) {
+    const compte = db
+      .insert(schema.comptePartageStreaming)
+      .values({ siteId, idFamille: familleDstv, libelle: "Compte Partagé 1", identifiant: "x", motDePasse: "y", nombreEcransMax, actif })
+      .returning()
+      .get();
+    db.update(schema.abonnement).set({ idComptePartage: compte.idComptePartage }).where(eq(schema.abonnement.numeroAbonnement, numeroAbonnement)).run();
+    return compte.idComptePartage;
+  }
+
+  function recruterSurCompte(idComptePartage: number, telephone: string) {
+    return recruterAbonne(db, {
+      siteId,
+      userId,
+      aujourdHui: "2025-12-01",
+      abonne: { nom: "Autre", prenom: "Client", telephone },
+      idFormule: compaq,
+      idComptePartage,
+      montantEncaisse: 13000,
+    }).numeroAbonnement;
+  }
+
+  it("refuse de réabonner un ancien occupant dont l'écran a été repris et dont le compte est maintenant complet", () => {
+    const idCompte = creerCompte(1);
+    db.update(schema.abonnement).set({ statut: "EXPIRE" }).where(eq(schema.abonnement.numeroAbonnement, numeroAbonnement)).run();
+    recruterSurCompte(idCompte, "690000111"); // prend l'écran libéré (1/1)
+
+    expect(() => reabonner(db, { siteId, userId, aujourdHui: "2025-12-20", numeroAbonnement, montantEncaisse: 13000 })).toThrow(/capacité|complet/i);
+
+    const abonnement = db.select().from(schema.abonnement).where(eq(schema.abonnement.numeroAbonnement, numeroAbonnement)).get();
+    expect(abonnement?.statut).toBe("EXPIRE");
+    expect(db.select().from(schema.facture).all().filter((f) => f.montantTotal === 13000)).toHaveLength(2); // recrutement initial + autre client, aucune facture de réabonnement
+  });
+
+  it("réabonne un ancien occupant quand son écran est toujours libre", () => {
+    creerCompte(2);
+    db.update(schema.abonnement).set({ statut: "EXPIRE" }).where(eq(schema.abonnement.numeroAbonnement, numeroAbonnement)).run();
+
+    const resultat = reabonner(db, { siteId, userId, aujourdHui: "2025-12-20", numeroAbonnement, montantEncaisse: 13000 });
+
+    expect(resultat.statutFacture).toBe("VALIDEE");
+  });
+
+  it("renouveler un abonnement encore ACTIF sur un compte complet reste permis (il occupe déjà son écran)", () => {
+    creerCompte(1);
+
+    const resultat = reabonner(db, { siteId, userId, aujourdHui: "2025-12-10", numeroAbonnement, montantEncaisse: 13000 });
+
+    expect(resultat.statutFacture).toBe("VALIDEE");
+  });
+
+  it("refuse de réactiver un abonnement sur un compte partagé désactivé", () => {
+    creerCompte(5, 0);
+    db.update(schema.abonnement).set({ statut: "EXPIRE" }).where(eq(schema.abonnement.numeroAbonnement, numeroAbonnement)).run();
+
+    expect(() => reabonner(db, { siteId, userId, aujourdHui: "2025-12-20", numeroAbonnement, montantEncaisse: 13000 })).toThrow(/désactivé/i);
+  });
+});

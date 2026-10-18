@@ -1,9 +1,10 @@
 import { and, eq } from "drizzle-orm";
-import { calculerDateFin, extraireTaxeDuTTC, joursAvantEcheance } from "@mboapilot/shared";
+import { calculerDateFin, extraireTaxeDuTTC, joursAvantEcheance, peutAffecterEcran } from "@mboapilot/shared";
 import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
 import { trouverDelaiGraceReabonnementEntreprise, trouverTauxTvaParSite } from "../entreprise/entreprise.repository.js";
 import { creerPaiement } from "../factures/paiement.repository.js";
+import { compterEcransOccupes, trouverComptePartage } from "../comptes-partages/compte-partage.repository.js";
 import { verifierEncaissementSaisi } from "../../lib/validation.js";
 
 export interface ReabonnerParams {
@@ -53,6 +54,23 @@ function reabonnerSansTransaction(db: Db, params: ReabonnerParams): Reabonnement
     .where(eq(schema.abonnement.numeroAbonnement, params.numeroAbonnement))
     .get();
   if (!abonnementActuel) throw new Error(`Abonnement ${params.numeroAbonnement} introuvable`);
+
+  // 5.9 : un écran se libère à l'expiration (ou à la résiliation) et un autre client a pu le prendre. Réactiver
+  // l'abonnement redemande cet écran : sans contrôle, le compte dépasserait la limite du fournisseur. Un abonnement
+  // encore ACTIF occupe déjà le sien : son renouvellement n'y change rien.
+  if (abonnementActuel.idComptePartage !== null && abonnementActuel.statut !== "ACTIF") {
+    const comptePartage = trouverComptePartage(db, abonnementActuel.idComptePartage);
+    if (comptePartage) {
+      if (comptePartage.actif !== 1) throw new Error(`Le compte partagé "${comptePartage.libelle}" est désactivé : réactivez-le avant de réabonner ce client`);
+      const ecransOccupes = compterEcransOccupes(db, abonnementActuel.idComptePartage);
+      if (!peutAffecterEcran(comptePartage.nombreEcransMax, ecransOccupes)) {
+        throw new Error(
+          `Capacité atteinte : l'écran de ce client sur "${comptePartage.libelle}" a été repris (${ecransOccupes}/${comptePartage.nombreEcransMax}). ` +
+            "Libérez un écran de ce compte ou augmentez sa capacité avant de réabonner ce client"
+        );
+      }
+    }
+  }
 
   const idFormule = params.idFormule ?? abonnementActuel.idFormule;
   const formule = db.select().from(schema.formule).where(eq(schema.formule.idFormule, idFormule)).get();

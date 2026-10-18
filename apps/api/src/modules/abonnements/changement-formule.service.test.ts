@@ -105,6 +105,17 @@ describe("changerFormule (7.4)", () => {
     expect(db.select().from(schema.paiement).where(eq(schema.paiement.idFacture, resultat.idFacture)).all()).toHaveLength(0);
   });
 
+  it("7.4 : refuse une migration vers un rang supérieur moins cher (catalogue incohérent), sans facture ni changement", () => {
+    const canal = db.select().from(schema.formule).where(eq(schema.formule.idFormule, idAccess)).get()!;
+    const idMoinsChere = db.insert(schema.formule).values({ idFamille: canal.idFamille, libelle: "MOINS CHERE", prix: 3000, rang: 3 }).returning().get().idFormule;
+    const facturesAvant = db.select().from(schema.facture).all().length;
+
+    expect(() => changerFormule(db, { siteId, userId, aujourdHui, numeroAbonnement, idNouvelleFormule: idMoinsChere, montantEncaisse: 0 })).toThrow(/catalogue/i);
+
+    expect(db.select().from(schema.facture).all()).toHaveLength(facturesAvant);
+    expect(db.select().from(schema.abonnement).where(eq(schema.abonnement.numeroAbonnement, numeroAbonnement)).get()?.idFormule).toBe(idAccess);
+  });
+
   it("journalise le changement dans l'historique de l'abonnement", () => {
     changerFormule(db, { siteId, userId, aujourdHui, numeroAbonnement, idNouvelleFormule: idEvasion, montantEncaisse: 5500 });
 

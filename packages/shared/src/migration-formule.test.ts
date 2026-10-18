@@ -22,6 +22,20 @@ describe("validerMigrationFormule (7.4)", () => {
     expect(resultat.autorise).toBe(false);
   });
 
+  // catalogue mal saisi : un rang supérieur moins cher que l'actuel donnait un différentiel négatif, donc une
+  // « facture de vente » négative qui diminuait le chiffre d'affaires
+  it("rejette un rang supérieur moins cher que la formule actuelle (différentiel négatif)", () => {
+    const moinsChere = { idFormule: 5, idFamille: 10, rang: 3, prix: 4000 };
+    const resultat = validerMigrationFormule(ACCESS, moinsChere);
+    expect(resultat.autorise).toBe(false);
+    expect(resultat).toMatchObject({ motif: expect.stringMatching(/catalogue|prix/i) });
+  });
+
+  it("autorise un rang supérieur au même prix (différentiel nul)", () => {
+    const memePrix = { idFormule: 6, idFamille: 10, rang: 2, prix: 5000 };
+    expect(validerMigrationFormule(ACCESS, memePrix)).toEqual({ autorise: true, montantDifferentiel: 0 });
+  });
+
   it("rejette une formule de rang inférieur (rétrogradation) en cours de période", () => {
     const resultat = validerMigrationFormule(EVASION, ACCESS);
     expect(resultat.autorise).toBe(false);

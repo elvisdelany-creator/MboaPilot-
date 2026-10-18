@@ -23,5 +23,13 @@ export function validerMigrationFormule(actuelle: FormuleMigration, cible: Formu
       motif: "Seule une formule de rang strictement supérieur peut être sélectionnée en migration — une rétrogradation n'est possible qu'au réabonnement suivant.",
     };
   }
+  // un rang supérieur moins cher signale un catalogue mal saisi : le différentiel serait négatif, c'est-à-dire
+  // une facture de vente négative qui diminuerait le chiffre d'affaires
+  if (cible.prix < actuelle.prix) {
+    return {
+      autorise: false,
+      motif: "La formule cible, de rang supérieur, coûte moins cher que la formule actuelle : vérifiez les prix et les rangs dans le catalogue avant de migrer.",
+    };
+  }
   return { autorise: true, montantDifferentiel: cible.prix - actuelle.prix };
 }

@@ -2,6 +2,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { joursAvantEcheance, LIMITE_RESULTATS_RECHERCHE_ABONNES, normaliserLibelle } from "@mboapilot/shared";
 import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
+import { exigerApporteurActif } from "../apporteurs/apporteur.repository.js";
 import { emailFacultatif, telephoneFacultatif, telephoneObligatoire, texteFacultatif, texteObligatoire } from "../../lib/champs-texte.js";
 
 export interface AbonneInput {
@@ -19,6 +20,7 @@ export function creerAbonne(db: Db, input: AbonneInput) {
   const nom = texteObligatoire(input.nom, "Le nom de l'abonné", 100);
   const prenom = texteObligatoire(input.prenom, "Le prénom de l'abonné", 100);
   const telephone = telephoneObligatoire(input.telephone, "Le téléphone de l'abonné");
+  if (input.apporteurId !== undefined && input.apporteurId !== null) exigerApporteurActif(db, input.apporteurId);
 
   return db
     .insert(schema.abonne)
@@ -67,6 +69,9 @@ export function modifierAbonne(db: Db, idAbonne: number, input: ModifierAbonneIn
   const email = emailFacultatif(input.email, "L'adresse e-mail de l'abonné");
   const numeroCni = texteFacultatif(input.numeroCni, "Le numéro de CNI de l'abonné", 30);
   const adresse = texteFacultatif(input.adresse, "L'adresse de l'abonné", 300);
+  // seul un NOUVEAU rattachement est contrôlé : un apporteur désactivé depuis ne doit pas empêcher de corriger
+  // le téléphone d'un client qu'il avait recruté (le formulaire renvoie le lien existant tel quel)
+  if (typeof input.apporteurId === "number" && input.apporteurId !== existant.apporteurId) exigerApporteurActif(db, input.apporteurId);
 
   return db
     .update(schema.abonne)

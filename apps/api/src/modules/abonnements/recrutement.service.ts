@@ -5,7 +5,7 @@ import * as schema from "../../db/schema.js";
 import { creerAbonne, type AbonneInput } from "../abonnes/abonne.repository.js";
 import { construireKitCalcul } from "../catalogue/kit-mapper.js";
 import { compterEcransOccupes, trouverComptePartage } from "../comptes-partages/compte-partage.repository.js";
-import { trouverApporteur } from "../apporteurs/apporteur.repository.js";
+import { exigerApporteurActif, trouverApporteur } from "../apporteurs/apporteur.repository.js";
 import { trouverTauxCommissionVendeurParSite, trouverTauxTvaParSite } from "../entreprise/entreprise.repository.js";
 import { decrementerComposantsKit } from "../stock/stock.service.js";
 import { creerPaiement } from "../factures/paiement.repository.js";
@@ -72,6 +72,7 @@ function recruterAbonneSansTransaction(db: Db, params: RecruterAbonneParams): Re
   // jamais modifié ensuite par un recrutement — seul un abonné existant transmet
   // son lien permanent (hérité) au recrutement en cours si aucun n'est précisé.
   let apporteurIdEffectif = params.apporteurId;
+  if (params.apporteurId !== undefined) exigerApporteurActif(db, params.apporteurId);
 
   const idAbonne =
     "idAbonne" in params.abonne

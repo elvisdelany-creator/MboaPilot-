@@ -1,7 +1,9 @@
 import { describe, it, expect, beforeEach } from "vitest";
+import { eq } from "drizzle-orm";
 import { creerDbTest, type Db } from "../../test-utils/db.js";
 import { creerAbonne, listerAbonnesEligiblesAnonymisationAutomatique, modifierAbonne, rechercherAbonnes, trouverAbonne } from "./abonne.repository.js";
 import { recruterAbonne } from "../abonnements/recrutement.service.js";
+import { creerApporteur } from "../apporteurs/apporteur.repository.js";
 import * as schema from "../../db/schema.js";
 
 let db: Db;
@@ -409,5 +411,36 @@ describe("rechercherAbonnes : nombre de résultats borné (4.5)", () => {
     const resultats = rechercherAbonnes(db, siteId, String(cible.idAbonne));
 
     expect(resultats.map((a) => a.idAbonne)).toEqual([cible.idAbonne]);
+  });
+});
+
+// 6.3 : le rattachement à un apporteur est contrôlé (existant, actif) ; un apporteur désactivé depuis ne bloque
+// pas la correction de la fiche d'un client qu'il avait déjà recruté
+describe("rattachement à un apporteur (6.3)", () => {
+  it("refuse de créer un abonné rattaché à un apporteur inexistant ou désactivé", () => {
+    const desactive = creerApporteur(db, { nom: "Ancien", tauxCommissionDefaut: 100 });
+    db.update(schema.sousDistributeur).set({ actif: 0 }).where(eq(schema.sousDistributeur.idApporteur, desactive.idApporteur)).run();
+
+    expect(() => creerAbonne(db, { siteId, nom: "Nga", prenom: "V", telephone: "690000000", apporteurId: 999999 })).toThrow(/introuvable/i);
+    expect(() => creerAbonne(db, { siteId, nom: "Nga", prenom: "V", telephone: "690000000", apporteurId: desactive.idApporteur })).toThrow(/désactivé/i);
+  });
+
+  it("refuse de rattacher un abonné existant à un apporteur désactivé", () => {
+    const desactive = creerApporteur(db, { nom: "Ancien", tauxCommissionDefaut: 100 });
+    db.update(schema.sousDistributeur).set({ actif: 0 }).where(eq(schema.sousDistributeur.idApporteur, desactive.idApporteur)).run();
+    const ab = creerAbonne(db, { siteId, nom: "Nga", prenom: "V", telephone: "690000000" });
+
+    expect(() => modifierAbonne(db, ab.idAbonne, { apporteurId: desactive.idApporteur })).toThrow(/désactivé/i);
+  });
+
+  it("permet de corriger la fiche d'un client lié à un apporteur désactivé depuis (lien renvoyé tel quel)", () => {
+    const apporteur = creerApporteur(db, { nom: "Ancien", tauxCommissionDefaut: 100 });
+    const ab = creerAbonne(db, { siteId, nom: "Nga", prenom: "V", telephone: "690000000", apporteurId: apporteur.idApporteur });
+    db.update(schema.sousDistributeur).set({ actif: 0 }).where(eq(schema.sousDistributeur.idApporteur, apporteur.idApporteur)).run();
+
+    const modifie = modifierAbonne(db, ab.idAbonne, { telephone: "690111222", apporteurId: apporteur.idApporteur });
+
+    expect(modifie?.telephone).toBe("690111222");
+    expect(modifie?.apporteurId).toBe(apporteur.idApporteur);
   });
 });

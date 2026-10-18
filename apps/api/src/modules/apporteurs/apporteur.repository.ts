@@ -46,6 +46,15 @@ export function trouverApporteur(db: Db, idApporteur: number) {
   return db.select().from(schema.sousDistributeur).where(eq(schema.sousDistributeur.idApporteur, idApporteur)).get();
 }
 
+// 6.3 : l'apporteur transmis par le client (rattachement d'un abonné, recrutement) doit exister et être actif :
+// un numéro inconnu finissait en erreur technique de clé étrangère, un apporteur désactivé continuait de recruter
+export function exigerApporteurActif(db: Db, idApporteur: number) {
+  const apporteur = trouverApporteur(db, idApporteur);
+  if (!apporteur) throw new Error(`Apporteur ${idApporteur} introuvable`);
+  if (apporteur.actif !== 1) throw new Error(`L'apporteur "${apporteur.nom}" est désactivé`);
+  return apporteur;
+}
+
 export function listerApporteurs(db: Db) {
   return db.select().from(schema.sousDistributeur).all();
 }

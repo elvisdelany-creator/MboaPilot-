@@ -908,3 +908,39 @@ describe("recruterAbonne — kit de la même famille que la formule (5.1, 6.2)",
     expect(recruterAvecKit(formuleDstvCompaq, kitDstvCompaq).numeroAbonnement).toBeGreaterThan(0);
   });
 });
+
+// L'apporteur transmis par le client n'était pas contrôlé : un numéro inconnu finissait en erreur technique
+// (clé étrangère), et un apporteur désactivé continuait de toucher des commissions sur de nouveaux recrutements.
+describe("recruterAbonne : contrôle de l'apporteur (6.3)", () => {
+  const recruter = (apporteurId: number) =>
+    recruterAbonne(db, {
+      siteId,
+      userId,
+      aujourdHui: "2025-11-16",
+      abonne: { nom: "Nga Ndongo", prenom: "Valentin", telephone: "690000000" },
+      idFormule: formuleDstvCompaq,
+      montantEncaisse: 13000,
+      apporteurId,
+    });
+
+  it("refuse un apporteur inexistant avec un message clair, sans créer d'abonné ni de facture", () => {
+    expect(() => recruter(999999)).toThrow(/apporteur.*introuvable/i);
+
+    expect(db.select().from(schema.abonne).all()).toHaveLength(0);
+    expect(db.select().from(schema.facture).all()).toHaveLength(0);
+  });
+
+  it("refuse un apporteur désactivé", () => {
+    const apporteur = creerApporteur(db, { nom: "Marie Apporteuse", tauxCommissionDefaut: 100 });
+    db.update(schema.sousDistributeur).set({ actif: 0 }).where(eq(schema.sousDistributeur.idApporteur, apporteur.idApporteur)).run();
+
+    expect(() => recruter(apporteur.idApporteur)).toThrow(/désactivé/i);
+    expect(db.select().from(schema.abonne).all()).toHaveLength(0);
+  });
+
+  it("accepte un apporteur actif", () => {
+    const apporteur = creerApporteur(db, { nom: "Marie Apporteuse", tauxCommissionDefaut: 100 });
+    expect(() => recruter(apporteur.idApporteur)).not.toThrow();
+  });
+});
+

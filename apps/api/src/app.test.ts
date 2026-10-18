@@ -5482,3 +5482,44 @@ describe("Photo SAV : nom de fichier d'origine", () => {
     expect(reponse.json().nomFichierOriginal.length).toBeLessThanOrEqual(100);
   });
 });
+
+describe("POST /api/v1/auth/mot-de-passe : changer son propre mot de passe (2.5.1)", () => {
+  it("change le mot de passe de l'appelant ; l'ancien est refusé à la connexion, le nouveau accepté", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const token = await connecter(app);
+
+    const reponse = await app.inject({
+      method: "POST",
+      url: "/api/v1/auth/mot-de-passe",
+      headers: authHeader(token),
+      payload: { motDePasseActuel: "motdepasse-secret", nouveauMotDePasse: "nouveau-motdepasse-42" },
+    });
+
+    expect(reponse.statusCode).toBe(200);
+    const ancien = await app.inject({ method: "POST", url: "/api/v1/auth/login", payload: { identifiant: "caissier1", motDePasse: "motdepasse-secret" } });
+    expect(ancien.statusCode).toBe(401);
+    const nouveau = await app.inject({ method: "POST", url: "/api/v1/auth/login", payload: { identifiant: "caissier1", motDePasse: "nouveau-motdepasse-42" } });
+    expect(nouveau.statusCode).toBe(200);
+  });
+
+  it("refuse (400) un mot de passe actuel incorrect, sans rien changer", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const token = await connecter(app);
+
+    const reponse = await app.inject({ method: "POST", url: "/api/v1/auth/mot-de-passe", headers: authHeader(token), payload: { motDePasseActuel: "faux", nouveauMotDePasse: "nouveau-motdepasse-42" } });
+
+    expect(reponse.statusCode).toBe(400);
+    expect(reponse.json().erreur).toMatch(/actuel est incorrect/i);
+    expect((await app.inject({ method: "POST", url: "/api/v1/auth/login", payload: { identifiant: "caissier1", motDePasse: "motdepasse-secret" } })).statusCode).toBe(200);
+  });
+
+  it("exige d'être connecté (401) et un corps valide (400, jamais 500)", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    expect((await app.inject({ method: "POST", url: "/api/v1/auth/mot-de-passe", payload: { motDePasseActuel: "a", nouveauMotDePasse: "b" } })).statusCode).toBe(401);
+
+    const token = await connecter(app);
+    const sansCorps = await app.inject({ method: "POST", url: "/api/v1/auth/mot-de-passe", headers: authHeader(token) });
+    expect(sansCorps.statusCode).toBe(400);
+  });
+});
+

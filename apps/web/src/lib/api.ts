@@ -936,6 +936,16 @@ export async function reinitialiserMotDePasseRequete(token: string, idUser: numb
   return lireJson<CompteUtilisateur>(reponse);
 }
 
+// 2.5.1 : chacun change SON mot de passe (l'actuel est revérifié côté serveur)
+export async function changerSonMotDePasseRequete(token: string, motDePasseActuel: string, nouveauMotDePasse: string): Promise<void> {
+  const reponse = await fetch(`${BASE}/auth/mot-de-passe`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headersAuth(token) },
+    body: JSON.stringify({ motDePasseActuel, nouveauMotDePasse }),
+  });
+  await lireJson<{ ok: boolean }>(reponse);
+}
+
 export async function chargerSites(token: string): Promise<Site[]> {
   const reponse = await fetch(`${BASE}/sites`, { headers: headersAuth(token) });
   return lireJson<Site[]>(reponse);

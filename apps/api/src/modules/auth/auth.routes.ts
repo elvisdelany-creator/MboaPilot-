@@ -3,7 +3,7 @@ import type { FastifyInstance } from "fastify";
 import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
 import type { Guard } from "./auth.plugin.js";
-import { authentifier } from "./auth.service.js";
+import { authentifier, changerSonMotDePasse } from "./auth.service.js";
 import { messageClient } from "../../lib/erreurs-api.js";
 
 export function registerAuthRoutes(app: FastifyInstance, db: Db, authRequis: Guard) {
@@ -13,6 +13,18 @@ export function registerAuthRoutes(app: FastifyInstance, db: Db, authRequis: Gua
   app.get("/api/v1/auth/moi", { preHandler: [authRequis] }, async (request, reply) => {
     const u = db.select().from(schema.utilisateur).where(eq(schema.utilisateur.idUser, request.user.idUser)).get()!;
     reply.code(200).send({ idUser: u.idUser, siteId: u.siteId, nom: u.nom, prenom: u.prenom, identifiant: u.identifiant, role: u.role, idApporteur: u.idApporteur });
+  });
+
+  // 2.5.1 : changement de SON propre mot de passe (le mot de passe actuel est revérifié) — jamais celui d'un autre :
+  // l'identité vient de la session, pas du corps de la requête
+  app.post<{ Body: { motDePasseActuel?: string; nouveauMotDePasse?: string } }>("/api/v1/auth/mot-de-passe", { preHandler: [authRequis] }, async (request, reply) => {
+    try {
+      const { motDePasseActuel, nouveauMotDePasse } = (request.body ?? {}) as { motDePasseActuel?: unknown; nouveauMotDePasse?: unknown };
+      changerSonMotDePasse(db, request.user.idUser, motDePasseActuel, nouveauMotDePasse);
+      reply.code(200).send({ ok: true });
+    } catch (erreur) {
+      reply.code(400).send({ erreur: messageClient(erreur) });
+    }
   });
 
   app.post<{ Body: { identifiant: string; motDePasse: string } }>("/api/v1/auth/login", async (request, reply) => {

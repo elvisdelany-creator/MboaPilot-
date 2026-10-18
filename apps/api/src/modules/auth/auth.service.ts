@@ -2,6 +2,8 @@ import bcrypt from "bcryptjs";
 import { eq } from "drizzle-orm";
 import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
+import { validerMotDePasse } from "@mboapilot/shared";
+import { trouverPolitiqueMotDePasseParSite } from "../entreprise/entreprise.repository.js";
 import { trouverUtilisateurParIdentifiant, type Role } from "../utilisateurs/utilisateur.repository.js";
 
 const MESSAGE_ERREUR = "Identifiants invalides";
@@ -80,3 +82,46 @@ function enregistrerEchecConnexion(db: Db, utilisateur: { idUser: number; tentat
     .where(eq(schema.utilisateur.idUser, utilisateur.idUser))
     .run();
 }
+
+const TOURS_HACHAGE = 12;
+
+// 2.5.1 : « authentification individuelle obligatoire » — chaque utilisateur choisit son mot de passe, qu'aucun
+// administrateur n'a besoin de connaître. Le mot de passe actuel est revérifié par `authentifier` (un jeton volé ne
+// suffit pas) : une erreur compte comme un échec de connexion et mène au verrouillage (11.2). Le nouveau suit la
+// politique de complexité de l'entreprise, et la trace d'audit ne contient jamais de mot de passe.
+export function changerSonMotDePasse(db: Db, idUser: number, motDePasseActuel: unknown, nouveauMotDePasse: unknown): void {
+  if (typeof motDePasseActuel !== "string" || motDePasseActuel === "") throw new Error("Le mot de passe actuel est obligatoire");
+  if (typeof nouveauMotDePasse !== "string") throw new Error("Le nouveau mot de passe doit être un texte");
+
+  const utilisateur = db.select().from(schema.utilisateur).where(eq(schema.utilisateur.idUser, idUser)).get();
+  if (!utilisateur || utilisateur.actif !== 1) throw new Error("Compte introuvable");
+
+  try {
+    authentifier(db, utilisateur.identifiant, motDePasseActuel);
+  } catch (erreur) {
+    // verrouillage : message d'origine ; sinon, mot de passe actuel erroné
+    if ((erreur as Error).message === MESSAGE_VERROUILLE) throw erreur;
+    throw new Error("Le mot de passe actuel est incorrect");
+  }
+
+  const erreurs = validerMotDePasse(nouveauMotDePasse, trouverPolitiqueMotDePasseParSite(db, utilisateur.siteId));
+  if (erreurs.length > 0) throw new Error(erreurs.join(" — "));
+  if (nouveauMotDePasse === motDePasseActuel) throw new Error("Le nouveau mot de passe doit être différent de l'actuel");
+
+  db.transaction(() => {
+    db.update(schema.utilisateur)
+      .set({ motDePasseHash: bcrypt.hashSync(nouveauMotDePasse, TOURS_HACHAGE), tentativesEchouees: 0, verrouilleJusqua: null })
+      .where(eq(schema.utilisateur.idUser, idUser))
+      .run();
+    db.insert(schema.journalAudit)
+      .values({
+        utilisateurId: idUser,
+        action: "MODIFICATION",
+        tableCible: "utilisateur",
+        idCible: String(idUser),
+        valeurApres: JSON.stringify({ action: "changement_mot_de_passe" }),
+      })
+      .run();
+  });
+}
+

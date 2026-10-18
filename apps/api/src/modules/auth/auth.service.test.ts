@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { eq } from "drizzle-orm";
 import { creerDbTest, type Db } from "../../test-utils/db.js";
 import { creerUtilisateur } from "../utilisateurs/utilisateur.repository.js";
-import { authentifier } from "./auth.service.js";
+import { authentifier, changerSonMotDePasse } from "./auth.service.js";
 import * as schema from "../../db/schema.js";
 
 let db: Db;
@@ -115,3 +115,49 @@ describe("authentifier : entrées qui ne sont pas des textes (11.2)", () => {
     expect(utilisateur?.tentativesEchouees).toBe(0);
   });
 });
+
+// 2.5.1 : « authentification individuelle obligatoire ». Seul un administrateur pouvait changer un mot de passe,
+// donc il connaissait celui de chaque utilisateur : chacun doit pouvoir choisir le sien.
+describe("changerSonMotDePasse (2.5.1, 11.2)", () => {
+  const idVnga = () => db.select().from(schema.utilisateur).where(eq(schema.utilisateur.identifiant, "vnga")).get()!.idUser;
+
+  it("remplace le mot de passe quand l'actuel est correct ; l'ancien ne marche plus, le nouveau oui", () => {
+    changerSonMotDePasse(db, idVnga(), "motdepasse-secret", "nouveau-motdepasse-42");
+
+    expect(() => authentifier(db, "vnga", "motdepasse-secret")).toThrow(/identifiants/i);
+    expect(authentifier(db, "vnga", "nouveau-motdepasse-42").identifiant).toBe("vnga");
+  });
+
+  it("refuse un mot de passe actuel incorrect, sans rien changer, et compte l'échec (anti force brute)", () => {
+    expect(() => changerSonMotDePasse(db, idVnga(), "pas-le-bon", "nouveau-motdepasse-42")).toThrow(/actuel est incorrect/i);
+
+    expect(authentifier(db, "vnga", "motdepasse-secret").identifiant).toBe("vnga");
+    for (let i = 0; i < 5; i++) expect(() => changerSonMotDePasse(db, idVnga(), "pas-le-bon", "nouveau-motdepasse-42")).toThrow();
+    expect(() => authentifier(db, "vnga", "motdepasse-secret")).toThrow(/verrouillé/i);
+  });
+
+  it("applique la politique de complexité de l'entreprise au nouveau mot de passe", () => {
+    expect(() => changerSonMotDePasse(db, idVnga(), "motdepasse-secret", "court")).toThrow();
+    expect(authentifier(db, "vnga", "motdepasse-secret").identifiant).toBe("vnga");
+  });
+
+  it("refuse un nouveau mot de passe identique à l'actuel", () => {
+    expect(() => changerSonMotDePasse(db, idVnga(), "motdepasse-secret", "motdepasse-secret")).toThrow(/différent/i);
+  });
+
+  it("journalise le changement (sans le mot de passe), au nom de l'utilisateur lui-même", () => {
+    const id = idVnga();
+    changerSonMotDePasse(db, id, "motdepasse-secret", "nouveau-motdepasse-42");
+
+    const trace = db.select().from(schema.journalAudit).where(eq(schema.journalAudit.tableCible, "utilisateur")).all().filter((t) => t.idCible === String(id)).at(-1)!;
+    expect(trace.utilisateurId).toBe(id);
+    expect(trace.valeurApres).toContain("changement_mot_de_passe");
+    expect(trace.valeurApres).not.toContain("nouveau-motdepasse-42");
+  });
+
+  it("refuse des mots de passe qui ne sont pas du texte", () => {
+    expect(() => changerSonMotDePasse(db, idVnga(), { a: 1 } as never, "nouveau-motdepasse-42")).toThrow();
+    expect(() => changerSonMotDePasse(db, idVnga(), "motdepasse-secret", 12345678 as never)).toThrow();
+  });
+});
+

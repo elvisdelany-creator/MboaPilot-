@@ -1,8 +1,9 @@
-import type { ReactNode } from "react";
-import { LogOut } from "lucide-react";
+import { useState, type ReactNode } from "react";
+import { KeyRound, LogOut } from "lucide-react";
 import { peutAccederVue, type RoleUtilisateur, type VueApplication } from "@mboapilot/shared";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth-context";
+import { ChangerMotDePasseDialog } from "./ChangerMotDePasseDialog";
 
 const LIBELLES_ROLES: Record<string, string> = {
   ADMINISTRATEUR: "Administrateur",
@@ -36,6 +37,7 @@ interface Props {
 export function AppHeader({ vueActive, onNaviguer, children }: Props) {
   const { session, deconnecter } = useAuth();
   const utilisateur = session!.utilisateur;
+  const [motDePasseOuvert, setMotDePasseOuvert] = useState(false);
 
   return (
     <header className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-2 border-b border-border bg-card px-4 py-3">
@@ -59,10 +61,14 @@ export function AppHeader({ vueActive, onNaviguer, children }: Props) {
         <span>
           {utilisateur.prenom} {utilisateur.nom} · {LIBELLES_ROLES[utilisateur.role] ?? utilisateur.role}
         </span>
+        <Button variant="ghost" size="icon" className="size-9 cursor-pointer" aria-label="Changer mon mot de passe" onClick={() => setMotDePasseOuvert(true)}>
+          <KeyRound className="size-4" />
+        </Button>
         <Button variant="ghost" size="icon" className="size-9 cursor-pointer" aria-label="Se déconnecter" onClick={deconnecter}>
           <LogOut className="size-4" />
         </Button>
       </div>
+      <ChangerMotDePasseDialog ouvert={motDePasseOuvert} onFerme={() => setMotDePasseOuvert(false)} />
     </header>
   );
 }

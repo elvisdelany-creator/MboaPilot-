@@ -97,7 +97,7 @@ export function TicketProduitsPanel({ panier, onIncrementer, onDecrementer, onRe
                   type="button"
                   onClick={() => onRetirer(ligne.produit.idProduit)}
                   aria-label={`Retirer ${ligne.produit.libelle} du panier`}
-                  className="cursor-pointer text-muted-foreground hover:text-destructive"
+                  className="-mr-2 -mt-2 flex size-10 shrink-0 cursor-pointer items-center justify-center rounded-md text-muted-foreground hover:text-destructive"
                 >
                   <Trash2 className="size-4" />
                 </button>
@@ -108,22 +108,22 @@ export function TicketProduitsPanel({ panier, onIncrementer, onDecrementer, onRe
                     type="button"
                     variant="outline"
                     size="icon"
-                    className="size-6 cursor-pointer"
+                    className="size-10 cursor-pointer"
                     onClick={() => onDecrementer(ligne.produit.idProduit)}
                     aria-label={`Diminuer la quantité de ${ligne.produit.libelle}`}
                   >
-                    <Minus className="size-3" />
+                    <Minus className="size-4" />
                   </Button>
                   <span className="w-6 text-center tabular-nums">{ligne.quantite}</span>
                   <Button
                     type="button"
                     variant="outline"
                     size="icon"
-                    className="size-6 cursor-pointer"
+                    className="size-10 cursor-pointer"
                     onClick={() => onIncrementer(ligne.produit.idProduit)}
                     aria-label={`Augmenter la quantité de ${ligne.produit.libelle}`}
                   >
-                    <Plus className="size-3" />
+                    <Plus className="size-4" />
                   </Button>
                 </div>
                 <span className="tabular-nums font-medium text-card-foreground">{formateurFcfa.format(montantLigne(ligne))} FCFA</span>
@@ -141,7 +141,7 @@ export function TicketProduitsPanel({ panier, onIncrementer, onDecrementer, onRe
                   value={ligne.remise || ""}
                   placeholder="0"
                   onChange={(e) => onModifierRemise(ligne.produit.idProduit, Number(e.target.value))}
-                  className="h-7 flex-1 tabular-nums"
+                  className="h-10 flex-1 tabular-nums"
                 />
                 <span className="text-xs text-muted-foreground">FCFA</span>
               </div>

@@ -5523,3 +5523,44 @@ describe("POST /api/v1/auth/mot-de-passe : changer son propre mot de passe (2.5.
   });
 });
 
+describe("POST /api/v1/factures/:id/avoir : remboursement enregistré avec l'avoir", () => {
+  it("rembourse l'avoir en espèces (paiement négatif sur la facture d'origine) et renvoie le montant remboursé", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    creerUtilisateur(db, { siteId, nom: "Gerant", prenom: "G", identifiant: "gerant-avoir", motDePasse: "motdepasse-secret", role: "GERANT" });
+    const token = await connecter(app, "gerant-avoir");
+    const facture = db.insert(schema.facture).values({ siteId, statut: "VALIDEE", montantTotal: 5000, creePar: userId }).returning().get();
+    const ligne = db.insert(schema.ligneVente).values({ idFacture: facture.idFacture, quantite: 1, prixApplique: 5000 }).returning().get();
+    db.insert(schema.paiement).values({ idFacture: facture.idFacture, mode: "CASH", montant: 5000, utilisateurId: userId }).run();
+
+    const reponse = await app.inject({
+      method: "POST",
+      url: `/api/v1/factures/${facture.idFacture}/avoir`,
+      headers: authHeader(token),
+      payload: { lignes: [{ idLigneOrigine: ligne.idLigne, quantite: 1 }], restituerStock: false, remboursement: { mode: "CASH" } },
+    });
+
+    expect(reponse.statusCode).toBe(201);
+    expect(reponse.json()).toMatchObject({ montantTotal: -5000, montantRembourse: 5000 });
+    expect(db.select().from(schema.paiement).where(eq(schema.paiement.idFacture, facture.idFacture)).all().map((p) => p.montant).sort((a, b) => a - b)).toEqual([-5000, 5000]);
+  });
+
+  it("refuse (400) un remboursement non dû, sans émettre d'avoir", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    creerUtilisateur(db, { siteId, nom: "Gerant", prenom: "G", identifiant: "gerant-avoir2", motDePasse: "motdepasse-secret", role: "GERANT" });
+    const token = await connecter(app, "gerant-avoir2");
+    const facture = db.insert(schema.facture).values({ siteId, statut: "VALIDEE", montantTotal: 5000, creePar: userId }).returning().get();
+    const ligne = db.insert(schema.ligneVente).values({ idFacture: facture.idFacture, quantite: 1, prixApplique: 5000 }).returning().get();
+
+    const reponse = await app.inject({
+      method: "POST",
+      url: `/api/v1/factures/${facture.idFacture}/avoir`,
+      headers: authHeader(token),
+      payload: { lignes: [{ idLigneOrigine: ligne.idLigne, quantite: 1 }], restituerStock: false, remboursement: { mode: "CASH" } },
+    });
+
+    expect(reponse.statusCode).toBe(400);
+    expect(reponse.json().erreur).toMatch(/rembours/i);
+    expect(db.select().from(schema.facture).where(eq(schema.facture.type, "AVOIR")).all()).toHaveLength(0);
+  });
+});
+

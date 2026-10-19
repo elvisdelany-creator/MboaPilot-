@@ -4,7 +4,7 @@ import type { Db } from "../../db/types.js";
 import type { RouteGuards, Guard } from "../auth/auth.plugin.js";
 import { siteAutorise } from "../auth/auth.plugin.js";
 import * as schema from "../../db/schema.js";
-import { creerAvoir, listerLignesFacture, type LigneAvoirInput } from "./avoir.service.js";
+import { creerAvoir, listerLignesFacture, type LigneAvoirInput, type RemboursementAvoirInput } from "./avoir.service.js";
 import { encaisserSoldeFacture, type EncaisserSoldeParams } from "./paiement-complementaire.service.js";
 import { annulerPaiement } from "./annulation-paiement.service.js";
 import { confirmerRapprochementVirement } from "./paiement.repository.js";
@@ -31,7 +31,7 @@ export function registerAvoirRoutes(app: FastifyInstance, db: Db, guards: RouteG
     }
   );
 
-  app.post<{ Params: { idFacture: string }; Body: { lignes: LigneAvoirInput[]; restituerStock: boolean; userId: number } }>(
+  app.post<{ Params: { idFacture: string }; Body: { lignes: LigneAvoirInput[]; restituerStock: boolean; userId: number; remboursement?: RemboursementAvoirInput } }>(
     "/api/v1/factures/:idFacture/avoir",
     { preHandler: [guards.authRequis, guards.gestionAvoirs] },
     async (request, reply) => {
@@ -48,6 +48,7 @@ export function registerAvoirRoutes(app: FastifyInstance, db: Db, guards: RouteG
             lignes: request.body.lignes,
             restituerStock: request.body.restituerStock,
             userId: request.body.userId,
+            remboursement: request.body.remboursement,
           })
         );
       } catch (erreur) {

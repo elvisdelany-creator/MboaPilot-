@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { chargerLignesFacture, emettreAvoirRequete, ErreurAuthentification, type LigneFacture } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import type { Facture } from "@/lib/types";
@@ -24,6 +25,15 @@ interface Props {
 }
 
 const formateurFcfa = new Intl.NumberFormat("fr-FR");
+
+type ModeRemboursement = "AUCUN" | "CASH" | "CHEQUE" | "VIREMENT" | "MOBILE_MONEY";
+const LIBELLES_REMBOURSEMENT: Record<ModeRemboursement, string> = {
+  AUCUN: "Pas de remboursement maintenant",
+  CASH: "Rembourser en espèces",
+  MOBILE_MONEY: "Rembourser par Mobile Money",
+  CHEQUE: "Rembourser par chèque",
+  VIREMENT: "Rembourser par virement",
+};
 
 // 6.4, 💡 Conseil d'architecte : une facture VALIDEE ne se corrige jamais
 // directement — l'avoir crédite tout ou partie de ses lignes (facture de
@@ -38,6 +48,7 @@ export function EmettreAvoirDialog({ facture, onFerme, onSucces }: Props) {
   const [lignes, setLignes] = useState<LigneFacture[]>([]);
   const [selection, setSelection] = useState<Record<number, number>>({}); // idLigne -> quantité à créditer
   const [restituerStock, setRestituerStock] = useState(false);
+  const [remboursement, setRemboursement] = useState<ModeRemboursement>("AUCUN");
   const [enCours, setEnCours] = useState(false);
 
   useEffect(() => {
@@ -45,6 +56,7 @@ export function EmettreAvoirDialog({ facture, onFerme, onSucces }: Props) {
       setLignes([]);
       setSelection({});
       setRestituerStock(false);
+      setRemboursement("AUCUN");
       return;
     }
     chargerLignesFacture(token, facture.idFacture)
@@ -81,8 +93,13 @@ export function EmettreAvoirDialog({ facture, onFerme, onSucces }: Props) {
         lignes: lignesSelectionnees.map(([idLigneOrigine, quantite]) => ({ idLigneOrigine: Number(idLigneOrigine), quantite })),
         restituerStock,
         userId: utilisateur.idUser,
+        ...(remboursement !== "AUCUN" && { remboursement: { mode: remboursement } }),
       });
-      toast.success(`Avoir émis : ${formateurFcfa.format(resultat.montantTotal)} FCFA.`);
+      toast.success(
+        resultat.montantRembourse > 0
+          ? `Avoir émis : ${formateurFcfa.format(resultat.montantTotal)} FCFA, dont ${formateurFcfa.format(resultat.montantRembourse)} FCFA remboursés.`
+          : `Avoir émis : ${formateurFcfa.format(resultat.montantTotal)} FCFA.`
+      );
       onSucces();
     } catch (erreur) {
       if (erreur instanceof ErreurAuthentification) {
@@ -142,6 +159,25 @@ export function EmettreAvoirDialog({ facture, onFerme, onSucces }: Props) {
           <Label htmlFor="avoir-restituer-stock" className="font-normal text-card-foreground">
             Restituer les articles au stock
           </Label>
+        </div>
+
+        <div>
+          <Label htmlFor="avoir-remboursement">Remboursement du client</Label>
+          <Select value={remboursement} onValueChange={(v) => setRemboursement(v as ModeRemboursement)}>
+            <SelectTrigger id="avoir-remboursement" className="mt-1 w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {(Object.keys(LIBELLES_REMBOURSEMENT) as ModeRemboursement[]).map((mode) => (
+                <SelectItem key={mode} value={mode}>
+                  {LIBELLES_REMBOURSEMENT[mode]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Un remboursement s'enregistre avec l'avoir et se déduit de la caisse du jour. Sans remboursement, la facture reste à rembourser.
+          </p>
         </div>
 
         <div className="flex items-center justify-between rounded-lg border border-border bg-muted/40 p-3 text-sm font-semibold">

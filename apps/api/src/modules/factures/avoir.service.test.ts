@@ -3,6 +3,8 @@ import { eq } from "drizzle-orm";
 import { creerDbTest, type Db } from "../../test-utils/db.js";
 import * as schema from "../../db/schema.js";
 import { creerAvoir } from "./avoir.service.js";
+import { soldeFacture } from "@mboapilot/shared";
+import { fermerCaisse, obtenirComptagesCloture, ouvrirCaisse } from "../caisse/cloture-caisse.service.js";
 
 let db: Db;
 let siteId: number;
@@ -181,3 +183,83 @@ describe("creerAvoir (6.4)", () => {
     expect(factureAvoir?.montantTaxe).toBe(-1250); // -7500 TTC -> HT -6250, taxe -1250
   });
 });
+
+// Décision du 2026-10-19 : le remboursement d'un avoir s'enregistre avec l'avoir. Sans cela l'argent rendu au client
+// n'existait nulle part : la facture créditée restait « surpayée » et la clôture de caisse accusait un manque
+// d'espèces à tort. Un remboursement est un paiement NÉGATIF sur la facture d'origine : il solde la facture et se
+// déduit du théorique de clôture, par mode de paiement.
+describe("creerAvoir : remboursement enregistré avec l'avoir", () => {
+  const payerFacture = () =>
+    db.insert(schema.paiement).values({ idFacture: idFactureValidee, mode: "CASH", montant: 3 * 2500 + 5000, utilisateurId: userId }).run();
+  const params = (extra: object = {}) => ({ idFactureOrigine: idFactureValidee, lignes: [{ idLigneOrigine: idLigneProduitSuivi, quantite: 1 }], restituerStock: false, userId, ...extra });
+  const paiementsOrigine = () => db.select().from(schema.paiement).where(eq(schema.paiement.idFacture, idFactureValidee)).all();
+  const soldeOrigine = () => {
+    const factures = db.select().from(schema.facture).all();
+    return soldeFacture(factures.find((f) => f.idFacture === idFactureValidee)!, factures, db.select().from(schema.paiement).all());
+  };
+
+  it("rembourse l'avoir en espèces : paiement négatif sur la facture d'origine, qui est alors soldée", () => {
+    payerFacture();
+
+    const resultat = creerAvoir(db, params({ remboursement: { mode: "CASH" } }));
+
+    expect(resultat).toMatchObject({ montantTotal: -2500, montantRembourse: 2500 });
+    expect(paiementsOrigine().filter((p) => p.montant < 0)).toEqual([expect.objectContaining({ mode: "CASH", montant: -2500, utilisateurId: userId })]);
+    expect(soldeOrigine()).toBe(0);
+  });
+
+  it("accepte un remboursement partiel", () => {
+    payerFacture();
+
+    const resultat = creerAvoir(db, params({ remboursement: { mode: "MOBILE_MONEY", montant: 1000 } }));
+
+    expect(resultat.montantRembourse).toBe(1000);
+    expect(paiementsOrigine().find((p) => p.montant < 0)).toMatchObject({ mode: "MOBILE_MONEY", montant: -1000 });
+  });
+
+  it("sans remboursement, n'écrit aucun paiement (la facture reste à rembourser)", () => {
+    payerFacture();
+
+    const resultat = creerAvoir(db, params());
+
+    expect(resultat.montantRembourse).toBe(0);
+    expect(paiementsOrigine()).toHaveLength(1);
+    expect(soldeOrigine()).toBe(-2500);
+  });
+
+  it("refuse un remboursement sur une facture non payée, sans créer l'avoir", () => {
+    expect(() => creerAvoir(db, params({ remboursement: { mode: "CASH" } }))).toThrow(/rembours/i);
+
+    expect(db.select().from(schema.facture).where(eq(schema.facture.type, "AVOIR")).all()).toHaveLength(0);
+  });
+
+  it("refuse un remboursement supérieur à ce qui a été payé en trop, sans créer l'avoir", () => {
+    payerFacture();
+
+    expect(() => creerAvoir(db, params({ remboursement: { mode: "CASH", montant: 3000 } }))).toThrow(/rembours/i);
+
+    expect(db.select().from(schema.facture).where(eq(schema.facture.type, "AVOIR")).all()).toHaveLength(0);
+    expect(paiementsOrigine()).toHaveLength(1);
+  });
+
+  it("refuse un mode de paiement inconnu ou un montant invalide", () => {
+    payerFacture();
+    expect(() => creerAvoir(db, params({ remboursement: { mode: "TROC" } }))).toThrow(/mode/i);
+    expect(() => creerAvoir(db, params({ remboursement: { mode: "CASH", montant: 0 } }))).toThrow(/montant/i);
+    expect(() => creerAvoir(db, params({ remboursement: { mode: "CASH", montant: 12.5 } }))).toThrow(/montant/i);
+    expect(db.select().from(schema.facture).where(eq(schema.facture.type, "AVOIR")).all()).toHaveLength(0);
+  });
+
+  it("déduit un remboursement en espèces du théorique CASH de la clôture de caisse", () => {
+    const cloture = ouvrirCaisse(db, { siteId, userId, fondOuverture: 10000 });
+    payerFacture(); // +12 500 en espèces pendant la session
+
+    creerAvoir(db, params({ remboursement: { mode: "CASH" } })); // −2 500 rendus au client
+
+    fermerCaisse(db, { idCloture: cloture.idCloture, userId, comptages: [{ mode: "CASH", montantCompte: 20000 }] });
+    const cash = obtenirComptagesCloture(db, cloture.idCloture).find((c) => c.mode === "CASH")!;
+    expect(cash.montantTheorique).toBe(10000 + 12500 - 2500);
+    expect(cash.ecart).toBe(0);
+  });
+});
+

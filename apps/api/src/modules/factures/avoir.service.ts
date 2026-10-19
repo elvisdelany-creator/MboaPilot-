@@ -1,14 +1,24 @@
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { extraireTaxeDuTTC } from "@mboapilot/shared";
 import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
 import { enregistrerMouvement } from "../stock/stock.repository.js";
 import { trouverTauxTvaParSite } from "../entreprise/entreprise.repository.js";
 import { verifierEntier } from "../../lib/validation.js";
+import { creerPaiement } from "./paiement.repository.js";
 
 export interface LigneAvoirInput {
   idLigneOrigine: number;
   quantite: number; // quantité à créditer
+}
+
+const MODES_REMBOURSEMENT = ["CASH", "CHEQUE", "VIREMENT", "MOBILE_MONEY"] as const;
+
+// Argent rendu au client en même temps que l'avoir. Absent = avoir comptable seul (le remboursement reste à faire).
+export interface RemboursementAvoirInput {
+  mode: (typeof MODES_REMBOURSEMENT)[number];
+  // absent = tout ce qui est dû au client (le montant de l'avoir, dans la limite de ce qui a été payé)
+  montant?: number;
 }
 
 export interface CreerAvoirParams {
@@ -16,12 +26,14 @@ export interface CreerAvoirParams {
   lignes: LigneAvoirInput[];
   restituerStock: boolean;
   userId: number;
+  remboursement?: RemboursementAvoirInput;
 }
 
 export interface AvoirResultat {
   idFactureAvoir: number;
   montantTotal: number; // négatif
   montantTaxe: number; // négatif
+  montantRembourse: number; // 0 si aucun remboursement n'a été enregistré avec l'avoir
 }
 
 // 6.4, 💡 Conseil d'architecte : correction d'une facture VALIDEE par un avoir
@@ -119,7 +131,36 @@ function creerAvoirSansTransaction(db: Db, params: CreerAvoirParams): AvoirResul
     }
   }
 
-  return { idFactureAvoir: factureAvoir.idFacture, montantTotal, montantTaxe };
+  const montantRembourse = params.remboursement ? enregistrerRemboursement(db, origine, montantTotal, params) : 0;
+
+  return { idFactureAvoir: factureAvoir.idFacture, montantTotal, montantTaxe, montantRembourse };
+}
+
+// Le remboursement est un paiement NÉGATIF sur la facture d'origine : il ramène son solde à 0 (le solde négatif d'une
+// facture payée puis créditée est précisément « un remboursement dû au client », soldeFacture) et se déduit du
+// théorique de la clôture de caisse, par mode de paiement. Plafonné à ce que le client a réellement payé en trop.
+function enregistrerRemboursement(db: Db, origine: typeof schema.facture.$inferSelect, montantAvoir: number, params: CreerAvoirParams): number {
+  const remboursement = params.remboursement!;
+  if (!(MODES_REMBOURSEMENT as readonly string[]).includes(remboursement.mode)) {
+    throw new Error(`Mode de remboursement inconnu — attendu : ${MODES_REMBOURSEMENT.join(", ")}`);
+  }
+  verifierEntier(remboursement.montant, "Le montant remboursé", { min: 1, nullable: false, message: "Le montant remboursé doit être un entier positif en FCFA" });
+
+  const totalPaye = Number(db.select({ total: sql<number>`coalesce(sum(${schema.paiement.montant}), 0)` }).from(schema.paiement).where(eq(schema.paiement.idFacture, origine.idFacture)).get()?.total ?? 0);
+  const totalAvoirs = Number(db.select({ total: sql<number>`coalesce(sum(${schema.facture.montantTotal}), 0)` }).from(schema.facture).where(eq(schema.facture.factureOrigineId, origine.idFacture)).get()?.total ?? 0);
+  // dû au client après cet avoir (les avoirs précédents et celui-ci sont déjà comptés dans totalAvoirs)
+  const remboursable = totalPaye - (origine.montantTotal + totalAvoirs);
+  if (remboursable <= 0) {
+    throw new Error("Aucun remboursement n'est dû sur cette facture : elle n'a pas été payée ou a déjà été remboursée");
+  }
+
+  const montant = remboursement.montant ?? Math.min(-montantAvoir, remboursable);
+  if (montant > remboursable) {
+    throw new Error(`Le remboursement (${montant}) dépasse ce qui est dû au client sur cette facture (${remboursable})`);
+  }
+
+  creerPaiement(db, { idFacture: origine.idFacture, mode: remboursement.mode, montant: -montant, utilisateurId: params.userId });
+  return montant;
 }
 
 // 6.4 : avoirs déjà émis sur une facture — nécessaire pour calculer le solde

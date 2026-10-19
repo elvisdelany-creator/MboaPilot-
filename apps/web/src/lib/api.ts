@@ -115,11 +115,14 @@ export interface EmettreAvoirPayload {
   lignes: { idLigneOrigine: number; quantite: number }[];
   restituerStock: boolean;
   userId: number;
+  // argent rendu au client avec l'avoir : un paiement négatif, déduit du théorique de la clôture de caisse
+  remboursement?: { mode: "CASH" | "CHEQUE" | "VIREMENT" | "MOBILE_MONEY"; montant?: number };
 }
 
 export interface AvoirResultat {
   idFactureAvoir: number;
   montantTotal: number;
+  montantRembourse: number;
 }
 
 export async function emettreAvoirRequete(token: string, idFacture: number, payload: EmettreAvoirPayload): Promise<AvoirResultat> {

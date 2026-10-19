@@ -408,8 +408,8 @@ export function DashboardPage({ onNaviguer, onReabonnerDepuisAlerte, onReabonner
           <ul className="space-y-2">
             {alertesTriees.map((alerte) => (
               <li key={alerte.numeroAbonnement}>
-                <Card className="flex-row items-center justify-between gap-4 p-4">
-                  <div className="flex items-center gap-3">
+                <Card className="flex-col items-stretch gap-3 p-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+                  <div className="flex min-w-0 flex-wrap items-center gap-3">
                     <span
                       className={cn(
                         "flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold",
@@ -450,8 +450,8 @@ export function DashboardPage({ onNaviguer, onReabonnerDepuisAlerte, onReabonner
             <ul className="space-y-2">
               {abonnementsExpires.map((a) => (
                 <li key={a.numeroAbonnement}>
-                  <Card className="flex-row items-center justify-between gap-4 p-4">
-                    <div className="flex items-center gap-3">
+                  <Card className="flex-col items-stretch gap-3 p-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+                    <div className="flex min-w-0 flex-wrap items-center gap-3">
                       <span className="flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-xs font-semibold text-muted-foreground">
                         <History className="size-3.5" aria-hidden="true" />
                         Expiré depuis {a.joursDepuisExpiration} j
@@ -482,7 +482,7 @@ export function DashboardPage({ onNaviguer, onReabonnerDepuisAlerte, onReabonner
               <ul className="space-y-2">
                 {alertesStock.map((p) => (
                   <li key={p.idProduit}>
-                    <Card className="flex-row items-center gap-3 p-4">
+                    <Card className="flex-col items-start gap-3 p-4 sm:flex-row sm:items-center">
                       <span className="flex items-center gap-1.5 rounded-full bg-alert-j1-bg px-2.5 py-1 text-xs font-semibold text-alert-j1-fg">
                         <PackageX className="size-3.5" aria-hidden="true" />
                         Rupture
@@ -494,7 +494,7 @@ export function DashboardPage({ onNaviguer, onReabonnerDepuisAlerte, onReabonner
                         </p>
                       </div>
                       {peutGererStock && (
-                        <div className="flex shrink-0 gap-2">
+                        <div className="flex shrink-0 flex-wrap gap-2">
                           <Button variant="outline" size="sm" className="cursor-pointer" onClick={() => onGererStockDepuisAlerte(p, "achat")}>
                             Réceptionner
                           </Button>
@@ -516,7 +516,7 @@ export function DashboardPage({ onNaviguer, onReabonnerDepuisAlerte, onReabonner
               <ul className="space-y-2">
                 {rotationLente.map((r) => (
                   <li key={r.produit.idProduit}>
-                    <Card className="flex-row items-center gap-3 p-4">
+                    <Card className="flex-col items-start gap-3 p-4 sm:flex-row sm:items-center">
                       <span className="flex items-center gap-1.5 rounded-full bg-alert-j7-bg px-2.5 py-1 text-xs font-semibold text-alert-j7-fg">
                         <TrendingDown className="size-3.5" aria-hidden="true" />
                         {r.joursDepuisDerniereVente === null ? "Jamais vendu" : `Invendu depuis ${r.joursDepuisDerniereVente} j`}

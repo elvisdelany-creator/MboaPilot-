@@ -107,3 +107,53 @@ describe("anonymiserAbonne (11.3)", () => {
     expect(audit[0].utilisateurId).toBeNull();
   });
 });
+
+// 11.3 : le droit à l'effacement vide aussi les copies de l'identité tenues ailleurs que sur la fiche. Le journal des
+// notifications gardait le téléphone et l'e-mail en clair (colonne destinataire), et un dossier SAV rattaché
+// pouvait porter le nom et le téléphone saisis à l'ouverture.
+describe("anonymiserAbonne : copies de l'identité hors de la fiche (11.3)", () => {
+  function abonneAvecTraces() {
+    const abonne = creerAbonne(db, { siteId, nom: "Nga Ndongo", prenom: "Valentin", telephone: "690000000", email: "v@example.cm" });
+    db.insert(schema.notification).values([
+      { idAbonne: abonne.idAbonne, canal: "SMS", evenement: "ALERTE_ECHEANCE", destinataire: "690000000", message: "Votre abonnement arrive à échéance.", statutEnvoi: "SIMULEE" },
+      { idAbonne: abonne.idAbonne, canal: "EMAIL", evenement: "ALERTE_ECHEANCE", destinataire: "v@example.cm", message: "Votre abonnement arrive à échéance.", statutEnvoi: "SIMULEE" },
+    ]).run();
+    const dossier = db.insert(schema.savDossier).values({ siteId, idAbonne: abonne.idAbonne, clientNom: "Nga Ndongo Valentin", clientTelephone: "690000000", descriptionPanne: "Ne s'allume plus", sousGarantie: 0 }).returning().get();
+    return { abonne, dossier };
+  }
+
+  it("remplace les destinataires des notifications de l'abonné, sans supprimer le journal", () => {
+    const { abonne } = abonneAvecTraces();
+
+    anonymiserAbonne(db, { idAbonne: abonne.idAbonne, userId });
+
+    const notifications = db.select().from(schema.notification).where(eq(schema.notification.idAbonne, abonne.idAbonne)).all();
+    expect(notifications).toHaveLength(2);
+    for (const n of notifications) {
+      expect(n.destinataire).not.toContain("690000000");
+      expect(n.destinataire).not.toContain("v@example.cm");
+    }
+  });
+
+  it("efface le nom et le téléphone copiés sur les dossiers SAV de l'abonné, en gardant le dossier", () => {
+    const { abonne, dossier } = abonneAvecTraces();
+
+    anonymiserAbonne(db, { idAbonne: abonne.idAbonne, userId });
+
+    const apres = db.select().from(schema.savDossier).where(eq(schema.savDossier.idDossierSav, dossier.idDossierSav)).get();
+    expect(apres?.descriptionPanne).toBe("Ne s'allume plus");
+    expect(apres?.clientNom).toBeNull();
+    expect(apres?.clientTelephone).toBeNull();
+  });
+
+  it("ne touche pas aux notifications ni aux dossiers des autres clients", () => {
+    const { abonne } = abonneAvecTraces();
+    const autre = creerAbonne(db, { siteId, nom: "Autre", prenom: "Client", telephone: "699999999" });
+    db.insert(schema.notification).values({ idAbonne: autre.idAbonne, canal: "SMS", evenement: "ALERTE_ECHEANCE", destinataire: "699999999", message: "x", statutEnvoi: "SIMULEE" }).run();
+
+    anonymiserAbonne(db, { idAbonne: abonne.idAbonne, userId });
+
+    expect(db.select().from(schema.notification).where(eq(schema.notification.idAbonne, autre.idAbonne)).get()?.destinataire).toBe("699999999");
+  });
+});
+

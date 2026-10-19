@@ -16,6 +16,8 @@ const PLACEHOLDER_NOM = "Anonymisé";
 // reconnaissable comme "aucun canal de contact réel" par notification.service.ts,
 // sans quoi le job quotidien continuerait de "joindre" un client anonymisé
 export const PLACEHOLDER_TELEPHONE = "0000000000";
+// destinataire des notifications d'un abonné anonymisé (la colonne est NOT NULL)
+const DESTINATAIRE_EFFACE = "[effacé]";
 
 // 11.3 : droit de suppression — efface l'identité et les coordonnées d'un
 // abonné (nom, prénom, téléphone, email, CNI, adresse) tout en conservant sa
@@ -31,34 +33,43 @@ export function anonymiserAbonne(db: Db, params: AnonymiserAbonneParams) {
   const abonne = trouverAbonne(db, params.idAbonne);
   if (!abonne) throw new Error(`Abonné ${params.idAbonne} introuvable`);
 
-  // 11.3, 11.5 : le journal d'audit trace QUE l'identité a été effacée,
-  // jamais l'identité elle-même — contrairement à la fusion de doublons
-  // (fusion-abonnes.service.ts), qui journalise la fiche complète du
-  // doublon supprimé à des fins de traçabilité d'un dédoublonnage, pas d'un
-  // droit à l'oubli. Journaliser ici les valeurs effacées viderait le droit
-  // de suppression de son sens : la fiche personnelle survivrait en clair,
-  // indéfiniment, dans une autre table consultable par l'encadrement (11.5).
-  db.insert(schema.journalAudit)
-    .values({
-      utilisateurId: params.userId,
-      action: "SUPPRESSION",
-      tableCible: "abonne",
-      idCible: String(params.idAbonne),
-      valeurAvant: JSON.stringify({ champsEffaces: ["nom", "prenom", "telephone", "email", "numeroCni", "adresse"] }),
-    })
-    .run();
+  // atomique : la fiche, les copies de l'identité et la trace d'audit s'effacent ensemble ou pas du tout
+  return db.transaction(() => {
+    // 11.3, 11.5 : le journal d'audit trace QUE l'identité a été effacée,
+    // jamais l'identité elle-même — contrairement à la fusion de doublons
+    // (fusion-abonnes.service.ts), qui journalise la fiche complète du
+    // doublon supprimé à des fins de traçabilité d'un dédoublonnage, pas d'un
+    // droit à l'oubli. Journaliser ici les valeurs effacées viderait le droit
+    // de suppression de son sens : la fiche personnelle survivrait en clair,
+    // indéfiniment, dans une autre table consultable par l'encadrement (11.5).
+    db.insert(schema.journalAudit)
+      .values({
+        utilisateurId: params.userId,
+        action: "SUPPRESSION",
+        tableCible: "abonne",
+        idCible: String(params.idAbonne),
+        valeurAvant: JSON.stringify({ champsEffaces: ["nom", "prenom", "telephone", "email", "numeroCni", "adresse"] }),
+      })
+      .run();
 
-  return db
-    .update(schema.abonne)
-    .set({
-      nom: PLACEHOLDER_NOM,
-      prenom: PLACEHOLDER_NOM,
-      telephone: PLACEHOLDER_TELEPHONE,
-      email: null,
-      numeroCni: null,
-      adresse: null,
-    })
-    .where(eq(schema.abonne.idAbonne, params.idAbonne))
-    .returning()
-    .get();
+    // copies de l'identité tenues ailleurs que sur la fiche : le journal des notifications garde le numéro ou
+    // l'e-mail du destinataire, un dossier SAV garde le nom et le téléphone saisis à l'ouverture. Les lignes
+    // elles-mêmes (historique d'envoi, dossier de réparation) sont conservées.
+    db.update(schema.notification).set({ destinataire: DESTINATAIRE_EFFACE }).where(eq(schema.notification.idAbonne, params.idAbonne)).run();
+    db.update(schema.savDossier).set({ clientNom: null, clientTelephone: null }).where(eq(schema.savDossier.idAbonne, params.idAbonne)).run();
+
+    return db
+      .update(schema.abonne)
+      .set({
+        nom: PLACEHOLDER_NOM,
+        prenom: PLACEHOLDER_NOM,
+        telephone: PLACEHOLDER_TELEPHONE,
+        email: null,
+        numeroCni: null,
+        adresse: null,
+      })
+      .where(eq(schema.abonne.idAbonne, params.idAbonne))
+      .returning()
+      .get();
+  });
 }

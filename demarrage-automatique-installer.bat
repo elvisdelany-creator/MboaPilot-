@@ -9,7 +9,9 @@ if "%MBOAPILOT_DOSSIER_DEMARRAGE%"=="" (
   set "DOSSIER_DEMARRAGE=%MBOAPILOT_DOSSIER_DEMARRAGE%"
 )
 
-powershell -NoProfile -Command "$s = (New-Object -ComObject WScript.Shell).CreateShortcut($env:DOSSIER_DEMARRAGE + '\MboaPilot.lnk'); $s.TargetPath = '%~dp0lancer-mboapilot.bat'; $s.WorkingDirectory = '%~dp0'; $s.WindowStyle = 7; $s.Description = 'Demarre MboaPilot'; $s.Save()"
+rem le chemin du dossier passe par une variable d'environnement : un nom contenant une apostrophe (N'Gono) casserait une chaine PowerShell
+set "MBOAPILOT_RACINE=%~dp0"
+powershell -NoProfile -Command "$s = (New-Object -ComObject WScript.Shell).CreateShortcut($env:DOSSIER_DEMARRAGE + '\MboaPilot.lnk'); $s.TargetPath = $env:MBOAPILOT_RACINE + 'lancer-mboapilot.bat'; $s.WorkingDirectory = $env:MBOAPILOT_RACINE; $s.WindowStyle = 7; $s.Description = 'Demarre MboaPilot'; $s.Save()"
 if errorlevel 1 (
   echo Impossible de creer le raccourci de demarrage automatique.
   pause

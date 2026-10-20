@@ -44,11 +44,32 @@ export function restaurerSauvegarde(cheminSauvegarde: string, cheminBase: string
   // laissé par une restauration précédente n'est jamais écrasé : il est daté et gardé à côté, sinon une
   // 2e restauration (mauvaise sauvegarde choisie d'abord) détruirait les données d'avant la 1re.
   const horodatage = new Date().toISOString().replace(/[:.]/g, "-");
-  for (const suffixe of ["", "-wal", "-shm"]) {
-    const filet = `${cheminBase}${suffixe}.avant-restauration`;
-    if (existsSync(filet)) renameSync(filet, `${filet}.${horodatage}`);
-    if (existsSync(`${cheminBase}${suffixe}`)) renameSync(`${cheminBase}${suffixe}`, filet);
+  const effectues: [de: string, vers: string][] = [];
+  const renommer = (de: string, vers: string) => {
+    renameSync(de, vers);
+    effectues.push([de, vers]);
+  };
+  try {
+    for (const suffixe of ["", "-wal", "-shm"]) {
+      const filet = `${cheminBase}${suffixe}.avant-restauration`;
+      if (existsSync(filet)) renommer(filet, `${filet}.${horodatage}`);
+      if (existsSync(`${cheminBase}${suffixe}`)) renommer(`${cheminBase}${suffixe}`, filet);
+    }
+    copyFileSync(cheminSauvegarde, cheminBase);
+  } catch (erreur) {
+    // Windows refuse de renommer une base que le serveur garde ouverte (EBUSY/EPERM) : on remet tout en place pour ne jamais
+    // laisser une base à moitié déplacée, puis on dit quoi faire au lieu de relayer le message brut du système.
+    for (const [de, vers] of effectues.reverse()) {
+      try {
+        renameSync(vers, de);
+      } catch {
+        // meilleur effort : les fichiers restent sous leur nouveau nom, présents à côté
+      }
+    }
+    const code = (erreur as NodeJS.ErrnoException).code;
+    if (code === "EBUSY" || code === "EPERM" || code === "EACCES") {
+      throw new Error("La base est utilisée par le serveur MboaPilot : arrêtez le serveur (fermez la fenêtre du lanceur), puis relancez la restauration. Rien n'a été modifié.");
+    }
+    throw erreur;
   }
-
-  copyFileSync(cheminSauvegarde, cheminBase);
 }

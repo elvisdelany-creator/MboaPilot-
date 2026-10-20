@@ -129,3 +129,22 @@ describe("restaurerSauvegarde : l'ancienne base mise de côté est complète à 
   });
 });
 
+
+// Sous Windows, une base ouverte par le serveur ne peut pas être renommée (EBUSY). Le message brut du système ne dit pas
+// quoi faire ; ailleurs le renommage réussit, d'où le test réservé à Windows.
+describe.skipIf(process.platform !== "win32")("restaurerSauvegarde : serveur encore en marche", () => {
+  it("explique en français qu'il faut arrêter le serveur et ne touche à rien", () => {
+    const base = creerBase("mboapilot.db", "actuelle");
+    const sauvegarde = creerBase("A.db", "sauvegarde-A");
+    const serveur = new Database(base); // le serveur garde la base ouverte
+    try {
+      expect(() => restaurerSauvegarde(sauvegarde, base)).toThrow(/arrêtez.*serveur/i);
+      expect(() => restaurerSauvegarde(sauvegarde, base)).not.toThrow(/EBUSY|EPERM/);
+      expect(existsSync(`${base}.avant-restauration`)).toBe(false);
+      expect(serveur.prepare("select v from t").get()).toEqual({ v: "actuelle" });
+    } finally {
+      serveur.close();
+    }
+    expect(lire(base)).toBe("actuelle");
+  });
+});

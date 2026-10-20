@@ -9,6 +9,7 @@
     "db:seed:dev": "tsx src/db/seed-dev.ts",
     "db:restaurer": "tsx src/db/restaurer-sauvegarde.ts",
     "dev": "tsx watch src/server.ts",
+    "start": "tsx src/server.ts",
     "test": "vitest run"
   },
   "dependencies": {

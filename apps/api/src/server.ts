@@ -7,6 +7,7 @@ import { planifierJobQuotidien } from "./jobs/planificateur.js";
 import { planifierSauvegardeQuotidienne } from "./jobs/planificateur-sauvegarde.js";
 import { revaliderLicence } from "./modules/licence/licence.service.js";
 import { dossierSauvegardes as dossierSauvegardesConfigure } from "./config/chemins.js";
+import { resoudreDossierInterfaceWeb } from "./lib/interface-web.js";
 
 // 2.6 : base restaurée ou application mise à jour — mise à niveau avant toute requête
 appliquerMigrations(db);
@@ -20,13 +21,15 @@ try {
 }
 
 const dossierSauvegardes = dossierSauvegardesConfigure();
-const app = buildApp(db, { jwtSecret: obtenirSecretJwt(), dossierSauvegardes });
+const dossierInterfaceWeb = resoudreDossierInterfaceWeb();
+const app = buildApp(db, { jwtSecret: obtenirSecretJwt(), dossierSauvegardes, dossierInterfaceWeb });
 const port = Number(process.env.PORT ?? 3001);
 
 app
   .listen({ port, host: "127.0.0.1" }) // 2.2 : serveur applicatif embarqué en local, port 127.0.0.1
   .then(() => {
     console.log(`MboaPilot API en écoute sur http://127.0.0.1:${port}`);
+    console.log(dossierInterfaceWeb ? `Interface web servie depuis ${dossierInterfaceWeb} : ouvrez http://127.0.0.1:${port}` : "Interface web non construite (apps/web/dist absent) : lancez `npm run build` dans apps/web, ou le serveur de développement.");
     // 10.4 étape 2 : tentative de revalidation "au démarrage" — simulée en
     // l'absence de serveur de licence éditeur réel, réussit systématiquement
     // et repousse d'autant le délai de grâce hors ligne (21 j).

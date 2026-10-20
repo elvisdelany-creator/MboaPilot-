@@ -1,5 +1,6 @@
 import Fastify from "fastify";
 import { gestionnaireErreurFastify, gestionnaireRouteInconnue } from "./lib/erreurs-api.js";
+import { creerGestionnaireInterfaceWeb } from "./lib/interface-web.js";
 import multipart from "@fastify/multipart";
 import type { Db } from "./db/types.js";
 import { registerAbonnementsRoutes } from "./modules/abonnements/abonnements.routes.js";
@@ -22,6 +23,7 @@ import { registerVentesRoutes } from "./modules/ventes/ventes.routes.js";
 import { registerSauvegardeRoutes } from "./modules/sauvegarde/sauvegarde.routes.js";
 import { registerAvoirRoutes } from "./modules/factures/avoir.routes.js";
 import { registerLicenceRoutes } from "./modules/licence/licence.routes.js";
+import { registerInstallationRoutes } from "./modules/installation/installation.routes.js";
 import { obtenirOuCreerLicence, calculerEtatLicence } from "./modules/licence/licence.service.js";
 import { registerClotureCaisseRoutes } from "./modules/caisse/cloture-caisse.routes.js";
 import { registerImpressionRoutes } from "./modules/impression/impression.routes.js";
@@ -46,23 +48,26 @@ export interface BuildAppOptions {
   // réelle nécessaire) — par défaut l'implémentation réseau réelle, inerte
   // tant qu'aucun site ne configure d'hôte d'imprimante.
   fournisseurImpression?: FournisseurImpression;
+  // dossier de l'interface web construite (apps/web/dist) : si présent, l'API la sert elle-même, sur la même adresse
+  dossierInterfaceWeb?: string;
 }
 
 // 10.4 : préfixes toujours autorisés en écriture même en mode dégradé —
 // authentification (pour pouvoir se connecter et consulter), licence
 // (pour revalider et sortir du mode dégradé) et sauvegarde ("export des
 // données toujours possible", 10.3).
-const PREFIXES_ECRITURE_TOUJOURS_AUTORISES = ["/api/v1/auth", "/api/v1/licence", "/api/v1/sauvegarde"];
+const PREFIXES_ECRITURE_TOUJOURS_AUTORISES = ["/api/v1/auth", "/api/v1/licence", "/api/v1/sauvegarde", "/api/v1/installation"];
 
 export function buildApp(db: Db, options: BuildAppOptions) {
   const app = Fastify();
   app.setErrorHandler(gestionnaireErreurFastify);
-  app.setNotFoundHandler(gestionnaireRouteInconnue);
+  app.setNotFoundHandler(options.dossierInterfaceWeb ? creerGestionnaireInterfaceWeb(options.dossierInterfaceWeb) : gestionnaireRouteInconnue);
   registerAuthPlugin(app, options.jwtSecret);
   const authRequis = creerAuthRequis(db);
   // 5.10 : téléversement des photos optionnelles du dossier SAV (multipart/form-data)
   app.register(multipart);
   registerAuthRoutes(app, db, authRequis);
+  registerInstallationRoutes(app, db);
   const fournisseurPaiementMobile = options.fournisseurPaiementMobile ?? new SimulateurOrangeMoney();
   const fournisseurImpression = options.fournisseurImpression ?? new ImprimanteReseauTcp();
 

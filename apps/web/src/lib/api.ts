@@ -74,6 +74,29 @@ export async function login(identifiant: string, motDePasse: string): Promise<{ 
   return lireJson(reponse);
 }
 
+// Première installation : tant qu'aucun compte n'existe, l'application propose l'assistant d'installation (routes publiques)
+export async function chargerEtatInstallation(): Promise<{ installee: boolean }> {
+  const reponse = await fetch(`${BASE}/installation/etat`);
+  return lireJson(reponse);
+}
+
+export interface SaisieInstallation {
+  nomEntreprise: string;
+  nomSite: string;
+  adresseSite?: string;
+  administrateur: { prenom: string; nom: string; identifiant: string; motDePasse: string };
+}
+
+// renvoie directement la session du premier administrateur, comme une connexion
+export async function installerRequete(saisie: SaisieInstallation): Promise<{ token: string; utilisateur: Utilisateur }> {
+  const reponse = await fetch(`${BASE}/installation`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(saisie),
+  });
+  return lireJson(reponse);
+}
+
 // 2.5.1 : profil COURANT (rôle, site) relu en base — celui reçu à la connexion peut avoir changé depuis
 export async function chargerProfilCourant(token: string): Promise<Utilisateur> {
   const reponse = await fetch(`${BASE}/auth/moi`, { headers: headersAuth(token) });

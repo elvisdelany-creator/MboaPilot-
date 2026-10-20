@@ -13,6 +13,8 @@ interface Session {
 interface AuthContextValeur {
   session: Session | null;
   connecter: (identifiant: string, motDePasse: string) => Promise<void>;
+  // ouvre une session déjà obtenue (fin de l'assistant d'installation, qui connecte le premier administrateur)
+  ouvrirSession: (token: string, utilisateur: Utilisateur) => void;
   deconnecter: () => void;
 }
 
@@ -32,11 +34,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(lireSessionStockee);
   const token = session?.token;
 
-  async function connecter(identifiant: string, motDePasse: string) {
-    const { token, utilisateur } = await loginRequete(identifiant, motDePasse);
+  function ouvrirSession(token: string, utilisateur: Utilisateur) {
     const nouvelleSession = { token, utilisateur };
     setSession(nouvelleSession);
     localStorage.setItem(CLE_SESSION, JSON.stringify(nouvelleSession));
+  }
+
+  async function connecter(identifiant: string, motDePasse: string) {
+    const { token, utilisateur } = await loginRequete(identifiant, motDePasse);
+    ouvrirSession(token, utilisateur);
   }
 
   function deconnecter() {
@@ -83,7 +89,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
-  return <AuthContext.Provider value={{ session, connecter, deconnecter }}>{children}</AuthContext.Provider>;
+  return <AuthContext.Provider value={{ session, connecter, ouvrirSession, deconnecter }}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth() {

@@ -1,8 +1,10 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { peutAccederVue, vuesAccessibles, type RoleUtilisateur } from "@mboapilot/shared";
 import { Toaster } from "@/components/ui/sonner";
 import { AuthProvider, useAuth } from "@/lib/auth-context";
 import { LoginPage } from "@/components/auth/LoginPage";
+import { InstallationPage } from "@/components/auth/InstallationPage";
+import { chargerEtatInstallation } from "@/lib/api";
 import { CaissePage } from "@/components/caisse/CaissePage";
 import { DashboardPage } from "@/components/dashboard/DashboardPage";
 import { SavPage } from "@/components/sav/SavPage";
@@ -25,11 +27,34 @@ type EtatVue =
   | { nom: "clients" }
   | { nom: "administration" };
 
+// Porte d'entrée sans session : l'assistant de première installation tant qu'aucun compte n'existe, la connexion sinon.
+// Si l'état ne peut pas être lu (serveur arrêté), on affiche la connexion, qui sait signaler l'erreur.
+function PorteEntree() {
+  const [etat, setEtat] = useState<"chargement" | "installer" | "connexion">("chargement");
+
+  useEffect(() => {
+    let annule = false;
+    chargerEtatInstallation()
+      .then(({ installee }) => {
+        if (!annule) setEtat(installee ? "connexion" : "installer");
+      })
+      .catch(() => {
+        if (!annule) setEtat("connexion");
+      });
+    return () => {
+      annule = true;
+    };
+  }, []);
+
+  if (etat === "chargement") return <div className="min-h-dvh bg-background" aria-busy="true" />;
+  return etat === "installer" ? <InstallationPage /> : <LoginPage />;
+}
+
 function Contenu() {
   const { session } = useAuth();
   const [vueDemandee, setVue] = useState<EtatVue>({ nom: "dashboard" });
 
-  if (!session) return <LoginPage />;
+  if (!session) return <PorteEntree />;
 
   // 2.5.1, 6.3 : le rôle APPORTEUR n'a accès qu'à sa propre fiche — les autres
   // routes sont de toute façon bloquées côté serveur, on ne les propose même pas.

@@ -870,10 +870,22 @@ export interface StatutLicence {
   derniereRevalidationReussie: string;
   etat: "ACTIVE" | "DEGRADE";
   joursRestantsGrace: number;
+  // jours avant l'échéance de l'abonnement éditeur : négatif une fois dépassée
+  joursRestantsAbonnement: number;
 }
 
 export async function chargerEtatLicence(token: string): Promise<StatutLicence> {
   const reponse = await fetch(`${BASE}/licence/etat`, { headers: headersAuth(token) });
+  return lireJson<StatutLicence>(reponse);
+}
+
+// pilote : l'administrateur prolonge l'abonnement en saisissant la nouvelle échéance (AAAA-MM-JJ)
+export async function prolongerLicenceRequete(token: string, dateExpiration: string): Promise<StatutLicence> {
+  const reponse = await fetch(`${BASE}/licence/expiration`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json", ...headersAuth(token) },
+    body: JSON.stringify({ dateExpiration }),
+  });
   return lireJson<StatutLicence>(reponse);
 }
 

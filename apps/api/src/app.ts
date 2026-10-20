@@ -155,7 +155,7 @@ export function buildApp(db: Db, options: BuildAppOptions) {
   // 6.4 : correction d'une facture VALIDEE par avoir
   registerAvoirRoutes(app, db, { authRequis, ventes, gestionAvoirs, lectureFinanciere, gestionRapprochement });
   // 10.4 : état de la licence éditeur, consultable par tout utilisateur connecté
-  registerLicenceRoutes(app, db, { authRequis });
+  registerLicenceRoutes(app, db, { authRequis, admin });
   // 13.1 : clôture de caisse quotidienne (fond d'ouverture, comptage, écart théorique/réel)
   registerClotureCaisseRoutes(app, db, { authRequis, ventes, validationCloture });
   // 11.4, 6.7 : impression ESC/POS du ticket sur l'imprimante réseau du site, si configurée

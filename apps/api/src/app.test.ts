@@ -5564,3 +5564,53 @@ describe("POST /api/v1/factures/:id/avoir : remboursement enregistré avec l'avo
   });
 });
 
+describe("PUT /api/v1/licence/expiration : prolonger l'abonnement (10.4, pilote)", () => {
+  const dansUnAn = () => new Date(Date.now() + 400 * 24 * 3600 * 1000).toISOString().slice(0, 10);
+
+  it("un administrateur prolonge la licence et reçoit le nouvel état", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    creerUtilisateur(db, { siteId, nom: "Admin", prenom: "A", identifiant: "admin-licence", motDePasse: "motdepasse-secret", role: "ADMINISTRATEUR" });
+    const token = await connecter(app, "admin-licence");
+    const date = dansUnAn();
+
+    const reponse = await app.inject({ method: "PUT", url: "/api/v1/licence/expiration", headers: authHeader(token), payload: { dateExpiration: date } });
+
+    expect(reponse.statusCode).toBe(200);
+    expect(reponse.json()).toMatchObject({ dateExpirationAbonnement: date, etat: "ACTIVE" });
+    expect(reponse.json().joursRestantsAbonnement).toBeGreaterThan(390);
+  });
+
+  it("refuse (403) un caissier", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const token = await connecter(app);
+
+    const reponse = await app.inject({ method: "PUT", url: "/api/v1/licence/expiration", headers: authHeader(token), payload: { dateExpiration: dansUnAn() } });
+
+    expect(reponse.statusCode).toBe(403);
+  });
+
+  it("refuse (400) une date invalide ou passée, et un corps absent, jamais un 500", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    creerUtilisateur(db, { siteId, nom: "Admin", prenom: "A", identifiant: "admin-licence2", motDePasse: "motdepasse-secret", role: "ADMINISTRATEUR" });
+    const token = await connecter(app, "admin-licence2");
+
+    expect((await app.inject({ method: "PUT", url: "/api/v1/licence/expiration", headers: authHeader(token), payload: { dateExpiration: "2020-01-01" } })).statusCode).toBe(400);
+    expect((await app.inject({ method: "PUT", url: "/api/v1/licence/expiration", headers: authHeader(token), payload: { dateExpiration: "demain" } })).statusCode).toBe(400);
+    expect((await app.inject({ method: "PUT", url: "/api/v1/licence/expiration", headers: authHeader(token) })).statusCode).toBe(400);
+  });
+
+  it("reste possible en mode dégradé : c'est là qu'on en a besoin", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    creerUtilisateur(db, { siteId, nom: "Admin", prenom: "A", identifiant: "admin-licence3", motDePasse: "motdepasse-secret", role: "ADMINISTRATEUR" });
+    const token = await connecter(app, "admin-licence3");
+    db.insert(schema.licence).values({ empreinteInstallation: "e", dateExpirationAbonnement: "2020-01-01", derniereRevalidationReussie: new Date().toISOString() }).run();
+    const bloque = await app.inject({ method: "POST", url: "/api/v1/sav/dossiers", headers: authHeader(token), payload: { descriptionPanne: "x", sousGarantie: false } });
+    expect(bloque.statusCode).toBe(403); // lecture seule : une écriture ordinaire est refusée
+
+    const reponse = await app.inject({ method: "PUT", url: "/api/v1/licence/expiration", headers: authHeader(token), payload: { dateExpiration: dansUnAn() } });
+
+    expect(reponse.statusCode).toBe(200);
+    expect(reponse.json().etat).toBe("ACTIVE");
+  });
+});
+

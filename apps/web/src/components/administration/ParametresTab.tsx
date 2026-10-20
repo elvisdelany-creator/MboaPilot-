@@ -20,6 +20,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { InfosEntreprise } from "@/lib/types";
+import { LicenceCard } from "./LicenceCard";
 
 const formateurDateHeure = new Intl.DateTimeFormat("fr-FR", { dateStyle: "short", timeStyle: "short" });
 const formateurTaille = (octets: number) => `${(octets / 1024).toFixed(0)} Ko`;
@@ -449,6 +450,9 @@ export function ParametresTab() {
           {enCoursTauxGarantie ? "Enregistrement…" : "Enregistrer"}
         </Button>
       </Card>
+
+      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Licence</p>
+      <LicenceCard />
 
       <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Remises à la caisse</p>
       <Card className="max-w-xl gap-4 p-4">

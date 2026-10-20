@@ -19,6 +19,8 @@ export type EtatLicence = "ACTIVE" | "DEGRADE";
 export interface StatutLicence extends LicenceInfo {
   etat: EtatLicence;
   joursRestantsGrace: number;
+  // jours avant l'échéance de l'abonnement éditeur : négatif une fois dépassée (l'application est alors en lecture seule)
+  joursRestantsAbonnement: number;
 }
 
 function ajouterJours(dateIso: string, jours: number): string {
@@ -76,5 +78,58 @@ export function calculerEtatLicence(licence: LicenceInfo, maintenant: string): S
     ...licence,
     etat: abonnementExpire || joursRestantsGrace < 0 ? "DEGRADE" : "ACTIVE",
     joursRestantsGrace,
+    joursRestantsAbonnement: joursAvantEcheance(licence.dateExpirationAbonnement.slice(0, 10), aujourdHui),
   };
+}
+
+const DUREE_MAX_PROLONGATION_JOURS = 3653; // 10 ans
+
+// « AAAA-MM-JJ » existant au calendrier (ni 2028-13-40, ni 2028-02-30)
+function estDateIsoReelle(valeur: unknown): valeur is string {
+  if (typeof valeur !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(valeur)) return false;
+  const date = new Date(valeur + "T00:00:00Z");
+  return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === valeur;
+}
+
+export interface ProlongerLicenceParams {
+  dateExpiration: string;
+  userId: number;
+  maintenant?: string;
+}
+
+// Pilote : l'administrateur saisit la nouvelle échéance de l'abonnement (date et non clé signée : aucun contrôle éditeur
+// à ce stade). Elle doit prolonger, c'est-à-dire dépasser à la fois aujourd'hui et l'échéance actuelle, sans excéder
+// 10 ans (une faute de frappe sur l'année ne doit pas rendre la licence éternelle). Elle revalide aussi la licence :
+// sinon un poste resté hors ligne au-delà du délai de grâce serait toujours en lecture seule. Tracée dans le journal.
+export function prolongerLicence(db: Db, params: ProlongerLicenceParams): typeof schema.licence.$inferSelect {
+  const maintenant = params.maintenant ?? new Date().toISOString();
+  const date = params.dateExpiration;
+  if (!estDateIsoReelle(date)) throw new Error("La date d'expiration est invalide : saisissez une date réelle au format AAAA-MM-JJ");
+
+  const licence = obtenirOuCreerLicence(db, maintenant);
+  const aujourdHui = maintenant.slice(0, 10);
+  const actuelle = licence.dateExpirationAbonnement.slice(0, 10);
+  if (date <= aujourdHui) throw new Error("La nouvelle date d'expiration doit être postérieure à aujourd'hui");
+  if (date <= actuelle) throw new Error(`La nouvelle date doit prolonger l'abonnement : elle doit dépasser l'échéance actuelle (${actuelle})`);
+  if (date > ajouterJours(aujourdHui, DUREE_MAX_PROLONGATION_JOURS)) throw new Error("La nouvelle date d'expiration ne peut pas dépasser 10 ans");
+
+  return db.transaction(() => {
+    const apres = db
+      .update(schema.licence)
+      .set({ dateExpirationAbonnement: date, derniereRevalidationReussie: maintenant })
+      .where(eq(schema.licence.idLicence, licence.idLicence))
+      .returning()
+      .get();
+    db.insert(schema.journalAudit)
+      .values({
+        utilisateurId: params.userId,
+        action: "MODIFICATION",
+        tableCible: "licence",
+        idCible: String(licence.idLicence),
+        valeurAvant: JSON.stringify({ dateExpirationAbonnement: actuelle }),
+        valeurApres: JSON.stringify({ dateExpirationAbonnement: date }),
+      })
+      .run();
+    return apres;
+  });
 }

@@ -12,6 +12,7 @@ import {
   trouverTauxCommissionVendeurParSite,
 } from "./entreprise.repository.js";
 import * as schema from "../../db/schema.js";
+import { eq } from "drizzle-orm";
 
 let db: Db;
 
@@ -449,3 +450,66 @@ describe("journal d'audit du paramétrage entreprise (11.5)", () => {
     expect(db.select().from(schema.journalAudit).all()).toHaveLength(0);
   });
 });
+
+// Le QR du ticket mène à l'adresse publique de vérification de la boutique ; sans adresse, aucun QR n'est imprimé.
+describe("modifierEntreprise : adresse publique de vérification", () => {
+  let idEntreprise: number;
+  let idSite: number;
+
+  beforeEach(() => {
+    idEntreprise = db.insert(schema.entreprise).values({ nom: "Boutique Test" }).returning().get().idEntreprise;
+    idSite = db.insert(schema.site).values({ idEntreprise, nom: "Site A" }).returning().get().idSite;
+  });
+
+  const adresse = () => trouverInfosEntrepriseParSite(db, idSite)?.entreprise.adressePubliqueVerification;
+
+  it("est vide par défaut (aucun QR imprimé)", () => {
+    expect(adresse()).toBeNull();
+  });
+
+  it("enregistre l'adresse normalisée (domaine en minuscules, sans barre finale)", () => {
+    modifierEntreprise(db, idEntreprise, { adressePubliqueVerification: "  https://Verif.MaBoutique.cm/ " });
+
+    expect(adresse()).toBe("https://verif.maboutique.cm");
+  });
+
+  it("efface l'adresse avec une saisie vide ou null", () => {
+    modifierEntreprise(db, idEntreprise, { adressePubliqueVerification: "https://verif.maboutique.cm" });
+
+    modifierEntreprise(db, idEntreprise, { adressePubliqueVerification: "" });
+    expect(adresse()).toBeNull();
+
+    modifierEntreprise(db, idEntreprise, { adressePubliqueVerification: "https://verif.maboutique.cm" });
+    modifierEntreprise(db, idEntreprise, { adressePubliqueVerification: null });
+    expect(adresse()).toBeNull();
+  });
+
+  it.each(["http://localhost:3001", "http://127.0.0.1", "verif.maboutique.cm", "https://verif.maboutique.cm/boutique", "javascript:alert(1)"])("refuse %s sans rien modifier", (invalide) => {
+    modifierEntreprise(db, idEntreprise, { adressePubliqueVerification: "https://ancienne.maboutique.cm" });
+
+    expect(() => modifierEntreprise(db, idEntreprise, { adressePubliqueVerification: invalide })).toThrow();
+
+    expect(adresse()).toBe("https://ancienne.maboutique.cm");
+  });
+
+  it("refuse une valeur qui n'est pas du texte", () => {
+    expect(() => modifierEntreprise(db, idEntreprise, { adressePubliqueVerification: 42 as never })).toThrow(/texte/i);
+    expect(() => modifierEntreprise(db, idEntreprise, { adressePubliqueVerification: { a: 1 } as never })).toThrow(/texte/i);
+  });
+
+  it("laisse l'adresse inchangée quand le champ est absent de la modification", () => {
+    modifierEntreprise(db, idEntreprise, { adressePubliqueVerification: "https://verif.maboutique.cm" });
+
+    modifierEntreprise(db, idEntreprise, { tauxTva: 1925 });
+
+    expect(adresse()).toBe("https://verif.maboutique.cm");
+  });
+
+  it("journalise le changement d'adresse", () => {
+    modifierEntreprise(db, idEntreprise, { adressePubliqueVerification: "https://verif.maboutique.cm" }, null);
+
+    const trace = db.select().from(schema.journalAudit).where(eq(schema.journalAudit.tableCible, "entreprise")).get();
+    expect(trace?.valeurApres).toContain("https://verif.maboutique.cm");
+  });
+});
+

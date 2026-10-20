@@ -1273,6 +1273,7 @@ export async function modifierEntrepriseRequete(
     delaiGraceReabonnementJours?: number;
     tauxGarantiePourcent?: number;
     plafondRemiseCaissierPourcent?: number;
+    adressePubliqueVerification?: string | null;
   }
 ): Promise<InfosEntreprise["entreprise"]> {
   const reponse = await fetch(`${BASE}/entreprise`, {

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { lireDateServeur, lireEntierSaisi } from "@mboapilot/shared";
+import { erreurAdressePublique, lireDateServeur, lireEntierSaisi } from "@mboapilot/shared";
 import { toast } from "sonner";
 import { Download, ImagePlus } from "lucide-react";
 import {
@@ -52,6 +52,7 @@ export function ParametresTab() {
   const [delaiGrace, setDelaiGrace] = useState("0");
   const [tauxGarantie, setTauxGarantie] = useState("0");
   const [plafondRemise, setPlafondRemise] = useState("20");
+  const [adressePublique, setAdressePublique] = useState("");
   const [enCours, setEnCours] = useState(false);
   const [enCoursJalons, setEnCoursJalons] = useState(false);
   const [enCoursMdp, setEnCoursMdp] = useState(false);
@@ -59,6 +60,7 @@ export function ParametresTab() {
   const [enCoursDelaiGrace, setEnCoursDelaiGrace] = useState(false);
   const [enCoursTauxGarantie, setEnCoursTauxGarantie] = useState(false);
   const [enCoursPlafondRemise, setEnCoursPlafondRemise] = useState(false);
+  const [enCoursAdressePublique, setEnCoursAdressePublique] = useState(false);
   const [sauvegardes, setSauvegardes] = useState<Sauvegarde[]>([]);
   const [exportEnCours, setExportEnCours] = useState(false);
   // 3.2.1, 13.2 : "personnalisation par entreprise (logo...)" sur les documents commerciaux
@@ -94,6 +96,7 @@ export function ParametresTab() {
         setDelaiGrace(String(infos.entreprise.delaiGraceReabonnementJours));
         setTauxGarantie(String(infos.entreprise.tauxGarantiePourcent));
         setPlafondRemise(String(infos.entreprise.plafondRemiseCaissierPourcent));
+        setAdressePublique(infos.entreprise.adressePubliqueVerification ?? "");
         setImprimanteHote(infos.site.imprimanteHote ?? "");
         setImprimantePort(String(infos.site.imprimantePort ?? 9100));
       })
@@ -267,6 +270,21 @@ export function ParametresTab() {
       gererErreur(erreur, "Échec de l'enregistrement du plafond de remise.");
     } finally {
       setEnCoursPlafondRemise(false);
+    }
+  }
+
+  // 13.1 : adresse publique vers laquelle mène le QR code des tickets (vide : aucun QR imprimé)
+  const erreurAdresse = erreurAdressePublique(adressePublique);
+  async function enregistrerAdressePublique() {
+    setEnCoursAdressePublique(true);
+    try {
+      await modifierEntrepriseRequete(token, { adressePubliqueVerification: adressePublique.trim() === "" ? null : adressePublique });
+      toast.success(adressePublique.trim() === "" ? "Adresse effacée : les tickets n'impriment plus de QR code." : "Adresse de vérification enregistrée.");
+      rechargerEntreprise();
+    } catch (erreur) {
+      gererErreur(erreur, "Échec de l'enregistrement de l'adresse de vérification.");
+    } finally {
+      setEnCoursAdressePublique(false);
     }
   }
 
@@ -475,6 +493,39 @@ export function ParametresTab() {
         <Button className="w-fit cursor-pointer" disabled={enCoursPlafondRemise} onClick={enregistrerPlafondRemise}>
           {enCoursPlafondRemise ? "Enregistrement…" : "Enregistrer"}
         </Button>
+      </Card>
+
+      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Vérification des tickets (QR code)</p>
+      <Card className="max-w-xl gap-4 p-4">
+        <p className="text-sm text-muted-foreground">
+          Le QR code du ticket permet à un client de vérifier son document depuis son téléphone (13.1). Il doit mener à une adresse accessible
+          depuis Internet : un nom de domaine ou un tunnel qui redirige vers ce poste, sans chemin (exemple : https://verif.maboutique.cm). Tant
+          qu'aucune adresse n'est enregistrée, les tickets n'impriment pas de QR code.
+        </p>
+        <div>
+          <Label htmlFor="parametres-adresse-verification">Adresse publique de vérification</Label>
+          <Input
+            id="parametres-adresse-verification"
+            type="url"
+            inputMode="url"
+            placeholder="https://verif.maboutique.cm"
+            value={adressePublique}
+            onChange={(e) => setAdressePublique(e.target.value)}
+            maxLength={200}
+            aria-describedby="parametres-adresse-verification-aide"
+            className="mt-1"
+          />
+          <p id="parametres-adresse-verification-aide" className={erreurAdresse ? "mt-1 text-sm text-destructive" : "mt-1 text-sm text-muted-foreground"}>
+            {erreurAdresse ?? "Laisser vide pour ne pas imprimer de QR code."}
+          </p>
+        </div>
+        <Button className="w-fit cursor-pointer" disabled={enCoursAdressePublique || erreurAdresse !== null} onClick={enregistrerAdressePublique}>
+          {enCoursAdressePublique ? "Enregistrement…" : "Enregistrer"}
+        </Button>
+        <p className="text-xs text-muted-foreground">
+          Si vous exposez le poste par un tunnel ou un proxy, limitez-le aux chemins /verification/ et /api/v1/verification/ : le reste de
+          l'application (connexion, caisse) n'a pas à être accessible depuis Internet.
+        </p>
       </Card>
 
       <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Imprimante de tickets (ESC/POS)</p>

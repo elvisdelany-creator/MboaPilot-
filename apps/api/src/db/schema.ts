@@ -59,6 +59,9 @@ export const entreprise = sqliteTable("entreprise", {
   // 6.4, 2.5.1 : plafond de remise ponctuelle d'un CAISSIER, en % du prix de la ligne (gérant et administrateur n'ont
   // pas de limite). 20 % par défaut ; 0 interdit toute remise au caissier, 100 revient à ne pas la limiter.
   plafondRemiseCaissierPourcent: integer("plafond_remise_caissier_pourcent").notNull().default(20),
+  // 13.1 : adresse publique (domaine ou tunnel, sans chemin) vers laquelle mène le QR code des tickets. Vide : aucun QR
+  // n'est imprimé (un lien « localhost » serait mort sur le téléphone d'un client).
+  adressePubliqueVerification: text("adresse_publique_verification"),
   dateCreation: text("date_creation").notNull().default(now),
 });
 

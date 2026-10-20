@@ -232,6 +232,13 @@
       "when": 1792406799990,
       "tag": "0032_plafond_remise_caissier",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "6",
+      "when": 1792504431993,
+      "tag": "0033_adresse_publique_verification",
+      "breakpoints": true
     }
   ]
 }

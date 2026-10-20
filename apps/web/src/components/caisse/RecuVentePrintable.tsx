@@ -1,5 +1,5 @@
 import { Printer, RotateCcw } from "lucide-react";
-import { lireDateServeur } from "@mboapilot/shared";
+import { construireUrlVerification, lireDateServeur } from "@mboapilot/shared";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { QrCode } from "@/components/ui/qr-code";
@@ -60,6 +60,7 @@ export function RecuVentePrintable({ infosEntreprise, logoUrl, recu, onNouvelleV
   // figé sur la facture à sa création, jamais recalculé ici avec le taux
   // courant (qui peut avoir changé depuis l'émission de ce ticket)
   const { montantTaxe } = recu;
+  const adressePublique = infosEntreprise?.entreprise.adressePubliqueVerification ?? null;
   const montantHT = recu.total - montantTaxe;
   const taxeApplicable = montantTaxe !== 0;
 
@@ -148,12 +149,18 @@ export function RecuVentePrintable({ infosEntreprise, logoUrl, recu, onNouvelleV
 
         <Separator />
 
-        <div className="flex flex-col items-center gap-1">
-          <QrCode valeur={`${window.location.origin}/verification/${recu.idFacture}/${recu.jetonVerification}`} taille={80} />
-          <p className="text-[10px] text-muted-foreground">Scanner pour vérifier ce document</p>
-        </div>
+        {/* 13.1 : le QR mène à l'adresse PUBLIQUE de la boutique (Paramètres) ; sans elle, un lien « localhost » serait
+            mort sur le téléphone du client : aucun QR n'est alors imprimé */}
+        {adressePublique && (
+          <>
+            <div className="flex flex-col items-center gap-1">
+              <QrCode valeur={construireUrlVerification(adressePublique, recu.idFacture, recu.jetonVerification)} taille={80} />
+              <p className="text-[10px] text-muted-foreground">Scanner pour vérifier ce document</p>
+            </div>
 
-        <Separator />
+            <Separator />
+          </>
+        )}
 
         <p className="text-center text-xs text-muted-foreground">{infosEntreprise?.entreprise.mentionsLegales || "Merci de votre confiance."}</p>
       </div>

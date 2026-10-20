@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm";
-import { JALONS_PAR_DEFAUT, POLITIQUE_MDP_PAR_DEFAUT, type JalonsAlerte, type PolitiqueMotDePasse } from "@mboapilot/shared";
+import { erreurAdressePublique, JALONS_PAR_DEFAUT, normaliserAdressePublique, POLITIQUE_MDP_PAR_DEFAUT, type JalonsAlerte, type PolitiqueMotDePasse } from "@mboapilot/shared";
 import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
 import { verifierBooleen, verifierEntier } from "../../lib/validation.js";
@@ -26,6 +26,7 @@ export interface InfosEntreprise {
     delaiGraceReabonnementJours: number;
     tauxGarantiePourcent: number;
     plafondRemiseCaissierPourcent: number;
+    adressePubliqueVerification: string | null;
   };
   site: { idSite: number; nom: string; adresse: string | null; imprimanteHote: string | null; imprimantePort: number | null };
 }
@@ -59,6 +60,7 @@ export function trouverInfosEntrepriseParSite(db: Db, siteId: number): InfosEntr
       delaiGraceReabonnementJours: entreprise.delaiGraceReabonnementJours,
       tauxGarantiePourcent: entreprise.tauxGarantiePourcent,
       plafondRemiseCaissierPourcent: entreprise.plafondRemiseCaissierPourcent,
+      adressePubliqueVerification: entreprise.adressePubliqueVerification,
     },
     site: { idSite: site.idSite, nom: site.nom, adresse: site.adresse, imprimanteHote: site.imprimanteHote, imprimantePort: site.imprimantePort },
   };
@@ -197,6 +199,7 @@ export interface ModifierEntrepriseInput {
   delaiGraceReabonnementJours?: number;
   tauxGarantiePourcent?: number;
   plafondRemiseCaissierPourcent?: number;
+  adressePubliqueVerification?: string | null;
 }
 
 // 6.1, 6.2, 4.4, 8.8 : paramétrage des taxes applicables (le cas échéant),
@@ -224,6 +227,11 @@ export function modifierEntreprise(db: Db, idEntreprise: number, input: Modifier
   verifierBooleen(input.politiqueMdpExigerMajuscule, "L'exigence de majuscule");
   verifierBooleen(input.politiqueMdpExigerChiffre, "L'exigence de chiffre");
   verifierBooleen(input.politiqueMdpExigerCaractereSpecial, "L'exigence de caractère spécial");
+  if (input.adressePubliqueVerification !== undefined && input.adressePubliqueVerification !== null) {
+    if (typeof input.adressePubliqueVerification !== "string") throw new Error("L'adresse publique de vérification doit être un texte");
+    const erreurAdresse = erreurAdressePublique(input.adressePubliqueVerification);
+    if (erreurAdresse) throw new Error(erreurAdresse);
+  }
   if (input.mentionsLegales !== undefined && input.mentionsLegales !== null && typeof input.mentionsLegales !== "string") {
     throw new Error("Les mentions légales doivent être un texte");
   }
@@ -298,6 +306,10 @@ export function modifierEntreprise(db: Db, idEntreprise: number, input: Modifier
       ...(input.delaiGraceReabonnementJours !== undefined && { delaiGraceReabonnementJours: input.delaiGraceReabonnementJours }),
       ...(input.tauxGarantiePourcent !== undefined && { tauxGarantiePourcent: input.tauxGarantiePourcent }),
       ...(input.plafondRemiseCaissierPourcent !== undefined && { plafondRemiseCaissierPourcent: input.plafondRemiseCaissierPourcent }),
+      // texte vide ou null : plus d'adresse, donc plus de QR sur les tickets
+      ...(input.adressePubliqueVerification !== undefined && {
+        adressePubliqueVerification: input.adressePubliqueVerification === null ? null : normaliserAdressePublique(input.adressePubliqueVerification),
+      }),
     })
     .where(eq(schema.entreprise.idEntreprise, idEntreprise))
     .returning()
@@ -324,4 +336,5 @@ const CHAMPS_AUDITES_ENTREPRISE = [
   "delaiGraceReabonnementJours",
   "tauxGarantiePourcent",
   "plafondRemiseCaissierPourcent",
+  "adressePubliqueVerification",
 ] as const;

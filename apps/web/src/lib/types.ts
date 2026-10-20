@@ -97,6 +97,7 @@ export interface InfosEntreprise {
     // politique)" — taux appliqué au tarif plein (0 = gratuit par défaut)
     tauxGarantiePourcent: number;
     plafondRemiseCaissierPourcent: number;
+    adressePubliqueVerification: string | null;
   };
   // 11.4, 6.7 : imprimante réseau ESC/POS rattachée au site — null si non configurée
   site: { idSite: number; nom: string; adresse: string | null; imprimanteHote: string | null; imprimantePort: number | null };

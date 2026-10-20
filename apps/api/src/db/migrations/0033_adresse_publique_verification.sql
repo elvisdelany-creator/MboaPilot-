@@ -1,0 +1,1 @@
+ALTER TABLE `entreprise` ADD `adresse_publique_verification` text;

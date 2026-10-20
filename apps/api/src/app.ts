@@ -58,8 +58,27 @@ export interface BuildAppOptions {
 // données toujours possible", 10.3).
 const PREFIXES_ECRITURE_TOUJOURS_AUTORISES = ["/api/v1/auth", "/api/v1/licence", "/api/v1/sauvegarde", "/api/v1/installation"];
 
+// Politique de contenu de la page de l'interface : tout vient du poste lui-même. Les styles en ligne sont tolérés (attributs
+// `style` de React, feuille d'impression) ; le QR s'affiche en data:, les logos et photos en blob:. Aucun script extérieur,
+// aucun objet, aucun affichage de l'application dans le cadre d'un autre site.
+const POLITIQUE_CONTENU =
+  "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; " +
+  "connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'";
+
 export function buildApp(db: Db, options: BuildAppOptions) {
   const app = Fastify();
+
+  // en-têtes de sécurité de TOUTES les réponses (11.2) : pas d'affichage dans un cadre (clickjacking), pas d'adresse
+  // transmise en Referer (le jeton de vérification est dans l'URL), pas de type de contenu deviné ; l'API ne se met
+  // jamais en cache (données de clients) ; la politique de contenu accompagne les pages HTML.
+  app.addHook("onSend", async (request, reply, payload) => {
+    reply.header("X-Content-Type-Options", "nosniff");
+    reply.header("X-Frame-Options", "DENY");
+    reply.header("Referrer-Policy", "no-referrer");
+    if (request.url.startsWith("/api/")) reply.header("Cache-Control", "no-store");
+    if (String(reply.getHeader("Content-Type") ?? "").startsWith("text/html")) reply.header("Content-Security-Policy", POLITIQUE_CONTENU);
+    return payload;
+  });
   app.setErrorHandler(gestionnaireErreurFastify);
   app.setNotFoundHandler(options.dossierInterfaceWeb ? creerGestionnaireInterfaceWeb(options.dossierInterfaceWeb) : gestionnaireRouteInconnue);
   registerAuthPlugin(app, options.jwtSecret);

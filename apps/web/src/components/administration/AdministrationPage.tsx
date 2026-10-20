@@ -28,6 +28,8 @@ import type { CompteUtilisateur, EntreeJournalAudit, Role, Site } from "@/lib/ty
 
 interface Props {
   onNaviguer: (vue: Vue) => void;
+  // onglet ouvert à l'arrivée (ex. « catalogue » depuis le guide d'une caisse vide) ; sinon le premier de la liste
+  ongletInitial?: string;
 }
 
 const LIBELLES_ROLES: Record<Role, string> = {
@@ -52,7 +54,7 @@ const formateurDateHeure = new Intl.DateTimeFormat("fr-FR", { dateStyle: "short"
 // 8.8 : le paramétrage (catalogue, comptes streaming, taxes/mentions
 // légales/logo) reste, lui, ouvert au Gérant — ces onglets ne sont donc pas
 // restreints comme les comptes/sites/audit ci-dessus.
-export function AdministrationPage({ onNaviguer }: Props) {
+export function AdministrationPage({ onNaviguer, ongletInitial }: Props) {
   const { session, deconnecter } = useAuth();
   const token = session!.token;
   const utilisateur = session!.utilisateur;
@@ -172,7 +174,7 @@ export function AdministrationPage({ onNaviguer }: Props) {
             </div>
           </div>
 
-          <Tabs defaultValue={estAdministrateur ? "utilisateurs" : "catalogue"}>
+          <Tabs defaultValue={ongletInitial ?? (estAdministrateur ? "utilisateurs" : "catalogue")}>
             <TabsList>
               {estAdministrateur && <TabsTrigger value="utilisateurs">Utilisateurs</TabsTrigger>}
               {estAdministrateur && <TabsTrigger value="sites">Sites</TabsTrigger>}

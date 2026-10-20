@@ -25,7 +25,7 @@ type EtatVue =
   | { nom: "apporteurs" }
   | { nom: "stock"; idProduitInitial?: number; actionInitiale?: "achat" | "transfert" }
   | { nom: "clients" }
-  | { nom: "administration" };
+  | { nom: "administration"; ongletInitial?: string };
 
 // Porte d'entrée sans session : l'assistant de première installation tant qu'aucun compte n'existe, la connexion sinon.
 // Si l'état ne peut pas être lu (serveur arrêté), on affiche la connexion, qui sait signaler l'erreur.
@@ -118,9 +118,16 @@ function Contenu() {
   } else if (vue.nom === "clients") {
     contenuPage = <ClientsPage onNaviguer={naviguer} onReabonnerDepuisFiche={reabonnerDepuisFiche} />;
   } else if (vue.nom === "administration") {
-    contenuPage = <AdministrationPage onNaviguer={naviguer} />;
+    contenuPage = <AdministrationPage onNaviguer={naviguer} ongletInitial={vue.ongletInitial} />;
   } else {
-    contenuPage = <CaissePage onNaviguer={naviguer} abonneInitial={vue.abonneInitial} idFamilleInitiale={vue.idFamilleInitiale} />;
+    contenuPage = (
+      <CaissePage
+        onNaviguer={naviguer}
+        onOuvrirCatalogueAdministration={() => setVue({ nom: "administration", ongletInitial: "catalogue" })}
+        abonneInitial={vue.abonneInitial}
+        idFamilleInitiale={vue.idFamilleInitiale}
+      />
+    );
   }
 
   return (

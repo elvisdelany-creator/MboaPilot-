@@ -32,6 +32,7 @@ import type {
 import { AppHeader, type Vue } from "@/components/layout/AppHeader";
 import { RechercheAbonne } from "./RechercheAbonne";
 import { CategoriesPanel } from "./CategoriesPanel";
+import { CatalogueVideGuide } from "./CatalogueVideGuide";
 import { GrilleArticles } from "./GrilleArticles";
 import { GrilleProduits } from "./GrilleProduits";
 import { TicketPanel, type PaiementSaisi } from "./TicketPanel";
@@ -45,12 +46,14 @@ import { FactureProFormaPrintable } from "./FactureProFormaPrintable";
 
 interface Props {
   onNaviguer: (vue: Vue) => void;
+  // ouvre Administration directement sur l'onglet Catalogue (guide d'une boutique sans catalogue)
+  onOuvrirCatalogueAdministration: () => void;
   // pré-sélection venant du tableau de bord (réabonnement en un clic depuis une alerte, 4.4/9.3)
   abonneInitial?: Abonne;
   idFamilleInitiale?: number;
 }
 
-export function CaissePage({ onNaviguer, abonneInitial, idFamilleInitiale }: Props) {
+export function CaissePage({ onNaviguer, onOuvrirCatalogueAdministration, abonneInitial, idFamilleInitiale }: Props) {
   const { session, deconnecter } = useAuth();
   const token = session!.token;
   const utilisateur = session!.utilisateur;
@@ -94,6 +97,9 @@ export function CaissePage({ onNaviguer, abonneInitial, idFamilleInitiale }: Pro
   // indépendant du ticket formule/kit, activé depuis la catégorie dédiée
   const [modeProduits, setModeProduits] = useState(false);
   const [produits, setProduits] = useState<Produit[]>([]);
+  // « catalogue vide » ne se dit qu'une fois les deux chargements terminés avec succès (jamais pendant le chargement)
+  const [famillesChargees, setFamillesChargees] = useState(false);
+  const [produitsCharges, setProduitsCharges] = useState(false);
   const [panierProduits, setPanierProduits] = useState<LignePanier[]>([]);
 
   function gererErreur(erreur: unknown, messageParDefaut: string) {
@@ -109,6 +115,7 @@ export function CaissePage({ onNaviguer, abonneInitial, idFamilleInitiale }: Pro
     chargerCatalogue(token)
       .then((data) => {
         setFamilles(data);
+        setFamillesChargees(true);
         setFamilleSelectionneeId((id) => id ?? data[0]?.idFamille ?? null);
       })
       .catch((e) => gererErreur(e, "Impossible de charger le catalogue."));
@@ -165,7 +172,10 @@ export function CaissePage({ onNaviguer, abonneInitial, idFamilleInitiale }: Pro
   // 5.2, 5.3 : catalogue produits/services du site, pour la vente rapide hors abonnement
   useEffect(() => {
     chargerProduits(token, utilisateur.siteId)
-      .then((data) => setProduits(data.filter((p) => p.type === "BIEN" || p.type === "SERVICE")))
+      .then((data) => {
+        setProduits(data.filter((p) => p.type === "BIEN" || p.type === "SERVICE"));
+        setProduitsCharges(true);
+      })
       .catch((e) => gererErreur(e, "Impossible de charger le catalogue de produits/services."));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, utilisateur.siteId]);
@@ -526,6 +536,8 @@ export function CaissePage({ onNaviguer, abonneInitial, idFamilleInitiale }: Pro
           total={modeProduits ? totalTicketProduits : totalTicket}
           onRetour={() => setProFormaVisible(false)}
         />
+      ) : famillesChargees && produitsCharges && familles.length === 0 && produits.length === 0 ? (
+        <CatalogueVideGuide role={utilisateur.role} onNaviguer={onNaviguer} onOuvrirCatalogueAdministration={onOuvrirCatalogueAdministration} />
       ) : (
         <div className="flex min-h-0 flex-1">
           <CategoriesPanel

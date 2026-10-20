@@ -1,5 +1,6 @@
 import { db } from "./db/client.js";
 import { appliquerMigrations } from "./db/appliquer-migrations.js";
+import { checkpointerBase, installerArretPropre, planifierCheckpoint } from "./db/arret-propre.js";
 import { buildApp } from "./app.js";
 import { obtenirSecretJwt } from "./config/jwt-secret.js";
 import { obtenirCleChiffrement } from "./config/encryption-key.js";
@@ -11,6 +12,9 @@ import { resoudreDossierInterfaceWeb } from "./lib/interface-web.js";
 
 // 2.6 : base restaurée ou application mise à jour — mise à niveau avant toute requête
 appliquerMigrations(db);
+// mboapilot.db doit être complet à lui seul dès le démarrage (une fermeture brutale précédente a pu laisser des écritures
+// dans le journal -wal), puis régulièrement, et à l'arrêt propre : voir db/arret-propre.ts
+checkpointerBase(db);
 
 // clé de chiffrement contrôlée dès le démarrage : un fichier illisible doit se voir tout de suite, pas à la première saisie d'un compte partagé
 try {
@@ -36,6 +40,8 @@ app
     revaliderLicence(db, new Date().toISOString());
     planifierJobQuotidien(db);
     planifierSauvegardeQuotidienne(db, dossierSauvegardes);
+    planifierCheckpoint(db);
+    installerArretPropre(app, db);
   })
   .catch((erreur) => {
     console.error(erreur);

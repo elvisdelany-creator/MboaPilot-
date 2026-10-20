@@ -74,6 +74,78 @@ describe("executerJobQuotidien — expiration (4.3)", () => {
   });
 });
 
+// Décision du 2026-10-19 : si le poste était éteint le jour exact d'un palier (dimanche, coupure), l'alerte du palier
+// atteint est créée au premier job suivant, une seule fois par cycle d'abonnement.
+describe("executerJobQuotidien — rattrapage des alertes manquées (4.4)", () => {
+  const alertesDe = (numero: number) => db.select().from(schema.alerteEcheance).where(eq(schema.alerteEcheance.numeroAbonnement, numero)).all();
+
+  it("crée l'alerte J-7 manquée quand le poste redémarre à J-5", () => {
+    const abonne = creerAbonne("690000021");
+    const sub = creerAbonnement(abonne.idAbonne, "2025-10-01", "2025-10-30");
+
+    const resultat = executerJobQuotidien(db, "2025-10-25"); // J-5 : le J-7 (23/10) est passé sans job
+
+    expect(resultat.alertesCreees).toBe(1);
+    expect(alertesDe(sub.numeroAbonnement).map((a) => [a.jalonJours, a.dateDeclenchement])).toEqual([[7, "2025-10-25"]]);
+  });
+
+  it("ne rattrape qu'une fois : les jours suivants du même palier ne créent rien", () => {
+    const abonne = creerAbonne("690000022");
+    const sub = creerAbonnement(abonne.idAbonne, "2025-10-01", "2025-10-30");
+
+    executerJobQuotidien(db, "2025-10-25"); // J-5
+    const lendemain = executerJobQuotidien(db, "2025-10-26"); // J-4, même palier
+
+    expect(lendemain.alertesCreees).toBe(0);
+    expect(alertesDe(sub.numeroAbonnement)).toHaveLength(1);
+  });
+
+  it("crée ensuite l'alerte du palier suivant (J-3) puis celle de J-1, chacune une fois", () => {
+    const abonne = creerAbonne("690000023");
+    const sub = creerAbonnement(abonne.idAbonne, "2025-10-01", "2025-10-30");
+
+    executerJobQuotidien(db, "2025-10-25"); // rattrape J-7
+    executerJobQuotidien(db, "2025-10-27"); // J-3 exact
+    executerJobQuotidien(db, "2025-10-28"); // J-2 : même palier que J-3, rien de plus
+    executerJobQuotidien(db, "2025-10-29"); // J-1 exact
+
+    expect(alertesDe(sub.numeroAbonnement).map((a) => a.jalonJours).sort((a, b) => b - a)).toEqual([7, 3, 1]);
+  });
+
+  it("à la reprise après plusieurs jours d'arrêt, ne crée que l'alerte du palier atteint (pas toutes celles manquées)", () => {
+    const abonne = creerAbonne("690000024");
+    const sub = creerAbonnement(abonne.idAbonne, "2025-10-01", "2025-10-30");
+
+    const resultat = executerJobQuotidien(db, "2025-10-28"); // J-2 : J-7 et J-3 manqués
+
+    expect(resultat.alertesCreees).toBe(1);
+    expect(alertesDe(sub.numeroAbonnement).map((a) => a.jalonJours)).toEqual([3]);
+  });
+
+  it("recommence au cycle suivant : après un réabonnement, les alertes du nouveau cycle se créent à nouveau", () => {
+    const abonne = creerAbonne("690000025");
+    const sub = creerAbonnement(abonne.idAbonne, "2025-10-01", "2025-10-30");
+    executerJobQuotidien(db, "2025-10-25"); // alerte J-7 du cycle 1
+
+    // réabonnement : même numéro, nouvelle date de fin
+    db.update(schema.abonnement).set({ dateDebut: "2025-10-30", dateFin: "2025-11-29" }).where(eq(schema.abonnement.numeroAbonnement, sub.numeroAbonnement)).run();
+    const resultat = executerJobQuotidien(db, "2025-11-22"); // J-7 du cycle 2
+
+    expect(resultat.alertesCreees).toBe(1);
+    expect(alertesDe(sub.numeroAbonnement)).toHaveLength(2);
+  });
+
+  it("n'alerte pas un abonnement qui a plus de 7 jours devant lui, ni un abonnement déjà expiré", () => {
+    const abonne = creerAbonne("690000026");
+    creerAbonnement(abonne.idAbonne, "2025-10-01", "2025-10-30");
+    expect(executerJobQuotidien(db, "2025-10-15").alertesCreees).toBe(0);
+
+    const expire = executerJobQuotidien(db, "2025-11-05"); // dépassé : il expire, aucune alerte de rappel
+    expect(expire.alertesCreees).toBe(0);
+    expect(expire.abonnementsExpires).toBe(1);
+  });
+});
+
 describe("executerJobQuotidien — alertes J-7/J-3/J-1 (4.4)", () => {
   it("crée une alerte J-7 pour un abonnement à échéance dans 7 jours", () => {
     const abonne = creerAbonne("690000003");
@@ -118,9 +190,9 @@ describe("executerJobQuotidien — alertes J-7/J-3/J-1 (4.4)", () => {
     const abonne = creerAbonne("690000009");
     const sub = creerAbonnement(abonne.idAbonne, "2025-10-01", "2025-10-30");
 
-    // J-7 n'est plus un seuil configuré : aucune alerte
-    const resultatJ7 = executerJobQuotidien(db, "2025-10-23");
-    expect(resultatJ7.alertesCreees).toBe(0);
+    // J-12 : avant le premier seuil configuré (10), aucune alerte
+    const resultatJ12 = executerJobQuotidien(db, "2025-10-18");
+    expect(resultatJ12.alertesCreees).toBe(0);
 
     // J-10 (nouveau seuil "anticipé") déclenche bien une alerte
     const resultatJ10 = executerJobQuotidien(db, "2025-10-20");

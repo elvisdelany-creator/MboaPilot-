@@ -50,12 +50,14 @@ export function ParametresTab() {
   const [dureeConservationDonnees, setDureeConservationDonnees] = useState("1095");
   const [delaiGrace, setDelaiGrace] = useState("0");
   const [tauxGarantie, setTauxGarantie] = useState("0");
+  const [plafondRemise, setPlafondRemise] = useState("20");
   const [enCours, setEnCours] = useState(false);
   const [enCoursJalons, setEnCoursJalons] = useState(false);
   const [enCoursMdp, setEnCoursMdp] = useState(false);
   const [enCoursConservation, setEnCoursConservation] = useState(false);
   const [enCoursDelaiGrace, setEnCoursDelaiGrace] = useState(false);
   const [enCoursTauxGarantie, setEnCoursTauxGarantie] = useState(false);
+  const [enCoursPlafondRemise, setEnCoursPlafondRemise] = useState(false);
   const [sauvegardes, setSauvegardes] = useState<Sauvegarde[]>([]);
   const [exportEnCours, setExportEnCours] = useState(false);
   // 3.2.1, 13.2 : "personnalisation par entreprise (logo...)" sur les documents commerciaux
@@ -90,6 +92,7 @@ export function ParametresTab() {
         setDureeConservationDonnees(String(infos.entreprise.dureeConservationDonneesJours));
         setDelaiGrace(String(infos.entreprise.delaiGraceReabonnementJours));
         setTauxGarantie(String(infos.entreprise.tauxGarantiePourcent));
+        setPlafondRemise(String(infos.entreprise.plafondRemiseCaissierPourcent));
         setImprimanteHote(infos.site.imprimanteHote ?? "");
         setImprimantePort(String(infos.site.imprimantePort ?? 9100));
       })
@@ -249,6 +252,20 @@ export function ParametresTab() {
       gererErreur(erreur, "Échec de l'enregistrement du taux de garantie.");
     } finally {
       setEnCoursTauxGarantie(false);
+    }
+  }
+
+  // 6.4, 2.5.1 : plafond de remise d'un caissier (gérant et administrateur : aucune limite)
+  async function enregistrerPlafondRemise() {
+    setEnCoursPlafondRemise(true);
+    try {
+      await modifierEntrepriseRequete(token, { plafondRemiseCaissierPourcent: lireEntierSaisi(plafondRemise, "Le plafond de remise") });
+      toast.success("Plafond de remise enregistré.");
+      rechargerEntreprise();
+    } catch (erreur) {
+      gererErreur(erreur, "Échec de l'enregistrement du plafond de remise.");
+    } finally {
+      setEnCoursPlafondRemise(false);
     }
   }
 
@@ -430,6 +447,29 @@ export function ParametresTab() {
         </div>
         <Button className="w-fit cursor-pointer" disabled={enCoursTauxGarantie} onClick={enregistrerTauxGarantie}>
           {enCoursTauxGarantie ? "Enregistrement…" : "Enregistrer"}
+        </Button>
+      </Card>
+
+      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Remises à la caisse</p>
+      <Card className="max-w-xl gap-4 p-4">
+        <p className="text-sm text-muted-foreground">
+          Remise maximale qu'un caissier peut accorder sur une ligne, en pourcentage de son prix (6.4) — 20 % par défaut. Un gérant ou un
+          administrateur n'a pas de limite. 0 % interdit toute remise au caissier.
+        </p>
+        <div>
+          <Label htmlFor="parametres-plafond-remise">Plafond de remise du caissier (%)</Label>
+          <Input
+            id="parametres-plafond-remise"
+            type="number"
+            min={0}
+            max={100}
+            value={plafondRemise}
+            onChange={(e) => setPlafondRemise(e.target.value)}
+            className="mt-1 max-w-32"
+          />
+        </div>
+        <Button className="w-fit cursor-pointer" disabled={enCoursPlafondRemise} onClick={enregistrerPlafondRemise}>
+          {enCoursPlafondRemise ? "Enregistrement…" : "Enregistrer"}
         </Button>
       </Card>
 

@@ -944,3 +944,61 @@ describe("recruterAbonne : contrôle de l'apporteur (6.3)", () => {
   });
 });
 
+// Décision du 2026-10-19 : le lien client↔apporteur reste permanent, mais un apporteur DÉSACTIVÉ ne touche plus de
+// commission sur les nouveaux recrutements de ses anciens clients.
+describe("recruterAbonne : commission d'un apporteur désactivé (6.2, 6.3)", () => {
+  const recruterClientDeLApporteur = (actif: 0 | 1) => {
+    db.update(schema.entreprise).set({ tauxCommissionVendeurDefaut: 100 }).run();
+    const apporteur = creerApporteur(db, { nom: "Jean Apporteur", tauxCommissionDefaut: 200 });
+    const client = db.insert(schema.abonne).values({ siteId, nom: "Ancien", prenom: "Client", telephone: "699999999", apporteurId: apporteur.idApporteur }).returning().get();
+    db.update(schema.sousDistributeur).set({ actif }).where(eq(schema.sousDistributeur.idApporteur, apporteur.idApporteur)).run();
+
+    const resultat = recruterAbonne(db, {
+      siteId,
+      userId,
+      aujourdHui: "2025-11-16",
+      abonne: { idAbonne: client.idAbonne },
+      idFormule: formuleToutCanalPlus,
+      idKit: kitGlobalZ,
+      montantEncaisse: 29000,
+    });
+    return { apporteur, resultat };
+  };
+
+  it("ne crée aucune commission quand l'apporteur du client est désactivé, mais garde le lien", () => {
+    const { apporteur, resultat } = recruterClientDeLApporteur(0);
+
+    expect(db.select().from(schema.suiviCommissionCanalplus).where(eq(schema.suiviCommissionCanalplus.numeroAbonnement, resultat.numeroAbonnement)).all()).toHaveLength(0);
+    expect(db.select().from(schema.abonnement).where(eq(schema.abonnement.numeroAbonnement, resultat.numeroAbonnement)).get()?.apporteurId).toBe(apporteur.idApporteur);
+  });
+
+  it("crée la commission quand l'apporteur est actif (contrôle)", () => {
+    const { resultat } = recruterClientDeLApporteur(1);
+
+    const suivi = db.select().from(schema.suiviCommissionCanalplus).where(eq(schema.suiviCommissionCanalplus.numeroAbonnement, resultat.numeroAbonnement)).get();
+    expect(suivi?.montantCommission).toBe(5800);
+  });
+});
+
+describe("recruterAbonne : plafond de remise du caissier (6.4)", () => {
+  const recruter = (remise: number) =>
+    recruterAbonne(db, {
+      siteId,
+      userId,
+      aujourdHui: "2025-11-16",
+      abonne: { nom: "Nga Ndongo", prenom: "Valentin", telephone: "690000000" },
+      idFormule: formuleDstvCompaq,
+      montantEncaisse: 13000 - remise,
+      remise,
+    });
+
+  it("refuse une remise supérieure au plafond (20 % de 13 000 = 2 600) pour un caissier, sans créer de client", () => {
+    expect(() => recruter(4000)).toThrow(/plafond/i);
+    expect(db.select().from(schema.abonne).all()).toHaveLength(0);
+  });
+
+  it("accepte une remise au plafond", () => {
+    expect(() => recruter(2600)).not.toThrow();
+  });
+});
+

@@ -3,7 +3,7 @@ import { extraireTaxeDuTTC } from "@mboapilot/shared";
 import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
 import { enregistrerMouvement } from "../stock/stock.repository.js";
-import { trouverTauxTvaParSite } from "../entreprise/entreprise.repository.js";
+import { exigerRemiseAutorisee, trouverTauxTvaParSite } from "../entreprise/entreprise.repository.js";
 import { creerPaiement } from "../factures/paiement.repository.js";
 import { creerAbonne, type AbonneInput } from "../abonnes/abonne.repository.js";
 import { verifierEncaissementSaisi, verifierEntier, verifierRemise } from "../../lib/validation.js";
@@ -71,6 +71,7 @@ function creerVenteProduitsSansTransaction(db: Db, params: CreerVenteProduitsPar
     const remise = ligne.remise ?? 0;
     if (remise < 0) throw new Error("La remise ne peut pas être négative");
     if (remise > prixCatalogue) throw new Error(`La remise (${remise}) dépasse le prix catalogue de la ligne (${prixCatalogue})`);
+    exigerRemiseAutorisee(db, params.userId, remise, prixCatalogue);
 
     return { produit, quantite: ligne.quantite, remise, prixApplique: prixCatalogue - remise };
   });

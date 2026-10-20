@@ -1237,6 +1237,7 @@ export async function modifierEntrepriseRequete(
     dureeConservationDonneesJours?: number;
     delaiGraceReabonnementJours?: number;
     tauxGarantiePourcent?: number;
+    plafondRemiseCaissierPourcent?: number;
   }
 ): Promise<InfosEntreprise["entreprise"]> {
   const reponse = await fetch(`${BASE}/entreprise`, {

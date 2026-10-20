@@ -6,7 +6,7 @@ import { creerAbonne, type AbonneInput } from "../abonnes/abonne.repository.js";
 import { construireKitCalcul } from "../catalogue/kit-mapper.js";
 import { compterEcransOccupes, trouverComptePartage } from "../comptes-partages/compte-partage.repository.js";
 import { exigerApporteurActif, trouverApporteur } from "../apporteurs/apporteur.repository.js";
-import { trouverTauxCommissionVendeurParSite, trouverTauxTvaParSite } from "../entreprise/entreprise.repository.js";
+import { exigerRemiseAutorisee, trouverTauxCommissionVendeurParSite, trouverTauxTvaParSite } from "../entreprise/entreprise.repository.js";
 import { decrementerComposantsKit } from "../stock/stock.service.js";
 import { creerPaiement } from "../factures/paiement.repository.js";
 import { creerSuiviCommissionCanalplus } from "./suivi-commission-canalplus.repository.js";
@@ -92,6 +92,7 @@ function recruterAbonneSansTransaction(db: Db, params: RecruterAbonneParams): Re
   const remise = params.remise ?? 0;
   if (remise < 0) throw new Error("La remise ne peut pas être négative");
   if (remise > formule.prix) throw new Error(`La remise (${remise}) dépasse le prix de la formule (${formule.prix})`);
+  exigerRemiseAutorisee(db, params.userId, remise, formule.prix);
 
   const famille = db
     .select()
@@ -215,7 +216,11 @@ function recruterAbonneSansTransaction(db: Db, params: RecruterAbonneParams): Re
   // l'encaissement est immédiat, ou plus tard via commission_canalplus_en_attente
   // si différé (6.6, Mobile Money) : voir paiement-mobile.service.ts.
   let commissionCanalplus: { montantCommission: number; dateFinProbatoire: string } | null = null;
-  if (famille?.libelle === LIBELLE_FAMILLE_CANALPLUS && kitRow) {
+  // le lien client↔apporteur est permanent (6.3), mais un apporteur désactivé ne touche plus de commission sur
+  // les nouveaux recrutements de ses anciens clients
+  const apporteurEffectif = apporteurIdEffectif !== undefined ? trouverApporteur(db, apporteurIdEffectif) : undefined;
+  const apporteurDesactive = apporteurEffectif !== undefined && apporteurEffectif.actif !== 1;
+  if (famille?.libelle === LIBELLE_FAMILLE_CANALPLUS && kitRow && !apporteurDesactive) {
     const dateFinProbatoire = calculerDateFin(dateDebut, DUREE_PROBATION_CANALPLUS_CYCLES, "STRICT_30J");
     // 6.2, 8.8 : montant_commission = calculer_commission(...) — taux de
     // l'apporteur référent s'il est renseigné (et configuré), sinon taux

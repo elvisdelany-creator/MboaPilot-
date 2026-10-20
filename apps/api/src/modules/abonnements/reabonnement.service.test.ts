@@ -144,6 +144,7 @@ describe("reabonner (7.2)", () => {
 
   // réabonnement offert (remise = prix de la formule) : rien n'est dû, la facture ne doit pas rester BROUILLON
   it("6.4 : un réabonnement dont le total est 0 FCFA (remise totale) est validé d'emblée, sans paiement fictif", () => {
+    db.update(schema.entreprise).set({ plafondRemiseCaissierPourcent: 100 }).run(); // le sujet ici est le total nul, pas le plafond
     const resultat = reabonner(db, { siteId, userId, aujourdHui: "2025-12-20", numeroAbonnement, montantEncaisse: 0, remise: 13000 });
 
     expect(resultat.statutFacture).toBe("VALIDEE");
@@ -408,3 +409,11 @@ describe("reabonner : capacité du compte partagé (5.9)", () => {
     expect(() => reabonner(db, { siteId, userId, aujourdHui: "2025-12-20", numeroAbonnement, montantEncaisse: 13000 })).toThrow(/désactivé/i);
   });
 });
+
+describe("reabonner : plafond de remise du caissier (6.4)", () => {
+  it("refuse une remise supérieure au plafond (20 % de 13 000 = 2 600) pour un caissier", () => {
+    expect(() => reabonner(db, { siteId, userId, aujourdHui: "2025-12-20", numeroAbonnement, montantEncaisse: 9000, remise: 4000 })).toThrow(/plafond/i);
+    expect(() => reabonner(db, { siteId, userId, aujourdHui: "2025-12-20", numeroAbonnement, montantEncaisse: 10400, remise: 2600 })).not.toThrow();
+  });
+});
+

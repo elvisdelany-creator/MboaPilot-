@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm";
-import { detecterJalonAlerte, evaluerExpiration, evaluerSuiviCommission } from "@mboapilot/shared";
+import { classerUrgenceEcheance, decalerJour, evaluerExpiration, evaluerSuiviCommission, joursAvantEcheance } from "@mboapilot/shared";
 import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
 import { trouverDureeConservationDonneesEntreprise, trouverJalonsAlerteEntreprise } from "../entreprise/entreprise.repository.js";
@@ -76,14 +76,20 @@ export function executerJobQuotidien(
       continue; // un abonnement qui vient d'expirer n'est plus éligible à une alerte de rappel
     }
 
-    const jalon = detecterJalonAlerte(abonnement.dateFin, aujourdHui, jalonsConfigures);
+    // 4.4 : palier atteint (le plus urgent dont le seuil est franchi), et non plus « exactement le jour du seuil » :
+    // si le poste était éteint le jour exact (dimanche, coupure), l'alerte est rattrapée au premier job suivant.
+    const joursRestants = joursAvantEcheance(abonnement.dateFin, aujourdHui);
+    const jalon = joursRestants >= 0 ? classerUrgenceEcheance(joursRestants, jalonsConfigures) : null;
     if (jalon) {
+      // une seule alerte par palier ET par cycle : une alerte de ce palier déjà créée dans la fenêtre qui précède la
+      // date de fin courante ; celles d'un cycle précédent (avant un réabonnement) sont plus anciennes et ne comptent pas
+      const debutFenetre = decalerJour(abonnement.dateFin, -jalonsConfigures.anticipe);
       const dejaEnvoyee = db
         .select()
         .from(schema.alerteEcheance)
         .where(eq(schema.alerteEcheance.numeroAbonnement, abonnement.numeroAbonnement))
         .all()
-        .some((a) => a.jalonJours === jalon.jours && a.dateDeclenchement === aujourdHui);
+        .some((a) => a.jalonJours === jalon.jours && a.dateDeclenchement >= debutFenetre);
       if (!dejaEnvoyee) {
         const alerte = db
           .insert(schema.alerteEcheance)

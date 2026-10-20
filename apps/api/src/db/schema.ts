@@ -56,6 +56,9 @@ export const entreprise = sqliteTable("entreprise", {
   // politique)" — taux appliqué au tarif plein d'une réparation SAV ou d'un
   // échange de matériel sous garantie (0 = gratuit, 100 = tarif plein).
   tauxGarantiePourcent: integer("taux_garantie_pourcent").notNull().default(0),
+  // 6.4, 2.5.1 : plafond de remise ponctuelle d'un CAISSIER, en % du prix de la ligne (gérant et administrateur n'ont
+  // pas de limite). 20 % par défaut ; 0 interdit toute remise au caissier, 100 revient à ne pas la limiter.
+  plafondRemiseCaissierPourcent: integer("plafond_remise_caissier_pourcent").notNull().default(20),
   dateCreation: text("date_creation").notNull().default(now),
 });
 

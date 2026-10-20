@@ -25,6 +25,7 @@ export interface InfosEntreprise {
     dureeConservationDonneesJours: number;
     delaiGraceReabonnementJours: number;
     tauxGarantiePourcent: number;
+    plafondRemiseCaissierPourcent: number;
   };
   site: { idSite: number; nom: string; adresse: string | null; imprimanteHote: string | null; imprimantePort: number | null };
 }
@@ -57,6 +58,7 @@ export function trouverInfosEntrepriseParSite(db: Db, siteId: number): InfosEntr
       dureeConservationDonneesJours: entreprise.dureeConservationDonneesJours,
       delaiGraceReabonnementJours: entreprise.delaiGraceReabonnementJours,
       tauxGarantiePourcent: entreprise.tauxGarantiePourcent,
+      plafondRemiseCaissierPourcent: entreprise.plafondRemiseCaissierPourcent,
     },
     site: { idSite: site.idSite, nom: site.nom, adresse: site.adresse, imprimanteHote: site.imprimanteHote, imprimantePort: site.imprimantePort },
   };
@@ -163,6 +165,22 @@ export function trouverTauxGarantieEntreprise(db: Db): number {
   return entreprise?.tauxGarantiePourcent ?? TAUX_GARANTIE_PAR_DEFAUT;
 }
 
+const PLAFOND_REMISE_CAISSIER_PAR_DEFAUT = 20;
+
+// 6.4, 2.5.1 : un CAISSIER ne peut pas remiser au-delà d'un pourcentage du prix de la ligne (20 % par défaut, réglable) ;
+// gérant, administrateur et autres rôles n'ont pas de limite. `prixBase` = prix de la ligne avant remise.
+export function exigerRemiseAutorisee(db: Db, userId: number, remise: number, prixBase: number): void {
+  if (!(remise > 0)) return;
+  const utilisateur = db.select().from(schema.utilisateur).where(eq(schema.utilisateur.idUser, userId)).get();
+  if (utilisateur?.role !== "CAISSIER") return;
+
+  const plafond = db.select().from(schema.entreprise).get()?.plafondRemiseCaissierPourcent ?? PLAFOND_REMISE_CAISSIER_PAR_DEFAUT;
+  // comparaison en entiers : remise / prixBase <= plafond / 100
+  if (remise * 100 > prixBase * plafond) {
+    throw new Error(`La remise (${remise} FCFA) dépasse le plafond autorisé pour un caissier (${plafond} % du prix de la ligne, soit ${Math.floor((prixBase * plafond) / 100)} FCFA). Demandez à un gérant.`);
+  }
+}
+
 export interface ModifierEntrepriseInput {
   tauxTva?: number | null;
   mentionsLegales?: string | null;
@@ -178,6 +196,7 @@ export interface ModifierEntrepriseInput {
   politiqueMdpExigerCaractereSpecial?: boolean;
   delaiGraceReabonnementJours?: number;
   tauxGarantiePourcent?: number;
+  plafondRemiseCaissierPourcent?: number;
 }
 
 // 6.1, 6.2, 4.4, 8.8 : paramétrage des taxes applicables (le cas échéant),
@@ -201,6 +220,7 @@ export function modifierEntreprise(db: Db, idEntreprise: number, input: Modifier
   verifierEntier(input.politiqueMdpLongueurMin, "La longueur minimale du mot de passe", { min: SANS_BORNE, nullable: false });
   verifierEntier(input.delaiGraceReabonnementJours, "Le délai de grâce de réabonnement", { nullable: false });
   verifierEntier(input.tauxGarantiePourcent, "Le taux de garantie", { min: SANS_BORNE, nullable: false });
+  verifierEntier(input.plafondRemiseCaissierPourcent, "Le plafond de remise du caissier", { min: SANS_BORNE, nullable: false });
   verifierBooleen(input.politiqueMdpExigerMajuscule, "L'exigence de majuscule");
   verifierBooleen(input.politiqueMdpExigerChiffre, "L'exigence de chiffre");
   verifierBooleen(input.politiqueMdpExigerCaractereSpecial, "L'exigence de caractère spécial");
@@ -238,6 +258,10 @@ export function modifierEntreprise(db: Db, idEntreprise: number, input: Modifier
     throw new Error("Le taux de garantie doit être compris entre 0 et 100 %");
   }
 
+  if (input.plafondRemiseCaissierPourcent !== undefined && (input.plafondRemiseCaissierPourcent < 0 || input.plafondRemiseCaissierPourcent > 100)) {
+    throw new Error("Le plafond de remise du caissier doit être compris entre 0 et 100 %");
+  }
+
   // 6.1 : un taux négatif rend le calcul de taxe mathématiquement impossible
   // (division par zéro ou négative dans extraireTaxeDuTTC) — constaté en
   // test grandeur nature : -100 % accepté sans erreur produisait un
@@ -273,6 +297,7 @@ export function modifierEntreprise(db: Db, idEntreprise: number, input: Modifier
       }),
       ...(input.delaiGraceReabonnementJours !== undefined && { delaiGraceReabonnementJours: input.delaiGraceReabonnementJours }),
       ...(input.tauxGarantiePourcent !== undefined && { tauxGarantiePourcent: input.tauxGarantiePourcent }),
+      ...(input.plafondRemiseCaissierPourcent !== undefined && { plafondRemiseCaissierPourcent: input.plafondRemiseCaissierPourcent }),
     })
     .where(eq(schema.entreprise.idEntreprise, idEntreprise))
     .returning()
@@ -298,4 +323,5 @@ const CHAMPS_AUDITES_ENTREPRISE = [
   "politiqueMdpExigerCaractereSpecial",
   "delaiGraceReabonnementJours",
   "tauxGarantiePourcent",
+  "plafondRemiseCaissierPourcent",
 ] as const;

@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { creerDbTest, type Db } from "../../test-utils/db.js";
 import * as schema from "../../db/schema.js";
 import { creerVenteProduits } from "./vente.service.js";
+import { creerUtilisateur } from "../utilisateurs/utilisateur.repository.js";
 
 let db: Db;
 let siteId: number;
@@ -193,6 +194,7 @@ describe("creerVenteProduits (5.2, 5.3, 8.5)", () => {
   // Une vente offerte (remise = prix) n'a rien à encaisser : elle restait BROUILLON pour toujours, sans pouvoir
   // être encaissée (0 FCFA) ni imprimée (6.4, règle 2), et le stock était pourtant sorti.
   it("6.4 : une vente dont le total est 0 FCFA (remise totale) est validée d'emblée, rien n'étant dû", () => {
+    db.update(schema.entreprise).set({ plafondRemiseCaissierPourcent: 100 }).run(); // le sujet ici est le total nul, pas le plafond
     const resultat = creerVenteProduits(db, { siteId, userId, lignes: [{ idProduit: idService, quantite: 1, remise: 5000 }], montantEncaisse: 0 });
 
     expect(resultat.montantTotal).toBe(0);
@@ -229,3 +231,40 @@ describe("creerVenteProduits (5.2, 5.3, 8.5)", () => {
     expect(facture?.montantTaxe).toBe(833); // 5000 TTC -> HT 4167, taxe 833
   });
 });
+
+// Décision du 2026-10-19 : un caissier ne peut pas dépasser un plafond de remise (20 % par défaut, réglable) ; gérant et
+// administrateur n'ont pas de limite. Sans cela n'importe quel caissier pouvait offrir jusqu'à 100 % d'une ligne.
+describe("creerVenteProduits : plafond de remise du caissier (6.4)", () => {
+  const vendre = (utilisateur: number, remise: number) =>
+    creerVenteProduits(db, { siteId, userId: utilisateur, lignes: [{ idProduit: idService, quantite: 1, remise }], montantEncaisse: 5000 - remise });
+  const gerant = () => creerUtilisateur(db, { siteId, nom: "G", prenom: "G", identifiant: "gerant-remise", motDePasse: "motdepasse-secret", role: "GERANT" }).idUser;
+
+  it("accepte une remise égale au plafond par défaut (20 %) pour un caissier", () => {
+    expect(() => vendre(userId, 1000)).not.toThrow(); // 20 % de 5 000
+  });
+
+  it("refuse une remise supérieure au plafond pour un caissier, sans rien enregistrer", () => {
+    expect(() => vendre(userId, 1001)).toThrow(/plafond/i);
+
+    expect(db.select().from(schema.facture).all()).toHaveLength(0);
+  });
+
+  it("n'applique aucun plafond à un gérant", () => {
+    expect(() => vendre(gerant(), 5000)).not.toThrow();
+  });
+
+  it("respecte le plafond réglé par l'entreprise", () => {
+    db.update(schema.entreprise).set({ plafondRemiseCaissierPourcent: 50 }).run();
+
+    expect(() => vendre(userId, 2500)).not.toThrow();
+    expect(() => vendre(userId, 2501)).toThrow(/plafond/i);
+  });
+
+  it("un plafond à 0 interdit toute remise au caissier", () => {
+    db.update(schema.entreprise).set({ plafondRemiseCaissierPourcent: 0 }).run();
+
+    expect(() => vendre(userId, 1)).toThrow(/plafond/i);
+    expect(() => creerVenteProduits(db, { siteId, userId, lignes: [{ idProduit: idService, quantite: 1 }], montantEncaisse: 5000 })).not.toThrow();
+  });
+});
+

@@ -2,7 +2,7 @@ import { and, eq } from "drizzle-orm";
 import { calculerDateFin, extraireTaxeDuTTC, joursAvantEcheance, peutAffecterEcran } from "@mboapilot/shared";
 import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
-import { trouverDelaiGraceReabonnementEntreprise, trouverTauxTvaParSite } from "../entreprise/entreprise.repository.js";
+import { exigerRemiseAutorisee, trouverDelaiGraceReabonnementEntreprise, trouverTauxTvaParSite } from "../entreprise/entreprise.repository.js";
 import { creerPaiement } from "../factures/paiement.repository.js";
 import { compterEcransOccupes, trouverComptePartage } from "../comptes-partages/compte-partage.repository.js";
 import { verifierEncaissementSaisi } from "../../lib/validation.js";
@@ -89,6 +89,7 @@ function reabonnerSansTransaction(db: Db, params: ReabonnerParams): Reabonnement
   const remise = params.remise ?? 0;
   if (remise < 0) throw new Error("La remise ne peut pas être négative");
   if (remise > formule.prix) throw new Error(`La remise (${remise}) dépasse le prix de la formule (${formule.prix})`);
+  exigerRemiseAutorisee(db, params.userId, remise, formule.prix);
 
   // 4.3, 8.8 : "délai de grâce" — un réabonnement tardif effectué dans ce
   // délai après la date_fin théorique précédente redémarre à compter de

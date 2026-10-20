@@ -1,0 +1,1 @@
+ALTER TABLE `entreprise` ADD `plafond_remise_caissier_pourcent` integer DEFAULT 20 NOT NULL;

@@ -15,7 +15,9 @@ import {
   type ModifierProduitInput,
 } from "./produit.repository.js";
 import { exporterCatalogueCsv, importerCatalogueCsv } from "./catalogue-import-export.service.js";
-import { envoyerErreur } from "../../lib/erreurs-api.js";
+import { envoyerErreur, gestionnaireErreurFastify } from "../../lib/erreurs-api.js";
+
+const TAILLE_MAX_IMPORT_CSV_OCTETS = 10 * 1024 * 1024;
 
 const ERREUR_SITE_PRODUIT = { erreur: "Ce produit n'appartient pas à votre site" };
 
@@ -96,9 +98,21 @@ export function registerProduitsRoutes(app: FastifyInstance, db: Db, guards: Rou
     }
   );
 
+  // un catalogue réel peut compter des dizaines de milliers de références : 10 Mo (environ 110 000 lignes) au lieu de la
+  // limite de 1 Mo des autres routes ; au-delà, un message qui dit quoi faire
   app.post<{ Body: { contenuCsv: string } }>(
     "/api/v1/produits/import-csv",
-    { preHandler: [guards.authRequis, guards.gestionCatalogue] },
+    {
+      bodyLimit: TAILLE_MAX_IMPORT_CSV_OCTETS,
+      errorHandler: (erreur, requete, reply) => {
+        if (erreur.code === "FST_ERR_CTP_BODY_TOO_LARGE") {
+          reply.code(413).send({ erreur: "Le fichier CSV est trop volumineux (10 Mo au maximum) : divisez-le en plusieurs fichiers." });
+          return;
+        }
+        gestionnaireErreurFastify(erreur, requete, reply);
+      },
+      preHandler: [guards.authRequis, guards.gestionCatalogue],
+    },
     async (request, reply) => {
       try {
         reply.code(200).send(importerCatalogueCsv(db, request.user.siteId, request.body.contenuCsv, request.user.idUser));

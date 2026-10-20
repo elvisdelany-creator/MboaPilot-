@@ -51,28 +51,35 @@ export function importerCatalogueCsv(db: Db, siteId: number, contenuCsv: string,
 
   const resultat: ResultatImportCsv = { crees: 0, misAJour: 0, erreurs: [] };
 
-  lignes.forEach((ligne, index) => {
-    const numeroLigne = index + 2; // +1 pour l'en-tête, +1 pour l'index 1-based
-    try {
-      const input = analyserLigneCsv(ligne);
-      const existant = parLibelleMinuscule.get(normaliserLibelle(input.libelle));
-      if (existant) {
-        modifierProduit(db, existant.idProduit, {
-          categorie: input.categorie,
-          prixVente: input.prixVente,
-          coutRevient: input.coutRevient,
-          seuilAlerte: input.seuilAlerte,
-          userId,
+  // une seule transaction pour tout le fichier : bien plus rapide (une écriture disque par ligne sinon) et un import
+  // interrompu (coupure de courant) ne laisse jamais un catalogue à moitié importé. Chaque ligne a son propre point
+  // de reprise : une ligne invalide est rapportée et annulée seule, sans bloquer les suivantes.
+  db.transaction(() => {
+    lignes.forEach((ligne, index) => {
+      const numeroLigne = index + 2; // +1 pour l'en-tête, +1 pour l'index 1-based
+      try {
+        db.transaction(() => {
+          const input = analyserLigneCsv(ligne);
+          const existant = parLibelleMinuscule.get(normaliserLibelle(input.libelle));
+          if (existant) {
+            modifierProduit(db, existant.idProduit, {
+              categorie: input.categorie,
+              prixVente: input.prixVente,
+              coutRevient: input.coutRevient,
+              seuilAlerte: input.seuilAlerte,
+              userId,
+            });
+            resultat.misAJour++;
+          } else {
+            const cree = creerProduit(db, { siteId, ...input });
+            parLibelleMinuscule.set(normaliserLibelle(cree.libelle), cree);
+            resultat.crees++;
+          }
         });
-        resultat.misAJour++;
-      } else {
-        const cree = creerProduit(db, { siteId, ...input });
-        parLibelleMinuscule.set(normaliserLibelle(cree.libelle), cree);
-        resultat.crees++;
+      } catch (erreur) {
+        resultat.erreurs.push({ ligne: numeroLigne, message: erreur instanceof Error ? erreur.message : "Ligne invalide" });
       }
-    } catch (erreur) {
-      resultat.erreurs.push({ ligne: numeroLigne, message: erreur instanceof Error ? erreur.message : "Ligne invalide" });
-    }
+    });
   });
 
   return resultat;

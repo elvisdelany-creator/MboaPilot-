@@ -232,8 +232,13 @@ function recruterAbonneSansTransaction(db: Db, params: RecruterAbonneParams): Re
     commissionCanalplus = { montantCommission: Math.round((montantTotal * tauxPourMille) / 1000), dateFinProbatoire };
   }
 
-  // 6.4 : dès qu'un encaissement (même partiel) est enregistré, la facture devient VALIDEE
-  if (params.montantEncaisse > 0) {
+  if (montantTotal === 0) {
+    // recrutement offert (remise totale) : rien n'est dû, donc rien à encaisser — la facture serait sinon BROUILLON pour
+    // toujours, ni encaissable (0 FCFA) ni imprimable (6.4). Aucune commission CANAL+ n'est suivie : rien n'a été vendu.
+    db.update(schema.facture).set({ statut: "VALIDEE" }).where(eq(schema.facture.idFacture, facture.idFacture)).run();
+    statutFacture = "VALIDEE";
+  } else if (params.montantEncaisse > 0) {
+    // 6.4 : dès qu'un encaissement (même partiel) est enregistré, la facture devient VALIDEE
     creerPaiement(db, {
       idFacture: facture.idFacture,
       mode: params.modePaiement ?? "CASH",

@@ -1002,3 +1002,42 @@ describe("recruterAbonne : plafond de remise du caissier (6.4)", () => {
   });
 });
 
+// Décision du 2026-10-19 : un recrutement dont le total est 0 FCFA (remise totale) est validé d'emblée, sans
+// paiement fictif et sans suivi de commission (rien n'a été vendu).
+describe("recruterAbonne : recrutement offert, total 0 FCFA (6.4)", () => {
+  const recruterOffert = () => {
+    db.update(schema.entreprise).set({ plafondRemiseCaissierPourcent: 100 }).run(); // le sujet ici est le total nul
+    return recruterAbonne(db, {
+      siteId,
+      userId,
+      aujourdHui: "2025-11-16",
+      abonne: { nom: "Nga Ndongo", prenom: "Valentin", telephone: "690000000" },
+      idFormule: formuleDstvCompaq,
+      montantEncaisse: 0,
+      remise: 13000,
+    });
+  };
+
+  it("valide la facture d'emblée, sans paiement fictif", () => {
+    const resultat = recruterOffert();
+
+    expect(resultat.statutFacture).toBe("VALIDEE");
+    expect(db.select().from(schema.facture).where(eq(schema.facture.idFacture, resultat.idFacture)).get()).toMatchObject({ statut: "VALIDEE", montantTotal: 0 });
+    expect(db.select().from(schema.paiement).where(eq(schema.paiement.idFacture, resultat.idFacture)).all()).toHaveLength(0);
+  });
+
+  it("un recrutement à total positif sans encaissement reste BROUILLON (contrôle)", () => {
+    db.update(schema.entreprise).set({ plafondRemiseCaissierPourcent: 100 }).run();
+    const resultat = recruterAbonne(db, {
+      siteId,
+      userId,
+      aujourdHui: "2025-11-16",
+      abonne: { nom: "Nga Ndongo", prenom: "Valentin", telephone: "690000000" },
+      idFormule: formuleDstvCompaq,
+      montantEncaisse: 0,
+      remise: 1000,
+    });
+    expect(resultat.statutFacture).toBe("BROUILLON");
+  });
+});
+

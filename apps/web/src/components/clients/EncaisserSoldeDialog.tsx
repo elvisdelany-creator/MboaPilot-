@@ -1,15 +1,17 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Wallet } from "lucide-react";
-import { excedentEncaissementSuspect } from "@mboapilot/shared";
+import { excedentEncaissementSuspect, MESSAGE_FORME_TELEPHONE, telephoneValide } from "@mboapilot/shared";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ConfirmationSurpaiementDialog } from "@/components/shared/ConfirmationSurpaiementDialog";
+import { PaiementMobileMoneyDialog } from "@/components/caisse/PaiementMobileMoneyDialog";
 import { encaisserSoldeFactureRequete, ErreurAuthentification, type ModePaiementEncaissement } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
+import type { ParcoursPaiementMobile } from "@/lib/types";
 
 interface Props {
   // 6.4 point 5, 9.4 : réutilisé pour n'importe quelle facture (fiche client
@@ -22,6 +24,9 @@ interface Props {
 
 const formateurFcfa = new Intl.NumberFormat("fr-FR");
 
+// le solde se règle aussi par Mobile Money (parcours dédié : code USSD du client ou demande envoyée à son téléphone)
+type ModeSolde = ModePaiementEncaissement | "MOBILE_MONEY";
+
 // 6.4 point 5, 9.4 : "un solde restant dû... peut faire l'objet
 // d'encaissements complémentaires ultérieurs" — même geste d'encaissement
 // que pour une vente, mais sur une facture déjà créée.
@@ -31,12 +36,15 @@ export function EncaisserSoldeDialog({ facture, solde, onFerme, onSucces }: Prop
   const utilisateur = session!.utilisateur;
 
   const [montant, setMontant] = useState(solde);
-  const [modePaiement, setModePaiement] = useState<ModePaiementEncaissement>("CASH");
+  const [modePaiement, setModePaiement] = useState<ModeSolde>("CASH");
   const [banque, setBanque] = useState("");
   const [numeroCheque, setNumeroCheque] = useState("");
   const [titulaireCheque, setTitulaireCheque] = useState("");
   const [dateCheque, setDateCheque] = useState("");
   const [referenceVirement, setReferenceVirement] = useState("");
+  const [numeroTelephone, setNumeroTelephone] = useState("");
+  const [parcours, setParcours] = useState<ParcoursPaiementMobile>("USSD_CLIENT");
+  const [paiementMobileOuvert, setPaiementMobileOuvert] = useState(false);
   const [enCours, setEnCours] = useState(false);
   const [confirmationSurpaiement, setConfirmationSurpaiement] = useState(false);
 
@@ -48,9 +56,16 @@ export function EncaisserSoldeDialog({ facture, solde, onFerme, onSucces }: Prop
     setTitulaireCheque("");
     setDateCheque("");
     setReferenceVirement("");
+    setNumeroTelephone("");
+    setParcours("USSD_CLIENT");
+    setPaiementMobileOuvert(false);
   }, [facture, solde]);
 
   function valider() {
+    if (modePaiement === "MOBILE_MONEY") {
+      setPaiementMobileOuvert(true);
+      return;
+    }
     if (modePaiement === "CASH" && excedentEncaissementSuspect(montant, solde)) {
       setConfirmationSurpaiement(true);
       return;
@@ -59,7 +74,7 @@ export function EncaisserSoldeDialog({ facture, solde, onFerme, onSucces }: Prop
   }
 
   async function soumettre() {
-    if (!facture || montant <= 0) return;
+    if (!facture || montant <= 0 || modePaiement === "MOBILE_MONEY") return;
     setConfirmationSurpaiement(false);
     setEnCours(true);
     try {
@@ -104,7 +119,7 @@ export function EncaisserSoldeDialog({ facture, solde, onFerme, onSucces }: Prop
         <div className="space-y-4">
           <div>
             <Label htmlFor="solde-mode-paiement">Mode de paiement</Label>
-            <Select value={modePaiement} onValueChange={(v) => setModePaiement(v as ModePaiementEncaissement)}>
+            <Select value={modePaiement} onValueChange={(v) => setModePaiement(v as ModeSolde)}>
               <SelectTrigger id="solde-mode-paiement" className="mt-1 w-full">
                 <SelectValue />
               </SelectTrigger>
@@ -112,6 +127,7 @@ export function EncaisserSoldeDialog({ facture, solde, onFerme, onSucces }: Prop
                 <SelectItem value="CASH">Comptant (cash)</SelectItem>
                 <SelectItem value="CHEQUE">Chèque</SelectItem>
                 <SelectItem value="VIREMENT">Virement bancaire</SelectItem>
+                <SelectItem value="MOBILE_MONEY">Mobile Money</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -174,6 +190,31 @@ export function EncaisserSoldeDialog({ facture, solde, onFerme, onSucces }: Prop
               </div>
             </div>
           )}
+
+          {/* 6.6 : Mobile Money — téléphone du client et parcours (code USSD saisi par le client, ou demande envoyée à son téléphone) */}
+          {modePaiement === "MOBILE_MONEY" && (
+            <div className="space-y-3">
+              <div>
+                <Label htmlFor="solde-mobile-telephone">Téléphone du client</Label>
+                <Input id="solde-mobile-telephone" type="tel" value={numeroTelephone} onChange={(e) => setNumeroTelephone(e.target.value)} className="mt-1" />
+                {numeroTelephone.trim() !== "" && !telephoneValide(numeroTelephone) && (
+                  <p className="mt-1 text-sm text-destructive">Le téléphone {MESSAGE_FORME_TELEPHONE}</p>
+                )}
+              </div>
+              <div>
+                <Label htmlFor="solde-mobile-parcours">Parcours</Label>
+                <Select value={parcours} onValueChange={(v) => setParcours(v as ParcoursPaiementMobile)}>
+                  <SelectTrigger id="solde-mobile-parcours" className="mt-1 w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="USSD_CLIENT">Le client compose le code USSD</SelectItem>
+                    <SelectItem value="PUSH_MARCHAND">Demande envoyée au téléphone du client</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          )}
         </div>
 
         <DialogFooter>
@@ -186,7 +227,8 @@ export function EncaisserSoldeDialog({ facture, solde, onFerme, onSucces }: Prop
               enCours ||
               montant <= 0 ||
               (modePaiement === "CHEQUE" && !(banque.trim() && numeroCheque.trim() && titulaireCheque.trim() && dateCheque)) ||
-              (modePaiement === "VIREMENT" && !(banque.trim() && referenceVirement.trim()))
+              (modePaiement === "VIREMENT" && !(banque.trim() && referenceVirement.trim())) ||
+              (modePaiement === "MOBILE_MONEY" && (!telephoneValide(numeroTelephone) || montant > solde))
             }
             onClick={valider}
           >
@@ -195,6 +237,20 @@ export function EncaisserSoldeDialog({ facture, solde, onFerme, onSucces }: Prop
           </Button>
         </DialogFooter>
       </DialogContent>
+
+      <PaiementMobileMoneyDialog
+        ouvert={paiementMobileOuvert}
+        idFacture={facture?.idFacture ?? null}
+        montant={montant}
+        numeroTelephone={numeroTelephone}
+        parcours={parcours}
+        onFerme={() => setPaiementMobileOuvert(false)}
+        onSucces={() => {
+          setPaiementMobileOuvert(false);
+          toast.success(montant < solde ? `${formateurFcfa.format(montant)} FCFA encaissés par Mobile Money — solde restant de ${formateurFcfa.format(solde - montant)} FCFA.` : `${formateurFcfa.format(montant)} FCFA encaissés par Mobile Money — facture soldée.`);
+          onSucces();
+        }}
+      />
 
       <ConfirmationSurpaiementDialog
         open={confirmationSurpaiement}

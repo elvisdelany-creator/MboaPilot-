@@ -28,8 +28,8 @@ export interface InitierPaiementMobileParams {
   parcours: ParcoursPaiementMobile;
 }
 
-// 6.6 : initie une transaction de paiement mobile sur une facture existante
-// (créée BROUILLON par le flux caisse/SAV concerné, avec montantEncaisse=0).
+// 6.6 : initie une transaction de paiement mobile sur une facture existante : créée BROUILLON par le flux caisse/SAV
+// concerné (montantEncaisse=0), ou déjà VALIDEE avec un solde restant dû (acompte encaissé par un autre moyen).
 export async function initierPaiementMobile(db: Db, fournisseur: FournisseurPaiementMobile, params: InitierPaiementMobileParams) {
   verifierEntier(params.montant, "Le montant du paiement mobile", { min: 1, max: MONTANT_MAX, requis: true, nullable: false, message: "Le montant du paiement mobile doit être positif" });
   const numeroTelephone = telephoneObligatoire(params.numeroTelephone, "Le numéro de téléphone du paiement mobile");
@@ -37,10 +37,11 @@ export async function initierPaiementMobile(db: Db, fournisseur: FournisseurPaie
 
   const facture = db.select().from(schema.facture).where(eq(schema.facture.idFacture, params.idFacture)).get();
   if (!facture) throw new Error(`Facture ${params.idFacture} introuvable`);
-  if (facture.statut === "VALIDEE") throw new Error("Cette facture est déjà validée");
   if (facture.type === "AVOIR") throw new Error("Une facture d'avoir ne peut pas être payée par Mobile Money");
   // un client débité au-delà de ce qu'il doit n'est remboursable que par un avoir : on refuse en amont
   const solde = soldeDuFacture(db, facture);
+  // une facture VALIDEE (acompte déjà encaissé) peut régler son solde par Mobile Money ; seule une facture soldée est refusée
+  if (facture.statut === "VALIDEE" && solde <= 0) throw new Error("Cette facture est déjà soldée");
   if (params.montant > solde) throw new Error(`Le montant (${formaterFcfa(params.montant)} FCFA) dépasse le solde dû de la facture (${formaterFcfa(Math.max(0, solde))} FCFA)`);
 
   // 6.6 : une seule transaction à la fois par facture — sinon deux

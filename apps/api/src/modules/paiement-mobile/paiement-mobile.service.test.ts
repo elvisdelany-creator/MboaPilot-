@@ -57,12 +57,46 @@ describe("initierPaiementMobile (6.6)", () => {
     expect(transaction.referenceTransaction).toBe("REF-TEST-1");
   });
 
-  it("rejette une facture déjà validée", async () => {
+  it("rejette une facture déjà soldée", async () => {
     db.update(schema.facture).set({ statut: "VALIDEE" }).where(eq(schema.facture.idFacture, idFacture)).run();
+    db.insert(schema.paiement).values({ idFacture, mode: "CASH", montant: 5000, utilisateurId: userId }).run();
 
     await expect(
-      initierPaiementMobile(db, fournisseur, { idFacture, numeroTelephone: "690000000", montant: 5000, parcours: "USSD_CLIENT" })
-    ).rejects.toThrow(/déjà validée/);
+      initierPaiementMobile(db, fournisseur, { idFacture, numeroTelephone: "690000000", montant: 1000, parcours: "USSD_CLIENT" })
+    ).rejects.toThrow(/soldée/);
+  });
+
+  // Décision du 2026-10-19 : le solde d'une facture déjà validée (acompte en espèces) peut se régler par Mobile Money.
+  it("accepte un paiement Mobile Money sur le solde d'une facture VALIDEE partiellement payée", async () => {
+    db.update(schema.facture).set({ statut: "VALIDEE" }).where(eq(schema.facture.idFacture, idFacture)).run();
+    db.insert(schema.paiement).values({ idFacture, mode: "CASH", montant: 2000, utilisateurId: userId }).run();
+
+    const transaction = await initierPaiementMobile(db, fournisseur, { idFacture, numeroTelephone: "690000000", montant: 3000, parcours: "USSD_CLIENT" });
+
+    expect(transaction.statut).toBe("EN_ATTENTE");
+  });
+
+  it("refuse un montant supérieur au solde restant d'une facture VALIDEE", async () => {
+    db.update(schema.facture).set({ statut: "VALIDEE" }).where(eq(schema.facture.idFacture, idFacture)).run();
+    db.insert(schema.paiement).values({ idFacture, mode: "CASH", montant: 2000, utilisateurId: userId }).run();
+
+    await expect(
+      initierPaiementMobile(db, fournisseur, { idFacture, numeroTelephone: "690000000", montant: 3001, parcours: "USSD_CLIENT" })
+    ).rejects.toThrow(/dépasse le solde/);
+  });
+
+  it("la confirmation ajoute le paiement au solde sans toucher aux paiements existants ni créer de commission", async () => {
+    db.update(schema.facture).set({ statut: "VALIDEE" }).where(eq(schema.facture.idFacture, idFacture)).run();
+    db.insert(schema.paiement).values({ idFacture, mode: "CASH", montant: 2000, utilisateurId: userId }).run();
+    const transaction = await initierPaiementMobile(db, fournisseur, { idFacture, numeroTelephone: "690000000", montant: 3000, parcours: "PUSH_MARCHAND" });
+
+    fournisseur.statut = "REUSSIE";
+    await actualiserStatutTransaction(db, fournisseur, transaction.idTransaction, userId);
+
+    const paiements = db.select().from(schema.paiement).where(eq(schema.paiement.idFacture, idFacture)).all();
+    expect(paiements.map((p) => [p.mode, p.montant]).sort()).toEqual([["CASH", 2000], ["MOBILE_MONEY", 3000]]);
+    expect(db.select().from(schema.facture).where(eq(schema.facture.idFacture, idFacture)).get()?.statut).toBe("VALIDEE");
+    expect(db.select().from(schema.suiviCommissionCanalplus).all()).toHaveLength(0);
   });
 
   it("rejette un montant nul ou négatif", async () => {

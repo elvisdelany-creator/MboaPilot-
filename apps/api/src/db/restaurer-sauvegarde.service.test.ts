@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { existsSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import Database from "better-sqlite3";
@@ -72,3 +72,60 @@ describe("restaurerSauvegarde (2.6)", () => {
     expect(lire(`${base}.avant-restauration`)).toBe("sauvegarde-A");
   });
 });
+
+// Après un arrêt brutal (fenêtre fermée), les dernières écritures de la base vivent dans mboapilot.db-wal. L'ancienne base
+// était mise de côté en trois morceaux : annuler la restauration « en remettant le fichier .avant-restauration sous le nom
+// mboapilot.db », comme l'explique le guide, rendait une base vide ou périmée (constaté : aucun article, alors que la base
+// d'origine en contenait deux).
+describe("restaurerSauvegarde : l'ancienne base mise de côté est complète à elle seule", () => {
+  function lireArticles(fichier: string): string[] {
+    const copie = join(dossier, `lecture-${Math.random().toString(36).slice(2)}.db`);
+    copyFileSync(fichier, copie);
+    const lecteur = new Database(copie, { readonly: true });
+    try {
+      return (lecteur.prepare("select v from t order by rowid").all() as { v: string }[]).map((r) => r.v);
+    } finally {
+      lecteur.close();
+    }
+  }
+
+  // état d'une base après un arrêt brutal : fichier .db + journal -wal + -shm, sans aucune connexion ouverte
+  function creerBaseApresArretBrutal(): string {
+    const origine = join(dossier, "origine");
+    mkdirSync(origine);
+    const vivante = new Database(join(origine, "mboapilot.db"));
+    vivante.pragma("journal_mode = WAL");
+    vivante.exec("create table t(v text)");
+    vivante.pragma("wal_checkpoint(TRUNCATE)");
+    vivante.prepare("insert into t values (?)").run("avant sauvegarde");
+    vivante.prepare("insert into t values (?)").run("apres sauvegarde"); // seulement dans le journal
+    const cible = join(dossier, "poste");
+    mkdirSync(cible);
+    for (const suffixe of ["", "-wal", "-shm"]) copyFileSync(join(origine, `mboapilot.db${suffixe}`), join(cible, `mboapilot.db${suffixe}`));
+    vivante.close(); // le « crash » : on n'a copié que ce que le disque contenait pendant que la base vivait
+    return join(cible, "mboapilot.db");
+  }
+
+  it("fusionne le journal avant de mettre l'ancienne base de côté : .avant-restauration seul contient tout", () => {
+    const base = creerBaseApresArretBrutal();
+    expect(existsSync(`${base}-wal`)).toBe(true);
+    const sauvegarde = creerBase("sauvegarde.db", "sauvegarde");
+
+    restaurerSauvegarde(sauvegarde, base);
+
+    expect(lireArticles(base)).toEqual(["sauvegarde"]);
+    expect(lireArticles(`${base}.avant-restauration`)).toEqual(["avant sauvegarde", "apres sauvegarde"]);
+  });
+
+  it("n'échoue pas quand l'ancienne base est illisible : elle est conservée telle quelle", () => {
+    const base = join(dossier, "mboapilot.db");
+    writeFileSync(base, "pas une base SQLite ".repeat(100));
+    const sauvegarde = creerBase("sauvegarde.db", "sauvegarde");
+
+    expect(() => restaurerSauvegarde(sauvegarde, base)).not.toThrow();
+
+    expect(lireArticles(base)).toEqual(["sauvegarde"]);
+    expect(existsSync(`${base}.avant-restauration`)).toBe(true);
+  });
+});
+

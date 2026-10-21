@@ -1,5 +1,6 @@
 import type { Db } from "../db/types.js";
 import { executerJobQuotidien, type JobQuotidienResultat } from "../modules/jobs/job-quotidien.service.js";
+import { jourDouala } from "@mboapilot/shared";
 
 // 4.3, 4.4, 6.2 : exécute le job quotidien au démarrage (rattrapage si le
 // serveur était éteint au changement de date) puis vérifie périodiquement
@@ -17,7 +18,7 @@ export function planifierJobQuotidien(
   let derniereExecution: string | null = null;
 
   function executerSiNecessaire() {
-    const aujourdHui = new Date().toISOString().slice(0, 10);
+    const aujourdHui = jourDouala();
     if (aujourdHui === derniereExecution) return;
     try {
       const resultat = executer(db, aujourdHui);

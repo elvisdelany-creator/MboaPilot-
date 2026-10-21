@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { eq } from "drizzle-orm";
-import { genererPlageJours } from "@mboapilot/shared";
+import { genererPlageJours, jourDouala } from "@mboapilot/shared";
 import { creerDbTest, type Db } from "../../test-utils/db.js";
 import { recruterAbonne } from "../abonnements/recrutement.service.js";
 import { creerApporteur } from "../apporteurs/apporteur.repository.js";
@@ -21,8 +21,8 @@ import * as schema from "../../db/schema.js";
 
 // facture.date_creation est toujours l'horloge réelle de la base
 // (datetime('now')), jamais le paramètre aujourdHui injecté dans les
-// services métier — les tests doivent donc raisonner sur la vraie date du jour.
-const AUJOURDHUI = new Date().toISOString().slice(0, 10);
+// services métier — les tests doivent donc raisonner sur la vraie date du jour (celle de Douala).
+const AUJOURDHUI = jourDouala();
 
 let db: Db;
 let siteId: number;
@@ -287,5 +287,57 @@ describe("calculerMargeParArticleJour (8.6)", () => {
 
   it("renvoie une liste vide sans vente", () => {
     expect(calculerMargeParArticleJour(db, siteId, AUJOURDHUI)).toEqual([]);
+  });
+});
+
+// Constaté en test grandeur nature : les jours étaient comptés en UTC alors que la boutique vit à l'heure de Douala (UTC+1).
+// Une vente à 00h30 à Douala (23h30 UTC la veille) était comptée dans le chiffre d'affaires de la veille.
+describe("tableau de bord : le jour est celui de Douala (UTC+1)", () => {
+  // vente faite à 00h30 à Douala le 21 octobre = 23h30 UTC le 20 (facture et paiement)
+  function vendreApresMinuitDouala() {
+    const r = recruterAbonne(db, { siteId, userId, aujourdHui: "2026-10-21", abonne: { nom: "Nga", prenom: "Paul", telephone: "690000000" }, idFormule, montantEncaisse: 10500 });
+    db.update(schema.facture).set({ dateCreation: "2026-10-20 23:30:00" }).where(eq(schema.facture.idFacture, r.idFacture)).run();
+    db.update(schema.paiement).set({ datePaiement: "2026-10-20 23:30:00" }).where(eq(schema.paiement.idFacture, r.idFacture)).run();
+  }
+
+  it("compte la vente de 00h30 dans le jour de Douala, pas dans la veille", () => {
+    vendreApresMinuitDouala();
+
+    expect(calculerIndicateursJour(db, siteId, "2026-10-21").chiffreAffairesJour).toBe(10500);
+    expect(calculerIndicateursJour(db, siteId, "2026-10-20").chiffreAffairesJour).toBe(0);
+  });
+
+  it("la courbe d'évolution range cette vente sur le jour de Douala", () => {
+    vendreApresMinuitDouala();
+
+    const evolution = calculerEvolutionCA(db, siteId, "2026-10-21", 2);
+
+    expect(evolution).toEqual([
+      { date: "2026-10-20", montant: 0 },
+      { date: "2026-10-21", montant: 10500 },
+    ]);
+  });
+
+  it("la courbe filtrée par famille fait de même", () => {
+    vendreApresMinuitDouala();
+
+    const evolution = calculerEvolutionCA(db, siteId, "2026-10-21", 2, "CANAL+");
+
+    expect(evolution.map((p) => p.montant)).toEqual([0, 10500]);
+  });
+
+  it("les encaissements de 00h30 sont ceux du jour de Douala", () => {
+    vendreApresMinuitDouala();
+
+    expect(listerEncaissementsJour(db, siteId, "2026-10-21").find((v) => v.mode === "CASH")?.total).toBe(10500);
+    expect(listerEncaissementsJour(db, siteId, "2026-10-20").find((v) => v.mode === "CASH")?.total).toBe(0);
+  });
+
+  it("une vente à 22h30 UTC (23h30 à Douala) reste dans le même jour de Douala", () => {
+    const r = recruterAbonne(db, { siteId, userId, aujourdHui: "2026-10-20", abonne: { nom: "Ada", prenom: "Eve", telephone: "690000001" }, idFormule, montantEncaisse: 10500 });
+    db.update(schema.facture).set({ dateCreation: "2026-10-20 22:30:00" }).where(eq(schema.facture.idFacture, r.idFacture)).run();
+
+    expect(calculerIndicateursJour(db, siteId, "2026-10-20").chiffreAffairesJour).toBe(10500);
+    expect(calculerIndicateursJour(db, siteId, "2026-10-21").chiffreAffairesJour).toBe(0);
   });
 });

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { excedentEncaissementSuspect, validerMigrationFormule } from "@mboapilot/shared";
+import { excedentEncaissementSuspect, jourDouala, validerMigrationFormule } from "@mboapilot/shared";
 import {
   Dialog,
   DialogContent,
@@ -121,7 +121,7 @@ export function ChangerFormuleDialog({ numeroAbonnement, formuleActuelle, formul
       const resultat = await changerFormuleRequete(token, numeroAbonnement, {
         siteId: utilisateur.siteId,
         userId: utilisateur.idUser,
-        aujourdHui: new Date().toISOString().slice(0, 10),
+        aujourdHui: jourDouala(),
         idNouvelleFormule: choix.formule.idFormule,
         idsOptions: idsOptionsSelectionnees.length > 0 ? idsOptionsSelectionnees : undefined,
         montantEncaisse,

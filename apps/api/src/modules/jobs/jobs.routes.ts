@@ -3,13 +3,14 @@ import type { Db } from "../../db/types.js";
 import type { RouteGuards } from "../auth/auth.plugin.js";
 import { executerJobQuotidien } from "./job-quotidien.service.js";
 import { listerAbonnementsExpires, listerAlertesEcheance } from "./alerte-echeance.repository.js";
+import { jourDouala } from "@mboapilot/shared";
 
 // 4.3, 4.4, 6.2 : déclenchement manuel du job quotidien (utile en complément
 // de la planification automatique du serveur — server.ts) et lecture des
 // abonnements à échéance pour le tableau de bord (8.6, 9.3).
 export function registerJobsRoutes(app: FastifyInstance, db: Db, guards: RouteGuards & { admin: RouteGuards["ventes"]; lectureFinanciere: RouteGuards["ventes"] }) {
   app.post("/api/v1/jobs/quotidien", { preHandler: [guards.authRequis, guards.admin] }, async (_request, reply) => {
-    const aujourdHui = new Date().toISOString().slice(0, 10);
+    const aujourdHui = jourDouala();
     reply.code(200).send(executerJobQuotidien(db, aujourdHui));
   });
 
@@ -20,7 +21,7 @@ export function registerJobsRoutes(app: FastifyInstance, db: Db, guards: RouteGu
     "/api/v1/alertes-echeance",
     { preHandler: [guards.authRequis, guards.lectureFinanciere] },
     async (request, reply) => {
-      const aujourdHui = new Date().toISOString().slice(0, 10);
+      const aujourdHui = jourDouala();
       const idFamille = request.query.idFamille !== undefined ? Number(request.query.idFamille) : undefined;
       reply.code(200).send(listerAlertesEcheance(db, request.user.siteId, aujourdHui, idFamille));
     }
@@ -32,7 +33,7 @@ export function registerJobsRoutes(app: FastifyInstance, db: Db, guards: RouteGu
     "/api/v1/abonnements-expires",
     { preHandler: [guards.authRequis, guards.lectureFinanciere] },
     async (request, reply) => {
-      const aujourdHui = new Date().toISOString().slice(0, 10);
+      const aujourdHui = jourDouala();
       const idFamille = request.query.idFamille !== undefined ? Number(request.query.idFamille) : undefined;
       reply.code(200).send(listerAbonnementsExpires(db, request.user.siteId, aujourdHui, idFamille));
     }

@@ -22,6 +22,7 @@ export { analyserCsv, construireCsv, decoderTexteCsv } from "./csv.js";
 export { validerMotDePasse, POLITIQUE_MDP_PAR_DEFAUT, type PolitiqueMotDePasse } from "./politique-mot-de-passe.js";
 export { normaliserLibelle } from "./normaliser-libelle.js";
 export { lireDateServeur } from "./date-serveur.js";
+export { bornesJourDouala, jourDouala } from "./jour-douala.js";
 export { LIMITE_RESULTATS_RECHERCHE_ABONNES } from "./limite-recherche.js";
 export { MESSAGE_FORME_TELEPHONE, telephoneValide } from "./telephone.js";
 export { lireEntierSaisi } from "./saisie-entier.js";

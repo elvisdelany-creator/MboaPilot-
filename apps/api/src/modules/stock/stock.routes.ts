@@ -16,6 +16,7 @@ import {
 import { transfererStock, type TransfererStockParams } from "./transfert.service.js";
 import { estRoleEncadrement, masquerCoutMargeProduit, trouverProduit } from "../produits/produit.repository.js";
 import { envoyerErreur } from "../../lib/erreurs-api.js";
+import { jourDouala } from "@mboapilot/shared";
 
 const ERREUR_SITE_PRODUIT = { erreur: "Ce produit n'appartient pas à votre site" };
 
@@ -47,7 +48,7 @@ export function registerStockRoutes(app: FastifyInstance, db: Db, guards: RouteG
     "/api/v1/stock/rotation-lente",
     { preHandler: [guards.authRequis, guards.lectureInterne] },
     async (request, reply) => {
-      const aujourdHui = new Date().toISOString().slice(0, 10);
+      const aujourdHui = jourDouala();
       const rotationLente = listerProduitsRotationLente(db, request.user.siteId, aujourdHui);
       reply
         .code(200)

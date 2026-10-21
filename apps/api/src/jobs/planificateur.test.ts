@@ -74,3 +74,17 @@ describe("planifierJobQuotidien : robustesse (4.3)", () => {
     expect(executer.mock.calls.map((a) => a[1])).toEqual(["2026-10-12", "2026-10-13"]);
   });
 });
+
+// Le jour de la boutique est celui de Douala (UTC+1) : à 00h30 à Douala (23h30 UTC), le job du nouveau jour doit tourner
+// avec la date du nouveau jour, pas avec celle de la veille.
+describe("planifierJobQuotidien : jour de Douala", () => {
+  it("exécute le job du jour de Douala dès minuit à Douala, soit 23h UTC la veille", () => {
+    vi.setSystemTime(new Date("2026-10-20T23:30:00Z"));
+    const executer = vi.fn().mockReturnValue(RESULTAT);
+
+    minuteur = planifierJobQuotidien(creerDbTest(), 1000, executer);
+
+    // (on ne compare que la date : un échec afficherait sinon l'objet base entier)
+    expect(executer.mock.calls[0]?.[1]).toBe("2026-10-21");
+  });
+});

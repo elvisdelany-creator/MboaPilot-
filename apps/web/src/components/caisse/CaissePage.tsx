@@ -43,6 +43,7 @@ import { ChangerFormuleDialog } from "./ChangerFormuleDialog";
 import { ClotureCaissePanel } from "./ClotureCaissePanel";
 import { RecuVentePrintable, type LigneRecu, type RecuVente } from "./RecuVentePrintable";
 import { FactureProFormaPrintable } from "./FactureProFormaPrintable";
+import { jourDouala } from "@mboapilot/shared";
 
 interface Props {
   onNaviguer: (vue: Vue) => void;
@@ -422,7 +423,7 @@ export function CaissePage({ onNaviguer, onOuvrirCatalogueAdministration, abonne
     if (!abonneSelectionne || !formuleSelectionnee) return;
     setEnCours(true);
     try {
-      const aujourdHui = new Date().toISOString().slice(0, 10);
+      const aujourdHui = jourDouala();
       // 6.6 : Mobile Money n'encaisse jamais dans cet appel — la facture est
       // créée BROUILLON (montantEncaisse=0), puis le paiement est initié à
       // part sur cette facture, sans toucher au cœur du recrutement/réabonnement.

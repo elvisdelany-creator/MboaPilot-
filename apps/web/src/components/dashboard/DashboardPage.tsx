@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { peutAccederVue, type RoleUtilisateur, lireDateServeur } from "@mboapilot/shared";
+import { peutAccederVue, type RoleUtilisateur, jourDouala, lireDateServeur } from "@mboapilot/shared";
 import { AlertTriangle, History, PackageX, RotateCw, TrendingDown, Users } from "lucide-react";
 import {
   chargerAbonnementsExpires,
@@ -121,7 +121,7 @@ export function DashboardPage({ onNaviguer, onReabonnerDepuisAlerte, onReabonner
   }
 
   function charger() {
-    const aujourdHui = new Date().toISOString().slice(0, 10);
+    const aujourdHui = jourDouala();
 
     // 8.6 : filtrable par famille, comme la liste des abonnements expirés ci-dessous
     chargerAlertesEcheance(token, siteId, idFamilleFiltre ?? undefined)

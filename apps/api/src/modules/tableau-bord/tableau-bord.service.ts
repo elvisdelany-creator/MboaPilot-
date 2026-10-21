@@ -1,5 +1,5 @@
 import { and, eq, gte, inArray, lt } from "drizzle-orm";
-import { decalerJour, genererPlageJours } from "@mboapilot/shared";
+import { bornesJourDouala, genererPlageJours, jourDouala } from "@mboapilot/shared";
 import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
 import { listerAlertesEcheance } from "../jobs/alerte-echeance.repository.js";
@@ -23,6 +23,7 @@ function construireSignesFactures(factures: { idFacture: number; type: string }[
 // site/statut/date) : charger toutes les factures du site pour filtrer en
 // mémoire coûtait 1 à 2 s à 150 000 factures.
 function facturesValideesDuJour(db: Db, siteId: number, jour: string) {
+  const { debut, fin } = bornesJourDouala(jour);
   return db
     .select()
     .from(schema.facture)
@@ -30,8 +31,8 @@ function facturesValideesDuJour(db: Db, siteId: number, jour: string) {
       and(
         eq(schema.facture.siteId, siteId),
         eq(schema.facture.statut, "VALIDEE"),
-        gte(schema.facture.dateCreation, jour),
-        lt(schema.facture.dateCreation, decalerJour(jour, 1)),
+        gte(schema.facture.dateCreation, debut),
+        lt(schema.facture.dateCreation, fin),
       ),
     )
     .all();
@@ -84,14 +85,14 @@ export function calculerEvolutionCA(db: Db, siteId: number, aujourdHui: string, 
   const factures = db
     .select()
     .from(schema.facture)
-    .where(and(eq(schema.facture.siteId, siteId), eq(schema.facture.statut, "VALIDEE"), gte(schema.facture.dateCreation, premierJour)))
+    .where(and(eq(schema.facture.siteId, siteId), eq(schema.facture.statut, "VALIDEE"), gte(schema.facture.dateCreation, bornesJourDouala(premierJour).debut)))
     .all();
 
   const montantParJour = new Map<string, number>();
 
   if (!libelleFamille) {
     for (const f of factures) {
-      const jour = f.dateCreation.slice(0, 10);
+      const jour = jourDouala(f.dateCreation);
       montantParJour.set(jour, (montantParJour.get(jour) ?? 0) + f.montantTotal);
     }
   } else {
@@ -102,7 +103,7 @@ export function calculerEvolutionCA(db: Db, siteId: number, aujourdHui: string, 
     for (const ligne of lignes) {
       if (resoudreFamille(ligne) !== libelleFamille) continue;
       const facture = factureParId.get(ligne.idFacture)!;
-      const jour = facture.dateCreation.slice(0, 10);
+      const jour = jourDouala(facture.dateCreation);
       montantParJour.set(jour, (montantParJour.get(jour) ?? 0) + ligne.prixApplique);
     }
   }
@@ -130,11 +131,12 @@ const MODES_PAIEMENT: VentilationPaiement["mode"][] = ["CASH", "CHEQUE", "VIREME
 
 // 8.6 : encaissements du jour ventilés par mode de paiement
 export function listerEncaissementsJour(db: Db, siteId: number, aujourdHui: string): VentilationPaiement[] {
+  const { debut, fin } = bornesJourDouala(aujourdHui);
   const lignes = db
     .select({ paiement: schema.paiement })
     .from(schema.paiement)
     .innerJoin(schema.facture, eq(schema.paiement.idFacture, schema.facture.idFacture))
-    .where(and(eq(schema.facture.siteId, siteId), gte(schema.paiement.datePaiement, aujourdHui), lt(schema.paiement.datePaiement, decalerJour(aujourdHui, 1))))
+    .where(and(eq(schema.facture.siteId, siteId), gte(schema.paiement.datePaiement, debut), lt(schema.paiement.datePaiement, fin)))
     .all();
 
   const totalParMode = new Map<string, number>();

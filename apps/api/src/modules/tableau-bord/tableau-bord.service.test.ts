@@ -209,6 +209,23 @@ describe("calculerVentilationCAJour (8.6)", () => {
     expect(ventilation).toContainEqual({ libelle: "SAV", montant: 3000 });
   });
 
+  // Constaté en test grandeur nature : la facture d'un dossier SAV (main-d'œuvre, sans article) tombait sous « Autre »,
+  // et une pièce de type BIEN posée lors d'une réparation sous « Produits & Services » : le SAV n'apparaissait pas.
+  it("range toute la facture d'un dossier SAV sous « SAV » : main-d'œuvre comme pièces", () => {
+    const piece = creerProduit(db, { siteId, type: "BIEN", libelle: "Alimentation", prixVente: 2000, coutRevient: 1000, margeType: "VALEUR", margeValeur: 500 });
+    const facture = db.insert(schema.facture).values({ siteId, statut: "VALIDEE", montantTotal: 7000, creePar: userId }).returning().get();
+    db.insert(schema.ligneVente).values({ idFacture: facture.idFacture, idProduit: piece.idProduit, quantite: 1, prixApplique: 2000 }).run();
+    db.insert(schema.ligneVente).values({ idFacture: facture.idFacture, prixApplique: 5000 }).run(); // main-d'œuvre : ni article ni abonnement
+    db.insert(schema.savDossier).values({ siteId, descriptionPanne: "Ne démarre plus", statut: "LIVRE", idFacture: facture.idFacture }).run();
+    creerVenteProduits(db, { siteId, userId, lignes: [{ idProduit: piece.idProduit, quantite: 1 }], montantEncaisse: 2000 });
+
+    const ventilation = calculerVentilationCAJour(db, siteId, AUJOURDHUI);
+
+    expect(ventilation).toContainEqual({ libelle: "SAV", montant: 7000 });
+    expect(ventilation).toContainEqual({ libelle: "Produits & Services", montant: 2000 }); // la même pièce vendue au comptoir reste hors SAV
+    expect(ventilation.find((v) => v.libelle === "Autre")).toBeUndefined();
+  });
+
   it("ventile la partie kit d'un recrutement sous la famille du kit", () => {
     const idFamilleCanal = db.select().from(schema.familleAbonnement).where(eq(schema.familleAbonnement.libelle, "CANAL+")).get()!.idFamille;
     const kit = db.insert(schema.kit).values({ idFamille: idFamilleCanal, libelle: "KIT", reglePrix: "PRIX_FIXE", prixFixe: 15000 }).returning().get();

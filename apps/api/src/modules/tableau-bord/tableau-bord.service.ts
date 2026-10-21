@@ -1,4 +1,4 @@
-import { and, eq, gte, inArray, lt } from "drizzle-orm";
+import { and, eq, gte, inArray, isNotNull, lt } from "drizzle-orm";
 import { bornesJourDouala, genererPlageJours, jourDouala } from "@mboapilot/shared";
 import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
@@ -155,9 +155,21 @@ const LIBELLE_AUTRE = "Autre";
 //
 // 11.1 : une même formule/kit/article revient sur des milliers de lignes — le
 // résolveur mémorise le résultat par origine au lieu de relire la base à chaque ligne.
+//
+// Une facture de dossier SAV (main-d'œuvre sans article, pièces de type BIEN) est du chiffre d'affaires SAV dans son
+// ensemble : elle se repère une fois pour toutes par le lien du dossier, sans lecture par ligne.
 function creerResolveurFamilleLigne(db: Db): (ligne: typeof schema.ligneVente.$inferSelect) => string {
   const memo = new Map<string, string>();
+  const facturesSav = new Set(
+    db
+      .select({ idFacture: schema.savDossier.idFacture })
+      .from(schema.savDossier)
+      .where(isNotNull(schema.savDossier.idFacture))
+      .all()
+      .map((d) => d.idFacture),
+  );
   return (ligne) => {
+    if (facturesSav.has(ligne.idFacture)) return LIBELLE_SAV;
     const cle = `${ligne.numeroAbonnement ?? ""}|${ligne.idKit ?? ""}|${ligne.idProduit ?? ""}`;
     let libelle = memo.get(cle);
     if (libelle === undefined) {

@@ -5,6 +5,11 @@ import { creerApporteur, listerApporteurs, modifierApporteur, type CreerApporteu
 import { construireFicheApporteur, enregistrerReglement } from "./apporteur.service.js";
 import { envoyerErreur } from "../../lib/erreurs-api.js";
 
+// boutique à laquelle limiter la vue d'un apporteur, ou undefined pour la vue complète (administrateur, apporteur lui-même)
+export function siteRestreint(utilisateur: { role: string; siteId: number }): number | undefined {
+  return utilisateur.role === "ADMINISTRATEUR" || utilisateur.role === "APPORTEUR" ? undefined : utilisateur.siteId;
+}
+
 // 6.3, 2.5.1 : gestion des apporteurs (Administrateur/Gérant) ; consultation
 // de la fiche également accessible aux rôles de vente (pour choisir un
 // apporteur au recrutement) ainsi qu'à l'apporteur lui-même, restreint à sa propre fiche.
@@ -60,7 +65,8 @@ export function registerApporteursRoutes(
         return;
       }
       try {
-        reply.code(200).send(construireFicheApporteur(db, idApporteur));
+        // 2.5.2 : chaque boutique ne voit de l'apporteur que ses propres clients ; l'administrateur et l'apporteur lui-même voient tout
+        reply.code(200).send(construireFicheApporteur(db, idApporteur, siteRestreint(request.user)));
       } catch (erreur) {
         envoyerErreur(reply, erreur);
       }

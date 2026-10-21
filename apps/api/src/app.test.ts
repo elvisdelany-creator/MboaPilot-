@@ -5614,3 +5614,63 @@ describe("PUT /api/v1/licence/expiration : prolonger l'abonnement (10.4, pilote)
   });
 });
 
+
+// 2.5.2, 11.3 : un apporteur est commun à l'entreprise, mais chaque boutique ne voit de lui que ses propres clients, son
+// chiffre d'affaires et ses commissions. L'administrateur et l'apporteur lui-même gardent la vue complète.
+describe("Fiche et suivi des apporteurs : cloisonnement par boutique", () => {
+  let idApporteur: number;
+
+  beforeEach(() => {
+    const idEntreprise = db.select().from(schema.site).get()!.idEntreprise;
+    const siteB = db.insert(schema.site).values({ idEntreprise, nom: "Site B" }).returning().get().idSite;
+    const apporteur = db.insert(schema.sousDistributeur).values({ nom: "Apporteur commun" }).returning().get();
+    idApporteur = apporteur.idApporteur;
+    creerUtilisateur(db, { siteId: siteB, nom: "G", prenom: "B", identifiant: "gerant-b", motDePasse: "motdepasse-secret", role: "GERANT" });
+    creerUtilisateur(db, { siteId, nom: "Ad", prenom: "A", identifiant: "admin-a", motDePasse: "motdepasse-secret", role: "ADMINISTRATEUR" });
+    creerUtilisateur(db, { siteId, nom: "Ap", prenom: "A", identifiant: "apporteur-1", motDePasse: "motdepasse-secret", role: "APPORTEUR", idApporteur });
+    for (const [site, nom, telephone] of [[siteId, "ClientDuSiteA", "690000001"], [siteB, "ClientDuSiteB", "690000002"]] as const) {
+      const abonne = db.insert(schema.abonne).values({ siteId: site, nom, prenom: "C", telephone, apporteurId: idApporteur }).returning().get();
+      const facture = db.insert(schema.facture).values({ siteId: site, idAbonne: abonne.idAbonne, statut: "VALIDEE", montantTotal: 13000, creePar: userId }).returning().get();
+      db.insert(schema.ligneVente).values({ idFacture: facture.idFacture, prixApplique: 13000 }).run();
+    }
+  });
+
+  async function fiche(identifiant: string) {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const token = await connecter(app, identifiant);
+    const reponse = await app.inject({ method: "GET", url: `/api/v1/apporteurs/${idApporteur}/fiche`, headers: authHeader(token) });
+    return { app, token, corps: reponse.json() };
+  }
+
+  it("le gérant d'une boutique ne voit que les clients et le chiffre d'affaires de sa boutique", async () => {
+    const { corps } = await fiche("gerant-b");
+
+    expect(corps.abonnes.map((a: { nom: string }) => a.nom)).toEqual(["ClientDuSiteB"]);
+    expect(corps.chiffreAffaires).toBe(13000);
+  });
+
+  it("l'administrateur voit toutes les boutiques", async () => {
+    const { corps } = await fiche("admin-a");
+
+    expect(corps.abonnes).toHaveLength(2);
+    expect(corps.chiffreAffaires).toBe(26000);
+  });
+
+  it("l'apporteur voit tous ses clients, quelle que soit la boutique", async () => {
+    const { corps } = await fiche("apporteur-1");
+
+    expect(corps.abonnes).toHaveLength(2);
+    expect(corps.chiffreAffaires).toBe(26000);
+  });
+
+  it("le suivi des apporteurs du tableau de bord est cloisonné de la même façon", async () => {
+    const { app, token: tokenGerant } = await fiche("gerant-b");
+    const tokenAdmin = await connecter(app, "admin-a");
+
+    const gerant = await app.inject({ method: "GET", url: "/api/v1/tableau-bord/apporteurs", headers: authHeader(tokenGerant) });
+    const admin = await app.inject({ method: "GET", url: "/api/v1/tableau-bord/apporteurs", headers: authHeader(tokenAdmin) });
+
+    expect(gerant.json()[0].chiffreAffaires).toBe(13000);
+    expect(admin.json()[0].chiffreAffaires).toBe(26000);
+  });
+});

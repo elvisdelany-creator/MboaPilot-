@@ -39,11 +39,20 @@ function calculerSoldeCommission(db: Db, idApporteur: number) {
 
 // 6.3 : fiche apporteur — abonnés référés, CA généré, commissions dues/confirmées/annulées
 // (y compris le suivi CANAL+ 4 mois, 6.2), et historique de règlement
-export function construireFicheApporteur(db: Db, idApporteur: number): FicheApporteur {
+//
+// 2.5.2, 11.3 : un apporteur est commun à l'entreprise, mais le gérant d'une boutique ne doit pas voir les clients (nom,
+// téléphone) ni le chiffre d'affaires des autres boutiques. Avec `siteId`, la fiche se limite à cette boutique : ses clients,
+// son chiffre d'affaires et ses commissions. Les montants globaux dus à l'apporteur (règlements, solde) restent alors masqués :
+// ils mêlent toutes les boutiques et relèvent de l'administrateur. Sans `siteId` (administrateur, apporteur lui-même) : vue complète.
+export function construireFicheApporteur(db: Db, idApporteur: number, siteId?: number): FicheApporteur {
   const apporteur = trouverApporteur(db, idApporteur);
   if (!apporteur) throw new Error(`Apporteur ${idApporteur} introuvable`);
 
-  const abonnes = db.select().from(schema.abonne).where(eq(schema.abonne.apporteurId, idApporteur)).all();
+  const abonnes = db
+    .select()
+    .from(schema.abonne)
+    .where(siteId === undefined ? eq(schema.abonne.apporteurId, idApporteur) : and(eq(schema.abonne.apporteurId, idApporteur), eq(schema.abonne.siteId, siteId)))
+    .all();
   const idsAbonnes = abonnes.map((a) => a.idAbonne);
 
   const factures =
@@ -57,13 +66,20 @@ export function construireFicheApporteur(db: Db, idApporteur: number): FicheAppo
       : [];
   const chiffreAffaires = factures.reduce((total, f) => total + f.montantTotal, 0);
 
-  const commissionsCanalplus = db
+  let commissionsCanalplus = db
     .select()
     .from(schema.suiviCommissionCanalplus)
     .where(eq(schema.suiviCommissionCanalplus.apporteurId, idApporteur))
     .all();
 
-  return { apporteur, abonnes, chiffreAffaires, commissionsCanalplus, ...calculerSoldeCommission(db, idApporteur) };
+  if (siteId === undefined) {
+    return { apporteur, abonnes, chiffreAffaires, commissionsCanalplus, ...calculerSoldeCommission(db, idApporteur) };
+  }
+
+  const abonnementsDuSite = new Set(db.select({ numero: schema.abonnement.numeroAbonnement }).from(schema.abonnement).where(eq(schema.abonnement.siteId, siteId)).all().map((a) => a.numero));
+  commissionsCanalplus = commissionsCanalplus.filter((c) => abonnementsDuSite.has(c.numeroAbonnement));
+  const montantCommissionConfirmee = commissionsCanalplus.filter((c) => c.statut === "CONFIRMEE").reduce((total, c) => total + c.montantCommission, 0);
+  return { apporteur, abonnes, chiffreAffaires, commissionsCanalplus, reglements: [], montantCommissionConfirmee, montantCommissionRegle: 0, soldeCommissionDu: 0 };
 }
 
 export interface ResumeApporteur {
@@ -79,11 +95,11 @@ export interface ResumeApporteur {
 // générés par chaque apporteur" — résumé compact pour le tableau de bord,
 // réutilise construireFicheApporteur pour ne pas dupliquer le calcul.
 // Seuls les apporteurs actifs sont consolidés, triés du CA le plus élevé au plus faible.
-export function listerResumesApporteurs(db: Db): ResumeApporteur[] {
+export function listerResumesApporteurs(db: Db, siteId?: number): ResumeApporteur[] {
   return listerApporteurs(db)
     .filter((a) => a.actif === 1)
     .map((a) => {
-      const fiche = construireFicheApporteur(db, a.idApporteur);
+      const fiche = construireFicheApporteur(db, a.idApporteur, siteId);
       return {
         idApporteur: a.idApporteur,
         nom: a.nom,

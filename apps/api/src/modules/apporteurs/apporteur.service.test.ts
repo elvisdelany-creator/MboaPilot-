@@ -286,3 +286,73 @@ describe("enregistrerReglement : référence (6.3)", () => {
     expect(reglement(apporteur, "R".repeat(100)).reference).toHaveLength(100);
   });
 });
+
+// Constaté en test grandeur nature : un apporteur est commun à l'entreprise, mais la fiche et le tableau de bord montraient au
+// gérant de la boutique B les clients (nom, téléphone) et le chiffre d'affaires de la boutique A. Décision : cloisonner par
+// boutique ; l'administrateur et l'apporteur lui-même gardent la vue complète.
+describe("cloisonnement des apporteurs par boutique (2.5.2, 6.3, 11.3)", () => {
+  let siteB: number;
+  let userB: number;
+  let idApporteur: number;
+
+  function recruter(site: number, user: number, nom: string, telephone: string) {
+    return recruterAbonne(db, {
+      siteId: site,
+      userId: user,
+      aujourdHui: "2025-11-16",
+      abonne: { nom, prenom: "Client", telephone },
+      idFormule: idFormuleCanal,
+      idKit: idKitCanal,
+      montantEncaisse: 20500,
+      apporteurId: idApporteur,
+    });
+  }
+
+  beforeEach(() => {
+    const idEntreprise = db.select().from(schema.site).get()!.idEntreprise;
+    siteB = db.insert(schema.site).values({ idEntreprise, nom: "Site B" }).returning().get().idSite;
+    userB = db.insert(schema.utilisateur).values({ siteId: siteB, nom: "B", prenom: "B", identifiant: "bb", motDePasseHash: "h", role: "GERANT" }).returning().get().idUser;
+    idApporteur = creerApporteur(db, { nom: "Apporteur commun", tauxCommissionDefaut: 500 }).idApporteur;
+    recruter(siteId, userId, "ClientDuSiteA", "690000001");
+    recruter(siteB, userB, "ClientDuSiteB", "690000002");
+  });
+
+  it("sans restriction, la fiche consolide les deux boutiques", () => {
+    const fiche = construireFicheApporteur(db, idApporteur);
+
+    expect(fiche.abonnes.map((a) => a.nom).sort()).toEqual(["ClientDuSiteA", "ClientDuSiteB"]);
+    expect(fiche.chiffreAffaires).toBe(41000);
+    expect(fiche.commissionsCanalplus).toHaveLength(2);
+  });
+
+  it("restreinte à une boutique, la fiche ne montre que ses clients, son chiffre d'affaires et ses commissions", () => {
+    const fiche = construireFicheApporteur(db, idApporteur, siteB);
+
+    expect(fiche.abonnes.map((a) => a.nom)).toEqual(["ClientDuSiteB"]);
+    expect(fiche.chiffreAffaires).toBe(20500);
+    expect(fiche.commissionsCanalplus).toHaveLength(1);
+    const abonnementB = db.select().from(schema.abonnement).where(eq(schema.abonnement.siteId, siteB)).get()!;
+    expect(fiche.commissionsCanalplus[0].numeroAbonnement).toBe(abonnementB.numeroAbonnement);
+  });
+
+  it("restreinte à une boutique, les montants globaux dus à l'apporteur ne sont pas exposés", () => {
+    db.update(schema.suiviCommissionCanalplus).set({ statut: "CONFIRMEE" }).run();
+    enregistrerReglement(db, { apporteurId: idApporteur, montant: 100, modePaiement: "CASH", utilisateurId: userId });
+
+    const restreinte = construireFicheApporteur(db, idApporteur, siteB);
+
+    expect(restreinte.reglements).toEqual([]);
+    expect(restreinte.montantCommissionRegle).toBe(0);
+    expect(restreinte.soldeCommissionDu).toBe(0);
+    expect(construireFicheApporteur(db, idApporteur).montantCommissionRegle).toBe(100); // la vue complète, elle, les garde
+  });
+
+  it("le résumé du tableau de bord, restreint à une boutique, ne compte que son chiffre d'affaires", () => {
+    expect(listerResumesApporteurs(db)[0].chiffreAffaires).toBe(41000);
+
+    const resume = listerResumesApporteurs(db, siteB)[0];
+
+    expect(resume.chiffreAffaires).toBe(20500);
+    expect(resume.soldeCommissionDu).toBe(0);
+  });
+});

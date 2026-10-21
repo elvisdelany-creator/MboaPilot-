@@ -11,6 +11,7 @@ import {
   listerEncaissementsJour,
 } from "./tableau-bord.service.js";
 import { listerResumesApporteurs } from "../apporteurs/apporteur.service.js";
+import { siteRestreint } from "../apporteurs/apporteurs.routes.js";
 
 // 11.1 : les requêtes bornent les factures par plage de dates — un `aujourdHui`
 // absent ou invalide est refusé ici (400) plutôt que de faire échouer le calcul.
@@ -85,8 +86,9 @@ export function registerTableauBordRoutes(app: FastifyInstance, db: Db, guards: 
   );
 
   // 8.6 : "Suivi des apporteurs d'affaires — Chiffre d'affaires et commissions
-  // générés par chaque apporteur" — mono-entreprise (2.2), pas de filtre par site
-  app.get("/api/v1/tableau-bord/apporteurs", { preHandler: [guards.authRequis, guards.pilotage] }, async (_request, reply) => {
-    reply.code(200).send(listerResumesApporteurs(db));
+  // générés par chaque apporteur" — les apporteurs sont communs à l'entreprise, mais chaque boutique ne voit que
+  // son propre chiffre d'affaires (2.5.2) ; l'administrateur consolide toutes les boutiques
+  app.get("/api/v1/tableau-bord/apporteurs", { preHandler: [guards.authRequis, guards.pilotage] }, async (request, reply) => {
+    reply.code(200).send(listerResumesApporteurs(db, siteRestreint(request.user)));
   });
 }

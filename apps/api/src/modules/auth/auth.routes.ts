@@ -2,7 +2,7 @@ import { eq } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
-import type { Guard } from "./auth.plugin.js";
+import { signerSession, type Guard } from "./auth.plugin.js";
 import { authentifier, changerSonMotDePasse } from "./auth.service.js";
 import { messageClient } from "../../lib/erreurs-api.js";
 
@@ -21,7 +21,8 @@ export function registerAuthRoutes(app: FastifyInstance, db: Db, authRequis: Gua
     try {
       const { motDePasseActuel, nouveauMotDePasse } = (request.body ?? {}) as { motDePasseActuel?: unknown; nouveauMotDePasse?: unknown };
       changerSonMotDePasse(db, request.user.idUser, motDePasseActuel, nouveauMotDePasse);
-      reply.code(200).send({ ok: true });
+      // les sessions ouvertes avec l'ancien mot de passe prennent fin, y compris celle-ci : on en remet une neuve
+      reply.code(200).send({ ok: true, token: signerSession(app, db, request.user.idUser) });
     } catch (erreur) {
       reply.code(400).send({ erreur: messageClient(erreur) });
     }
@@ -32,12 +33,7 @@ export function registerAuthRoutes(app: FastifyInstance, db: Db, authRequis: Gua
       // corps absent, null ou tableau : traité comme des identifiants manquants (401 générique)
       const { identifiant, motDePasse } = (request.body ?? {}) as { identifiant?: string; motDePasse?: string };
       const utilisateur = authentifier(db, identifiant as string, motDePasse as string);
-      const token = app.jwt.sign({
-        idUser: utilisateur.idUser,
-        siteId: utilisateur.siteId,
-        role: utilisateur.role,
-        idApporteur: utilisateur.idApporteur,
-      });
+      const token = signerSession(app, db, utilisateur.idUser);
       reply.code(200).send({ token, utilisateur });
     } catch (erreur) {
       // 11.2 : propage le message réel (générique pour un échec, distinct pour un

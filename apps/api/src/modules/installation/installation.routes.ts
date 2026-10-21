@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import type { Db } from "../../db/types.js";
 import { envoyerErreur } from "../../lib/erreurs-api.js";
+import { signerSession } from "../auth/auth.plugin.js";
 import { authentifier } from "../auth/auth.service.js";
 import { installationNecessaire, installer, type SaisieInstallation } from "./installation.service.js";
 
@@ -20,7 +21,7 @@ export function registerInstallationRoutes(app: FastifyInstance, db: Db) {
       const saisie = (request.body ?? {}) as SaisieInstallation;
       installer(db, saisie);
       const utilisateur = authentifier(db, saisie.administrateur.identifiant, saisie.administrateur.motDePasse);
-      const token = app.jwt.sign({ idUser: utilisateur.idUser, siteId: utilisateur.siteId, role: utilisateur.role, idApporteur: utilisateur.idApporteur });
+      const token = signerSession(app, db, utilisateur.idUser);
       reply.code(201).send({ token, utilisateur });
     } catch (erreur) {
       envoyerErreur(reply, erreur);

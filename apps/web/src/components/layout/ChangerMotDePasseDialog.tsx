@@ -16,7 +16,7 @@ interface Props {
 // 2.5.1 : « authentification individuelle » — chaque utilisateur choisit son mot de passe, qu'aucun
 // administrateur n'a besoin de connaître.
 export function ChangerMotDePasseDialog({ ouvert, onFerme }: Props) {
-  const { session, deconnecter } = useAuth();
+  const { session, ouvrirSession, deconnecter } = useAuth();
   const token = session!.token;
 
   const [actuel, setActuel] = useState("");
@@ -59,7 +59,8 @@ export function ChangerMotDePasseDialog({ ouvert, onFerme }: Props) {
     if (!pretAValider) return;
     setEnCours(true);
     try {
-      await changerSonMotDePasseRequete(token, actuel, nouveau);
+      const nouveauToken = await changerSonMotDePasseRequete(token, actuel, nouveau);
+      ouvrirSession(nouveauToken, session!.utilisateur); // l'ancien jeton ne vaut plus : on poursuit avec le neuf
       toast.success("Votre mot de passe a été changé.");
       onFerme();
     } catch (erreur) {

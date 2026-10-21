@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import fastifyJwt from "@fastify/jwt";
 import { eq } from "drizzle-orm";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
@@ -7,8 +8,8 @@ import type { Role } from "../utilisateurs/utilisateur.repository.js";
 
 declare module "@fastify/jwt" {
   interface FastifyJWT {
-    payload: { idUser: number; siteId: number; role: Role; idApporteur: number | null };
-    user: { idUser: number; siteId: number; role: Role; idApporteur: number | null };
+    payload: { idUser: number; siteId: number; role: Role; idApporteur: number | null; e?: string };
+    user: { idUser: number; siteId: number; role: Role; idApporteur: number | null; e?: string };
   }
 }
 
@@ -25,6 +26,25 @@ const DUREE_SESSION = "12h";
 
 export function registerAuthPlugin(app: FastifyInstance, jwtSecret: string) {
   app.register(fastifyJwt, { secret: jwtSecret, sign: { expiresIn: DUREE_SESSION } });
+}
+
+// 11.2 : le jeton porte l'empreinte du mot de passe avec lequel il a été émis. Réinitialiser ou changer le mot de passe
+// (« après compromission ») met fin à toutes les sessions ouvertes avec l'ancien : sans cela, un jeton volé restait
+// exploitable jusqu'à 12 h. L'empreinte dérive du hash bcrypt, jamais du mot de passe, et n'est qu'un repère de version.
+function empreinteSession(motDePasseHash: string): string {
+  return createHash("sha256").update(motDePasseHash).digest("hex").slice(0, 16);
+}
+
+// signe la session d'un utilisateur : à la connexion, à l'installation et après un changement de mot de passe
+export function signerSession(app: FastifyInstance, db: Db, idUser: number): string {
+  const utilisateur = db.select().from(schema.utilisateur).where(eq(schema.utilisateur.idUser, idUser)).get()!;
+  return app.jwt.sign({
+    idUser: utilisateur.idUser,
+    siteId: utilisateur.siteId,
+    role: utilisateur.role,
+    idApporteur: utilisateur.idApporteur,
+    e: empreinteSession(utilisateur.motDePasseHash),
+  });
 }
 
 // noms sous lesquels les routes acceptent aujourd'hui l'auteur d'une action
@@ -47,6 +67,11 @@ export function creerAuthRequis(db: Db) {
 
     const utilisateurCourant = db.select().from(schema.utilisateur).where(eq(schema.utilisateur.idUser, request.user.idUser)).get();
     if (!utilisateurCourant || utilisateurCourant.actif !== 1) {
+      reply.code(401).send({ erreur: "Authentification requise" });
+      return;
+    }
+    // jeton émis avec un autre mot de passe (ou avant l'introduction de l'empreinte) : session terminée
+    if (request.user.e !== empreinteSession(utilisateurCourant.motDePasseHash)) {
       reply.code(401).send({ erreur: "Authentification requise" });
       return;
     }

@@ -5674,3 +5674,62 @@ describe("Fiche et suivi des apporteurs : cloisonnement par boutique", () => {
     expect(admin.json()[0].chiffreAffaires).toBe(26000);
   });
 });
+
+// 11.2 : constaté en test grandeur nature — un mot de passe réinitialisé « après compromission » (ou changé par l'utilisateur
+// lui-même) laissait l'ancien jeton valable jusqu'à 12 h : un jeton volé survivait au remède. Le jeton porte désormais
+// l'empreinte du mot de passe avec lequel il a été émis ; il est refusé dès que le mot de passe change.
+describe("Session et changement de mot de passe (11.2)", () => {
+  async function moi(app: FastifyInstance, token: string) {
+    return (await app.inject({ method: "GET", url: "/api/v1/auth/moi", headers: authHeader(token) })).statusCode;
+  }
+
+  it("un jeton émis avant la réinitialisation du mot de passe par l'administrateur est refusé", async () => {
+    creerUtilisateur(db, { siteId, nom: "Ad", prenom: "A", identifiant: "admin-a", motDePasse: "motdepasse-secret", role: "ADMINISTRATEUR" });
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const jetonVole = await connecter(app);
+    const jetonAdmin = await connecter(app, "admin-a");
+    expect(await moi(app, jetonVole)).toBe(200);
+
+    const reinit = await app.inject({ method: "POST", url: `/api/v1/utilisateurs/${userId}/mot-de-passe`, headers: authHeader(jetonAdmin), payload: { motDePasse: "nouveau-secret-123" } });
+    expect(reinit.statusCode).toBe(200);
+
+    expect(await moi(app, jetonVole)).toBe(401);
+    const frais = await connecter(app, "caissier1", "nouveau-secret-123");
+    expect(await moi(app, frais)).toBe(200);
+  });
+
+  it("un jeton émis avant le changement de son propre mot de passe est refusé, la réponse en fournit un neuf", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const ancien = await connecter(app);
+
+    const reponse = await app.inject({
+      method: "POST",
+      url: "/api/v1/auth/mot-de-passe",
+      headers: authHeader(ancien),
+      payload: { motDePasseActuel: "motdepasse-secret", nouveauMotDePasse: "autre-secret-456" },
+    });
+
+    expect(reponse.statusCode).toBe(200);
+    expect(await moi(app, ancien)).toBe(401);
+    const neuf = reponse.json().token as string;
+    expect(neuf).toBeTypeOf("string");
+    expect(await moi(app, neuf)).toBe(200);
+  });
+
+  it("un jeton valide reste valide tant que le mot de passe ne change pas (changement de rôle, nouvelle connexion)", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const premier = await connecter(app);
+    const second = await connecter(app);
+
+    expect(await moi(app, premier)).toBe(200);
+    expect(await moi(app, second)).toBe(200);
+  });
+
+  it("un jeton d'un ancien format, sans empreinte de mot de passe, est refusé (reconnexion nécessaire une fois)", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    await app.ready();
+    const ancienFormat = app.jwt.sign({ idUser: userId, siteId, role: "CAISSIER", idApporteur: null });
+
+    expect(await moi(app, ancienFormat)).toBe(401);
+  });
+});

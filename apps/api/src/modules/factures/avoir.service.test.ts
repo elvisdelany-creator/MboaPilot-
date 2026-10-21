@@ -263,3 +263,57 @@ describe("creerAvoir : remboursement enregistré avec l'avoir", () => {
   });
 });
 
+
+// Constaté en test grandeur nature : la vente d'un kit retire chacun de ses composants du stock (décodeur, parabole…), mais
+// l'avoir d'une ligne de kit avec « remettre en stock » ne rendait rien : le matériel revenu au magasin restait absent du stock.
+describe("creerAvoir : restitution du stock d'un kit (6.4, 5.1, 5.2)", () => {
+  let idKit: number;
+  let idDecodeur: number;
+  let idCable: number;
+  let idAccessoireSansStock: number;
+  let idFactureKit: number;
+  let idLigneKit: number;
+
+  const stock = (idProduit: number) => db.select().from(schema.produit).where(eq(schema.produit.idProduit, idProduit)).get()?.quantiteStock;
+
+  beforeEach(() => {
+    const famille = db.insert(schema.familleAbonnement).values({ libelle: "CANAL+" }).returning().get().idFamille;
+    idKit = db.insert(schema.kit).values({ idFamille: famille, libelle: "Kit G11", reglePrix: "PRIX_FIXE", prixFixe: 40000 }).returning().get().idKit;
+    // stock après la vente de 2 kits : 5 décodeurs - 2, 10 câbles - 4
+    idDecodeur = db.insert(schema.produit).values({ siteId, type: "BIEN", libelle: "Décodeur G11", prixVente: 20000, suiviStock: 1, quantiteStock: 3 }).returning().get().idProduit;
+    idCable = db.insert(schema.produit).values({ siteId, type: "BIEN", libelle: "Câble HDMI", prixVente: 1000, suiviStock: 1, quantiteStock: 6 }).returning().get().idProduit;
+    idAccessoireSansStock = db.insert(schema.produit).values({ siteId, type: "BIEN", libelle: "Vis et chevilles", prixVente: 0, suiviStock: 0 }).returning().get().idProduit;
+    db.insert(schema.kitComposant).values([
+      { idKit, idProduit: idDecodeur, quantite: 1 },
+      { idKit, idProduit: idCable, quantite: 2 },
+      { idKit, idProduit: idAccessoireSansStock, quantite: 1 },
+    ]).run();
+    idFactureKit = db.insert(schema.facture).values({ siteId, idAbonne, statut: "VALIDEE", montantTotal: 80000, creePar: userId }).returning().get().idFacture;
+    idLigneKit = db.insert(schema.ligneVente).values({ idFacture: idFactureKit, idKit, quantite: 2, prixApplique: 80000 }).returning().get().idLigne;
+  });
+
+  it("remet en stock chaque composant suivi, multiplié par la quantité de kits créditée", () => {
+    creerAvoir(db, { idFactureOrigine: idFactureKit, lignes: [{ idLigneOrigine: idLigneKit, quantite: 1 }], restituerStock: true, userId });
+
+    expect(stock(idDecodeur)).toBe(4); // 3 + 1 décodeur
+    expect(stock(idCable)).toBe(8); // 6 + 2 câbles
+    const mouvements = db.select().from(schema.stockMouvement).all();
+    expect(mouvements.map((m) => [m.idProduit, m.typeMouvement, m.quantite]).sort()).toEqual(
+      [[idDecodeur, "RETOUR_CLIENT", 1], [idCable, "RETOUR_CLIENT", 2]].sort(),
+    );
+  });
+
+  it("n'y touche pas quand restituerStock est faux", () => {
+    creerAvoir(db, { idFactureOrigine: idFactureKit, lignes: [{ idLigneOrigine: idLigneKit, quantite: 2 }], restituerStock: false, userId });
+
+    expect(stock(idDecodeur)).toBe(3);
+    expect(stock(idCable)).toBe(6);
+  });
+
+  it("rend la totalité des composants quand les deux kits sont crédités", () => {
+    creerAvoir(db, { idFactureOrigine: idFactureKit, lignes: [{ idLigneOrigine: idLigneKit, quantite: 2 }], restituerStock: true, userId });
+
+    expect(stock(idDecodeur)).toBe(5);
+    expect(stock(idCable)).toBe(10);
+  });
+});

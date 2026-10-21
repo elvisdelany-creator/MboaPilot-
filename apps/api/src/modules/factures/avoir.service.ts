@@ -3,6 +3,7 @@ import { extraireTaxeDuTTC } from "@mboapilot/shared";
 import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
 import { enregistrerMouvement } from "../stock/stock.repository.js";
+import { restituerComposantsKit } from "../stock/stock.service.js";
 import { trouverTauxTvaParSite } from "../entreprise/entreprise.repository.js";
 import { verifierEntier } from "../../lib/validation.js";
 import { creerPaiement } from "./paiement.repository.js";
@@ -116,6 +117,10 @@ function creerAvoirSansTransaction(db: Db, params: CreerAvoirParams): AvoirResul
         ligneOrigineId: ligne.ligneOrigineId,
       })
       .run();
+
+    if (params.restituerStock && ligne.idKit !== null) {
+      restituerComposantsKit(db, { idKit: ligne.idKit, siteId: origine.siteId, userId: params.userId, quantiteKits: ligne.quantite });
+    }
 
     if (params.restituerStock && ligne.idProduit !== null) {
       const produit = db.select().from(schema.produit).where(eq(schema.produit.idProduit, ligne.idProduit)).get();

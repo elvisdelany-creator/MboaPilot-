@@ -132,6 +132,30 @@ export function decrementerComposantsKit(db: Db, params: DecrementerComposantsKi
   }
 }
 
+export interface RestituerComposantsKitParams extends DecrementerComposantsKitParams {
+  quantiteKits: number;
+}
+
+// 6.4, 5.1 : pendant exact de decrementerComposantsKit pour un avoir avec remise en stock — chaque composant suivi revient
+// pour sa quantité de composition, multipliée par le nombre de kits crédités. Sans cela, le matériel d'un kit repris
+// restait absent du stock alors qu'il est revenu au magasin.
+export function restituerComposantsKit(db: Db, params: RestituerComposantsKitParams) {
+  const composants = db.select().from(schema.kitComposant).where(eq(schema.kitComposant.idKit, params.idKit)).all();
+
+  for (const composant of composants) {
+    const produit = db.select().from(schema.produit).where(eq(schema.produit.idProduit, composant.idProduit)).get();
+    if (produit?.suiviStock === 1) {
+      enregistrerMouvement(db, {
+        idProduit: composant.idProduit,
+        siteId: params.siteId,
+        typeMouvement: "RETOUR_CLIENT",
+        quantite: composant.quantite * params.quantiteKits,
+        utilisateurId: params.userId,
+      });
+    }
+  }
+}
+
 // 8.6, 9.3 : état des stocks du tableau de bord — produits suivis dont le
 // stock est descendu au niveau ou en dessous de leur seuil d'alerte.
 export function listerAlertesStock(db: Db, siteId: number) {

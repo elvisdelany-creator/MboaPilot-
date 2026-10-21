@@ -1,4 +1,6 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
+import { filtrerArticles, resoudreEntreeRecherche } from "@mboapilot/shared";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -18,18 +20,24 @@ export function GrilleProduits({ produits, onAjouter }: Props) {
   // code interne/code-barres ; une scanette termine sa frappe par Entrée,
   // ce qui ajoute directement l'article au ticket sur une correspondance exacte.
   const [recherche, setRecherche] = useState("");
-  const rechercheNormalisee = recherche.trim().toLowerCase();
-  const produitsFiltres = rechercheNormalisee
-    ? produits.filter(
-        (p) => p.libelle.toLowerCase().includes(rechercheNormalisee) || p.codeBarres?.toLowerCase().includes(rechercheNormalisee)
-      )
-    : produits;
+  const champRecherche = useRef<HTMLInputElement>(null);
+  const produitsFiltres = filtrerArticles(produits, recherche);
+
+  // Poste avec souris et clavier : le champ est prêt à recevoir la scanette dès l'ouverture de la grille, sans clic préalable.
+  // Sur tablette tactile, on ne le prend pas : cela ferait surgir le clavier à l'écran par-dessus la grille.
+  useEffect(() => {
+    if (window.matchMedia("(pointer: fine)").matches) champRecherche.current?.focus();
+  }, []);
 
   function surEntree(e: React.KeyboardEvent<HTMLInputElement>) {
     if (e.key !== "Enter") return;
-    const correspondance = produits.find((p) => p.codeBarres?.toLowerCase() === rechercheNormalisee);
-    if (correspondance) {
-      onAjouter(correspondance);
+    const entree = resoudreEntreeRecherche(produits, recherche);
+    if (entree.action === "ajouter") {
+      onAjouter(entree.article);
+      setRecherche("");
+    } else if (entree.action === "inconnu") {
+      // un code inconnu ne doit pas rester dans le champ : le code suivant s'y collerait et ne correspondrait plus à rien
+      toast.error(`Aucun article ne correspond à « ${entree.saisie} »`);
       setRecherche("");
     }
   }
@@ -81,6 +89,7 @@ export function GrilleProduits({ produits, onAjouter }: Props) {
   return (
     <div className="flex-1 overflow-y-auto p-4">
       <Input
+        ref={champRecherche}
         value={recherche}
         onChange={(e) => setRecherche(e.target.value)}
         onKeyDown={surEntree}

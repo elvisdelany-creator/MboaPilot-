@@ -5733,3 +5733,38 @@ describe("Session et changement de mot de passe (11.2)", () => {
     expect(await moi(app, ancienFormat)).toBe(401);
   });
 });
+
+// Constaté par un test de robustesse de toutes les routes : un identifiant en tableau ou en objet dans le corps d'une requête
+// donnait une erreur interne (500) ; c'est un « introuvable » ou une demande invalide (4xx).
+describe("Identifiants illisibles dans un corps de requête : jamais d'erreur interne", () => {
+  const ILLISIBLES = [[], {}, [1], { a: 1 }, true];
+
+  it.each(ILLISIBLES)("POST /api/v1/paiements-mobiles avec idFacture = %j", async (illisible) => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const token = await connecter(app);
+
+    const reponse = await app.inject({ method: "POST", url: "/api/v1/paiements-mobiles", headers: authHeader(token), payload: { idFacture: illisible, telephone: "690000000" } });
+
+    expect(reponse.statusCode).toBeGreaterThanOrEqual(400);
+    expect(reponse.statusCode).toBeLessThan(500);
+  });
+
+  it.each(ILLISIBLES)("POST /api/v1/sav/dossiers avec idAbonne = %j", async (illisible) => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const token = await connecter(app);
+
+    const reponse = await app.inject({ method: "POST", url: "/api/v1/sav/dossiers", headers: authHeader(token), payload: { idAbonne: illisible, descriptionPanne: "Panne", sousGarantie: false } });
+
+    expect(reponse.statusCode).toBeLessThan(500);
+  });
+
+  it.each(ILLISIBLES)("POST /api/v1/stock/achats avec idProduit = %j", async (illisible) => {
+    creerUtilisateur(db, { siteId, nom: "G", prenom: "A", identifiant: "gerant-x", motDePasse: "motdepasse-secret", role: "GERANT" });
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const token = await connecter(app, "gerant-x");
+
+    const reponse = await app.inject({ method: "POST", url: "/api/v1/stock/achats", headers: authHeader(token), payload: { idProduit: illisible, quantite: 1, coutUnitaire: 1 } });
+
+    expect(reponse.statusCode).toBeLessThan(500);
+  });
+});

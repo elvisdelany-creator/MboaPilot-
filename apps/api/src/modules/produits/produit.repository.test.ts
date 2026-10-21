@@ -8,6 +8,7 @@ import {
   masquerCoutHistoriquePrix,
   masquerCoutMargeProduit,
   modifierProduit,
+  trouverProduit,
 } from "./produit.repository.js";
 import * as schema from "../../db/schema.js";
 
@@ -252,5 +253,13 @@ describe("creerProduit / modifierProduit : valeurs hors domaine", () => {
 
     expect(() => modifierProduit(db, produit.idProduit, { ...surcharge, userId } as never)).toThrow(message);
     expect(listerProduits(db, siteId)[0]).toMatchObject({ libelle: "Câble HDMI", prixVente: 2500 });
+  });
+});
+
+// Constaté par un test de robustesse de toutes les routes : un identifiant d'article en tableau, objet ou booléen faisait
+// échouer la liaison SQL (erreur interne 500) au lieu d'un « introuvable ».
+describe("trouverProduit : identifiant illisible", () => {
+  it.each([[[]], [[1]], [{}], [{ a: 1 }], [true], [null], [undefined]])("renvoie undefined pour %j, sans exception", (valeur) => {
+    expect(trouverProduit(db, valeur as never)).toBeUndefined();
   });
 });

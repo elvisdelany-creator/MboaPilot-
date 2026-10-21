@@ -1,3 +1,4 @@
+import { identifiantLiable } from "../../lib/validation.js";
 import { eq } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import type { Db } from "../../db/types.js";
@@ -17,7 +18,7 @@ export function registerPaiementMobileRoutes(app: FastifyInstance, db: Db, fourn
     "/api/v1/paiements-mobiles",
     { preHandler: [guards.authRequis, guards.ventes] },
     async (request, reply) => {
-      const facture = db.select().from(schema.facture).where(eq(schema.facture.idFacture, request.body.idFacture)).get();
+      const facture = identifiantLiable(request.body.idFacture) ? db.select().from(schema.facture).where(eq(schema.facture.idFacture, request.body.idFacture)).get() : undefined;
       if (facture && !siteAutorise(request.user, facture.siteId)) {
         reply.code(403).send(ERREUR_SITE_FACTURE);
         return;

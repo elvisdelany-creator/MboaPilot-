@@ -2,7 +2,7 @@ import { desc, eq } from "drizzle-orm";
 import { calculerMarge, type MargeType } from "@mboapilot/shared";
 import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
-import { verifierBooleen, verifierEntier } from "../../lib/validation.js";
+import { identifiantLiable, verifierBooleen, verifierEntier } from "../../lib/validation.js";
 
 // 5.2, 7.3 : catalogue des produits/pièces détachées d'un site
 export function listerProduits(db: Db, siteId: number) {
@@ -10,6 +10,7 @@ export function listerProduits(db: Db, siteId: number) {
 }
 
 export function trouverProduit(db: Db, idProduit: number) {
+  if (!identifiantLiable(idProduit)) return undefined;
   return db.select().from(schema.produit).where(eq(schema.produit.idProduit, idProduit)).get();
 }
 

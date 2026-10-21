@@ -444,3 +444,17 @@ describe("rattachement à un apporteur (6.3)", () => {
     expect(modifie?.apporteurId).toBe(apporteur.idApporteur);
   });
 });
+
+// Constaté par un test de robustesse de toutes les routes : un identifiant d'abonné qui arrive sous forme de tableau,
+// d'objet ou de booléen dans un corps de requête faisait échouer la liaison SQL (erreur interne 500) au lieu d'un « introuvable ».
+describe("trouverAbonne : identifiant illisible", () => {
+  it.each([[[]], [[1]], [{}], [{ a: 1 }], [true], [null], [undefined]])("renvoie undefined pour %j, sans exception", (valeur) => {
+    expect(trouverAbonne(db, valeur as never)).toBeUndefined();
+  });
+
+  it("trouve toujours un abonné par son numéro", () => {
+    const abonne = creerAbonne(db, { siteId, nom: "Nga", prenom: "Valentin", telephone: "690000000" });
+
+    expect(trouverAbonne(db, abonne.idAbonne)?.nom).toBe("Nga");
+  });
+});

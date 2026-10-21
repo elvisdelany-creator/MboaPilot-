@@ -1,3 +1,4 @@
+import { identifiantLiable } from "../../lib/validation.js";
 import { and, eq, sql } from "drizzle-orm";
 import { joursAvantEcheance, LIMITE_RESULTATS_RECHERCHE_ABONNES, normaliserLibelle } from "@mboapilot/shared";
 import type { Db } from "../../db/types.js";
@@ -39,6 +40,7 @@ export function creerAbonne(db: Db, input: AbonneInput) {
 }
 
 export function trouverAbonne(db: Db, idAbonne: number) {
+  if (!identifiantLiable(idAbonne)) return undefined;
   return db.select().from(schema.abonne).where(eq(schema.abonne.idAbonne, idAbonne)).get();
 }
 

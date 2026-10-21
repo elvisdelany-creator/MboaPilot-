@@ -53,3 +53,10 @@ export function verifierEncaissementSaisi(params: { montantEncaisse?: unknown; r
 export function verifierBooleen(valeur: unknown, libelle: string): void {
   if (valeur !== undefined && typeof valeur !== "boolean") throw new Error(`${libelle} doit être vrai ou faux`);
 }
+
+// Un identifiant venu d'un corps de requête peut être n'importe quel JSON : un tableau, un objet ou un booléen fait échouer la
+// liaison SQL (« Too few parameter values », « SQLite3 can only bind… »), donc une erreur interne 500. Seuls un nombre ou un
+// texte sont liables ; le reste ne peut correspondre à aucune ligne et se traite comme « introuvable ».
+export function identifiantLiable(valeur: unknown): valeur is number | string {
+  return typeof valeur === "number" || typeof valeur === "string";
+}

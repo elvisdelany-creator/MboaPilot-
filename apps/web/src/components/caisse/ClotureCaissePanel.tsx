@@ -161,6 +161,14 @@ export function ClotureCaissePanel() {
                         min={0}
                         value={comptages[mode]}
                         onChange={(e) => setComptages((c) => ({ ...c, [mode]: Number(e.target.value) }))}
+                        // au clavier, Entrée passe au mode suivant ; sur le dernier seulement elle confirme la clôture (irréversible) :
+                        // valider dès les espèces fermerait la caisse avec les autres comptages à zéro, donc un faux écart
+                        onKeyDown={(e) => {
+                          if (e.key !== "Enter") return;
+                          const suivant = MODES[MODES.indexOf(mode) + 1];
+                          if (suivant) document.getElementById(`comptage-${suivant}`)?.focus();
+                          else if (!enCours) validerFermeture();
+                        }}
                         className="mt-1 h-11 text-base tabular-nums"
                       />
                     </div>
@@ -192,6 +200,10 @@ export function ClotureCaissePanel() {
                   min={0}
                   value={fondOuverture}
                   onChange={(e) => setFondOuverture(Number(e.target.value))}
+                  // au clavier, Entrée ouvre la caisse, comme le bouton
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !enCours) validerOuverture();
+                  }}
                   className="mt-1 h-11 text-base tabular-nums"
                 />
               </div>

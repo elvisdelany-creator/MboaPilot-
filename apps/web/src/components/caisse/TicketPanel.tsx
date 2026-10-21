@@ -323,6 +323,10 @@ export function TicketPanel({
               min={0}
               value={montant}
               onChange={(e) => setMontant(Number(e.target.value))}
+              // au clavier, Entrée dans le montant encaissé valide la vente, comme le bouton (même condition)
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && pretAValider) valider();
+              }}
               className="mt-1 h-11 text-base tabular-nums"
             />
             {montant > 0 && montant < total && (

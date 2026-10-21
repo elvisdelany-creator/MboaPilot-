@@ -75,7 +75,7 @@ export function RecuVentePrintable({ infosEntreprise, logoUrl, recu, onNouvelleV
           <p className="text-sm text-muted-foreground">
             Une facture sans encaissement ne s'imprime pas et ne se transmet pas au client. Le ticket sera disponible dès le premier encaissement, même partiel.
           </p>
-          <Button className="cursor-pointer gap-2" onClick={onNouvelleVente}>
+          <Button autoFocus className="cursor-pointer gap-2" onClick={onNouvelleVente}>
             <RotateCcw className="size-4" />
             Nouvelle vente
           </Button>
@@ -166,7 +166,8 @@ export function RecuVentePrintable({ infosEntreprise, logoUrl, recu, onNouvelleV
       </div>
 
       <div className="no-print mt-6 flex gap-2">
-        <Button variant="outline" className="cursor-pointer gap-2" onClick={onNouvelleVente}>
+        {/* le focus arrive ici une fois la vente encaissée (au clavier : Entrée pour la suivante, au lieu de refaire le tour de la page) */}
+        <Button autoFocus variant="outline" className="cursor-pointer gap-2" onClick={onNouvelleVente}>
           <RotateCcw className="size-4" />
           Nouvelle vente
         </Button>

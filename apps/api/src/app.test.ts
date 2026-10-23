@@ -5965,3 +5965,44 @@ describe("Abonnements : la date du jour vient du serveur, jamais du poste (7.1, 
     expect(abonnement?.idFormule).toBe(idFormule);
   });
 });
+
+describe("POST /api/v1/abonnements/:numeroAbonnement/changement-formule : total attendu (7.4)", () => {
+  it("refuse en 400 sans rien encaisser quand le prix de la formule a changé depuis l'affichage", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const token = await connecter(app);
+    const idFamille = db.select().from(schema.formule).where(eq(schema.formule.idFormule, idFormule)).get()!.idFamille;
+    const idSuperieure = db.insert(schema.formule).values({ idFamille, libelle: "PREMIUM", prix: 28000, rang: 5 }).returning().get().idFormule;
+    const { numeroAbonnement } = (
+      await app.inject({
+        method: "POST",
+        url: "/api/v1/recrutements",
+        headers: authHeader(token),
+        payload: { abonne: { nom: "Nga", prenom: "Paul", telephone: "690000000" }, idFormule, montantEncaisse: 13000 },
+      })
+    ).json();
+    // le gérant relève le prix pendant que la fenêtre de migration est ouverte
+    db.update(schema.formule).set({ prix: 30000 }).where(eq(schema.formule.idFormule, idSuperieure)).run();
+    const facturesAvant = db.select().from(schema.facture).all().length;
+
+    const refus = await app.inject({
+      method: "POST",
+      url: `/api/v1/abonnements/${numeroAbonnement}/changement-formule`,
+      headers: authHeader(token),
+      payload: { idNouvelleFormule: idSuperieure, montantEncaisse: 15000, totalAttendu: 15000 },
+    });
+
+    expect(refus.statusCode).toBe(400);
+    expect(refus.json().erreur).toMatch(/prix a changé/i);
+    expect(db.select().from(schema.facture).all()).toHaveLength(facturesAvant);
+    expect(db.select().from(schema.paiement).all()).toHaveLength(1); // seul le paiement du recrutement
+    expect(db.select().from(schema.abonnement).where(eq(schema.abonnement.numeroAbonnement, numeroAbonnement)).get()?.idFormule).toBe(idFormule);
+
+    const accepte = await app.inject({
+      method: "POST",
+      url: `/api/v1/abonnements/${numeroAbonnement}/changement-formule`,
+      headers: authHeader(token),
+      payload: { idNouvelleFormule: idSuperieure, montantEncaisse: 17000, totalAttendu: 17000 },
+    });
+    expect(accepte.statusCode).toBe(200);
+  });
+});

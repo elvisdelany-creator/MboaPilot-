@@ -520,6 +520,8 @@ export interface ChangerFormulePayload {
   // 3.2.2, 5.4.2, 7.4 : "ajuster ses options" lors de la migration
   idsOptions?: number[];
   montantEncaisse: number;
+  // total affiché : le serveur refuse la migration si un prix a changé entre-temps
+  totalAttendu?: number;
   modePaiement?: ModePaiementEncaissement;
   banque?: string;
   numeroCheque?: string;

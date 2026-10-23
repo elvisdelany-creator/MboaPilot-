@@ -257,3 +257,43 @@ describe("changerFormule — formule cible retirée de la vente (7.4, 8.8)", () 
     expect(db.select().from(schema.abonnement).where(eq(schema.abonnement.numeroAbonnement, numeroAbonnement)).get()?.idFormule).toBe(idAccess);
   });
 });
+
+// le différentiel affiché au caissier peut être périmé : un gérant modifie le prix de la formule pendant que la fenêtre est ouverte.
+// Sans contrôle, le caissier encaisse l'ancien différentiel et la facture reste « validée » avec un solde dû que personne n'a vu.
+describe("changerFormule : total attendu (7.4)", () => {
+  function nombreFactures() {
+    return db.select().from(schema.facture).all().length;
+  }
+
+  it("refuse la migration si le prix de la formule a changé depuis l'affichage, sans rien modifier", () => {
+    db.update(schema.formule).set({ prix: 12000 }).where(eq(schema.formule.idFormule, idEvasion)).run();
+    const facturesAvant = nombreFactures();
+
+    expect(() =>
+      changerFormule(db, { siteId, userId, aujourdHui, numeroAbonnement, idNouvelleFormule: idEvasion, montantEncaisse: 5500, totalAttendu: 5500 })
+    ).toThrow(/prix a changé/i);
+
+    expect(nombreFactures()).toBe(facturesAvant);
+    expect(db.select().from(schema.abonnement).where(eq(schema.abonnement.numeroAbonnement, numeroAbonnement)).get()?.idFormule).toBe(idAccess);
+    expect(db.select().from(schema.historiqueAbonnement).where(eq(schema.historiqueAbonnement.typeChangement, "FORMULE")).all()).toHaveLength(0);
+  });
+
+  it("accepte la migration quand le total attendu correspond au différentiel", () => {
+    const resultat = changerFormule(db, { siteId, userId, aujourdHui, numeroAbonnement, idNouvelleFormule: idEvasion, montantEncaisse: 5500, totalAttendu: 5500 });
+
+    expect(resultat.statutFacture).toBe("VALIDEE");
+    expect(resultat.montantDifferentiel).toBe(5500);
+  });
+
+  it("le total attendu comprend les options : différentiel + tarif différencié", () => {
+    const idOption = db.insert(schema.optionComplement).values({ libelle: "Option English Plus", prix: 5000 }).returning().get().idOption;
+    db.insert(schema.formuleOptionCompat).values({ idFormule: idEvasion, idOption, prixSurcharge: 2000 }).run();
+
+    expect(() =>
+      changerFormule(db, { siteId, userId, aujourdHui, numeroAbonnement, idNouvelleFormule: idEvasion, idsOptions: [idOption], montantEncaisse: 7500, totalAttendu: 5500 })
+    ).toThrow(/prix a changé/i);
+
+    const resultat = changerFormule(db, { siteId, userId, aujourdHui, numeroAbonnement, idNouvelleFormule: idEvasion, idsOptions: [idOption], montantEncaisse: 7500, totalAttendu: 7500 });
+    expect(db.select().from(schema.facture).where(eq(schema.facture.idFacture, resultat.idFacture)).get()?.montantTotal).toBe(7500);
+  });
+});

@@ -15,7 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ConfirmationSurpaiementDialog } from "@/components/shared/ConfirmationSurpaiementDialog";
-import { changerFormuleRequete, chargerOptions, ErreurAuthentification, type ModePaiementEncaissement } from "@/lib/api";
+import { changerFormuleRequete, chargerCatalogue, chargerOptions, ErreurAuthentification, type ModePaiementEncaissement } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import type { Formule, OptionCatalogue } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -44,6 +44,8 @@ export function ChangerFormuleDialog({ numeroAbonnement, formuleActuelle, formul
   const [enCours, setEnCours] = useState(false);
   // 3.2.2, 5.4.2, 7.4 : "ajuster ses options" lors de la migration
   const [options, setOptions] = useState<OptionCatalogue[]>([]);
+  // formules rechargées après un « le prix a changé » : remplacent celles reçues à l'ouverture, devenues périmées
+  const [formulesRechargees, setFormulesRechargees] = useState<Formule[] | null>(null);
   const [idsOptionsSelectionnees, setIdsOptionsSelectionnees] = useState<number[]>([]);
 
   // 6.5 : moyen de paiement de l'encaissement
@@ -57,8 +59,9 @@ export function ChangerFormuleDialog({ numeroAbonnement, formuleActuelle, formul
 
   const ouvert = numeroAbonnement !== null;
 
+  const formules = formulesRechargees ?? formulesFamille;
   const candidats = formuleActuelle
-    ? formulesFamille
+    ? formules
         .map((formule) => ({ formule, validation: validerMigrationFormule(formuleActuelle, formule) }))
         .filter((c): c is { formule: Formule; validation: { autorise: true; montantDifferentiel: number } } => c.validation.autorise)
         // de la formule immédiatement supérieure à la plus haute (et non dans l'ordre de création)
@@ -81,6 +84,7 @@ export function ChangerFormuleDialog({ numeroAbonnement, formuleActuelle, formul
   useEffect(() => {
     if (!ouvert) {
       setIdFormuleChoisie(null);
+      setFormulesRechargees(null);
       setMontantEncaisse(0);
       setIdsOptionsSelectionnees([]);
       setModePaiement("CASH");
@@ -113,6 +117,18 @@ export function ChangerFormuleDialog({ numeroAbonnement, formuleActuelle, formul
     soumettre();
   }
 
+  async function rafraichirPrix() {
+    if (!formuleActuelle) return;
+    try {
+      const [catalogue, nouvellesOptions] = await Promise.all([chargerCatalogue(token), chargerOptions(token)]);
+      const famille = catalogue.find((f) => f.formules.some((x) => x.idFormule === formuleActuelle.idFormule));
+      if (famille) setFormulesRechargees(famille.formules);
+      setOptions(nouvellesOptions);
+    } catch {
+      // la panne réseau est déjà signalée par les autres chargements ; le prochain essai de confirmation redemandera les prix
+    }
+  }
+
   async function soumettre() {
     if (!numeroAbonnement || !choix) return;
     setConfirmationSurpaiement(false);
@@ -125,6 +141,7 @@ export function ChangerFormuleDialog({ numeroAbonnement, formuleActuelle, formul
         idNouvelleFormule: choix.formule.idFormule,
         idsOptions: idsOptionsSelectionnees.length > 0 ? idsOptionsSelectionnees : undefined,
         montantEncaisse,
+        totalAttendu: montantDu,
         modePaiement,
         banque: modePaiement === "CHEQUE" || modePaiement === "VIREMENT" ? banque : undefined,
         numeroCheque: modePaiement === "CHEQUE" ? numeroCheque : undefined,
@@ -142,6 +159,13 @@ export function ChangerFormuleDialog({ numeroAbonnement, formuleActuelle, formul
       if (erreur instanceof ErreurAuthentification) {
         toast.error("Session expirée — veuillez vous reconnecter.");
         deconnecter();
+        return;
+      }
+      // un prix a changé depuis l'affichage : le serveur a refusé avant tout encaissement ; on recharge les prix, le montant à
+      // encaisser se recale sur le nouveau total, et le caissier le revoit avec le client avant de confirmer à nouveau
+      if (erreur instanceof Error && erreur.message.startsWith("Le prix a changé")) {
+        toast.error("Le prix a changé depuis l'affichage : les prix viennent d'être mis à jour. Vérifiez le nouveau total avec le client, puis confirmez à nouveau.");
+        rafraichirPrix();
         return;
       }
       toast.error(erreur instanceof Error ? erreur.message : "Échec du changement de formule.");

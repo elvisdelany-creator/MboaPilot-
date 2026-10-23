@@ -4,7 +4,7 @@ import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
 import { trouverTauxTvaParSite } from "../entreprise/entreprise.repository.js";
 import { creerPaiement } from "../factures/paiement.repository.js";
-import { verifierEncaissementSaisi } from "../../lib/validation.js";
+import { verifierEncaissementSaisi, verifierTotalAttendu } from "../../lib/validation.js";
 
 export interface ChangerFormuleParams {
   siteId: number;
@@ -20,6 +20,8 @@ export interface ChangerFormuleParams {
   // compatible avec la nouvelle formule (formule_option_compat)
   idsOptions?: number[];
   montantEncaisse: number;
+  // total affiché à la caisse : la migration est refusée si un prix a changé entre-temps (verifierTotalAttendu)
+  totalAttendu?: number;
   // 6.5 : moyen de paiement de l'encaissement — comptant par défaut ; le
   // Mobile Money suit son propre parcours dédié (paiement-mobile), jamais ici
   modePaiement?: "CASH" | "CHEQUE" | "VIREMENT";
@@ -107,6 +109,8 @@ function changerFormuleSansTransaction(db: Db, params: ChangerFormuleParams): Ch
   });
   const prixOptions = optionsAppliquees.reduce((total, o) => total + o.prixApplique, 0);
   const montantTotal = validation.montantDifferentiel + prixOptions;
+  // la transaction annule la formule et l'historique déjà écrits plus haut
+  verifierTotalAttendu(montantTotal, params.totalAttendu);
 
   // 3.2.3, 6.1, 8.8 : "porte le total, la TVA/taxes le cas échéant" — figée
   // au taux en vigueur à cet instant, jamais recalculée après coup

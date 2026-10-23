@@ -15,6 +15,14 @@ export function registerAuthRoutes(app: FastifyInstance, db: Db, authRequis: Gua
     reply.code(200).send({ idUser: u.idUser, siteId: u.siteId, nom: u.nom, prenom: u.prenom, identifiant: u.identifiant, role: u.role, idApporteur: u.idApporteur });
   });
 
+  // 11.2 : session glissante — l'application ouverte renouvelle sa session au fil de la journée (ouverture, retour sur la fenêtre,
+  // toutes les 30 min), sinon un caissier connecté à 8 h était éjecté à 20 h en pleine vente et perdait son ticket. Le garde a déjà
+  // vérifié le jeton, le compte actif et l'empreinte du mot de passe : un jeton expiré, un compte désactivé ou un mot de passe
+  // changé depuis ne se renouvellent pas. L'identité vient du jeton, jamais du corps de la requête.
+  app.post("/api/v1/auth/renouveler", { preHandler: [authRequis] }, async (request, reply) => {
+    reply.code(200).send({ token: signerSession(app, db, request.user.idUser) });
+  });
+
   // 2.5.1 : changement de SON propre mot de passe (le mot de passe actuel est revérifié) — jamais celui d'un autre :
   // l'identité vient de la session, pas du corps de la requête
   app.post<{ Body: { motDePasseActuel?: string; nouveauMotDePasse?: string } }>("/api/v1/auth/mot-de-passe", { preHandler: [authRequis] }, async (request, reply) => {

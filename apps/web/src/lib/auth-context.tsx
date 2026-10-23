@@ -1,9 +1,12 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
-import { chargerProfilCourant, ErreurAuthentification, login as loginRequete } from "./api";
+import { chargerProfilCourant, ErreurAuthentification, login as loginRequete, renouvelerSessionRequete } from "./api";
 import type { Utilisateur } from "./types";
 
 const CLE_SESSION = "mboapilot.session";
+// 11.2 : session glissante — une session vaut 12 h, mais tant que l'application reste ouverte elle se renouvelle toutes les
+// 30 min : sans cela, un caissier connecté à 8 h était éjecté à 20 h en pleine vente, et son ticket en cours était perdu
+const INTERVALLE_RENOUVELLEMENT_MS = 30 * 60 * 1000;
 
 interface Session {
   token: string;
@@ -33,9 +36,11 @@ function lireSessionStockee(): Session | null {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(lireSessionStockee);
   const token = session?.token;
+  const dernierRenouvellement = useRef(0);
 
   function ouvrirSession(token: string, utilisateur: Utilisateur) {
     const nouvelleSession = { token, utilisateur };
+    dernierRenouvellement.current = Date.now();
     setSession(nouvelleSession);
     localStorage.setItem(CLE_SESSION, JSON.stringify(nouvelleSession));
   }
@@ -72,6 +77,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           localStorage.setItem(CLE_SESSION, JSON.stringify(miseAJour));
           return miseAJour;
         });
+        if (Date.now() - dernierRenouvellement.current >= INTERVALLE_RENOUVELLEMENT_MS) {
+          const renouvelee = await renouvelerSessionRequete(token as string);
+          if (annule) return;
+          dernierRenouvellement.current = Date.now();
+          setSession((courante) => {
+            if (!courante || courante.token !== token) return courante;
+            const miseAJour = { token: renouvelee.token, utilisateur: courante.utilisateur };
+            localStorage.setItem(CLE_SESSION, JSON.stringify(miseAJour));
+            return miseAJour;
+          });
+        }
       } catch (erreur) {
         if (annule || !(erreur instanceof ErreurAuthentification)) return; // une panne réseau ne déconnecte personne
         toast.error("Session expirée — veuillez vous reconnecter.");
@@ -81,9 +97,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     verifierProfil();
     window.addEventListener("focus", verifierProfil);
+    const minuteur = window.setInterval(verifierProfil, INTERVALLE_RENOUVELLEMENT_MS);
     return () => {
       annule = true;
       window.removeEventListener("focus", verifierProfil);
+      window.clearInterval(minuteur);
     };
     // deconnecter ne dépend que de setters stables
     // eslint-disable-next-line react-hooks/exhaustive-deps

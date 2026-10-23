@@ -6006,3 +6006,65 @@ describe("POST /api/v1/abonnements/:numeroAbonnement/changement-formule : total 
     expect(accepte.statusCode).toBe(200);
   });
 });
+
+// 11.2 : session glissante. Un jeton vaut 12 h depuis la connexion : un caissier connecté à 8 h était éjecté à 20 h, en pleine vente,
+// et perdait son ticket. Tant que l'application reste ouverte, elle renouvelle la session ; fermée plus de 12 h, elle expire.
+describe("POST /api/v1/auth/renouveler : session glissante (11.2)", () => {
+  const renouveler = (app: FastifyInstance, token?: string) =>
+    app.inject({ method: "POST", url: "/api/v1/auth/renouveler", headers: token ? authHeader(token) : {} });
+
+  it("renvoie un jeton neuf qui expire plus tard que l'ancien et que le serveur accepte", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    // le jeton d'origine : celui de la connexion, avec l'empreinte du mot de passe (le plugin JWT n'existe qu'une fois le serveur prêt)
+    const connexion = await connecter(app);
+    const ancien = app.jwt.sign({ idUser: userId, siteId, role: "CAISSIER", idApporteur: null }, { expiresIn: "1h" });
+
+    const reponse = await renouveler(app, connexion);
+
+    expect(reponse.statusCode).toBe(200);
+    const nouveau = reponse.json().token as string;
+    const moi = await app.inject({ method: "GET", url: "/api/v1/auth/moi", headers: authHeader(nouveau) });
+    expect(moi.statusCode).toBe(200);
+    expect(moi.json().idUser).toBe(userId);
+    expect((app.jwt.decode(nouveau) as { exp: number }).exp).toBeGreaterThan((app.jwt.decode(ancien) as { exp: number }).exp);
+  });
+
+  it("refuse sans jeton, avec un jeton expiré ou falsifié", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const connexion = await connecter(app);
+    const expire = app.jwt.sign({ idUser: userId, siteId, role: "CAISSIER", idApporteur: null }, { expiresIn: "-1s" });
+
+    expect((await renouveler(app)).statusCode).toBe(401);
+    expect((await renouveler(app, expire)).statusCode).toBe(401);
+    expect((await renouveler(app, `${connexion}x`)).statusCode).toBe(401);
+  });
+
+  it("ne prolonge pas la session d'un compte désactivé ou dont le mot de passe a changé depuis", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const connexion = await connecter(app);
+    const changement = await app.inject({
+      method: "POST",
+      url: "/api/v1/auth/mot-de-passe",
+      headers: authHeader(connexion),
+      payload: { motDePasseActuel: "motdepasse-secret", nouveauMotDePasse: "nouveau-motdepasse-42" },
+    });
+    expect(changement.statusCode).toBe(200);
+
+    expect((await renouveler(app, connexion)).statusCode).toBe(401); // jeton émis avec l'ancien mot de passe
+
+    const neuf = changement.json().token as string;
+    db.update(schema.utilisateur).set({ actif: 0 }).where(eq(schema.utilisateur.idUser, userId)).run();
+    expect((await renouveler(app, neuf)).statusCode).toBe(401);
+  });
+
+  it("renvoie le jeton du compte qui l'appelle, jamais celui d'un autre", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const autre = creerUtilisateur(db, { siteId, nom: "Z", prenom: "Y", identifiant: "autre", motDePasse: "motdepasse-secret", role: "GERANT" }).idUser;
+    const connexion = await connecter(app);
+
+    const reponse = await app.inject({ method: "POST", url: "/api/v1/auth/renouveler", headers: authHeader(connexion), payload: { idUser: autre, userId: autre } });
+
+    expect(reponse.statusCode).toBe(200);
+    expect((app.jwt.decode(reponse.json().token) as { idUser: number }).idUser).toBe(userId);
+  });
+});

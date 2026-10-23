@@ -103,6 +103,12 @@ export async function chargerProfilCourant(token: string): Promise<Utilisateur> 
   return lireJson<Utilisateur>(reponse);
 }
 
+// 11.2 : session glissante — jeton neuf pour la même session, tant que l'actuel est encore valide
+export async function renouvelerSessionRequete(token: string): Promise<{ token: string }> {
+  const reponse = await fetch(`${BASE}/auth/renouveler`, { method: "POST", headers: headersAuth(token) });
+  return lireJson<{ token: string }>(reponse);
+}
+
 export async function rechercherAbonnes(token: string, siteId: number, q: string): Promise<Abonne[]> {
   if (!q.trim()) return [];
   const params = new URLSearchParams({ siteId: String(siteId), q });

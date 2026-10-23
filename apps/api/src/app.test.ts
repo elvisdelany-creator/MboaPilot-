@@ -4,12 +4,17 @@ import { eq } from "drizzle-orm";
 import { mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { jourDouala } from "@mboapilot/shared";
 import { creerDbTest, type Db } from "./test-utils/db.js";
 import { JPEG_FACTICE, PNG_FACTICE } from "./test-utils/images.js";
 import { buildApp } from "./app.js";
 import { creerUtilisateur } from "./modules/utilisateurs/utilisateur.repository.js";
 import { SimulateurImpression } from "./modules/impression/simulateur-impression.js";
 import * as schema from "./db/schema.js";
+
+// minuit à Douala (UTC+1) comme instant : le serveur compte les jours à l'heure de Douala, donc les dates relatives de ces tests
+// aussi — calculées en UTC, elles décalaient d'un jour entre 23 h et minuit UTC
+const dateDouala = () => new Date(`${jourDouala()}T00:00:00Z`);
 
 const JWT_SECRET_TEST = "secret-de-test-ne-jamais-utiliser-en-prod";
 
@@ -642,7 +647,7 @@ describe("GET /api/v1/alertes-echeance", () => {
     const autreSite = db.insert(schema.site).values({ idEntreprise, nom: "Site B" }).returning().get().idSite;
     const autreUserId = creerUtilisateur(db, { siteId: autreSite, nom: "B", prenom: "B", identifiant: "bsite", motDePasse: "motdepasse-secret", role: "CAISSIER" }).idUser;
 
-    const dateFinProche = new Date();
+    const dateFinProche = dateDouala();
     dateFinProche.setDate(dateFinProche.getDate() + 3);
     const abonneAutreSite = db.insert(schema.abonne).values({ siteId: autreSite, nom: "SecretSiteB", prenom: "X", telephone: "699999999" }).returning().get();
     db.insert(schema.abonnement)
@@ -650,7 +655,7 @@ describe("GET /api/v1/alertes-echeance", () => {
         idAbonne: abonneAutreSite.idAbonne,
         idFormule,
         siteId: autreSite,
-        dateDebut: new Date().toISOString().slice(0, 10),
+        dateDebut: jourDouala(),
         dateFin: dateFinProche.toISOString().slice(0, 10),
         statut: "ACTIF",
         creePar: autreUserId,
@@ -662,7 +667,7 @@ describe("GET /api/v1/alertes-echeance", () => {
     expect(alertes.statusCode).toBe(200);
     expect(alertes.json()).toHaveLength(0);
 
-    const dateFinPassee = new Date();
+    const dateFinPassee = dateDouala();
     dateFinPassee.setDate(dateFinPassee.getDate() - 90);
     db.insert(schema.abonnement)
       .values({
@@ -688,7 +693,7 @@ describe("GET /api/v1/alertes-echeance", () => {
     const familleCanal = db.insert(schema.familleAbonnement).values({ libelle: "CANAL+" }).returning().get();
     const formuleCanal = db.insert(schema.formule).values({ idFamille: familleCanal.idFamille, libelle: "ACCESS", prix: 5000, rang: 1 }).returning().get();
 
-    const aujourdHui = new Date();
+    const aujourdHui = dateDouala();
     const dateFin = new Date(aujourdHui);
     dateFin.setDate(dateFin.getDate() + 3);
     const abonneDstv = db.insert(schema.abonne).values({ siteId, nom: "Nga", prenom: "Paul", telephone: "690000000" }).returning().get();
@@ -726,7 +731,7 @@ describe("GET /api/v1/abonnements-expires (4.4, 8.8)", () => {
     const token = await connecter(app);
 
     const abonne = db.insert(schema.abonne).values({ siteId, nom: "Nga", prenom: "Paul", telephone: "690000000" }).returning().get();
-    const dateFin = new Date();
+    const dateFin = dateDouala();
     dateFin.setDate(dateFin.getDate() - 10);
     db.insert(schema.abonnement)
       .values({
@@ -753,7 +758,7 @@ describe("GET /api/v1/abonnements-expires (4.4, 8.8)", () => {
     const tokenAdmin = await connecter(app, "admin1");
 
     const abonne = db.insert(schema.abonne).values({ siteId, nom: "Nga", prenom: "Paul", telephone: "690000000" }).returning().get();
-    const dateFin = new Date();
+    const dateFin = dateDouala();
     dateFin.setDate(dateFin.getDate() - 10);
     db.insert(schema.abonnement)
       .values({
@@ -1858,7 +1863,7 @@ describe("Vente rapide de produits/services hors abonnement (5.2, 5.3, 8.5)", ()
     const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
     const token = await connecter(app);
     const idProduit = await creerBien(db);
-    const aujourdHui = new Date().toISOString().slice(0, 10);
+    const aujourdHui = jourDouala();
 
     const vente = await app.inject({
       method: "POST",
@@ -3083,7 +3088,7 @@ describe("Tableau de bord de pilotage (8.6, 9.3)", () => {
     const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
     creerUtilisateur(db, { siteId, nom: "Admin", prenom: "D", identifiant: "admin1", motDePasse: "motdepasse-secret", role: "ADMINISTRATEUR" });
     const token = await connecter(app, "admin1");
-    const aujourdHui = new Date().toISOString().slice(0, 10);
+    const aujourdHui = jourDouala();
 
     await app.inject({
       method: "POST",
@@ -3160,7 +3165,7 @@ describe("Tableau de bord de pilotage (8.6, 9.3)", () => {
     const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
     creerUtilisateur(db, { siteId, nom: "Admin", prenom: "D", identifiant: "admin1", motDePasse: "motdepasse-secret", role: "ADMINISTRATEUR" });
     const token = await connecter(app, "admin1");
-    const aujourdHui = new Date().toISOString().slice(0, 10);
+    const aujourdHui = jourDouala();
 
     await app.inject({
       method: "POST",
@@ -3184,7 +3189,7 @@ describe("Tableau de bord de pilotage (8.6, 9.3)", () => {
     const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
     creerUtilisateur(db, { siteId, nom: "Admin", prenom: "D", identifiant: "admin1", motDePasse: "motdepasse-secret", role: "ADMINISTRATEUR" });
     const token = await connecter(app, "admin1");
-    const aujourdHui = new Date().toISOString().slice(0, 10);
+    const aujourdHui = jourDouala();
     const produit = db
       .insert(schema.produit)
       .values({ siteId, type: "BIEN", libelle: "Câble HDMI", prixVente: 2000, coutRevient: 1000, margeType: "VALEUR", margeValeur: 500 })
@@ -3213,7 +3218,7 @@ describe("Tableau de bord de pilotage (8.6, 9.3)", () => {
     const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
     creerUtilisateur(db, { siteId, nom: "Admin", prenom: "D", identifiant: "admin1", motDePasse: "motdepasse-secret", role: "ADMINISTRATEUR" });
     const token = await connecter(app, "admin1");
-    const aujourdHui = new Date().toISOString().slice(0, 10);
+    const aujourdHui = jourDouala();
 
     await app.inject({
       method: "POST",
@@ -3241,7 +3246,7 @@ describe("Tableau de bord de pilotage (8.6, 9.3)", () => {
   it("un caissier n'a pas accès au tableau de bord de pilotage (403)", async () => {
     const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
     const token = await connecter(app);
-    const aujourdHui = new Date().toISOString().slice(0, 10);
+    const aujourdHui = jourDouala();
 
     const reponse = await app.inject({
       method: "GET",
@@ -3259,7 +3264,7 @@ describe("Tableau de bord de pilotage (8.6, 9.3)", () => {
     const idEntreprise = db.select().from(schema.site).where(eq(schema.site.idSite, siteId)).get()!.idEntreprise;
     const autreSite = db.insert(schema.site).values({ idEntreprise, nom: "Site B" }).returning().get().idSite;
     const autreUserId = creerUtilisateur(db, { siteId: autreSite, nom: "B", prenom: "B", identifiant: "bsite", motDePasse: "motdepasse-secret", role: "CAISSIER" }).idUser;
-    const aujourdHui = new Date().toISOString().slice(0, 10);
+    const aujourdHui = jourDouala();
     const facture = db.insert(schema.facture).values({ siteId: autreSite, statut: "VALIDEE", montantTotal: 99000, creePar: autreUserId }).returning().get();
     db.insert(schema.paiement).values({ idFacture: facture.idFacture, mode: "CASH", montant: 99000, utilisateurId: autreUserId }).run();
 
@@ -3321,7 +3326,7 @@ describe("Licence logicielle mode local (10.4)", () => {
     const ilYA30Jours = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
     db.update(schema.licence).set({ derniereRevalidationReussie: ilYA30Jours }).run();
 
-    const aujourdHui = new Date().toISOString().slice(0, 10);
+    const aujourdHui = jourDouala();
     const ecriture = await app.inject({
       method: "POST",
       url: "/api/v1/recrutements",
@@ -4069,7 +4074,7 @@ describe("GET /api/v1/entreprise (6.7)", () => {
     expect(modification.json().jalonAlerteAnticipe).toBe(10);
 
     const abonne = db.insert(schema.abonne).values({ siteId, nom: "Nga", prenom: "Paul", telephone: "690000000" }).returning().get();
-    const aujourdHui = new Date();
+    const aujourdHui = dateDouala();
     const dateFin = new Date(aujourdHui);
     dateFin.setDate(dateFin.getDate() + 10);
     db.insert(schema.abonnement)

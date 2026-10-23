@@ -10,7 +10,7 @@ import { exigerRemiseAutorisee, trouverTauxCommissionVendeurParSite, trouverTaux
 import { decrementerComposantsKit } from "../stock/stock.service.js";
 import { creerPaiement } from "../factures/paiement.repository.js";
 import { creerSuiviCommissionCanalplus } from "./suivi-commission-canalplus.repository.js";
-import { verifierEncaissementSaisi } from "../../lib/validation.js";
+import { verifierEncaissementSaisi, verifierTotalAttendu } from "../../lib/validation.js";
 
 export interface RecruterAbonneParams {
   siteId: number;
@@ -29,6 +29,8 @@ export interface RecruterAbonneParams {
   idsOptions?: number[];
   dateDebut?: string;
   montantEncaisse: number;
+  // total affiché à la caisse : le recrutement est refusé si un prix a changé entre-temps (verifierTotalAttendu)
+  totalAttendu?: number;
   apporteurId?: number;
   idComptePartage?: number; // 5.9 : écran/profil affecté sur un compte streaming mutualisé
   // 6.4, 7.1 : "remise ponctuelle" ou "tarif préférentiel apporteur" — montant
@@ -172,6 +174,7 @@ function recruterAbonneSansTransaction(db: Db, params: RecruterAbonneParams): Re
   // kit ne porte que le matériel : la somme des lignes égale le total facturé.
   const prixFormuleApplique = formule.prix - remise;
   const montantTotal = prixFormuleApplique + prixKitHorsFormule + prixOptions;
+  verifierTotalAttendu(montantTotal, params.totalAttendu);
 
   // 3.2.3, 6.1, 8.8 : "porte le total, la TVA/taxes le cas échéant" — figée
   // au taux en vigueur à cet instant, jamais recalculée après coup

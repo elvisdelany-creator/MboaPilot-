@@ -109,7 +109,30 @@ export function CaissePage({ onNaviguer, onOuvrirCatalogueAdministration, abonne
       deconnecter();
       return;
     }
+    // un prix a changé depuis l'affichage : le serveur a refusé avant tout encaissement ; on recharge les prix, le ticket en
+    // cours garde ses lignes mais prend les nouveaux prix, et le caissier revoit le total avec le client avant de valider
+    if (erreur instanceof Error && erreur.message.startsWith("Le prix a changé")) {
+      toast.error("Le prix a changé depuis l'affichage : les prix de la caisse viennent d'être mis à jour. Vérifiez le nouveau total avec le client, puis validez à nouveau.");
+      rafraichirPrix();
+      return;
+    }
     toast.error(erreur instanceof Error ? erreur.message : messageParDefaut);
+  }
+
+  async function rafraichirPrix() {
+    try {
+      const [nouvellesFamilles, nouveauxProduits] = await Promise.all([chargerCatalogue(token), chargerProduits(token, utilisateur.siteId)]);
+      setFamilles(nouvellesFamilles);
+      const produitsVente = nouveauxProduits.filter((p) => p.type === "BIEN" || p.type === "SERVICE");
+      setProduits(produitsVente);
+      setPanierProduits((panier) => panier.map((l) => ({ ...l, produit: produitsVente.find((p) => p.idProduit === l.produit.idProduit) ?? l.produit })));
+      const formules = nouvellesFamilles.flatMap((f) => f.formules);
+      const kits = nouvellesFamilles.flatMap((f) => f.kits);
+      setFormuleSelectionnee((f) => (f ? formules.find((x) => x.idFormule === f.idFormule) ?? f : f));
+      setKitSelectionne((k) => (k ? kits.find((x) => x.idKit === k.idKit) ?? k : k));
+    } catch {
+      // la panne réseau est déjà signalée par les autres chargements ; le prochain essai de validation redemandera les prix
+    }
   }
 
   useEffect(() => {
@@ -364,6 +387,7 @@ export function CaissePage({ onNaviguer, onOuvrirCatalogueAdministration, abonne
         nouvelAbonne: abonneSelectionne && !("idAbonne" in abonneSelectionne) ? abonneSelectionne : undefined,
         lignes: panierProduits.map((l) => ({ idProduit: l.produit.idProduit, quantite: l.quantite, remise: l.remise || undefined })),
         montantEncaisse,
+        totalAttendu: totalTicketProduits,
         modePaiement: paiement.mode === "MOBILE_MONEY" ? undefined : paiement.mode,
         banque: paiement.mode === "CHEQUE" || paiement.mode === "VIREMENT" ? paiement.banque : undefined,
         numeroCheque: paiement.mode === "CHEQUE" ? paiement.numeroCheque : undefined,
@@ -445,6 +469,7 @@ export function CaissePage({ onNaviguer, onOuvrirCatalogueAdministration, abonne
             idFormule: formuleSelectionnee.idFormule,
             idsOptions: idsOptionsSelectionnees.length > 0 ? idsOptionsSelectionnees : undefined,
             montantEncaisse,
+            totalAttendu: totalTicket,
             remise: remiseEffective || undefined,
             ...detailsPaiement,
           })
@@ -458,6 +483,7 @@ export function CaissePage({ onNaviguer, onOuvrirCatalogueAdministration, abonne
             numeroSerie: kitSelectionne && numeroSerie.trim() ? numeroSerie.trim() : undefined,
             idsOptions: idsOptionsSelectionnees.length > 0 ? idsOptionsSelectionnees : undefined,
             montantEncaisse,
+            totalAttendu: totalTicket,
             // 6.3 : lien permanent — uniquement renseigné à la création d'un nouveau client,
             // un abonné existant hérite déjà de son apporteur côté serveur
             apporteurId: "idAbonne" in abonneSelectionne ? undefined : abonneSelectionne.apporteurId,

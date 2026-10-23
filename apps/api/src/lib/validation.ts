@@ -60,3 +60,15 @@ export function verifierBooleen(valeur: unknown, libelle: string): void {
 export function identifiantLiable(valeur: unknown): valeur is number | string {
   return typeof valeur === "number" || typeof valeur === "string";
 }
+
+// Le caissier encaisse le total AFFICHÉ à l'écran ; si un gérant change un prix entre-temps, le serveur facture un autre
+// total : le ticket remis au client dit 2 000, la facture 2 500, et 500 FCFA restent dus sans que personne ne le sache. La caisse
+// envoie donc le total qu'elle affiche, et la vente est refusée avant tout encaissement s'il diffère. Absent (autres clients de
+// l'API) : aucun contrôle.
+export function verifierTotalAttendu(montantTotal: number, totalAttendu: unknown): void {
+  if (totalAttendu === undefined || totalAttendu === null) return;
+  if (typeof totalAttendu !== "number" || !Number.isFinite(totalAttendu)) throw new Error("Le total attendu doit être un nombre");
+  if (totalAttendu === montantTotal) return;
+  const fcfa = (n: number) => `${new Intl.NumberFormat("fr-FR").format(n)} FCFA`;
+  throw new Error(`Le prix a changé depuis l'affichage de la caisse : le total est maintenant de ${fcfa(montantTotal)} (affiché : ${fcfa(totalAttendu)}). Rechargez la caisse et recommencez.`);
+}

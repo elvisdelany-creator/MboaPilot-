@@ -268,3 +268,24 @@ describe("creerVenteProduits : plafond de remise du caissier (6.4)", () => {
   });
 });
 
+
+// Constaté en test grandeur nature : un gérant changeait le prix d'un article pendant que le caissier avait encore l'ancien
+// prix à l'écran. Le serveur facturait 2 500, le ticket remis au client disait « TOTAL 2 000, comptant 2 000 » : 500 FCFA dus
+// sans que personne ne le sache, et un ticket qui contredit la facture. La vente est désormais refusée avant tout encaissement.
+describe("creerVenteProduits : total attendu à la caisse", () => {
+  it("refuse la vente quand le prix a changé depuis l'affichage, sans rien enregistrer", () => {
+    db.update(schema.produit).set({ prixVente: 3000 }).where(eq(schema.produit.idProduit, idBien)).run(); // affiché : 2500
+
+    expect(() => creerVenteProduits(db, { siteId, userId, lignes: [{ idProduit: idBien, quantite: 1 }], montantEncaisse: 2500, totalAttendu: 2500 })).toThrow(/prix a changé/i);
+
+    expect(db.select().from(schema.facture).all()).toHaveLength(0);
+    expect(db.select().from(schema.paiement).all()).toHaveLength(0);
+    expect(db.select().from(schema.produit).where(eq(schema.produit.idProduit, idBien)).get()?.quantiteStock).toBe(10);
+  });
+
+  it("accepte la vente quand le total attendu correspond (remise comprise)", () => {
+    const resultat = creerVenteProduits(db, { siteId, userId, lignes: [{ idProduit: idBien, quantite: 2, remise: 500 }], montantEncaisse: 4500, totalAttendu: 4500 });
+
+    expect(resultat.montantTotal).toBe(4500);
+  });
+});

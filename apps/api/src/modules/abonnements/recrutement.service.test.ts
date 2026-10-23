@@ -1041,3 +1041,26 @@ describe("recruterAbonne : recrutement offert, total 0 FCFA (6.4)", () => {
   });
 });
 
+
+// Même défaut que pour les articles : un prix de formule changé pendant que le caissier a l'ancien à l'écran donnait une
+// facture plus chère que le ticket, avec un solde dû ignoré. Le recrutement est refusé avant tout encaissement.
+describe("recruterAbonne : total attendu à la caisse", () => {
+  const abonne = { nom: "Nga Ndongo", prenom: "Valentin", telephone: "690000000" };
+
+  it("refuse le recrutement quand le prix de la formule a changé depuis l'affichage, sans rien enregistrer", () => {
+    db.update(schema.formule).set({ prix: 11000 }).where(eq(schema.formule.libelle, "EVASION")).run(); // affiché : 10500
+    const idEvasion = db.select().from(schema.formule).where(eq(schema.formule.libelle, "EVASION")).get()!.idFormule;
+
+    expect(() => recruterAbonne(db, { siteId, userId, aujourdHui: "2025-11-16", abonne, idFormule: idEvasion, montantEncaisse: 10500, totalAttendu: 10500 })).toThrow(/prix a changé/i);
+
+    expect(db.select().from(schema.facture).all()).toHaveLength(0);
+    expect(db.select().from(schema.abonne).all()).toHaveLength(0);
+    expect(db.select().from(schema.abonnement).all()).toHaveLength(0);
+  });
+
+  it("accepte le recrutement quand le total attendu correspond (kit compris)", () => {
+    const resultat = recruterAbonne(db, { siteId, userId, aujourdHui: "2025-11-16", abonne, idFormule: formuleToutCanalPlus, idKit: kitGlobalZ, montantEncaisse: 29000, totalAttendu: 29000 });
+
+    expect(resultat.statutFacture).toBe("VALIDEE");
+  });
+});

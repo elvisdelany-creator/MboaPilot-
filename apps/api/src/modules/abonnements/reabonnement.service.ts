@@ -5,7 +5,7 @@ import * as schema from "../../db/schema.js";
 import { exigerRemiseAutorisee, trouverDelaiGraceReabonnementEntreprise, trouverTauxTvaParSite } from "../entreprise/entreprise.repository.js";
 import { creerPaiement } from "../factures/paiement.repository.js";
 import { compterEcransOccupes, trouverComptePartage } from "../comptes-partages/compte-partage.repository.js";
-import { verifierEncaissementSaisi } from "../../lib/validation.js";
+import { verifierEncaissementSaisi, verifierTotalAttendu } from "../../lib/validation.js";
 
 export interface ReabonnerParams {
   siteId: number;
@@ -17,6 +17,8 @@ export interface ReabonnerParams {
   // être compatible avec la formule (nouvelle ou reconduite)
   idsOptions?: number[];
   montantEncaisse: number;
+  // total affiché à la caisse : le réabonnement est refusé si un prix a changé entre-temps (verifierTotalAttendu)
+  totalAttendu?: number;
   // 6.4, 7.2 : "remise ponctuelle" — montant en FCFA déduit du prix de la formule
   remise?: number;
   // 6.5 : moyen de paiement de l'encaissement — comptant par défaut ; le
@@ -156,6 +158,7 @@ function reabonnerSansTransaction(db: Db, params: ReabonnerParams): Reabonnement
 
   const prixApplique = formule.prix - remise;
   const montantTotal = prixApplique + prixOptions;
+  verifierTotalAttendu(montantTotal, params.totalAttendu);
 
   // 3.2.3, 6.1, 8.8 : "porte le total, la TVA/taxes le cas échéant" — figée
   // au taux en vigueur à cet instant, jamais recalculée après coup

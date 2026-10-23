@@ -417,3 +417,22 @@ describe("reabonner : plafond de remise du caissier (6.4)", () => {
   });
 });
 
+
+describe("reabonner : total attendu à la caisse", () => {
+  it("refuse le réabonnement quand le prix de la formule a changé depuis l'affichage, sans rien enregistrer", () => {
+    db.update(schema.formule).set({ prix: 14000 }).where(eq(schema.formule.idFormule, compaq)).run(); // affiché : 13000
+    const avant = db.select().from(schema.abonnement).where(eq(schema.abonnement.numeroAbonnement, numeroAbonnement)).get();
+    const nombreFactures = db.select().from(schema.facture).all().length;
+
+    expect(() => reabonner(db, { siteId, userId, aujourdHui: "2025-12-20", numeroAbonnement, montantEncaisse: 13000, totalAttendu: 13000 })).toThrow(/prix a changé/i);
+
+    expect(db.select().from(schema.facture).all()).toHaveLength(nombreFactures);
+    expect(db.select().from(schema.abonnement).where(eq(schema.abonnement.numeroAbonnement, numeroAbonnement)).get()?.dateFin).toBe(avant?.dateFin);
+  });
+
+  it("accepte le réabonnement quand le total attendu correspond", () => {
+    const resultat = reabonner(db, { siteId, userId, aujourdHui: "2025-12-20", numeroAbonnement, montantEncaisse: 13000, totalAttendu: 13000 });
+
+    expect(resultat.statutFacture).toBe("VALIDEE");
+  });
+});

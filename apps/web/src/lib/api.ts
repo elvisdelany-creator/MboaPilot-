@@ -301,6 +301,8 @@ export interface RecruterPayload {
   // 3.2.2, 5.4.2 : options complémentaires (ex. Option English Plus)
   idsOptions?: number[];
   montantEncaisse: number;
+  // total affiché à la caisse : le serveur refuse l'opération si un prix a changé entre-temps
+  totalAttendu?: number;
   apporteurId?: number;
   idComptePartage?: number; // 5.9 : écran affecté sur un compte streaming mutualisé
   remise?: number; // 6.4 : remise ponctuelle sur le prix de la formule
@@ -334,6 +336,8 @@ export interface CreerVentePayload {
   nouvelAbonne?: NouvelAbonne;
   lignes: { idProduit: number; quantite: number; remise?: number }[];
   montantEncaisse: number;
+  // total affiché à la caisse : le serveur refuse l'opération si un prix a changé entre-temps
+  totalAttendu?: number;
   modePaiement?: ModePaiementEncaissement;
   banque?: string;
   numeroCheque?: string;
@@ -482,6 +486,8 @@ export interface ReabonnerPayload {
   // 3.2.2, 5.4.2, 7.2 : "ajuster ses options" au réabonnement
   idsOptions?: number[];
   montantEncaisse: number;
+  // total affiché à la caisse : le serveur refuse l'opération si un prix a changé entre-temps
+  totalAttendu?: number;
   remise?: number; // 6.4 : remise ponctuelle sur le prix de la formule
   modePaiement?: ModePaiementEncaissement;
   banque?: string;

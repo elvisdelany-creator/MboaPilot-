@@ -32,6 +32,7 @@ import {
   type ModifierKitInput,
   type ModifierOptionInput,
 } from "./catalogue.repository.js";
+import { chargerCatalogueDepart, listerOperateursDepart } from "./catalogue-depart.js";
 import { envoyerErreur } from "../../lib/erreurs-api.js";
 
 // catalogue en lecture : accessible à tout utilisateur authentifié, quel que
@@ -233,6 +234,24 @@ export function registerCatalogueRoutes(app: FastifyInstance, db: Db, guards: { 
     async (request, reply) => {
       supprimerComposantKit(db, Number(request.params.idKit), Number(request.params.idProduit));
       reply.code(204).send();
+    }
+  );
+
+  // Catalogue de départ (annexe 14.1) : tarifs des opérateurs à charger en un clic plutôt qu'à saisir à la main — réservé à
+  // l'encadrement, comme tout le back-office du catalogue (8.8)
+  app.get("/api/v1/catalogue/depart", { preHandler: [guards.authRequis, guards.gestionCatalogue] }, async (_request, reply) => {
+    reply.code(200).send(listerOperateursDepart());
+  });
+
+  app.post<{ Body: { operateurs?: string[] } }>(
+    "/api/v1/catalogue/depart",
+    { preHandler: [guards.authRequis, guards.gestionCatalogue] },
+    async (request, reply) => {
+      try {
+        reply.code(201).send(chargerCatalogueDepart(db, request.body?.operateurs as string[], request.user.idUser));
+      } catch (erreur) {
+        envoyerErreur(reply, erreur);
+      }
     }
   );
 }

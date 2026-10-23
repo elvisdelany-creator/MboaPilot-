@@ -54,6 +54,12 @@ interface Props {
   idFamilleInitiale?: number;
 }
 
+// une famille sans formule ni kit à vendre (toutes ses formules désactivées, ou pas encore de formule) n'a pas à occuper une
+// catégorie vide à la caisse : « Disney+ » du catalogue de départ, tant que son tarif n'est pas renseigné, par exemple
+function famillesVendables(familles: CatalogueFamille[]): CatalogueFamille[] {
+  return familles.filter((f) => f.formules.length > 0 || f.kits.length > 0);
+}
+
 export function CaissePage({ onNaviguer, onOuvrirCatalogueAdministration, abonneInitial, idFamilleInitiale }: Props) {
   const { session, deconnecter } = useAuth();
   const token = session!.token;
@@ -122,7 +128,7 @@ export function CaissePage({ onNaviguer, onOuvrirCatalogueAdministration, abonne
   async function rafraichirPrix() {
     try {
       const [nouvellesFamilles, nouveauxProduits] = await Promise.all([chargerCatalogue(token), chargerProduits(token, utilisateur.siteId)]);
-      setFamilles(nouvellesFamilles);
+      setFamilles(famillesVendables(nouvellesFamilles));
       const produitsVente = nouveauxProduits.filter((p) => p.type === "BIEN" || p.type === "SERVICE");
       setProduits(produitsVente);
       setPanierProduits((panier) => panier.map((l) => ({ ...l, produit: produitsVente.find((p) => p.idProduit === l.produit.idProduit) ?? l.produit })));
@@ -138,9 +144,10 @@ export function CaissePage({ onNaviguer, onOuvrirCatalogueAdministration, abonne
   useEffect(() => {
     chargerCatalogue(token)
       .then((data) => {
-        setFamilles(data);
+        const vendables = famillesVendables(data);
+        setFamilles(vendables);
         setFamillesChargees(true);
-        setFamilleSelectionneeId((id) => id ?? data[0]?.idFamille ?? null);
+        setFamilleSelectionneeId((id) => id ?? vendables[0]?.idFamille ?? null);
       })
       .catch((e) => gererErreur(e, "Impossible de charger le catalogue."));
     // eslint-disable-next-line react-hooks/exhaustive-deps

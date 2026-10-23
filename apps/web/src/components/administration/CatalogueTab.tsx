@@ -30,6 +30,7 @@ import { Separator } from "@/components/ui/separator";
 import { NouvelleFormuleDialog } from "./NouvelleFormuleDialog";
 import { NouvelleOptionDialog } from "./NouvelleOptionDialog";
 import { NouveauKitDialog } from "./NouveauKitDialog";
+import { CatalogueDepartDialog } from "./CatalogueDepartDialog";
 import type { CatalogueFamille, Famille, Formule, KitBrut, OptionCatalogue, Produit } from "@/lib/types";
 
 const formateurFcfa = new Intl.NumberFormat("fr-FR");
@@ -59,6 +60,7 @@ export function CatalogueTab() {
   const [formuleEnEdition, setFormuleEnEdition] = useState<Formule | null>(null);
   const [kitDialogFamilleId, setKitDialogFamilleId] = useState<number | null>(null);
   const [kitEnEdition, setKitEnEdition] = useState<KitBrut | null>(null);
+  const [departOuvert, setDepartOuvert] = useState(false);
   const [optionDialogOuvert, setOptionDialogOuvert] = useState(false);
   const [optionEnEdition, setOptionEnEdition] = useState<OptionCatalogue | null>(null);
   const [liaisonFormuleId, setLiaisonFormuleId] = useState<Record<number, string>>({});
@@ -242,6 +244,9 @@ export function CatalogueTab() {
         <div className="flex items-center justify-between gap-2">
           <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Familles et formules</p>
           <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" className="cursor-pointer" onClick={() => setDepartOuvert(true)}>
+              Catalogue de départ
+            </Button>
             <Input
               value={nouvelleFamille}
               onChange={(e) => setNouvelleFamille(e.target.value)}
@@ -254,6 +259,12 @@ export function CatalogueTab() {
             </Button>
           </div>
         </div>
+
+        {familles.length === 0 && (
+          <p className="text-sm text-muted-foreground">
+            Aucune famille pour l'instant : chargez le « Catalogue de départ » (tarifs de référence des opérateurs) ou créez votre première famille.
+          </p>
+        )}
 
         <ul className="space-y-3">
           {familles.map((famille) => (
@@ -566,6 +577,16 @@ export function CatalogueTab() {
         onSucces={() => {
           setFormuleDialogFamilleId(null);
           rechargerFamilles();
+        }}
+      />
+
+      <CatalogueDepartDialog
+        ouvert={departOuvert}
+        onFerme={() => setDepartOuvert(false)}
+        onSucces={() => {
+          rechargerFamilles();
+          rechargerCatalogueVente();
+          rechargerOptions();
         }}
       />
 

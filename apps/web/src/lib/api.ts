@@ -1037,6 +1037,36 @@ export async function chargerFamilles(token: string): Promise<Famille[]> {
   return lireJson<Famille[]>(reponse);
 }
 
+// annexe 14.1 : tarifs de référence des opérateurs, à charger en un clic plutôt qu'à saisir à la main
+export interface OperateurDepart {
+  cle: string;
+  libelle: string;
+  nombreFormules: number;
+  nombreKits: number;
+  nombreOptions: number;
+  notes: string[];
+}
+
+export interface ResultatChargementDepart {
+  crees: { familles: number; formules: number; kits: number; options: number; liaisons: number };
+  dejaPresents: number;
+  notes: string[];
+}
+
+export async function chargerOperateursDepart(token: string): Promise<OperateurDepart[]> {
+  const reponse = await fetch(`${BASE}/catalogue/depart`, { headers: headersAuth(token) });
+  return lireJson<OperateurDepart[]>(reponse);
+}
+
+export async function chargerCatalogueDepartRequete(token: string, operateurs: string[]): Promise<ResultatChargementDepart> {
+  const reponse = await fetch(`${BASE}/catalogue/depart`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headersAuth(token) },
+    body: JSON.stringify({ operateurs }),
+  });
+  return lireJson<ResultatChargementDepart>(reponse);
+}
+
 export async function creerFamilleRequete(token: string, payload: { libelle: string }): Promise<Famille> {
   const reponse = await fetch(`${BASE}/catalogue/familles`, {
     method: "POST",

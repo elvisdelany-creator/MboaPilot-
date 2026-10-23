@@ -5815,3 +5815,54 @@ describe("GET /api/v1/entreprise : un apporteur ne reçoit que l'essentiel", () 
     expect(corps.site.imprimanteHote).toBe("192.168.1.50");
   });
 });
+
+// Catalogue de départ (annexe 14.1) : un gérant charge les tarifs des opérateurs en un clic ; le personnel de vente ne le peut pas.
+describe("Catalogue de départ : /api/v1/catalogue/depart", () => {
+  beforeEach(() => {
+    creerUtilisateur(db, { siteId, nom: "G", prenom: "A", identifiant: "gerant-depart", motDePasse: "motdepasse-secret", role: "GERANT" });
+  });
+
+  async function appeler(identifiant: string, methode: "GET" | "POST", payload?: unknown) {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const token = await connecter(app, identifiant);
+    const reponse = await app.inject({ method: methode, url: "/api/v1/catalogue/depart", headers: authHeader(token), payload: payload as never });
+    return { statut: reponse.statusCode, corps: reponse.json() };
+  }
+
+  it("un gérant liste les opérateurs proposés", async () => {
+    const { statut, corps } = await appeler("gerant-depart", "GET");
+
+    expect(statut).toBe(200);
+    expect(corps.map((o: { libelle: string }) => o.libelle)).toEqual(["CANAL+", "DStv", "StarTimes", "24H Sport", "Moreplex", "Streaming et IPTV"]);
+  });
+
+  it("un gérant charge CANAL+ : les formules arrivent dans le catalogue de vente, avec le résumé", async () => {
+    const charge = await appeler("gerant-depart", "POST", { operateurs: ["canal-plus"] });
+
+    expect(charge.statut).toBe(201);
+    expect(charge.corps.crees).toMatchObject({ familles: 1, formules: 5, kits: 4, options: 5 });
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const token = await connecter(app, "gerant-depart");
+    const catalogue = (await app.inject({ method: "GET", url: "/api/v1/catalogue", headers: authHeader(token) })).json();
+    const canal = catalogue.find((f: { libelle: string }) => f.libelle === "CANAL+");
+    expect(canal.formules.map((f: { libelle: string }) => f.libelle)).toContain("TOUT CANAL+");
+  });
+
+  it("un opérateur inconnu ou une sélection vide donne une erreur claire, jamais un 500", async () => {
+    const inconnu = await appeler("gerant-depart", "POST", { operateurs: ["nimporte"] });
+    const vide = await appeler("gerant-depart", "POST", { operateurs: [] });
+    const absent = await appeler("gerant-depart", "POST", {});
+
+    expect([inconnu.statut, vide.statut, absent.statut]).toEqual([400, 400, 400]);
+    expect(inconnu.corps.erreur).toMatch(/inconnu/i);
+    expect(vide.corps.erreur).toMatch(/au moins un opérateur/i);
+  });
+
+  it("un caissier ne peut ni lister ni charger", async () => {
+    const famillesAvant = db.select().from(schema.familleAbonnement).all().length;
+
+    expect((await appeler("caissier1", "GET")).statut).toBe(403);
+    expect((await appeler("caissier1", "POST", { operateurs: ["canal-plus"] })).statut).toBe(403);
+    expect(db.select().from(schema.familleAbonnement).all()).toHaveLength(famillesAvant);
+  });
+});

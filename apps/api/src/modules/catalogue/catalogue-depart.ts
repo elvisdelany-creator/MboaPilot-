@@ -139,7 +139,7 @@ const OPERATEURS: OperateurDepart[] = [
         options: [],
       },
     ],
-    notes: [],
+    notes: ["Le prix du kit inclut sa première formule (le ticket affiche la formule, puis le matériel pour le reste) : le client paie le prix du kit, pas le prix du kit plus la formule."],
   },
   {
     cle: "24h-sport",
@@ -153,7 +153,7 @@ const OPERATEURS: OperateurDepart[] = [
         options: [],
       },
     ],
-    notes: [],
+    notes: ["Le prix du kit inclut sa première formule (le ticket affiche la formule, puis le matériel pour le reste) : le client paie le prix du kit, pas le prix du kit plus la formule."],
   },
   {
     cle: "moreplex",
@@ -166,7 +166,7 @@ const OPERATEURS: OperateurDepart[] = [
         options: [],
       },
     ],
-    notes: [],
+    notes: ["Le prix du kit inclut sa première formule (le ticket affiche la formule, puis le matériel pour le reste) : le client paie le prix du kit, pas le prix du kit plus la formule."],
   },
   {
     cle: "streaming",

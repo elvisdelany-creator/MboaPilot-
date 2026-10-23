@@ -125,6 +125,9 @@ export function NouveauKitDialog({ ouvert, idFamille, formulesFamille, kit, onFe
             <div>
               <Label htmlFor="kit-prix-fixe">Prix fixe (FCFA)</Label>
               <Input id="kit-prix-fixe" type="number" min={0} value={prixFixe} onChange={(e) => setPrixFixe(e.target.value)} className="mt-1" />
+              <p className="mt-1 text-xs text-muted-foreground">
+                Prix total payé par le client : matériel et première formule compris. La caisse en déduit le prix de la formule choisie pour facturer le matériel.
+              </p>
             </div>
           )}
 

@@ -159,7 +159,7 @@ describe("listerEncaissementsJour (8.6 : ventilation par mode de paiement)", () 
 describe("listerCommissionsCanalplusEnCours (8.6, 6.2)", () => {
   it("liste les commissions encore en période probatoire", () => {
     const apporteur = creerApporteur(db, { nom: "Jean Apporteur" });
-    const kit = db.insert(schema.kit).values({ idFamille: idFamilleCanal, libelle: "KIT", reglePrix: "PRIX_FIXE", prixFixe: 15000 }).returning().get();
+    const kit = db.insert(schema.kit).values({ idFamille: idFamilleCanal, libelle: "KIT", reglePrix: "PRIX_FIXE", prixFixe: 25500 }).returning().get();
     recruterAbonne(db, {
       siteId,
       userId,
@@ -228,7 +228,7 @@ describe("calculerVentilationCAJour (8.6)", () => {
 
   it("ventile la partie kit d'un recrutement sous la famille du kit", () => {
     const idFamilleCanal = db.select().from(schema.familleAbonnement).where(eq(schema.familleAbonnement.libelle, "CANAL+")).get()!.idFamille;
-    const kit = db.insert(schema.kit).values({ idFamille: idFamilleCanal, libelle: "KIT", reglePrix: "PRIX_FIXE", prixFixe: 15000 }).returning().get();
+    const kit = db.insert(schema.kit).values({ idFamille: idFamilleCanal, libelle: "KIT", reglePrix: "PRIX_FIXE", prixFixe: 25500 }).returning().get();
 
     recruterAbonne(db, {
       siteId,

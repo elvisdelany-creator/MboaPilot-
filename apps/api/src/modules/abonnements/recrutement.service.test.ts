@@ -314,13 +314,13 @@ describe("recruterAbonne (7.1)", () => {
     expect(suivis).toHaveLength(0);
   });
 
-  // 5.1.1 : "PRIX_FIXE pour les kits StarTimes/24H Sport/Moreplex dont le prix
-  // n'évolue pas avec la formule" — il n'embarque pas la formule, qui se paie
-  // en plus (contrairement aux kits à décodeur variable ou à différentiel)
-  it("recrutement avec un kit à prix fixe : la formule se paie en plus du kit", () => {
+  // 5.1.1, 5.6 à 5.8 : « PRIX_FIXE pour les kits StarTimes/24H Sport/Moreplex dont le prix n'évolue pas avec la formule » ;
+  // leur composition est « Décodeur + formule … » : le prix fixe couvre le matériel ET la première formule, comme les kits à
+  // décodeur variable ou à différentiel. Le client paie le prix du kit, pas le prix du kit plus celui de la formule.
+  it("recrutement avec un kit à prix fixe : le prix du kit inclut la formule, le client paie le prix du kit", () => {
     const kitPrixFixe = db
       .insert(schema.kit)
-      .values({ idFamille: familleCanalPlus, libelle: "KIT PRIX FIXE", reglePrix: "PRIX_FIXE", prixFixe: 18000 })
+      .values({ idFamille: familleCanalPlus, libelle: "KIT PRIX FIXE", reglePrix: "PRIX_FIXE", prixFixe: 46000 })
       .returning()
       .get().idKit;
 
@@ -331,13 +331,56 @@ describe("recruterAbonne (7.1)", () => {
       abonne: { nom: "Mballa", prenom: "Sylvie", telephone: "691111111" },
       idFormule: formuleToutCanalPlus,
       idKit: kitPrixFixe,
-      montantEncaisse: 46000, // 28000 (formule) + 18000 (kit)
+      montantEncaisse: 46000, // le prix fixe du kit : formule 28000 + matériel 18000
     });
 
     const facture = db.select().from(schema.facture).where(eq(schema.facture.idFacture, resultat.idFacture)).get();
     expect(facture?.montantTotal).toBe(46000);
     const lignes = db.select().from(schema.ligneVente).where(eq(schema.ligneVente.idFacture, resultat.idFacture)).all();
-    expect(lignes.some((l) => l.idKit === kitPrixFixe && l.prixApplique === 18000)).toBe(true);
+    expect(lignes.some((l) => l.idKit === kitPrixFixe && l.prixApplique === 18000)).toBe(true); // la part matériel
+    expect(lignes.some((l) => l.numeroAbonnement !== null && l.idKit === null && l.prixApplique === 28000)).toBe(true); // la formule
+  });
+
+  it("recrutement avec un kit à prix fixe : une formule moins chère donne un matériel plus cher, le total reste le prix du kit", () => {
+    const kitPrixFixe = db
+      .insert(schema.kit)
+      .values({ idFamille: familleCanalPlus, libelle: "KIT PRIX FIXE", reglePrix: "PRIX_FIXE", prixFixe: 46000 })
+      .returning()
+      .get().idKit;
+    const evasion = db.select().from(schema.formule).where(eq(schema.formule.libelle, "EVASION")).get()!.idFormule; // 10500
+
+    const resultat = recruterAbonne(db, {
+      siteId,
+      userId,
+      aujourdHui: "2025-11-16",
+      abonne: { nom: "Eyenga", prenom: "Sarah", telephone: "691222222" },
+      idFormule: evasion,
+      idKit: kitPrixFixe,
+      montantEncaisse: 46000,
+    });
+
+    expect(db.select().from(schema.facture).where(eq(schema.facture.idFacture, resultat.idFacture)).get()?.montantTotal).toBe(46000);
+  });
+
+  it("recrutement avec un kit à prix fixe : refuse une formule plus chère que le kit, sans rien enregistrer", () => {
+    const kitPetit = db
+      .insert(schema.kit)
+      .values({ idFamille: familleCanalPlus, libelle: "KIT PETIT PRIX", reglePrix: "PRIX_FIXE", prixFixe: 18000 })
+      .returning()
+      .get().idKit;
+
+    expect(() =>
+      recruterAbonne(db, {
+        siteId,
+        userId,
+        aujourdHui: "2025-11-16",
+        abonne: { nom: "Mballa", prenom: "Sylvie", telephone: "691111111" },
+        idFormule: formuleToutCanalPlus, // 28000 > 18000
+        idKit: kitPetit,
+        montantEncaisse: 18000,
+      })
+    ).toThrow(/inférieur/i);
+    expect(db.select().from(schema.facture).all()).toHaveLength(0);
   });
 
   it("recrutement pour un abonné déjà existant : aucune nouvelle fiche abonné créée", () => {

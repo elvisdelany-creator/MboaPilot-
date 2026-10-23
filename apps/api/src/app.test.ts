@@ -1373,7 +1373,7 @@ describe("Module apporteur d'affaires (6.3)", () => {
     const famille = db.insert(schema.familleAbonnement).values({ libelle: "CANAL+" }).returning().get();
     const evasion = db.insert(schema.formule).values({ idFamille: famille.idFamille, libelle: "EVASION", prix: 10500, rang: 2 }).returning().get();
     // 6.2 : "lorsqu'un kit CANAL+ est vendu" — condition du suivi de commission
-    const kit = db.insert(schema.kit).values({ idFamille: famille.idFamille, libelle: "KIT", reglePrix: "PRIX_FIXE", prixFixe: 10000 }).returning().get();
+    const kit = db.insert(schema.kit).values({ idFamille: famille.idFamille, libelle: "KIT", reglePrix: "PRIX_FIXE", prixFixe: 20500 }).returning().get();
     const recrutement = await app.inject({
       method: "POST",
       url: "/api/v1/recrutements",
@@ -1385,7 +1385,7 @@ describe("Module apporteur d'affaires (6.3)", () => {
         abonne: { nom: "Nga", prenom: "Paul", telephone: "690000000" },
         idFormule: evasion.idFormule,
         idKit: kit.idKit,
-        montantEncaisse: 20500, // 10500 (formule) + 10000 (kit)
+        montantEncaisse: 20500, // prix fixe du kit, formule 10500 comprise (matériel 10000)
         apporteurId: apporteur.idApporteur,
       },
     });
@@ -1505,7 +1505,7 @@ describe("Module apporteur d'affaires (6.3)", () => {
     const famille = db.insert(schema.familleAbonnement).values({ libelle: "CANAL+" }).returning().get();
     const evasion = db.insert(schema.formule).values({ idFamille: famille.idFamille, libelle: "EVASION", prix: 10500, rang: 2 }).returning().get();
     // 6.2 : "lorsqu'un kit CANAL+ est vendu" — condition du suivi de commission
-    const kit = db.insert(schema.kit).values({ idFamille: famille.idFamille, libelle: "KIT", reglePrix: "PRIX_FIXE", prixFixe: 10000 }).returning().get();
+    const kit = db.insert(schema.kit).values({ idFamille: famille.idFamille, libelle: "KIT", reglePrix: "PRIX_FIXE", prixFixe: 20500 }).returning().get();
 
     await app.inject({
       method: "PATCH",
@@ -1525,7 +1525,7 @@ describe("Module apporteur d'affaires (6.3)", () => {
         abonne: { nom: "Nga", prenom: "Paul", telephone: "690000000" },
         idFormule: evasion.idFormule,
         idKit: kit.idKit,
-        montantEncaisse: 20500, // 10500 (formule) + 10000 (kit)
+        montantEncaisse: 20500, // prix fixe du kit, formule 10500 comprise (matériel 10000)
       },
     });
     expect(recrutement.statusCode).toBe(201);

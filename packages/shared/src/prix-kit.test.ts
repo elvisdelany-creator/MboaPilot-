@@ -70,9 +70,24 @@ describe("calculerPrixKitHorsFormule (5.1.1)", () => {
     expect(calculerPrixKitHorsFormule(kit, { idFormule: 10, prix: 13000 })).toBe(42000);
   });
 
-  it("prix fixe : le kit n'embarque pas la formule, son prix reste entier", () => {
+  // Le cahier des charges décrit ces kits comme « Décodeur + installation + formule GLOBAL » (StarTimes), « Décodeur + formule
+  // FULL 24H SPORT 3 MOIS » (24H Sport) : le prix fixe couvre le matériel ET la première formule, comme les kits CANAL+ et DStv.
+  // Les facturer en plus de la formule faisait payer 45 000 un kit 24H Sport affiché 30 000.
+  it("prix fixe : le kit embarque la formule de départ (KIT STARTIMES 18 000 avec GLOBAL 10 500 -> 7 500 de matériel)", () => {
     const kit = { reglePrix: "PRIX_FIXE" as const, prixFixe: 18000 };
-    expect(calculerPrixKitHorsFormule(kit, { idFormule: 1, prix: 10500 })).toBe(18000);
+    expect(calculerPrixKitHorsFormule(kit, { idFormule: 1, prix: 10500 })).toBe(7500);
+  });
+
+  it("prix fixe : formule + matériel donnent toujours le prix fixe, quelle que soit la formule choisie", () => {
+    const kit = { reglePrix: "PRIX_FIXE" as const, prixFixe: 30000 };
+    for (const prixFormule of [5000, 15000, 30000]) {
+      expect(prixFormule + calculerPrixKitHorsFormule(kit, { idFormule: 1, prix: prixFormule })).toBe(30000);
+    }
+  });
+
+  it("prix fixe : refuse une formule plus chère que le kit, au lieu d'un matériel à prix négatif", () => {
+    const kit = { reglePrix: "PRIX_FIXE" as const, prixFixe: 18000 };
+    expect(() => calculerPrixKitHorsFormule(kit, { idFormule: 1, prix: 28000 })).toThrow(/inférieur/i);
   });
 
   it("lève l'erreur de prix non configuré, comme calculerPrixKit", () => {

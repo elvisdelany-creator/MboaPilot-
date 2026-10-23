@@ -30,7 +30,7 @@ beforeEach(() => {
   idFormuleDstv = db.insert(schema.formule).values({ idFamille: dstv.idFamille, libelle: "COMPAQ", prix: 13000, rang: 3 }).returning().get().idFormule;
   idKitCanal = db
     .insert(schema.kit)
-    .values({ idFamille: canal.idFamille, libelle: "KIT CANAL+", reglePrix: "PRIX_FIXE", prixFixe: 10000 })
+    .values({ idFamille: canal.idFamille, libelle: "KIT CANAL+", reglePrix: "PRIX_FIXE", prixFixe: 20500 })
     .returning()
     .get().idKit;
 });

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
-import { calculerDateFin, calculerPrixKit, type Kit } from "@mboapilot/shared";
+import { calculerDateFin, calculerPrixKit, calculerPrixKitHorsFormule, type Kit } from "@mboapilot/shared";
 import { creerDbTest, type Db } from "../../test-utils/db.js";
 import * as schema from "../../db/schema.js";
 import { chargerCatalogueDepart, listerOperateursDepart } from "./catalogue-depart.js";
@@ -133,6 +133,21 @@ describe("chargerCatalogueDepart : autres opérateurs", () => {
     expect([kit("KIT STARTIMES")?.prixFixe, kit("KIT 24H SPORT")?.prixFixe, kit("KIT MOREPLEX")?.prixFixe]).toEqual([18000, 30000, 30000]);
     expect(["NOVA", "SMART", "SUPER (EN/FR)", "GLOBAL"].map((l) => formule("StarTimes", l)?.prix)).toEqual([2500, 5000, 9000, 10500]);
     expect(formule("Moreplex", "FULL MOREPLEX")?.prix).toBe(5000);
+  });
+
+  it("les kits à prix fixe incluent leur formule : le client paie 18 000 / 30 000 / 30 000 au total, formule comprise", () => {
+    chargerCatalogueDepart(db, ["startimes", "24h-sport", "moreplex"], idUser);
+    const cas: [string, string, string][] = [["StarTimes", "GLOBAL", "KIT STARTIMES"], ["24H Sport", "FULL 24H SPORT 3 MOIS", "KIT 24H SPORT"], ["Moreplex", "FULL MOREPLEX", "KIT MOREPLEX"]];
+
+    const totaux = cas.map(([fam, form, nomKit]) => {
+      const f = formule(fam, form)!;
+      return f.prix + calculerPrixKitHorsFormule(kitMoteur(nomKit), { idFormule: f.idFormule, prix: f.prix });
+    });
+
+    expect(totaux).toEqual([18000, 30000, 30000]);
+    for (const operateur of listerOperateursDepart().filter((o) => ["startimes", "24h-sport", "moreplex"].includes(o.cle))) {
+      expect(operateur.notes.join(" ")).toMatch(/inclut sa première formule/);
+    }
   });
 
   it("24H Sport : la formule de 3 mois vaut 3 cycles de 30 jours, donc 90 jours de validité", () => {

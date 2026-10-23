@@ -353,3 +353,39 @@ describe("executerJobQuotidien — anonymisation automatique (11.3)", () => {
     expect(resultat.abonnesAnonymises).toBe(0);
   });
 });
+
+// 4.4 : J-7 courtoisie, J-3 relance ferme, J-1 dernier rappel. Le SMS dit qui écrit, pour quel abonnement et quand : les trois
+// messages étaient identiques et muets sur l'expéditeur et l'opérateur, ce qui ne dit rien à un client qui a plusieurs abonnements.
+describe("executerJobQuotidien — contenu des relances (4.4)", () => {
+  function messagesEnvoyes(dateFin: string) {
+    const abonne = creerAbonne("690000001");
+    const sub = creerAbonnement(abonne.idAbonne, "2025-10-01", dateFin);
+    const envoyes: string[] = [];
+    const fournisseur: FournisseurNotification = { envoyer: (_canal, params) => (envoyes.push(params.message), { reussi: true, simule: true }) };
+    executerJobQuotidien(db, "2025-10-29", fournisseur);
+    return { envoyes, numero: sub.numeroAbonnement };
+  }
+
+  it("J-7 : ton de courtoisie, avec la boutique, la formule et l'échéance en clair", () => {
+    const { envoyes, numero } = messagesEnvoyes("2025-11-05");
+
+    expect(envoyes).toEqual([`Boutique Test : votre abonnement CANAL+ EVASION n°${numero} arrive à échéance dans 7 jours (05/11/2025). Pensez à vous réabonner.`]);
+  });
+
+  it("J-3 : relance ferme", () => {
+    const { envoyes } = messagesEnvoyes("2025-11-01");
+
+    expect(envoyes).toHaveLength(1);
+    expect(envoyes[0]).toContain("Boutique Test : rappel — votre abonnement CANAL+ EVASION");
+    expect(envoyes[0]).toContain("dans 3 jours (01/11/2025)");
+    expect(envoyes[0]).toContain("Réabonnez-vous dès maintenant");
+  });
+
+  it("J-1 : dernier rappel, « demain »", () => {
+    const { envoyes } = messagesEnvoyes("2025-10-30");
+
+    expect(envoyes).toHaveLength(1);
+    expect(envoyes[0]).toContain("dernier rappel");
+    expect(envoyes[0]).toContain("arrive à échéance demain (30/10/2025)");
+  });
+});

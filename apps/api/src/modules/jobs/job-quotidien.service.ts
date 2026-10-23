@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm";
-import { classerUrgenceEcheance, decalerJour, evaluerExpiration, evaluerSuiviCommission, joursAvantEcheance } from "@mboapilot/shared";
+import { classerUrgenceEcheance, decalerJour, evaluerExpiration, evaluerSuiviCommission, joursAvantEcheance, messageRelanceEcheance } from "@mboapilot/shared";
 import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
 import { trouverDureeConservationDonneesEntreprise, trouverJalonsAlerteEntreprise } from "../entreprise/entreprise.repository.js";
@@ -14,6 +14,14 @@ import { calculerEtatLicence } from "../licence/licence.service.js";
 function formaterDateFrancaise(dateIso: string): string {
   const [annee, mois, jour] = dateIso.split("-");
   return `${jour}/${mois}/${annee}`;
+}
+
+// « CANAL+ EVASION » : l'opérateur et la formule de l'abonnement, tels que le client les connaît
+function libelleAbonnement(db: Db, idFormule: number): string {
+  const formule = db.select().from(schema.formule).where(eq(schema.formule.idFormule, idFormule)).get();
+  if (!formule) return "";
+  const famille = db.select().from(schema.familleAbonnement).where(eq(schema.familleAbonnement.idFamille, formule.idFamille)).get();
+  return [famille?.libelle, formule.libelle].filter(Boolean).join(" ");
 }
 
 // lecture seule : la licence n'est pas créée ici (elle l'est au premier accès de l'application)
@@ -104,7 +112,14 @@ export function executerJobQuotidien(
         const notifications = envoyerNotificationAbonne(db, fournisseurNotification, {
           idAbonne: abonnement.idAbonne,
           evenement: "ALERTE_ECHEANCE",
-          message: `Votre abonnement n°${abonnement.numeroAbonnement} arrive à échéance le ${formaterDateFrancaise(abonnement.dateFin)}. Pensez à vous réabonner.`,
+          message: messageRelanceEcheance({
+            entreprise: db.select().from(schema.entreprise).get()?.nom ?? "",
+            libelleAbonnement: libelleAbonnement(db, abonnement.idFormule),
+            numeroAbonnement: abonnement.numeroAbonnement,
+            dateFin: formaterDateFrancaise(abonnement.dateFin),
+            joursRestants,
+            rang: jalon.rang,
+          }),
           idAlerte: alerte.idAlerte,
         });
         resultat.notificationsTentees += notifications.length;

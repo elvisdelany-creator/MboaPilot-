@@ -5773,3 +5773,45 @@ describe("Identifiants illisibles dans un corps de requête : jamais d'erreur in
     expect(reponse.statusCode).toBeLessThan(500);
   });
 });
+
+// Constaté par une matrice rôle × route : GET /entreprise était ouverte à tous les rôles et renvoyait tous les réglages, y compris
+// à l'apporteur, un partenaire externe : taux de commission interne des vendeurs, plafond de remise des caissiers, durées de
+// conservation, adresse réseau de l'imprimante du site. Il n'a besoin que de l'identité de l'entreprise et de la politique de
+// mot de passe (sa fenêtre de changement de mot de passe).
+describe("GET /api/v1/entreprise : un apporteur ne reçoit que l'essentiel", () => {
+  async function entreprise(identifiant: string) {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const token = await connecter(app, identifiant);
+    const reponse = await app.inject({ method: "GET", url: "/api/v1/entreprise", headers: authHeader(token) });
+    return { statut: reponse.statusCode, corps: reponse.json() };
+  }
+
+  beforeEach(() => {
+    const apporteur = db.insert(schema.sousDistributeur).values({ nom: "Apporteur externe" }).returning().get();
+    creerUtilisateur(db, { siteId, nom: "Ap", prenom: "E", identifiant: "apporteur-ext", motDePasse: "motdepasse-secret", role: "APPORTEUR", idApporteur: apporteur.idApporteur });
+    db.update(schema.entreprise).set({ tauxCommissionVendeurDefaut: 100, plafondRemiseCaissierPourcent: 15 }).run();
+    db.update(schema.site).set({ imprimanteHote: "192.168.1.50", imprimantePort: 9100 }).run();
+  });
+
+  it("l'apporteur reçoit l'identité de l'entreprise et la politique de mot de passe, rien d'interne", async () => {
+    const { statut, corps } = await entreprise("apporteur-ext");
+
+    expect(statut).toBe(200);
+    expect(corps.entreprise.nom).toBe("Boutique Test");
+    expect(corps.entreprise.politiqueMdpLongueurMin).toBeTypeOf("number");
+    expect(corps.entreprise).not.toHaveProperty("tauxCommissionVendeurDefaut");
+    expect(corps.entreprise).not.toHaveProperty("plafondRemiseCaissierPourcent");
+    expect(corps.entreprise).not.toHaveProperty("dureeConservationDonneesJours");
+    expect(corps.entreprise).not.toHaveProperty("tauxGarantiePourcent");
+    expect(corps.site).not.toHaveProperty("imprimanteHote");
+    expect(JSON.stringify(corps)).not.toContain("192.168.1.50");
+  });
+
+  it("un caissier garde tous les réglages dont la caisse a besoin", async () => {
+    const { corps } = await entreprise("caissier1");
+
+    expect(corps.entreprise.plafondRemiseCaissierPourcent).toBe(15);
+    expect(corps.entreprise.tauxCommissionVendeurDefaut).toBe(100);
+    expect(corps.site.imprimanteHote).toBe("192.168.1.50");
+  });
+});

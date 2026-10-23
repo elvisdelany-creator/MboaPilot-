@@ -18,6 +18,14 @@ const TAILLE_MAX_LOGO_OCTETS = 2 * 1024 * 1024;
 // légales — le cahier ne distingue pas les deux ; seules l'anonymisation
 // RGPD (11.3) et la licence éditeur (10.4) restent réservées à
 // l'Administrateur seul.
+function reduireInfosPourApporteur(infos: NonNullable<ReturnType<typeof trouverInfosEntrepriseParSite>>) {
+  const { idEntreprise, nom, devise, logoUrl, politiqueMdpLongueurMin, politiqueMdpExigerMajuscule, politiqueMdpExigerChiffre, politiqueMdpExigerCaractereSpecial } = infos.entreprise;
+  return {
+    entreprise: { idEntreprise, nom, devise, logoUrl, politiqueMdpLongueurMin, politiqueMdpExigerMajuscule, politiqueMdpExigerChiffre, politiqueMdpExigerCaractereSpecial },
+    site: { idSite: infos.site.idSite, nom: infos.site.nom, adresse: infos.site.adresse },
+  };
+}
+
 export function registerEntrepriseRoutes(app: FastifyInstance, db: Db, dossierLogos: string, guards: { authRequis: Guard; gestionParametres: Guard }) {
   app.get("/api/v1/entreprise", { preHandler: [guards.authRequis] }, async (request, reply) => {
     const infos = trouverInfosEntrepriseParSite(db, request.user.siteId);
@@ -25,7 +33,10 @@ export function registerEntrepriseRoutes(app: FastifyInstance, db: Db, dossierLo
       reply.code(404).send({ erreur: "Entreprise introuvable" });
       return;
     }
-    reply.code(200).send(infos);
+    // un apporteur est un partenaire externe : identité de l'entreprise et politique de mot de passe (sa fenêtre de changement de
+    // mot de passe) seulement — ni taux de commission interne, ni plafond de remise, ni durées de conservation, ni adresse
+    // réseau de l'imprimante du site
+    reply.code(200).send(request.user.role === "APPORTEUR" ? reduireInfosPourApporteur(infos) : infos);
   });
 
   app.patch<{ Body: ModifierEntrepriseInput }>(

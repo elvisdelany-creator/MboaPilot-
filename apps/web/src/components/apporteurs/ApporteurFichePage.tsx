@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { LogOut } from "lucide-react";
+import { KeyRound, LogOut } from "lucide-react";
 import { chargerFicheApporteur, ErreurAuthentification } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
+import { ChangerMotDePasseDialog } from "@/components/layout/ChangerMotDePasseDialog";
 import { FicheApporteurPanel } from "./FicheApporteurPanel";
 import type { FicheApporteur } from "@/lib/types";
 
@@ -15,6 +16,8 @@ export function ApporteurFichePage() {
   const utilisateur = session!.utilisateur;
 
   const [fiche, setFiche] = useState<FicheApporteur | null>(null);
+  // 2.5.1 : chacun change SON mot de passe, l'apporteur comme les autres rôles (sinon il garde celui fixé par l'administrateur)
+  const [motDePasseOuvert, setMotDePasseOuvert] = useState(false);
 
   useEffect(() => {
     if (utilisateur.idApporteur === null) return;
@@ -37,11 +40,15 @@ export function ApporteurFichePage() {
         <h1 className="font-heading text-lg font-semibold text-foreground">Ma fiche apporteur</h1>
         <div className="ml-auto flex items-center gap-3 text-sm text-muted-foreground">
           <span>{utilisateur.prenom} {utilisateur.nom}</span>
+          <Button variant="ghost" size="icon" className="size-9 cursor-pointer" aria-label="Changer mon mot de passe" onClick={() => setMotDePasseOuvert(true)}>
+            <KeyRound className="size-4" />
+          </Button>
           <Button variant="ghost" size="icon" className="size-9 cursor-pointer" aria-label="Se déconnecter" onClick={deconnecter}>
             <LogOut className="size-4" />
           </Button>
         </div>
       </header>
+      <ChangerMotDePasseDialog ouvert={motDePasseOuvert} onFerme={() => setMotDePasseOuvert(false)} />
 
       <main className="flex-1 overflow-y-auto p-6">
         <div className="mx-auto max-w-2xl">

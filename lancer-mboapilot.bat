@@ -24,17 +24,37 @@ if errorlevel 1 (
   exit /b 1
 )
 
-if not exist "node_modules" (
-  echo Premiere preparation : installation des composants ^(quelques minutes, connexion Internet necessaire^)...
+rem apres une mise a jour du code : composants a reinstaller si la liste des dependances est plus recente que leur
+rem installation, interface a reconstruire si ses sources sont plus recentes que la version construite (sinon une ancienne
+rem interface tournerait avec le nouveau serveur)
+set "REINSTALLER=0"
+set "RECONSTRUIRE=0"
+if not exist "node_modules" set "REINSTALLER=1"
+if exist "node_modules\.package-lock.json" if exist "package-lock.json" (
+  powershell -NoProfile -Command "if ((Get-Item 'package-lock.json').LastWriteTime -gt (Get-Item 'node_modules\.package-lock.json').LastWriteTime) { exit 1 } else { exit 0 }" >nul 2>nul
+  if errorlevel 1 set "REINSTALLER=1"
+)
+
+if "%REINSTALLER%"=="1" (
+  echo Installation des composants ^(quelques minutes, connexion Internet necessaire^)...
   call npm install
   if errorlevel 1 (
     echo L'installation a echoue. Verifiez la connexion Internet puis relancez.
     pause
     exit /b 1
   )
+  rem repere de fin d'installation : evite de reinstaller a chaque demarrage meme si npm n'a rien eu a changer
+  powershell -NoProfile -Command "if (Test-Path 'node_modules\.package-lock.json') { (Get-Item 'node_modules\.package-lock.json').LastWriteTime = Get-Date }" >nul 2>nul
+  set "RECONSTRUIRE=1"
 )
 
-if not exist "apps\web\dist\index.html" (
+if not exist "apps\web\dist\index.html" set "RECONSTRUIRE=1"
+if exist "apps\web\dist\index.html" (
+  powershell -NoProfile -Command "$d = (Get-Item 'apps\web\dist\index.html').LastWriteTime; $s = Get-ChildItem 'apps\web\src','packages\shared\src' -Recurse -File -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 1; if ($s -and $s.LastWriteTime -gt $d) { exit 1 } else { exit 0 }" >nul 2>nul
+  if errorlevel 1 set "RECONSTRUIRE=1"
+)
+
+if "%RECONSTRUIRE%"=="1" (
   echo Construction de l'interface...
   call npm run build
   if errorlevel 1 (

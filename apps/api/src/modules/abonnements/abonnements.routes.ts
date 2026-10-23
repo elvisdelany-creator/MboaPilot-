@@ -1,5 +1,6 @@
 import { eq } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
+import { jourDouala } from "@mboapilot/shared";
 import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
 import type { RouteGuards } from "../auth/auth.plugin.js";
@@ -14,6 +15,12 @@ import { envoyerErreur } from "../../lib/erreurs-api.js";
 
 const ERREUR_SITE_ABONNE = { erreur: "Cet abonné n'appartient pas à votre site" };
 const ERREUR_SITE_ABONNEMENT = { erreur: "Cet abonnement n'appartient pas à votre site" };
+
+// 7.1, 7.2, 7.4 : le jour d'une vente est celui du serveur (Douala), jamais celui envoyé par le poste — comme le job
+// quotidien et les alertes. Une date de poste faussée antidatait un recrutement, le datait de l'an prochain ou contournait le
+// contrôle d'expiration de la migration ; mal formée, elle donnait « Invalid time value ». Même sort pour la date de début du
+// recrutement : l'interface ne l'envoie jamais, et un abonnement démarre le jour de la vente.
+type SansJour<T> = Omit<T, "aujourdHui" | "dateDebut">;
 
 type Appelant = Parameters<typeof siteAutorise>[0];
 
@@ -48,7 +55,7 @@ export function registerAbonnementsRoutes(app: FastifyInstance, db: Db, guards: 
     }
   );
 
-  app.post<{ Body: RecruterAbonneParams }>(
+  app.post<{ Body: SansJour<RecruterAbonneParams> }>(
     "/api/v1/recrutements",
     { preHandler: [guards.authRequis, guards.ventes] },
     async (request, reply) => {
@@ -63,7 +70,7 @@ export function registerAbonnementsRoutes(app: FastifyInstance, db: Db, guards: 
       try {
         // 2.5.2 : le siteId du corps n'est qu'une indication client — celui de
         // l'appelant (relu en base à chaque requête) fait seul foi
-        const resultat = recruterAbonne(db, { ...request.body, siteId: request.user.siteId });
+        const resultat = recruterAbonne(db, { ...request.body, siteId: request.user.siteId, aujourdHui: jourDouala(), dateDebut: undefined });
         reply.code(201).send(resultat);
       } catch (erreur) {
         envoyerErreur(reply, erreur);
@@ -71,7 +78,7 @@ export function registerAbonnementsRoutes(app: FastifyInstance, db: Db, guards: 
     }
   );
 
-  app.post<{ Params: { numeroAbonnement: string }; Body: Omit<ReabonnerParams, "numeroAbonnement"> }>(
+  app.post<{ Params: { numeroAbonnement: string }; Body: SansJour<Omit<ReabonnerParams, "numeroAbonnement">> }>(
     "/api/v1/abonnements/:numeroAbonnement/reabonnements",
     { preHandler: [guards.authRequis, guards.ventes] },
     async (request, reply) => {
@@ -84,6 +91,7 @@ export function registerAbonnementsRoutes(app: FastifyInstance, db: Db, guards: 
           ...request.body,
           siteId: request.user.siteId,
           numeroAbonnement: Number(request.params.numeroAbonnement),
+          aujourdHui: jourDouala(),
         });
         reply.code(200).send(resultat);
       } catch (erreur) {
@@ -113,7 +121,7 @@ export function registerAbonnementsRoutes(app: FastifyInstance, db: Db, guards: 
     }
   );
 
-  app.post<{ Params: { numeroAbonnement: string }; Body: Omit<ChangerFormuleParams, "numeroAbonnement"> }>(
+  app.post<{ Params: { numeroAbonnement: string }; Body: SansJour<Omit<ChangerFormuleParams, "numeroAbonnement">> }>(
     "/api/v1/abonnements/:numeroAbonnement/changement-formule",
     { preHandler: [guards.authRequis, guards.ventes] },
     async (request, reply) => {
@@ -126,6 +134,7 @@ export function registerAbonnementsRoutes(app: FastifyInstance, db: Db, guards: 
           ...request.body,
           siteId: request.user.siteId,
           numeroAbonnement: Number(request.params.numeroAbonnement),
+          aujourdHui: jourDouala(),
         });
         reply.code(200).send(resultat);
       } catch (erreur) {

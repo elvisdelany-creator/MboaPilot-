@@ -5866,3 +5866,102 @@ describe("Catalogue de départ : /api/v1/catalogue/depart", () => {
     expect(db.select().from(schema.familleAbonnement).all()).toHaveLength(famillesAvant);
   });
 });
+
+// 7.1, 7.2, 7.4 : le jour de la vente est celui du serveur (heure de Douala), comme pour le job quotidien et les alertes. Une
+// date envoyée par le poste n'est pas fiable : un caissier pouvait antidater un recrutement (abonnement « actif » déjà fini),
+// le dater de l'an prochain, ou contourner le contrôle d'expiration de la migration.
+describe("Abonnements : la date du jour vient du serveur, jamais du poste (7.1, 7.2, 7.4)", () => {
+  const veille = () => new Date(dateDouala().getTime() - 24 * 3600 * 1000).toISOString().slice(0, 10);
+
+  async function recruter(app: FastifyInstance, token: string, charge: Record<string, unknown> = {}) {
+    return app.inject({
+      method: "POST",
+      url: "/api/v1/recrutements",
+      headers: authHeader(token),
+      payload: { siteId, userId, aujourdHui: jourDouala(), abonne: { nom: "Nga", prenom: "Paul", telephone: "690000000" }, idFormule, montantEncaisse: 13000, ...charge },
+    });
+  }
+
+  it("un recrutement ignore la date du poste : l'abonnement démarre aujourd'hui, à Douala", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const token = await connecter(app);
+
+    const reponse = await recruter(app, token, { aujourdHui: "2020-01-01" });
+
+    expect(reponse.statusCode).toBe(201);
+    const abonnement = db.select().from(schema.abonnement).where(eq(schema.abonnement.numeroAbonnement, reponse.json().numeroAbonnement)).get();
+    expect(abonnement?.dateDebut).toBe(jourDouala());
+  });
+
+  it("un recrutement ignore aussi une date de début imposée par le poste", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const token = await connecter(app);
+
+    const reponse = await recruter(app, token, { dateDebut: "2020-01-01" });
+
+    expect(reponse.statusCode).toBe(201);
+    const abonnement = db.select().from(schema.abonnement).where(eq(schema.abonnement.numeroAbonnement, reponse.json().numeroAbonnement)).get();
+    expect(abonnement?.dateDebut).toBe(jourDouala());
+  });
+
+  it("un recrutement sans date du poste réussit : le serveur connaît le jour", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const token = await connecter(app);
+
+    const reponse = await recruter(app, token, { aujourdHui: undefined });
+
+    expect(reponse.statusCode).toBe(201);
+  });
+
+  it("une date du poste mal formée ne produit plus d'erreur « Invalid time value »", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const token = await connecter(app);
+
+    const reponse = await recruter(app, token, { aujourdHui: "demain" });
+
+    expect(reponse.statusCode).toBe(201);
+  });
+
+  it("un réabonnement ignore la date du poste : la nouvelle échéance part d'aujourd'hui", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const token = await connecter(app);
+    const { numeroAbonnement } = (await recruter(app, token)).json();
+    db.update(schema.abonnement).set({ dateDebut: "2025-01-01", dateFin: "2025-01-30", statut: "EXPIRE" }).where(eq(schema.abonnement.numeroAbonnement, numeroAbonnement)).run();
+
+    const reponse = await app.inject({
+      method: "POST",
+      url: `/api/v1/abonnements/${numeroAbonnement}/reabonnements`,
+      headers: authHeader(token),
+      payload: { siteId, userId, aujourdHui: "2025-01-15", montantEncaisse: 13000 },
+    });
+
+    expect(reponse.statusCode).toBe(200);
+    const abonnement = db.select().from(schema.abonnement).where(eq(schema.abonnement.numeroAbonnement, numeroAbonnement)).get();
+    expect(abonnement?.dateDebut).toBe(jourDouala());
+  });
+
+  it("la migration d'un abonnement dont la date de fin est dépassée reste refusée, même antidatée", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const token = await connecter(app);
+    const { numeroAbonnement } = (await recruter(app, token)).json();
+    const idFormuleSuperieure = db
+      .insert(schema.formule)
+      .values({ idFamille: db.select().from(schema.formule).where(eq(schema.formule.idFormule, idFormule)).get()!.idFamille, libelle: "PREMIUM", prix: 28000, rang: 5 })
+      .returning()
+      .get().idFormule;
+    // le job quotidien n'a pas encore tourné : la date de fin est passée mais le statut affiche encore ACTIF
+    db.update(schema.abonnement).set({ dateDebut: "2025-01-01", dateFin: veille(), statut: "ACTIF" }).where(eq(schema.abonnement.numeroAbonnement, numeroAbonnement)).run();
+
+    const reponse = await app.inject({
+      method: "POST",
+      url: `/api/v1/abonnements/${numeroAbonnement}/changement-formule`,
+      headers: authHeader(token),
+      payload: { siteId, userId, aujourdHui: veille(), idNouvelleFormule: idFormuleSuperieure, montantEncaisse: 15000 },
+    });
+
+    expect(reponse.statusCode).toBe(400);
+    expect(reponse.json().erreur).toContain("abonnement actif");
+    const abonnement = db.select().from(schema.abonnement).where(eq(schema.abonnement.numeroAbonnement, numeroAbonnement)).get();
+    expect(abonnement?.idFormule).toBe(idFormule);
+  });
+});

@@ -250,6 +250,7 @@ export function ClientsPage({ onNaviguer, onReabonnerDepuisFiche }: Props) {
               value={terme}
               onChange={(e) => setTerme(e.target.value)}
               placeholder="Rechercher (nom, téléphone, n° abonné)…"
+              aria-label="Rechercher un client"
               className="h-10"
             />
           </div>

@@ -94,6 +94,7 @@ export function GrilleProduits({ produits, onAjouter }: Props) {
         onChange={(e) => setRecherche(e.target.value)}
         onKeyDown={surEntree}
         placeholder="Rechercher un article (libellé ou code-barres)…"
+        aria-label="Rechercher un article"
         className="mb-4"
       />
       {produitsFiltres.length === 0 && (

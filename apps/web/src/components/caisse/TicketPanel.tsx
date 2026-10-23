@@ -201,6 +201,13 @@ export function TicketPanel({
               </span>
             </li>
           )}
+          {/* 6.4 : la remise a sa ligne, juste sous la formule remisée (comme sur le reçu et le pro-forma), pour que les lignes totalisent le total affiché */}
+          {remise > 0 && (
+            <li className="flex items-center justify-between text-sm">
+              <span className="text-card-foreground">Remise</span>
+              <span className="tabular-nums font-medium text-card-foreground">−{formateurFcfa.format(remise)} FCFA</span>
+            </li>
+          )}
           {kitSelectionne && (
             <li className="flex items-center justify-between text-sm">
               <span className="text-card-foreground">{kitSelectionne.libelle} — matériel</span>
@@ -210,9 +217,7 @@ export function TicketPanel({
             </li>
           )}
           {prixKitNonConfigure && (
-            <p className="text-xs text-destructive">
-              Prix non configuré pour ce kit sur cette formule — contactez un administrateur.
-            </p>
+            <li className="text-xs text-destructive">Prix non configuré pour ce kit sur cette formule — contactez un administrateur.</li>
           )}
           {optionsSelectionnees.map((o) => (
             <li key={o.idOption} className="flex items-center justify-between text-sm">

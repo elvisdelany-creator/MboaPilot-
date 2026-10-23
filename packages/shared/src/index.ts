@@ -30,6 +30,7 @@ export { lireEntierSaisi } from "./saisie-entier.js";
 export { AIDE_IDENTIFIANT_CONNEXION, erreurIdentifiantConnexion, normaliserIdentifiant } from "./identifiant-connexion.js";
 export { soldeFacture, soldeTotalDu, type FactureSolde, type PaiementSolde } from "./solde-facture.js";
 export { plafondRemiseCaissier } from "./plafond-remise.js";
+export { ligneAvecRemise, type LigneMontant } from "./lignes-remise.js";
 export { excedentEncaissementSuspect, SEUIL_EXCEDENT_ENCAISSEMENT_SUSPECT } from "./excedent-encaissement.js";
 export { peutAccederVue, vuesAccessibles, type RoleUtilisateur, type VueApplication } from "./acces-vues.js";
 export { decrireEntreeAudit, type ChangementAudit, type DescriptionAudit, type EntreeAuditBrute } from "./description-audit.js";

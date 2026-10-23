@@ -43,7 +43,7 @@ import { ChangerFormuleDialog } from "./ChangerFormuleDialog";
 import { ClotureCaissePanel } from "./ClotureCaissePanel";
 import { RecuVentePrintable, type LigneRecu, type RecuVente } from "./RecuVentePrintable";
 import { FactureProFormaPrintable } from "./FactureProFormaPrintable";
-import { jourDouala, plafondRemiseCaissier } from "@mboapilot/shared";
+import { jourDouala, ligneAvecRemise, plafondRemiseCaissier } from "@mboapilot/shared";
 
 interface Props {
   onNaviguer: (vue: Vue) => void;
@@ -316,7 +316,8 @@ export function CaissePage({ onNaviguer, onOuvrirCatalogueAdministration, abonne
   const remiseEffective = formuleSelectionnee ? Math.min(remise, plafondRemise(formuleSelectionnee.prix)) : 0;
   const totalTicket = (formuleSelectionnee?.prix ?? 0) - remiseEffective + (prixKitHorsFormule ?? 0) + prixOptions;
   const lignesTicket: LigneRecu[] = [
-    ...(formuleSelectionnee ? [{ libelle: formuleSelectionnee.libelle, montant: formuleSelectionnee.prix - remiseEffective }] : []),
+    // prix catalogue puis ligne « Remise » : les lignes du reçu totalisent le total, et le client voit sa remise
+    ...(formuleSelectionnee ? ligneAvecRemise(formuleSelectionnee.libelle, formuleSelectionnee.prix, remiseEffective) : []),
     ...(kitSelectionne ? [{ libelle: `${kitSelectionne.libelle} — matériel`, montant: prixKitHorsFormule ?? 0 }] : []),
     ...optionsSelectionnees.map((o) => ({ libelle: o.libelle, montant: o.prixApplique })),
   ];
@@ -388,10 +389,9 @@ export function CaissePage({ onNaviguer, onOuvrirCatalogueAdministration, abonne
     setAbonneSelectionne(null);
   }
 
-  const lignesTicketProduits: LigneRecu[] = panierProduits.map((l) => ({
-    libelle: l.quantite > 1 ? `${l.produit.libelle} × ${l.quantite}` : l.produit.libelle,
-    montant: l.produit.prixVente * l.quantite - l.remise,
-  }));
+  const lignesTicketProduits: LigneRecu[] = panierProduits.flatMap((l) =>
+    ligneAvecRemise(l.quantite > 1 ? `${l.produit.libelle} × ${l.quantite}` : l.produit.libelle, l.produit.prixVente * l.quantite, l.remise, `Remise — ${l.produit.libelle}`)
+  );
   const totalTicketProduits = panierProduits.reduce((somme, l) => somme + l.produit.prixVente * l.quantite - l.remise, 0);
 
   async function validerVenteProduits(paiement: PaiementSaisi) {

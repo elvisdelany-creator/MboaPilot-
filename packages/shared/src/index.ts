@@ -32,6 +32,7 @@ export { soldeFacture, soldeTotalDu, type FactureSolde, type PaiementSolde } fro
 export { plafondRemiseCaissier } from "./plafond-remise.js";
 export { ligneAvecRemise, type LigneMontant } from "./lignes-remise.js";
 export { messageRelanceEcheance, type DonneesRelanceEcheance } from "./message-relance.js";
+export { creerVerrouSoumission } from "./verrou-soumission.js";
 export { excedentEncaissementSuspect, SEUIL_EXCEDENT_ENCAISSEMENT_SUSPECT } from "./excedent-encaissement.js";
 export { peutAccederVue, vuesAccessibles, type RoleUtilisateur, type VueApplication } from "./acces-vues.js";
 export { decrireEntreeAudit, type ChangementAudit, type DescriptionAudit, type EntreeAuditBrute } from "./description-audit.js";

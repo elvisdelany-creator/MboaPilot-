@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { creerVerrouSoumission } from "@mboapilot/shared";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -45,7 +46,11 @@ export function ReceptionAchatDialog({ produit, onFerme, onSucces }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [produit]);
 
-  async function valider() {
+  // verrou synchrone : l'état « en cours » ne se met à jour qu'au prochain rendu, et un double clic passerait deux fois
+  const [executerUneFois] = useState(creerVerrouSoumission);
+  const valider = () => executerUneFois(validerSansVerrou);
+
+  async function validerSansVerrou() {
     if (!produit || !quantite || !coutUnitaire) return;
     setEnCours(true);
     try {

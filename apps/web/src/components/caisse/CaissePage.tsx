@@ -43,7 +43,7 @@ import { ChangerFormuleDialog } from "./ChangerFormuleDialog";
 import { ClotureCaissePanel } from "./ClotureCaissePanel";
 import { RecuVentePrintable, type LigneRecu, type RecuVente } from "./RecuVentePrintable";
 import { FactureProFormaPrintable } from "./FactureProFormaPrintable";
-import { jourDouala, ligneAvecRemise, plafondRemiseCaissier } from "@mboapilot/shared";
+import { creerVerrouSoumission, jourDouala, ligneAvecRemise, plafondRemiseCaissier } from "@mboapilot/shared";
 
 interface Props {
   onNaviguer: (vue: Vue) => void;
@@ -394,7 +394,13 @@ export function CaissePage({ onNaviguer, onOuvrirCatalogueAdministration, abonne
   );
   const totalTicketProduits = panierProduits.reduce((somme, l) => somme + l.produit.prixVente * l.quantite - l.remise, 0);
 
-  async function validerVenteProduits(paiement: PaiementSaisi) {
+  // verrou synchrone : l'état « en cours » ne se met à jour qu'au prochain rendu, et des déclenchements qui arrivent avant lui
+  // (double clic, Entrée répétée) encaissaient chacun la vente une fois de plus
+  const [executerUneFois] = useState(creerVerrouSoumission);
+  const validerVenteProduits = (paiement: PaiementSaisi) => executerUneFois(() => validerVenteProduitsSansVerrou(paiement));
+  const valider = (paiement: PaiementSaisi) => executerUneFois(() => validerSansVerrou(paiement));
+
+  async function validerVenteProduitsSansVerrou(paiement: PaiementSaisi) {
     if (panierProduits.length === 0) return;
     setEnCours(true);
     try {
@@ -464,7 +470,7 @@ export function CaissePage({ onNaviguer, onOuvrirCatalogueAdministration, abonne
     }
   }
 
-  async function valider(paiement: PaiementSaisi) {
+  async function validerSansVerrou(paiement: PaiementSaisi) {
     if (!abonneSelectionne || !formuleSelectionnee) return;
     setEnCours(true);
     try {

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { excedentEncaissementSuspect } from "@mboapilot/shared";
+import { creerVerrouSoumission, excedentEncaissementSuspect } from "@mboapilot/shared";
 import {
   Dialog,
   DialogContent,
@@ -105,7 +105,11 @@ export function EchangeMaterielDialog({ numeroAbonnement, onFerme, onSucces }: P
     soumettre();
   }
 
-  async function soumettre() {
+  // verrou synchrone : l'état « en cours » ne se met à jour qu'au prochain rendu, et un double clic passerait deux fois
+  const [executerUneFois] = useState(creerVerrouSoumission);
+  const soumettre = () => executerUneFois(soumettreSansVerrou);
+
+  async function soumettreSansVerrou() {
     if (!numeroAbonnement || !idProduit) return;
     setConfirmationSurpaiement(false);
     setEnCours(true);

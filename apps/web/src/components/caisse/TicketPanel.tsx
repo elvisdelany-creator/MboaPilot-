@@ -425,14 +425,15 @@ export function TicketPanel({
             Sélectionnez ou créez un client pour valider ce recrutement.
           </p>
         )}
-        {/* 6.7 : estimation imprimable avant encaissement — distincte de la facture BROUILLON */}
+        {/* 6.7 : estimation imprimable avant encaissement — distincte de la facture BROUILLON. Elle se donne à un prospect qui n'est
+            pas encore client : exiger un client enregistré obligeait à créer une fiche rien que pour un devis (la facture, elle, ne
+            nomme le client que s'il y en a un) */}
         <Button
           type="button"
           variant="outline"
           size="sm"
           className="w-full cursor-pointer gap-2"
-          disabled={!abonneSelectionne || !formuleSelectionnee}
-          aria-describedby={formuleSelectionnee && !abonneSelectionne ? "ticket-aide-client" : undefined}
+          disabled={!formuleSelectionnee}
           onClick={onImprimerProForma}
         >
           <FileText className="size-4" />

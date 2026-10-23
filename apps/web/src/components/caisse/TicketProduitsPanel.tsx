@@ -22,6 +22,10 @@ interface Props {
   onDecrementer: (idProduit: number) => void;
   onRetirer: (idProduit: number) => void;
   onModifierRemise: (idProduit: number, remise: number) => void;
+  // 6.4, 2.5.1 : remise maximale pour un prix de ligne donné (limite du rôle), et pourcentage du plafond caissier à annoncer
+  // (null : pas de plafond propre au rôle)
+  plafondRemise: (prixBase: number) => number;
+  plafondRemisePourcent: number | null;
   enCours: boolean;
   onValider: (paiement: PaiementSaisi) => void;
   onImprimerProForma: () => void;
@@ -36,7 +40,18 @@ function montantLigne(ligne: LignePanier): number {
 // 9.2 : ticket en cours pour une vente de produits/services hors abonnement —
 // même logique d'encaissement (comptant/Mobile Money) que TicketPanel, mais
 // panier multi-lignes avec quantités au lieu d'une formule + un kit unique.
-export function TicketProduitsPanel({ panier, onIncrementer, onDecrementer, onRetirer, onModifierRemise, enCours, onValider, onImprimerProForma }: Props) {
+export function TicketProduitsPanel({
+  panier,
+  onIncrementer,
+  onDecrementer,
+  onRetirer,
+  onModifierRemise,
+  plafondRemise,
+  plafondRemisePourcent,
+  enCours,
+  onValider,
+  onImprimerProForma,
+}: Props) {
   const total = panier.reduce((somme, l) => somme + montantLigne(l), 0);
 
   const [modePaiement, setModePaiement] = useState<"CASH" | "CHEQUE" | "VIREMENT" | "MOBILE_MONEY">("CASH");
@@ -129,21 +144,29 @@ export function TicketProduitsPanel({ panier, onIncrementer, onDecrementer, onRe
                 <span className="tabular-nums font-medium text-card-foreground">{formateurFcfa.format(montantLigne(ligne))} FCFA</span>
               </div>
               {/* 6.4 : "remise ponctuelle" — montant en FCFA déduit du prix catalogue de la ligne */}
-              <div className="mt-1 flex items-center gap-2">
-                <Label htmlFor={`remise-${ligne.produit.idProduit}`} className="text-xs font-normal text-muted-foreground">
-                  Remise
-                </Label>
-                <Input
-                  id={`remise-${ligne.produit.idProduit}`}
-                  type="number"
-                  min={0}
-                  max={ligne.produit.prixVente * ligne.quantite}
-                  value={ligne.remise || ""}
-                  placeholder="0"
-                  onChange={(e) => onModifierRemise(ligne.produit.idProduit, Number(e.target.value))}
-                  className="h-10 flex-1 tabular-nums"
-                />
-                <span className="text-xs text-muted-foreground">FCFA</span>
+              <div className="mt-1">
+                <div className="flex items-center gap-2">
+                  <Label htmlFor={`remise-${ligne.produit.idProduit}`} className="text-xs font-normal text-muted-foreground">
+                    Remise
+                  </Label>
+                  <Input
+                    id={`remise-${ligne.produit.idProduit}`}
+                    type="number"
+                    min={0}
+                    max={plafondRemise(ligne.produit.prixVente * ligne.quantite)}
+                    value={ligne.remise || ""}
+                    placeholder="0"
+                    aria-describedby={plafondRemisePourcent !== null ? `remise-plafond-${ligne.produit.idProduit}` : undefined}
+                    onChange={(e) => onModifierRemise(ligne.produit.idProduit, Number(e.target.value))}
+                    className="h-10 flex-1 tabular-nums"
+                  />
+                  <span className="text-xs text-muted-foreground">FCFA</span>
+                </div>
+                {plafondRemisePourcent !== null && (
+                  <p id={`remise-plafond-${ligne.produit.idProduit}`} className="mt-1 text-xs text-muted-foreground">
+                    Plafond caissier : {formateurFcfa.format(plafondRemise(ligne.produit.prixVente * ligne.quantite))} FCFA ({plafondRemisePourcent} %)
+                  </p>
+                )}
               </div>
             </li>
           ))}

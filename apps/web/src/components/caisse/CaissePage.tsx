@@ -43,7 +43,7 @@ import { ChangerFormuleDialog } from "./ChangerFormuleDialog";
 import { ClotureCaissePanel } from "./ClotureCaissePanel";
 import { RecuVentePrintable, type LigneRecu, type RecuVente } from "./RecuVentePrintable";
 import { FactureProFormaPrintable } from "./FactureProFormaPrintable";
-import { jourDouala } from "@mboapilot/shared";
+import { jourDouala, plafondRemiseCaissier } from "@mboapilot/shared";
 
 interface Props {
   onNaviguer: (vue: Vue) => void;
@@ -299,13 +299,21 @@ export function CaissePage({ onNaviguer, onOuvrirCatalogueAdministration, abonne
   const optionsSelectionnees = optionsCompatibles.filter((o) => idsOptionsSelectionnees.includes(o.idOption));
   const prixOptions = optionsSelectionnees.reduce((total, o) => total + o.prixApplique, 0);
 
+  // 6.4, 2.5.1 : un caissier ne remise pas au-delà d'un pourcentage du prix de la ligne (réglable). Le serveur refuse au-delà ;
+  // la caisse montre la limite dès la saisie, plutôt que de la révéler par un refus au moment de valider devant le client.
+  // Les autres rôles n'ont pas de limite (jusqu'au prix de la ligne). Avant le chargement des réglages, seul le serveur fait foi.
+  const plafondRemisePourcent = utilisateur.role === "CAISSIER" ? (infosEntreprise?.entreprise.plafondRemiseCaissierPourcent ?? null) : null;
+  function plafondRemise(prixBase: number): number {
+    return plafondRemisePourcent === null ? prixBase : plafondRemiseCaissier(prixBase, plafondRemisePourcent);
+  }
+
   // 6.7 : base du ticket / pro-forma — même calcul que TicketPanel, dupliqué
   // ici pour que CaissePage puisse construire le récapitulatif imprimable
   const prixKitHorsFormule =
     kitSelectionne && formuleSelectionnee
       ? calculerPrixKitHorsFormuleSecurise(kitSelectionne, { idFormule: formuleSelectionnee.idFormule, prix: formuleSelectionnee.prix })
       : 0;
-  const remiseEffective = formuleSelectionnee ? Math.min(remise, formuleSelectionnee.prix) : 0;
+  const remiseEffective = formuleSelectionnee ? Math.min(remise, plafondRemise(formuleSelectionnee.prix)) : 0;
   const totalTicket = (formuleSelectionnee?.prix ?? 0) - remiseEffective + (prixKitHorsFormule ?? 0) + prixOptions;
   const lignesTicket: LigneRecu[] = [
     ...(formuleSelectionnee ? [{ libelle: formuleSelectionnee.libelle, montant: formuleSelectionnee.prix - remiseEffective }] : []),
@@ -348,10 +356,10 @@ export function CaissePage({ onNaviguer, onOuvrirCatalogueAdministration, abonne
     });
   }
 
-  // 6.4 : "remise ponctuelle" par ligne, plafonnée au prix catalogue de la ligne
+  // 6.4 : "remise ponctuelle" par ligne, plafonnée à la limite du rôle (au plus le prix catalogue de la ligne)
   function modifierRemiseProduit(idProduit: number, remise: number) {
     setPanierProduits((panier) =>
-      panier.map((l) => (l.produit.idProduit === idProduit ? { ...l, remise: Math.max(0, Math.min(remise, l.produit.prixVente * l.quantite)) } : l))
+      panier.map((l) => (l.produit.idProduit === idProduit ? { ...l, remise: Math.max(0, Math.min(remise, plafondRemise(l.produit.prixVente * l.quantite))) } : l))
     );
   }
 
@@ -361,7 +369,13 @@ export function CaissePage({ onNaviguer, onOuvrirCatalogueAdministration, abonne
 
   function decrementerProduit(idProduit: number) {
     setPanierProduits((panier) =>
-      panier.flatMap((l) => (l.produit.idProduit === idProduit ? (l.quantite > 1 ? [{ ...l, quantite: l.quantite - 1 }] : []) : [l]))
+      panier.flatMap((l) => {
+        if (l.produit.idProduit !== idProduit) return [l];
+        if (l.quantite <= 1) return [];
+        // la base de la ligne baisse : la remise déjà saisie ne doit pas dépasser le nouveau plafond
+        const quantite = l.quantite - 1;
+        return [{ ...l, quantite, remise: Math.min(l.remise, plafondRemise(l.produit.prixVente * quantite)) }];
+      })
     );
   }
 
@@ -599,6 +613,8 @@ export function CaissePage({ onNaviguer, onOuvrirCatalogueAdministration, abonne
                 onDecrementer={decrementerProduit}
                 onRetirer={retirerProduit}
                 onModifierRemise={modifierRemiseProduit}
+                plafondRemise={plafondRemise}
+                plafondRemisePourcent={plafondRemisePourcent}
                 enCours={enCours}
                 onValider={validerVenteProduits}
                 onImprimerProForma={() => setProFormaVisible(true)}
@@ -631,6 +647,8 @@ export function CaissePage({ onNaviguer, onOuvrirCatalogueAdministration, abonne
                 onSelectionnerComptePartage={setComptePartageSelectionne}
                 remise={remiseEffective}
                 onChangerRemise={setRemise}
+                plafondRemise={plafondRemise}
+                plafondRemisePourcent={plafondRemisePourcent}
                 enCours={enCours}
                 onValider={valider}
                 onEchangerMateriel={() => setEchangeMaterielOuvert(true)}

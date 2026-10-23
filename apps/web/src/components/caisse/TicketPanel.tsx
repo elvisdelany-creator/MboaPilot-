@@ -52,6 +52,10 @@ interface Props {
   // CaissePage pour que le pro-forma imprimable la reflète aussi
   remise: number;
   onChangerRemise: (remise: number) => void;
+  // 6.4, 2.5.1 : remise maximale pour un prix de ligne donné (limite du rôle), et pourcentage du plafond caissier à annoncer
+  // (null : pas de plafond propre au rôle)
+  plafondRemise: (prixBase: number) => number;
+  plafondRemisePourcent: number | null;
   enCours: boolean;
   onValider: (paiement: PaiementSaisi) => void;
   onEchangerMateriel: () => void;
@@ -80,6 +84,8 @@ export function TicketPanel({
   onSelectionnerComptePartage,
   remise,
   onChangerRemise,
+  plafondRemise,
+  plafondRemisePourcent,
   enCours,
   onValider,
   onEchangerMateriel,
@@ -250,21 +256,29 @@ export function TicketPanel({
 
         {/* 6.4 : "remise ponctuelle" ou "tarif préférentiel apporteur" — montant en FCFA déduit du prix de la formule */}
         {formuleSelectionnee && (
-          <div className="mt-3 flex items-center gap-2">
-            <Label htmlFor="ticket-remise" className="text-sm font-normal text-muted-foreground">
-              Remise
-            </Label>
-            <Input
-              id="ticket-remise"
-              type="number"
-              min={0}
-              max={formuleSelectionnee.prix}
-              value={remise || ""}
-              placeholder="0"
-              onChange={(e) => onChangerRemise(Math.max(0, Math.min(Number(e.target.value), formuleSelectionnee.prix)))}
-              className="h-9 flex-1 tabular-nums"
-            />
-            <span className="text-sm text-muted-foreground">FCFA</span>
+          <div className="mt-3">
+            <div className="flex items-center gap-2">
+              <Label htmlFor="ticket-remise" className="text-sm font-normal text-muted-foreground">
+                Remise
+              </Label>
+              <Input
+                id="ticket-remise"
+                type="number"
+                min={0}
+                max={plafondRemise(formuleSelectionnee.prix)}
+                value={remise || ""}
+                placeholder="0"
+                aria-describedby={plafondRemisePourcent !== null ? "ticket-remise-plafond" : undefined}
+                onChange={(e) => onChangerRemise(Math.max(0, Math.min(Number(e.target.value), plafondRemise(formuleSelectionnee.prix))))}
+                className="h-9 flex-1 tabular-nums"
+              />
+              <span className="text-sm text-muted-foreground">FCFA</span>
+            </div>
+            {plafondRemisePourcent !== null && (
+              <p id="ticket-remise-plafond" className="mt-1 text-xs text-muted-foreground">
+                Plafond caissier : {formateurFcfa.format(plafondRemise(formuleSelectionnee.prix))} FCFA ({plafondRemisePourcent} % du prix de la formule). Au-delà, demandez à un gérant.
+              </p>
+            )}
           </div>
         )}
 

@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm";
-import { erreurAdressePublique, JALONS_PAR_DEFAUT, normaliserAdressePublique, POLITIQUE_MDP_PAR_DEFAUT, type JalonsAlerte, type PolitiqueMotDePasse } from "@mboapilot/shared";
+import { erreurAdressePublique, JALONS_PAR_DEFAUT, normaliserAdressePublique, plafondRemiseCaissier, POLITIQUE_MDP_PAR_DEFAUT, type JalonsAlerte, type PolitiqueMotDePasse } from "@mboapilot/shared";
 import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
 import { verifierBooleen, verifierEntier } from "../../lib/validation.js";
@@ -177,9 +177,9 @@ export function exigerRemiseAutorisee(db: Db, userId: number, remise: number, pr
   if (utilisateur?.role !== "CAISSIER") return;
 
   const plafond = db.select().from(schema.entreprise).get()?.plafondRemiseCaissierPourcent ?? PLAFOND_REMISE_CAISSIER_PAR_DEFAUT;
-  // comparaison en entiers : remise / prixBase <= plafond / 100
-  if (remise * 100 > prixBase * plafond) {
-    throw new Error(`La remise (${remise} FCFA) dépasse le plafond autorisé pour un caissier (${plafond} % du prix de la ligne, soit ${Math.floor((prixBase * plafond) / 100)} FCFA). Demandez à un gérant.`);
+  const plafondFcfa = plafondRemiseCaissier(prixBase, plafond);
+  if (remise > plafondFcfa) {
+    throw new Error(`La remise (${remise} FCFA) dépasse le plafond autorisé pour un caissier (${plafond} % du prix de la ligne, soit ${plafondFcfa} FCFA). Demandez à un gérant.`);
   }
 }
 

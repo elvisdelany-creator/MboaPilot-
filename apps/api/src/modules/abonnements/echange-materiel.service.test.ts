@@ -315,7 +315,7 @@ describe("echangerMateriel — saisies, site du produit et atomicité (7.3)", ()
   });
 
   it("n'écrit rien quand l'opération échoue en cours de route (l'ancien matériel reste actif)", () => {
-    db.update(schema.produit).set({ suiviStock: 1 }).where(eq(schema.produit.idProduit, idProduitDecodeur)).run();
+    db.update(schema.produit).set({ suiviStock: 1, quantiteStock: 5 }).where(eq(schema.produit.idProduit, idProduitDecodeur)).run();
     echangerMateriel(db, echange({ numeroSerie: "SN-ANCIEN" }));
     const avant = materiels();
     const nbFactures = db.select().from(schema.facture).all().length;

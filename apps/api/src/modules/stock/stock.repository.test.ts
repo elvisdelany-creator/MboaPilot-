@@ -56,6 +56,45 @@ describe("enregistrerMouvement (5.2)", () => {
   });
 });
 
+// 5.2 : un stock ne descend jamais sous zéro. Une vente de 100 avec 25 en stock était acceptée (stock à −75), puis une casse de 100
+// aussi : le stock affiché n'était plus qu'un chiffre sans lien avec le magasin.
+describe("enregistrerMouvement : stock insuffisant (5.2)", () => {
+  const stock = () => db.select().from(schema.produit).where(eq(schema.produit.idProduit, idProduit)).get()!.quantiteStock;
+  const nombreMouvements = () => db.select().from(schema.stockMouvement).all().length;
+
+  it.each(["VENTE", "CASSE", "TRANSFERT_SORTIE"] as const)("%s refuse une quantité supérieure au stock, sans rien journaliser", (typeMouvement) => {
+    expect(() => enregistrerMouvement(db, { idProduit, siteId, typeMouvement, quantite: 11, motif: "test", utilisateurId: userId })).toThrow(
+      /Stock insuffisant.*Décodeur.*10 disponible.*11 demandé/
+    );
+
+    expect(stock()).toBe(10);
+    expect(nombreMouvements()).toBe(0);
+  });
+
+  it("accepte une sortie égale au stock : il tombe à zéro, jamais en dessous", () => {
+    const produit = enregistrerMouvement(db, { idProduit, siteId, typeMouvement: "VENTE", quantite: 10, utilisateurId: userId });
+
+    expect(produit.quantiteStock).toBe(0);
+    expect(() => enregistrerMouvement(db, { idProduit, siteId, typeMouvement: "VENTE", quantite: 1, utilisateurId: userId })).toThrow(/0 disponible/);
+  });
+
+  it("un inventaire ne peut pas non plus rendre le stock négatif", () => {
+    expect(() => enregistrerMouvement(db, { idProduit, siteId, typeMouvement: "INVENTAIRE", quantite: -11, motif: "Comptage", utilisateurId: userId })).toThrow(
+      /Stock insuffisant/
+    );
+
+    expect(stock()).toBe(10);
+  });
+
+  it("ne bloque jamais une entrée de stock (achat, retour client, transfert reçu)", () => {
+    for (const typeMouvement of ["ACHAT", "RETOUR_CLIENT", "TRANSFERT_ENTREE"] as const) {
+      enregistrerMouvement(db, { idProduit, siteId, typeMouvement, quantite: 5, utilisateurId: userId });
+    }
+
+    expect(stock()).toBe(25);
+  });
+});
+
 describe("listerMouvementsProduit", () => {
   it("renvoie les mouvements du plus récent au plus ancien", () => {
     enregistrerMouvement(db, { idProduit, siteId, typeMouvement: "ACHAT", quantite: 1, utilisateurId: userId });

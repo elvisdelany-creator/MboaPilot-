@@ -44,7 +44,7 @@ import { ChangerFormuleDialog } from "./ChangerFormuleDialog";
 import { ClotureCaissePanel } from "./ClotureCaissePanel";
 import { RecuVentePrintable, type LigneRecu, type RecuVente } from "./RecuVentePrintable";
 import { FactureProFormaPrintable } from "./FactureProFormaPrintable";
-import { classerEncaissement, creerVerrouSoumission, jourDouala, ligneAvecRemise, plafondRemiseCaissier } from "@mboapilot/shared";
+import { classerEncaissement, creerVerrouSoumission, jourDouala, ligneAvecRemise, messageStockInsuffisant, peutAjouterAuPanier, plafondRemiseCaissier } from "@mboapilot/shared";
 
 interface Props {
   onNaviguer: (vue: Vue) => void;
@@ -359,7 +359,16 @@ export function CaissePage({ onNaviguer, onOuvrirCatalogueAdministration, abonne
 
   // 5.2, 5.3 : panier de produits/services — un clic ajoute une unité,
   // tolérant aux erreurs de saisie (persona Caissier, 2.5.1) via +/- et retrait
+  // 5.2 : un stock ne descend jamais sous zéro — le serveur refuse toute sortie au-delà du disponible, la caisse n'offre même pas de
+  // dépasser le stock (et dit pourquoi)
+  function refuserSiStockInsuffisant(produit: Produit, quantiteDejaAuPanier: number): boolean {
+    if (peutAjouterAuPanier(produit, quantiteDejaAuPanier)) return false;
+    toast.warning(messageStockInsuffisant(produit.libelle, produit.quantiteStock));
+    return true;
+  }
+
   function ajouterProduitAuPanier(produit: Produit) {
+    if (refuserSiStockInsuffisant(produit, panierProduits.find((l) => l.produit.idProduit === produit.idProduit)?.quantite ?? 0)) return;
     setPanierProduits((panier) => {
       const existant = panier.find((l) => l.produit.idProduit === produit.idProduit);
       if (existant) return panier.map((l) => (l.produit.idProduit === produit.idProduit ? { ...l, quantite: l.quantite + 1 } : l));
@@ -375,6 +384,8 @@ export function CaissePage({ onNaviguer, onOuvrirCatalogueAdministration, abonne
   }
 
   function incrementerProduit(idProduit: number) {
+    const ligne = panierProduits.find((l) => l.produit.idProduit === idProduit);
+    if (ligne && refuserSiStockInsuffisant(ligne.produit, ligne.quantite)) return;
     setPanierProduits((panier) => panier.map((l) => (l.produit.idProduit === idProduit ? { ...l, quantite: l.quantite + 1 } : l)));
   }
 

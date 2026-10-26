@@ -862,7 +862,7 @@ describe("Module SAV (5.10, 8.4)", () => {
     expect(ouverture.statusCode).toBe(201);
     const { idDossierSav } = ouverture.json();
 
-    const produit = db.insert(schema.produit).values({ siteId, type: "BIEN", libelle: "Alimentation", prixVente: 3000 }).returning().get();
+    const produit = db.insert(schema.produit).values({ siteId, type: "BIEN", libelle: "Alimentation", prixVente: 3000, quantiteStock: 5 }).returning().get();
 
     const piece = await app.inject({
       method: "POST",
@@ -5435,7 +5435,7 @@ describe("Opérations de stock : site de l'article et auteur de la session (2.5.
     const token = await connecter(app, "gerant1");
     const idEntreprise = db.select().from(schema.site).where(eq(schema.site.idSite, siteId)).get()!.idEntreprise;
     const autreSite = db.insert(schema.site).values({ idEntreprise, nom: "Site B" }).returning().get().idSite;
-    const produit = db.insert(schema.produit).values({ siteId, type: "BIEN", libelle: "Câble", prixVente: 2000, coutRevient: 700, suiviStock: 1 }).returning().get();
+    const produit = db.insert(schema.produit).values({ siteId, type: "BIEN", libelle: "Câble", prixVente: 2000, coutRevient: 700, suiviStock: 1, quantiteStock: 10 }).returning().get();
     const mouvements = () => db.select().from(schema.stockMouvement).where(eq(schema.stockMouvement.idProduit, produit.idProduit)).all();
     return { app, token, gerant, autreSite, produit, mouvements };
   }

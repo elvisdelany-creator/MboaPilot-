@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { FileText, Minus, Plus, Trash2 } from "lucide-react";
-import { excedentEncaissementSuspect } from "@mboapilot/shared";
+import { excedentEncaissementSuspect, peutAjouterAuPanier } from "@mboapilot/shared";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -142,6 +142,8 @@ export function TicketProduitsPanel({
                     size="icon"
                     className="size-10 cursor-pointer"
                     onClick={() => onIncrementer(ligne.produit.idProduit)}
+                    disabled={!peutAjouterAuPanier(ligne.produit, ligne.quantite)}
+                    title={peutAjouterAuPanier(ligne.produit, ligne.quantite) ? undefined : `Stock disponible : ${ligne.produit.quantiteStock}`}
                     aria-label={`Augmenter la quantité de ${ligne.produit.libelle}`}
                   >
                     <Plus className="size-4" />

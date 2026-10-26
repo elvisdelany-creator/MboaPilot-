@@ -431,6 +431,32 @@ describe("recruterAbonne (7.1)", () => {
     const decodeur = db.select().from(schema.produit).where(eq(schema.produit.idProduit, idDecodeur)).get();
     expect(decodeur?.quantiteStock).toBe(4);
   });
+
+  // 5.2 : un stock ne descend jamais sous zéro — sans décodeur en stock, le kit ne se vend pas, et rien ne reste (ni abonné ni abonnement)
+  it("5.2 : refuse le recrutement avec kit quand un composant n'est plus en stock, sans rien enregistrer", () => {
+    const idDecodeur = db
+      .insert(schema.produit)
+      .values({ siteId, type: "BIEN", libelle: "Décodeur GLOBALZ", prixVente: 15000, suiviStock: 1, quantiteStock: 0 })
+      .returning()
+      .get().idProduit;
+    db.insert(schema.kitComposant).values({ idKit: kitGlobalZ, idProduit: idDecodeur, quantite: 1 }).run();
+
+    expect(() =>
+      recruterAbonne(db, {
+        siteId,
+        userId,
+        aujourdHui: "2025-11-16",
+        abonne: { nom: "Nga Ndongo", prenom: "Valentin", telephone: "690000000" },
+        idFormule: formuleToutCanalPlus,
+        idKit: kitGlobalZ,
+        montantEncaisse: 0,
+      })
+    ).toThrow(/Stock insuffisant.*Décodeur GLOBALZ/);
+
+    expect(db.select().from(schema.abonnement).all()).toHaveLength(0);
+    expect(db.select().from(schema.abonne).all()).toHaveLength(0);
+    expect(db.select().from(schema.facture).all()).toHaveLength(0);
+  });
 });
 
 describe("recruterAbonne — apporteur d'affaires (6.3 : lien permanent abonné ↔ apporteur)", () => {

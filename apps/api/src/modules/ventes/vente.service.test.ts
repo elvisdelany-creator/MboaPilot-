@@ -297,6 +297,50 @@ describe("creerVenteProduits : total attendu à la caisse", () => {
 
 // 6.4 : « un solde restant dû reste visible » : il l'est dans les « Impayées » d'un client. Une vente non soldée sans client laissait une
 // dette sans débiteur, introuvable, avec un stock déjà sorti.
+// 5.2 : un stock ne descend jamais sous zéro — la vente est refusée tout entière, sans facture ni mouvement
+describe("creerVenteProduits : stock insuffisant (5.2)", () => {
+  const stock = () => db.select().from(schema.produit).where(eq(schema.produit.idProduit, idBien)).get()!.quantiteStock;
+
+  it("refuse une quantité supérieure au stock, avec un message qui nomme l'article et le disponible", () => {
+    expect(() =>
+      creerVenteProduits(db, { siteId, userId, idAbonne: idClient, lignes: [{ idProduit: idBien, quantite: 11 }], montantEncaisse: 27500 })
+    ).toThrow(/Stock insuffisant.*Télécommande universelle.*10 disponible.*11 demandé/);
+
+    expect(stock()).toBe(10);
+    expect(db.select().from(schema.facture).all()).toHaveLength(0);
+    expect(db.select().from(schema.stockMouvement).all()).toHaveLength(0);
+  });
+
+  it("refuse l'ensemble quand le total de deux lignes du même article dépasse le stock, sans rien laisser", () => {
+    expect(() =>
+      creerVenteProduits(db, {
+        siteId,
+        userId,
+        idAbonne: idClient,
+        lignes: [
+          { idProduit: idBien, quantite: 6 },
+          { idProduit: idBien, quantite: 6 },
+        ],
+        montantEncaisse: 0,
+      })
+    ).toThrow(/Stock insuffisant/);
+
+    expect(stock()).toBe(10);
+    expect(db.select().from(schema.facture).all()).toHaveLength(0);
+  });
+
+  it("accepte de vendre exactement tout le stock, et la vente suivante est refusée", () => {
+    creerVenteProduits(db, { siteId, userId, lignes: [{ idProduit: idBien, quantite: 10 }], montantEncaisse: 25000 });
+
+    expect(stock()).toBe(0);
+    expect(() => creerVenteProduits(db, { siteId, userId, lignes: [{ idProduit: idBien, quantite: 1 }], montantEncaisse: 2500 })).toThrow(/rupture|0 disponible/i);
+  });
+
+  it("ne limite pas un service, dont le stock n'est pas suivi", () => {
+    expect(() => creerVenteProduits(db, { siteId, userId, lignes: [{ idProduit: idService, quantite: 50 }], montantEncaisse: 250000 })).not.toThrow();
+  });
+});
+
 describe("creerVenteProduits : une vente non soldée exige un client (6.4)", () => {
   let idAbonne: number;
   beforeEach(() => {

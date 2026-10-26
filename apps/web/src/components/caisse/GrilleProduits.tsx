@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import type { Produit } from "@/lib/types";
+import { cn } from "@/lib/utils";
 
 interface Props {
   produits: Produit[];
@@ -70,7 +71,8 @@ export function GrilleProduits({ produits, onAjouter }: Props) {
               onKeyDown={(e) => {
                 if (e.key === "Enter" || e.key === " ") onAjouter(produit);
               }}
-              className="relative min-h-20 cursor-pointer justify-center gap-1 border-2 border-transparent p-4 text-center transition-colors hover:border-border"
+              aria-disabled={produit.suiviStock === 1 && produit.quantiteStock <= 0 ? true : undefined}
+              className={cn("relative min-h-20 cursor-pointer justify-center gap-1 border-2 border-transparent p-4 text-center transition-colors hover:border-border", produit.suiviStock === 1 && produit.quantiteStock <= 0 && "opacity-60")}
             >
               {produit.suiviStock === 1 && (
                 <Badge variant={produit.quantiteStock > 0 ? "secondary" : "destructive"} className="absolute -top-2 left-1/2 -translate-x-1/2">

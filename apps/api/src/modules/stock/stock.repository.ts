@@ -37,6 +37,12 @@ export function enregistrerMouvement(db: Db, params: EnregistrerMouvementParams)
 
   const delta = params.typeMouvement === "INVENTAIRE" ? params.quantite : SIGNE_PAR_TYPE[params.typeMouvement] * params.quantite;
 
+  // un stock ne descend jamais sous zéro : une sortie (vente, casse, transfert, échange, composant de kit) au-delà du disponible est
+  // refusée avant toute écriture. Un stock réel plus grand que celui saisi se corrige d'abord par un achat ou un inventaire.
+  if (produit.quantiteStock + delta < 0) {
+    throw new Error(`Stock insuffisant pour « ${produit.libelle} » : ${produit.quantiteStock} disponible(s), ${Math.abs(delta)} demandé(s)`);
+  }
+
   // atomique : le mouvement et le cache du stock s'écrivent ensemble, sinon un échec entre les deux laissait un
   // mouvement journalisé sans effet sur le stock
   return db.transaction(() => {

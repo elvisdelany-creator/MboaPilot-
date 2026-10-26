@@ -3,6 +3,8 @@ import { eq } from "drizzle-orm";
 import { creerDbTest, type Db } from "../../test-utils/db.js";
 import { recruterAbonne } from "./recrutement.service.js";
 import { reabonner } from "./reabonnement.service.js";
+import { executerJobQuotidien } from "../jobs/job-quotidien.service.js";
+import { decalerJour, joursAvantEcheance } from "@mboapilot/shared";
 import * as schema from "../../db/schema.js";
 
 let db: Db;
@@ -163,6 +165,91 @@ describe("reabonner (7.2)", () => {
 // après la date_fin théorique (2025-12-15 pour cet abonnement, recruté le
 // 2025-11-16 sur 30 jours) redémarre à compter de cette date_fin plutôt que
 // de la date réelle de paiement, pour ne pas pénaliser un client en léger retard.
+// 4.3, 7.2 : un client qui se réabonne AVANT la fin de sa période (ou le jour même) ne doit perdre aucun jour déjà payé : la nouvelle
+// période prolonge l'ancienne. Sinon un client qui paie 7 jours avant l'échéance recevait 23 jours de service pour 30 payés, et le suivi
+// de commission CANAL+ s'annulait alors que le client n'avait jamais été interrompu.
+describe("reabonner — réabonnement avant l'échéance : aucun jour perdu (4.3, 7.2)", () => {
+  // période initiale : 2025-11-16 → 2025-12-15
+
+  function periode() {
+    const a = db.select().from(schema.abonnement).where(eq(schema.abonnement.numeroAbonnement, numeroAbonnement)).get();
+    return `${a?.dateDebut} → ${a?.dateFin}`;
+  }
+
+  it("7 jours avant l'échéance : la nouvelle période démarre le lendemain de la fin actuelle", () => {
+    reabonner(db, { siteId, userId, aujourdHui: "2025-12-08", numeroAbonnement, montantEncaisse: 13000 });
+
+    expect(periode()).toBe("2025-12-16 → 2026-01-14");
+  });
+
+  it("le dernier jour de la période : la nouvelle période démarre le lendemain, sans jour de chevauchement", () => {
+    reabonner(db, { siteId, userId, aujourdHui: "2025-12-15", numeroAbonnement, montantEncaisse: 13000 });
+
+    expect(periode()).toBe("2025-12-16 → 2026-01-14");
+  });
+
+  it("deux réabonnements anticipés s'enchaînent : chacun prolonge la période en cours", () => {
+    reabonner(db, { siteId, userId, aujourdHui: "2025-12-08", numeroAbonnement, montantEncaisse: 13000 });
+    reabonner(db, { siteId, userId, aujourdHui: "2025-12-20", numeroAbonnement, montantEncaisse: 13000 });
+
+    expect(periode()).toBe("2026-01-15 → 2026-02-13");
+  });
+
+  it("après l'échéance (aucun délai de grâce), la nouvelle période démarre à la date du réabonnement", () => {
+    reabonner(db, { siteId, userId, aujourdHui: "2025-12-17", numeroAbonnement, montantEncaisse: 13000 });
+
+    expect(periode()).toBe("2025-12-17 → 2026-01-15");
+  });
+
+  it("un changement de formule au réabonnement anticipé prolonge lui aussi la période en cours", () => {
+    reabonner(db, { siteId, userId, aujourdHui: "2025-12-08", numeroAbonnement, idFormule: premium, montantEncaisse: 28000 });
+
+    expect(periode()).toBe("2025-12-16 → 2026-01-14");
+  });
+});
+
+// 6.2 : « un réabonnement effectué à temps maintient la commission en cours » : un client ponctuel, qui paie chaque fois quelques
+// jours avant l'échéance, ne doit jamais faire annuler la commission de son apporteur.
+describe("commission CANAL+ : un client ponctuel confirme la commission (6.2)", () => {
+  function clientCanalplus(avance: number) {
+    const famille = db.insert(schema.familleAbonnement).values({ libelle: "CANAL+" }).returning().get().idFamille;
+    const evasion = db.insert(schema.formule).values({ idFamille: famille, libelle: "EVASION", prix: 10500, rang: 2 }).returning().get().idFormule;
+    const idKit = db.insert(schema.kit).values({ idFamille: famille, libelle: "KIT CANAL+ TEST", reglePrix: "PRIX_FIXE", prixFixe: 15500 }).returning().get().idKit;
+    const debut = "2026-01-01";
+    const recrutement = recruterAbonne(db, { siteId, userId, aujourdHui: debut, abonne: { nom: "Ngo", prenom: "Paul", telephone: "690000111" }, idFormule: evasion, idKit, montantEncaisse: 15500 });
+    let renouvellements = 0;
+    for (let n = 0; n <= 135; n++) {
+      const jour = decalerJour(debut, n);
+      const abonnement = db.select().from(schema.abonnement).where(eq(schema.abonnement.numeroAbonnement, recrutement.numeroAbonnement)).get()!;
+      if (abonnement.statut === "ACTIF" && joursAvantEcheance(abonnement.dateFin, jour) === avance && renouvellements < 3) {
+        reabonner(db, { siteId, userId, aujourdHui: jour, numeroAbonnement: recrutement.numeroAbonnement, montantEncaisse: 10500 });
+        renouvellements += 1;
+      }
+      executerJobQuotidien(db, jour);
+    }
+    return db.select().from(schema.suiviCommissionCanalplus).get();
+  }
+
+  it("paie 7 jours avant chaque échéance : commission confirmée", () => {
+    expect(clientCanalplus(7)?.statut).toBe("CONFIRMEE");
+  });
+
+  it("paie le dernier jour de chaque période : commission confirmée", () => {
+    expect(clientCanalplus(0)?.statut).toBe("CONFIRMEE");
+  });
+
+  it("un client qui laisse vraiment expirer reste sanctionné : commission annulée", () => {
+    const famille = db.insert(schema.familleAbonnement).values({ libelle: "CANAL+" }).returning().get().idFamille;
+    const evasion = db.insert(schema.formule).values({ idFamille: famille, libelle: "EVASION", prix: 10500, rang: 2 }).returning().get().idFormule;
+    const idKit = db.insert(schema.kit).values({ idFamille: famille, libelle: "KIT CANAL+ TEST", reglePrix: "PRIX_FIXE", prixFixe: 15500 }).returning().get().idKit;
+    recruterAbonne(db, { siteId, userId, aujourdHui: "2026-01-01", abonne: { nom: "Ngo", prenom: "Paul", telephone: "690000111" }, idFormule: evasion, idKit, montantEncaisse: 15500 });
+
+    for (let n = 0; n <= 40; n++) executerJobQuotidien(db, decalerJour("2026-01-01", n));
+
+    expect(db.select().from(schema.suiviCommissionCanalplus).get()?.statut).toBe("ANNULEE");
+  });
+});
+
 describe("reabonner — délai de grâce (4.3, 8.8)", () => {
   beforeEach(() => {
     db.update(schema.abonnement).set({ statut: "EXPIRE" }).where(eq(schema.abonnement.numeroAbonnement, numeroAbonnement)).run();

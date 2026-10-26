@@ -1,5 +1,5 @@
 import { and, eq } from "drizzle-orm";
-import { calculerDateFin, extraireTaxeDuTTC, joursAvantEcheance, peutAffecterEcran } from "@mboapilot/shared";
+import { calculerDateFin, decalerJour, extraireTaxeDuTTC, joursAvantEcheance, peutAffecterEcran } from "@mboapilot/shared";
 import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
 import { exigerRemiseAutorisee, trouverDelaiGraceReabonnementEntreprise, trouverTauxTvaParSite } from "../entreprise/entreprise.repository.js";
@@ -106,7 +106,12 @@ function reabonnerSansTransaction(db: Db, params: ReabonnerParams): Reabonnement
   const joursDepuisExpiration = -joursAvantEcheance(abonnementActuel.dateFin, params.aujourdHui);
   const dansLeDelaiDeGrace = abonnementActuel.statut !== "RESILIE" && joursDepuisExpiration > 0 && joursDepuisExpiration <= delaiGrace;
 
-  const dateDebut = dansLeDelaiDeGrace ? abonnementActuel.dateFin : params.aujourdHui;
+  // 4.3, 7.2 : un réabonnement fait AVANT la fin de la période (ou le jour même) prolonge la période en cours, sans perdre un seul jour
+  // déjà payé : la nouvelle période démarre le lendemain de la fin actuelle. Partir de la date du paiement faisait perdre au client
+  // les jours qui lui restaient (23 jours de service pour 30 payés à 7 jours de l'échéance) et annulait à tort la commission CANAL+
+  // d'un client pourtant jamais interrompu (6.2). Après l'échéance, la date du réabonnement (ou le délai de grâce) s'applique toujours.
+  const avantLEcheance = abonnementActuel.statut !== "RESILIE" && joursAvantEcheance(abonnementActuel.dateFin, params.aujourdHui) >= 0;
+  const dateDebut = avantLEcheance ? decalerJour(abonnementActuel.dateFin, 1) : dansLeDelaiDeGrace ? abonnementActuel.dateFin : params.aujourdHui;
   const dateFin = calculerDateFin(dateDebut, formule.dureeCycles, formule.modeDuree);
 
   if (dansLeDelaiDeGrace) {

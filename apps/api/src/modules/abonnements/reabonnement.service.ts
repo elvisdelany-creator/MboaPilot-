@@ -6,6 +6,7 @@ import { exigerRemiseAutorisee, trouverDelaiGraceReabonnementEntreprise, trouver
 import { creerPaiement } from "../factures/paiement.repository.js";
 import { compterEcransOccupes, trouverComptePartage } from "../comptes-partages/compte-partage.repository.js";
 import { verifierEncaissementSaisi, verifierTotalAttendu } from "../../lib/validation.js";
+import { dernierIdHistorique, enregistrerOperationEnAttente, etatAbonnement } from "./operation-en-attente.repository.js";
 
 export interface ReabonnerParams {
   siteId: number;
@@ -56,6 +57,9 @@ function reabonnerSansTransaction(db: Db, params: ReabonnerParams): Reabonnement
     .where(eq(schema.abonnement.numeroAbonnement, params.numeroAbonnement))
     .get();
   if (!abonnementActuel) throw new Error(`Abonnement ${params.numeroAbonnement} introuvable`);
+  // de quoi défaire le réabonnement s'il n'est jamais payé (annulation-facture.service.ts)
+  const etatAvant = etatAbonnement(db, params.numeroAbonnement);
+  const reperHistorique = dernierIdHistorique(db);
 
   // 5.9 : un écran se libère à l'expiration (ou à la résiliation) et un autre client a pu le prendre. Réactiver
   // l'abonnement redemande cet écran : sans contrôle, le compte dépasserait la limite du fournisseur. Un abonnement
@@ -204,6 +208,10 @@ function reabonnerSansTransaction(db: Db, params: ReabonnerParams): Reabonnement
     });
     db.update(schema.facture).set({ statut: "VALIDEE" }).where(eq(schema.facture.idFacture, facture.idFacture)).run();
     statutFacture = "VALIDEE";
+  }
+
+  if (statutFacture === "BROUILLON") {
+    enregistrerOperationEnAttente(db, { idFacture: facture.idFacture, numeroAbonnement: params.numeroAbonnement, type: "REABONNEMENT", avant: etatAvant, idHistoriqueAvant: reperHistorique });
   }
 
   return { numeroAbonnement: params.numeroAbonnement, idFacture: facture.idFacture, jetonVerification: facture.jetonVerification, statutFacture, montantTaxe };

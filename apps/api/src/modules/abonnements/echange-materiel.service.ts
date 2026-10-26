@@ -7,6 +7,7 @@ import { trouverTauxGarantieEntreprise, trouverTauxTvaParSite } from "../entrepr
 import { creerPaiement } from "../factures/paiement.repository.js";
 import { verifierBooleen, verifierEncaissementSaisi } from "../../lib/validation.js";
 import { texteFacultatif, texteObligatoire } from "../../lib/champs-texte.js";
+import { dernierIdHistorique, enregistrerOperationEnAttente, etatAbonnement } from "./operation-en-attente.repository.js";
 
 export interface EchangerMaterielParams {
   siteId: number;
@@ -74,6 +75,10 @@ function echangerMaterielSansTransaction(db: Db, params: EchangerMaterielParams)
     .where(eq(schema.materielAbonne.numeroAbonnement, params.numeroAbonnement))
     .all()
     .filter((m) => m.statut === "ACTIF");
+
+  // de quoi défaire l'échange s'il n'est jamais payé (annulation-facture.service.ts)
+  const etatAvant = etatAbonnement(db, params.numeroAbonnement);
+  const reperHistorique = dernierIdHistorique(db);
 
   for (const m of ancienMateriel) {
     db.update(schema.materielAbonne).set({ statut: "REMPLACE" }).where(eq(schema.materielAbonne.idMateriel, m.idMateriel)).run();
@@ -154,6 +159,17 @@ function echangerMaterielSansTransaction(db: Db, params: EchangerMaterielParams)
     });
     db.update(schema.facture).set({ statut: "VALIDEE" }).where(eq(schema.facture.idFacture, facture.idFacture)).run();
     statutFacture = "VALIDEE";
+  }
+
+  if (statutFacture === "BROUILLON") {
+    enregistrerOperationEnAttente(db, {
+      idFacture: facture.idFacture,
+      numeroAbonnement: params.numeroAbonnement,
+      type: "ECHANGE_MATERIEL",
+      avant: etatAvant,
+      idHistoriqueAvant: reperHistorique,
+      materiel: { idNouveau: nouveauMateriel.idMateriel, idsRemplaces: ancienMateriel.map((m) => m.idMateriel), idProduit: params.idProduit, siteId: params.siteId },
+    });
   }
 
   return {

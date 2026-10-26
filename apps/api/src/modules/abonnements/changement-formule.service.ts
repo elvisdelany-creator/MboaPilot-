@@ -5,6 +5,7 @@ import * as schema from "../../db/schema.js";
 import { trouverTauxTvaParSite } from "../entreprise/entreprise.repository.js";
 import { creerPaiement } from "../factures/paiement.repository.js";
 import { verifierEncaissementSaisi, verifierTotalAttendu } from "../../lib/validation.js";
+import { dernierIdHistorique, enregistrerOperationEnAttente, etatAbonnement } from "./operation-en-attente.repository.js";
 
 export interface ChangerFormuleParams {
   siteId: number;
@@ -75,6 +76,10 @@ function changerFormuleSansTransaction(db: Db, params: ChangerFormuleParams): Ch
 
   const validation = validerMigrationFormule(formuleActuelle, nouvelleFormule);
   if (!validation.autorise) throw new Error(validation.motif);
+
+  // de quoi défaire le changement s'il n'est jamais payé (annulation-facture.service.ts)
+  const etatAvant = etatAbonnement(db, params.numeroAbonnement);
+  const reperHistorique = dernierIdHistorique(db);
 
   db.insert(schema.historiqueAbonnement)
     .values({
@@ -151,6 +156,10 @@ function changerFormuleSansTransaction(db: Db, params: ChangerFormuleParams): Ch
     });
     db.update(schema.facture).set({ statut: "VALIDEE" }).where(eq(schema.facture.idFacture, facture.idFacture)).run();
     statutFacture = "VALIDEE";
+  }
+
+  if (statutFacture === "BROUILLON") {
+    enregistrerOperationEnAttente(db, { idFacture: facture.idFacture, numeroAbonnement: params.numeroAbonnement, type: "CHANGEMENT_FORMULE", avant: etatAvant, idHistoriqueAvant: reperHistorique });
   }
 
   return {

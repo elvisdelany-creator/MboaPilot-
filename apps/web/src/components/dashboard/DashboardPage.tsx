@@ -30,7 +30,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { EvolutionCaChart } from "./EvolutionCaChart";
-import { AnnulerVenteEnAttenteDialog } from "./AnnulerVenteEnAttenteDialog";
+import { AnnulerVenteEnAttenteDialog, LIBELLE_ANNULATION } from "./AnnulerVenteEnAttenteDialog";
 import type {
   AbonnementExpire,
   AlerteEcheance,
@@ -342,7 +342,7 @@ export function DashboardPage({ onNaviguer, onReabonnerDepuisAlerte, onReabonner
             <div className="mb-8">
               <h2 className="font-heading text-lg font-semibold text-foreground">Ventes sans encaissement</h2>
               <p className="mb-3 text-sm text-muted-foreground">
-                Ces ventes n'ont rien encaissé (paiement Mobile Money abandonné) : leur stock est sorti ou leur abonnement est ouvert. Annulez-les pour tout remettre en ordre.
+                Ces opérations n'ont rien encaissé (paiement Mobile Money abandonné) mais ont déjà servi le client : stock sorti, abonnement ouvert, prolongé ou modifié. Annulez-les pour tout remettre en ordre.
               </p>
               <ul className="space-y-2">
                 {ventesEnAttente.map((v) => (
@@ -358,9 +358,11 @@ export function DashboardPage({ onNaviguer, onReabonnerDepuisAlerte, onReabonner
                       </div>
                       {v.paiementEnCours ? (
                         <span className="text-sm text-muted-foreground">Paiement en cours…</span>
+                      ) : v.blocage ? (
+                        <span className="max-w-48 text-right text-xs text-muted-foreground">{v.blocage}</span>
                       ) : (
                         <Button variant="outline" size="sm" className="cursor-pointer" onClick={() => setVenteAAnnuler(v)}>
-                          {v.type === "ABONNEMENT" ? "Annuler le recrutement" : "Annuler la vente"}
+                          {LIBELLE_ANNULATION[v.type].bouton}
                         </Button>
                       )}
                     </Card>

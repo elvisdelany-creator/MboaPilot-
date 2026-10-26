@@ -487,6 +487,17 @@ export const transactionMobileMoney = sqliteTable("transaction_mobile_money", {
   dateExpiration: text("date_expiration").notNull(), // délai de validation de l'OTP dépassé (6.6)
 });
 
+// 7.2, 7.3, 7.4 : réabonnement, changement de formule et échange de matériel modifient un abonnement existant dès la création de
+// leur facture, même quand le paiement (Mobile Money) n'est pas encore là. Tant que la facture reste BROUILLON, cette ligne garde
+// de quoi défaire l'opération s'il n'aboutit jamais : l'état de l'abonnement avant et après, les lignes d'historique créées et,
+// pour un échange, le matériel concerné (JSON). Écrite seulement quand la facture reste BROUILLON.
+export const operationAbonnementEnAttente = sqliteTable("operation_abonnement_en_attente", {
+  idFacture: integer("id_facture").primaryKey().references(() => facture.idFacture),
+  numeroAbonnement: integer("numero_abonnement").notNull().references(() => abonnement.numeroAbonnement),
+  type: text("type", { enum: ["REABONNEMENT", "CHANGEMENT_FORMULE", "ECHANGE_MATERIEL"] }).notNull(),
+  details: text("details").notNull(),
+});
+
 export const savDossier = sqliteTable("sav_dossier", {
   idDossierSav: integer("id_dossier_sav").primaryKey({ autoIncrement: true }),
   siteId: integer("site_id").notNull().references(() => site.idSite),

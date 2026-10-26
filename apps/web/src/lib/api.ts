@@ -207,14 +207,18 @@ export async function encaisserSoldeFactureRequete(token: string, idFacture: num
 }
 
 // 6.4, 9.1 : vente de produits ou recrutement jamais encaissé (paiement Mobile Money abandonné) — stock sorti, abonnement ouvert
+export type TypeVenteEnAttente = "PRODUITS" | "ABONNEMENT" | "REABONNEMENT" | "CHANGEMENT_FORMULE" | "ECHANGE_MATERIEL";
+
 export interface VenteEnAttente {
   idFacture: number;
   dateCreation: string;
   montantTotal: number;
   client: string | null;
-  type: "PRODUITS" | "ABONNEMENT";
-  // recrutement jamais payé : l'abonnement qui s'annule avec la facture
+  type: TypeVenteEnAttente;
+  // abonnement concerné : celui d'un recrutement qui s'annule avec la facture, ou celui qu'une opération a modifié
   numeroAbonnement: number | null;
+  // pourquoi l'annulation est impossible pour l'instant (une opération plus récente repose sur l'abonnement), sinon null
+  blocage: string | null;
   lignes: { libelle: string; quantite: number }[];
   paiementEnCours: boolean;
 }

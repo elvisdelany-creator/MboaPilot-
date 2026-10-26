@@ -50,6 +50,19 @@ const BASE = "/api/v1";
 // erreur métier ordinaire (-> simple message à l'utilisateur)
 export class ErreurAuthentification extends Error {}
 
+// serveur arrêté ou réseau coupé : le navigateur lève alors une TypeError au message anglais et technique (« Failed to fetch »), qui
+// s'affichait tel quel au caissier. Distinguée des erreurs métier pour que l'interface puisse réessayer au lieu d'abandonner.
+export class ErreurReseau extends Error {}
+
+async function appelerServeur(...parametres: Parameters<typeof fetch>): Promise<Response> {
+  try {
+    return await fetch(...parametres);
+  } catch (erreur) {
+    if (erreur instanceof TypeError) throw new ErreurReseau("Impossible de joindre le serveur MboaPilot : vérifiez qu'il est démarré, puis réessayez.");
+    throw erreur;
+  }
+}
+
 async function lireJson<T>(reponse: Response): Promise<T> {
   // corps vide ou non JSON (réponse d'un proxy, d'un serveur arrêté) : pas d'exception technique
   const corps = await reponse.json().catch(() => null);
@@ -66,7 +79,7 @@ function headersAuth(token: string): HeadersInit {
 }
 
 export async function login(identifiant: string, motDePasse: string): Promise<{ token: string; utilisateur: Utilisateur }> {
-  const reponse = await fetch(`${BASE}/auth/login`, {
+  const reponse = await appelerServeur(`${BASE}/auth/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ identifiant, motDePasse }),
@@ -76,7 +89,7 @@ export async function login(identifiant: string, motDePasse: string): Promise<{ 
 
 // Première installation : tant qu'aucun compte n'existe, l'application propose l'assistant d'installation (routes publiques)
 export async function chargerEtatInstallation(): Promise<{ installee: boolean }> {
-  const reponse = await fetch(`${BASE}/installation/etat`);
+  const reponse = await appelerServeur(`${BASE}/installation/etat`);
   return lireJson(reponse);
 }
 
@@ -89,7 +102,7 @@ export interface SaisieInstallation {
 
 // renvoie directement la session du premier administrateur, comme une connexion
 export async function installerRequete(saisie: SaisieInstallation): Promise<{ token: string; utilisateur: Utilisateur }> {
-  const reponse = await fetch(`${BASE}/installation`, {
+  const reponse = await appelerServeur(`${BASE}/installation`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(saisie),
@@ -99,26 +112,26 @@ export async function installerRequete(saisie: SaisieInstallation): Promise<{ to
 
 // 2.5.1 : profil COURANT (rôle, site) relu en base — celui reçu à la connexion peut avoir changé depuis
 export async function chargerProfilCourant(token: string): Promise<Utilisateur> {
-  const reponse = await fetch(`${BASE}/auth/moi`, { headers: headersAuth(token) });
+  const reponse = await appelerServeur(`${BASE}/auth/moi`, { headers: headersAuth(token) });
   return lireJson<Utilisateur>(reponse);
 }
 
 // 11.2 : session glissante — jeton neuf pour la même session, tant que l'actuel est encore valide
 export async function renouvelerSessionRequete(token: string): Promise<{ token: string }> {
-  const reponse = await fetch(`${BASE}/auth/renouveler`, { method: "POST", headers: headersAuth(token) });
+  const reponse = await appelerServeur(`${BASE}/auth/renouveler`, { method: "POST", headers: headersAuth(token) });
   return lireJson<{ token: string }>(reponse);
 }
 
 export async function rechercherAbonnes(token: string, siteId: number, q: string): Promise<Abonne[]> {
   if (!q.trim()) return [];
   const params = new URLSearchParams({ siteId: String(siteId), q });
-  const reponse = await fetch(`${BASE}/abonnes?${params.toString()}`, { headers: headersAuth(token) });
+  const reponse = await appelerServeur(`${BASE}/abonnes?${params.toString()}`, { headers: headersAuth(token) });
   return lireJson<Abonne[]>(reponse);
 }
 
 // 8.1 : fiche client 360°
 export async function chargerFiche360(token: string, idAbonne: number): Promise<Fiche360> {
-  const reponse = await fetch(`${BASE}/abonnes/${idAbonne}/fiche-360`, { headers: headersAuth(token) });
+  const reponse = await appelerServeur(`${BASE}/abonnes/${idAbonne}/fiche-360`, { headers: headersAuth(token) });
   return lireJson<Fiche360>(reponse);
 }
 
@@ -138,7 +151,7 @@ export interface LigneFacture {
 }
 
 export async function chargerLignesFacture(token: string, idFacture: number): Promise<LigneFacture[]> {
-  const reponse = await fetch(`${BASE}/factures/${idFacture}/lignes`, { headers: headersAuth(token) });
+  const reponse = await appelerServeur(`${BASE}/factures/${idFacture}/lignes`, { headers: headersAuth(token) });
   return lireJson<LigneFacture[]>(reponse);
 }
 
@@ -157,7 +170,7 @@ export interface AvoirResultat {
 }
 
 export async function emettreAvoirRequete(token: string, idFacture: number, payload: EmettreAvoirPayload): Promise<AvoirResultat> {
-  const reponse = await fetch(`${BASE}/factures/${idFacture}/avoir`, {
+  const reponse = await appelerServeur(`${BASE}/factures/${idFacture}/avoir`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...headersAuth(token) },
     body: JSON.stringify(payload),
@@ -185,7 +198,7 @@ export interface EncaisserSoldeResultat {
 }
 
 export async function encaisserSoldeFactureRequete(token: string, idFacture: number, payload: EncaisserSoldePayload): Promise<EncaisserSoldeResultat> {
-  const reponse = await fetch(`${BASE}/factures/${idFacture}/paiements`, {
+  const reponse = await appelerServeur(`${BASE}/factures/${idFacture}/paiements`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...headersAuth(token) },
     body: JSON.stringify(payload),
@@ -202,7 +215,7 @@ export interface AnnulerPaiementResultat {
 }
 
 export async function annulerPaiementRequete(token: string, idPaiement: number, userId: number): Promise<AnnulerPaiementResultat> {
-  const reponse = await fetch(`${BASE}/paiements/${idPaiement}?userId=${userId}`, {
+  const reponse = await appelerServeur(`${BASE}/paiements/${idPaiement}?userId=${userId}`, {
     method: "DELETE",
     headers: headersAuth(token),
   });
@@ -211,7 +224,7 @@ export async function annulerPaiementRequete(token: string, idPaiement: number, 
 
 // 6.5 : confirmation manuelle du rapprochement bancaire d'un virement
 export async function confirmerRapprochementRequete(token: string, idPaiement: number): Promise<Paiement> {
-  const reponse = await fetch(`${BASE}/paiements/${idPaiement}/rapprochement`, {
+  const reponse = await appelerServeur(`${BASE}/paiements/${idPaiement}/rapprochement`, {
     method: "PATCH",
     headers: headersAuth(token),
   });
@@ -231,7 +244,7 @@ export interface ModifierAbonnePayload {
 }
 
 export async function modifierAbonneRequete(token: string, idAbonne: number, payload: ModifierAbonnePayload): Promise<Abonne> {
-  const reponse = await fetch(`${BASE}/abonnes/${idAbonne}`, {
+  const reponse = await appelerServeur(`${BASE}/abonnes/${idAbonne}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json", ...headersAuth(token) },
     body: JSON.stringify(payload),
@@ -244,7 +257,7 @@ export async function fusionnerAbonnesRequete(
   token: string,
   payload: { idAbonnePrincipal: number; idAbonneDoublon: number; userId: number }
 ): Promise<{ idAbonnePrincipal: number; idAbonneDoublon: number }> {
-  const reponse = await fetch(`${BASE}/abonnes/fusion`, {
+  const reponse = await appelerServeur(`${BASE}/abonnes/fusion`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...headersAuth(token) },
     body: JSON.stringify(payload),
@@ -255,7 +268,7 @@ export async function fusionnerAbonnesRequete(
 // 11.3 : anonymisation (droit de suppression) — outil technique, réservé à
 // l'Administrateur ; voir l'avertissement dans AnonymiserAbonneDialog.tsx
 export async function anonymiserAbonneRequete(token: string, idAbonne: number, userId: number): Promise<Abonne> {
-  const reponse = await fetch(`${BASE}/abonnes/${idAbonne}/anonymiser`, {
+  const reponse = await appelerServeur(`${BASE}/abonnes/${idAbonne}/anonymiser`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...headersAuth(token) },
     body: JSON.stringify({ userId }),
@@ -264,14 +277,14 @@ export async function anonymiserAbonneRequete(token: string, idAbonne: number, u
 }
 
 export async function chargerCatalogue(token: string): Promise<CatalogueFamille[]> {
-  const reponse = await fetch(`${BASE}/catalogue`, { headers: headersAuth(token) });
+  const reponse = await appelerServeur(`${BASE}/catalogue`, { headers: headersAuth(token) });
   return lireJson<CatalogueFamille[]>(reponse);
 }
 
 // 9.2 : nécessaire pour détecter si l'abonné a déjà un abonnement dans la
 // famille sélectionnée (réabonnement) ou non (recrutement).
 export async function chargerAbonnementsAbonne(token: string, idAbonne: number): Promise<Abonnement[]> {
-  const reponse = await fetch(`${BASE}/abonnes/${idAbonne}/abonnements`, { headers: headersAuth(token) });
+  const reponse = await appelerServeur(`${BASE}/abonnes/${idAbonne}/abonnements`, { headers: headersAuth(token) });
   return lireJson<Abonnement[]>(reponse);
 }
 
@@ -280,7 +293,7 @@ export async function chargerAbonnementsAbonne(token: string, idAbonne: number):
 export async function chargerAlertesEcheance(token: string, siteId: number, idFamille?: number): Promise<AlerteEcheance[]> {
   const params = new URLSearchParams({ siteId: String(siteId) });
   if (idFamille !== undefined) params.set("idFamille", String(idFamille));
-  const reponse = await fetch(`${BASE}/alertes-echeance?${params}`, { headers: headersAuth(token) });
+  const reponse = await appelerServeur(`${BASE}/alertes-echeance?${params}`, { headers: headersAuth(token) });
   return lireJson<AlerteEcheance[]>(reponse);
 }
 
@@ -289,7 +302,7 @@ export async function chargerAlertesEcheance(token: string, siteId: number, idFa
 export async function chargerAbonnementsExpires(token: string, siteId: number, idFamille?: number): Promise<AbonnementExpire[]> {
   const params = new URLSearchParams({ siteId: String(siteId) });
   if (idFamille !== undefined) params.set("idFamille", String(idFamille));
-  const reponse = await fetch(`${BASE}/abonnements-expires?${params}`, { headers: headersAuth(token) });
+  const reponse = await appelerServeur(`${BASE}/abonnements-expires?${params}`, { headers: headersAuth(token) });
   return lireJson<AbonnementExpire[]>(reponse);
 }
 
@@ -323,7 +336,7 @@ export interface RecruterPayload {
 }
 
 export async function recruter(token: string, payload: RecruterPayload): Promise<RecrutementResultat> {
-  const reponse = await fetch(`${BASE}/recrutements`, {
+  const reponse = await appelerServeur(`${BASE}/recrutements`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...headersAuth(token) },
     body: JSON.stringify(payload),
@@ -333,7 +346,7 @@ export async function recruter(token: string, payload: RecruterPayload): Promise
 
 // 5.2, 7.3, 8.2 : catalogue des produits/pièces détachées, pour l'échange de matériel et sa gestion
 export async function chargerProduits(token: string, siteId: number): Promise<Produit[]> {
-  const reponse = await fetch(`${BASE}/produits?siteId=${siteId}`, { headers: headersAuth(token) });
+  const reponse = await appelerServeur(`${BASE}/produits?siteId=${siteId}`, { headers: headersAuth(token) });
   return lireJson<Produit[]>(reponse);
 }
 
@@ -364,7 +377,7 @@ export interface VenteResultat {
 
 // 5.2, 5.3, 8.5 : vente rapide de produits physiques et services hors abonnement
 export async function creerVenteRequete(token: string, payload: CreerVentePayload): Promise<VenteResultat> {
-  const reponse = await fetch(`${BASE}/ventes`, {
+  const reponse = await appelerServeur(`${BASE}/ventes`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...headersAuth(token) },
     body: JSON.stringify(payload),
@@ -388,7 +401,7 @@ export interface CreerProduitPayload {
 }
 
 export async function creerProduitRequete(token: string, payload: CreerProduitPayload): Promise<Produit> {
-  const reponse = await fetch(`${BASE}/produits`, {
+  const reponse = await appelerServeur(`${BASE}/produits`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...headersAuth(token) },
     body: JSON.stringify(payload),
@@ -410,7 +423,7 @@ export interface ModifierProduitPayload {
 }
 
 export async function modifierProduitRequete(token: string, idProduit: number, payload: ModifierProduitPayload): Promise<Produit> {
-  const reponse = await fetch(`${BASE}/produits/${idProduit}`, {
+  const reponse = await appelerServeur(`${BASE}/produits/${idProduit}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json", ...headersAuth(token) },
     body: JSON.stringify(payload),
@@ -420,7 +433,7 @@ export async function modifierProduitRequete(token: string, idProduit: number, p
 
 // 8.2 : export de catalogue (CSV) — initialisation ou mise à jour tarifaire en masse
 export async function exporterCatalogueCsvRequete(token: string, siteId: number): Promise<string> {
-  const reponse = await fetch(`${BASE}/produits/export-csv?siteId=${siteId}`, { headers: headersAuth(token) });
+  const reponse = await appelerServeur(`${BASE}/produits/export-csv?siteId=${siteId}`, { headers: headersAuth(token) });
   if (!reponse.ok) {
     const corps = await reponse.json().catch(() => null);
     const message = corps?.erreur ?? "Erreur inattendue";
@@ -443,7 +456,7 @@ export interface ResultatImportCsv {
 }
 
 export async function importerCatalogueCsvRequete(token: string, payload: ImporterCatalogueCsvPayload): Promise<ResultatImportCsv> {
-  const reponse = await fetch(`${BASE}/produits/import-csv`, {
+  const reponse = await appelerServeur(`${BASE}/produits/import-csv`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...headersAuth(token) },
     body: JSON.stringify(payload),
@@ -452,7 +465,7 @@ export async function importerCatalogueCsvRequete(token: string, payload: Import
 }
 
 export async function chargerHistoriquePrixProduit(token: string, idProduit: number): Promise<HistoriquePrixProduit[]> {
-  const reponse = await fetch(`${BASE}/produits/${idProduit}/historique-prix`, { headers: headersAuth(token) });
+  const reponse = await appelerServeur(`${BASE}/produits/${idProduit}/historique-prix`, { headers: headersAuth(token) });
   return lireJson<HistoriquePrixProduit[]>(reponse);
 }
 
@@ -478,7 +491,7 @@ export async function echangerMaterielRequete(
   numeroAbonnement: number,
   payload: EchangerMaterielPayload
 ): Promise<EchangeMaterielResultat> {
-  const reponse = await fetch(`${BASE}/abonnements/${numeroAbonnement}/echange-materiel`, {
+  const reponse = await appelerServeur(`${BASE}/abonnements/${numeroAbonnement}/echange-materiel`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...headersAuth(token) },
     body: JSON.stringify(payload),
@@ -510,7 +523,7 @@ export async function reabonnerRequete(
   numeroAbonnement: number,
   payload: ReabonnerPayload
 ): Promise<RecrutementResultat> {
-  const reponse = await fetch(`${BASE}/abonnements/${numeroAbonnement}/reabonnements`, {
+  const reponse = await appelerServeur(`${BASE}/abonnements/${numeroAbonnement}/reabonnements`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...headersAuth(token) },
     body: JSON.stringify(payload),
@@ -543,7 +556,7 @@ export async function changerFormuleRequete(
   numeroAbonnement: number,
   payload: ChangerFormulePayload
 ): Promise<ChangerFormuleResultat> {
-  const reponse = await fetch(`${BASE}/abonnements/${numeroAbonnement}/changement-formule`, {
+  const reponse = await appelerServeur(`${BASE}/abonnements/${numeroAbonnement}/changement-formule`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...headersAuth(token) },
     body: JSON.stringify(payload),
@@ -553,12 +566,12 @@ export async function changerFormuleRequete(
 
 // 5.10, 8.4 : module SAV
 export async function chargerDossiersSav(token: string, siteId: number): Promise<DossierSav[]> {
-  const reponse = await fetch(`${BASE}/sav/dossiers?siteId=${siteId}`, { headers: headersAuth(token) });
+  const reponse = await appelerServeur(`${BASE}/sav/dossiers?siteId=${siteId}`, { headers: headersAuth(token) });
   return lireJson<DossierSav[]>(reponse);
 }
 
 export async function chargerDossierSav(token: string, idDossierSav: number): Promise<DossierSavDetaille> {
-  const reponse = await fetch(`${BASE}/sav/dossiers/${idDossierSav}`, { headers: headersAuth(token) });
+  const reponse = await appelerServeur(`${BASE}/sav/dossiers/${idDossierSav}`, { headers: headersAuth(token) });
   return lireJson<DossierSavDetaille>(reponse);
 }
 
@@ -574,7 +587,7 @@ export interface OuvrirDossierSavPayload {
 }
 
 export async function ouvrirDossierSav(token: string, payload: OuvrirDossierSavPayload): Promise<DossierSav> {
-  const reponse = await fetch(`${BASE}/sav/dossiers`, {
+  const reponse = await appelerServeur(`${BASE}/sav/dossiers`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...headersAuth(token) },
     body: JSON.stringify(payload),
@@ -587,7 +600,7 @@ export async function affecterPieceSavRequete(
   idDossierSav: number,
   payload: { idProduit: number; quantite: number; userId: number }
 ): Promise<void> {
-  const reponse = await fetch(`${BASE}/sav/dossiers/${idDossierSav}/pieces`, {
+  const reponse = await appelerServeur(`${BASE}/sav/dossiers/${idDossierSav}/pieces`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...headersAuth(token) },
     body: JSON.stringify(payload),
@@ -615,7 +628,7 @@ export async function changerStatutSavRequete(
   idDossierSav: number,
   payload: ChangerStatutSavPayload
 ): Promise<ChangerStatutSavResultat> {
-  const reponse = await fetch(`${BASE}/sav/dossiers/${idDossierSav}/statut`, {
+  const reponse = await appelerServeur(`${BASE}/sav/dossiers/${idDossierSav}/statut`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...headersAuth(token) },
     body: JSON.stringify(payload),
@@ -627,7 +640,7 @@ export async function changerStatutSavRequete(
 export async function televerserPhotoSav(token: string, idDossierSav: number, fichier: File): Promise<SavPhoto> {
   const corps = new FormData();
   corps.append("file", fichier);
-  const reponse = await fetch(`${BASE}/sav/dossiers/${idDossierSav}/photos`, {
+  const reponse = await appelerServeur(`${BASE}/sav/dossiers/${idDossierSav}/photos`, {
     method: "POST",
     headers: headersAuth(token), // pas de Content-Type explicite : le navigateur pose la frontière multipart
     body: corps,
@@ -639,14 +652,14 @@ export async function televerserPhotoSav(token: string, idDossierSav: number, fi
 // <img src> classique ne peut pas la porter, on récupère donc le fichier en
 // blob puis on crée une URL locale temporaire (à révoquer après usage)
 export async function chargerUrlPhotoSav(token: string, idPhoto: number): Promise<string> {
-  const reponse = await fetch(`${BASE}/sav/photos/${idPhoto}`, { headers: headersAuth(token) });
+  const reponse = await appelerServeur(`${BASE}/sav/photos/${idPhoto}`, { headers: headersAuth(token) });
   if (!reponse.ok) throw new Error("Impossible de charger la photo.");
   return URL.createObjectURL(await reponse.blob());
 }
 
 // 6.3 : sous-distributeurs et apporteurs d'affaires
 export async function chargerApporteurs(token: string): Promise<Apporteur[]> {
-  const reponse = await fetch(`${BASE}/apporteurs`, { headers: headersAuth(token) });
+  const reponse = await appelerServeur(`${BASE}/apporteurs`, { headers: headersAuth(token) });
   return lireJson<Apporteur[]>(reponse);
 }
 
@@ -657,7 +670,7 @@ export interface CreerApporteurPayload {
 }
 
 export async function creerApporteurRequete(token: string, payload: CreerApporteurPayload): Promise<Apporteur> {
-  const reponse = await fetch(`${BASE}/apporteurs`, {
+  const reponse = await appelerServeur(`${BASE}/apporteurs`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...headersAuth(token) },
     body: JSON.stringify(payload),
@@ -670,7 +683,7 @@ export async function modifierApporteurRequete(
   idApporteur: number,
   payload: { actif?: boolean; tauxCommissionDefaut?: number }
 ): Promise<Apporteur> {
-  const reponse = await fetch(`${BASE}/apporteurs/${idApporteur}`, {
+  const reponse = await appelerServeur(`${BASE}/apporteurs/${idApporteur}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json", ...headersAuth(token) },
     body: JSON.stringify(payload),
@@ -679,7 +692,7 @@ export async function modifierApporteurRequete(
 }
 
 export async function chargerFicheApporteur(token: string, idApporteur: number): Promise<FicheApporteur> {
-  const reponse = await fetch(`${BASE}/apporteurs/${idApporteur}/fiche`, { headers: headersAuth(token) });
+  const reponse = await appelerServeur(`${BASE}/apporteurs/${idApporteur}/fiche`, { headers: headersAuth(token) });
   return lireJson<FicheApporteur>(reponse);
 }
 
@@ -696,7 +709,7 @@ export async function enregistrerReglementRequete(
   idApporteur: number,
   payload: EnregistrerReglementPayload
 ): Promise<ReglementCommission> {
-  const reponse = await fetch(`${BASE}/apporteurs/${idApporteur}/reglements`, {
+  const reponse = await appelerServeur(`${BASE}/apporteurs/${idApporteur}/reglements`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...headersAuth(token) },
     body: JSON.stringify(payload),
@@ -707,7 +720,7 @@ export async function enregistrerReglementRequete(
 // 5.2 : suivi de stock — alertes de rupture, historique des mouvements, et
 // les trois actions correctives (réception d'achat, casse/perte, inventaire)
 export async function chargerAlertesStock(token: string, siteId: number): Promise<Produit[]> {
-  const reponse = await fetch(`${BASE}/stock/alertes?siteId=${siteId}`, { headers: headersAuth(token) });
+  const reponse = await appelerServeur(`${BASE}/stock/alertes?siteId=${siteId}`, { headers: headersAuth(token) });
   return lireJson<Produit[]>(reponse);
 }
 
@@ -719,12 +732,12 @@ export interface ProduitRotationLente {
 }
 
 export async function chargerProduitsRotationLente(token: string, siteId: number): Promise<ProduitRotationLente[]> {
-  const reponse = await fetch(`${BASE}/stock/rotation-lente?siteId=${siteId}`, { headers: headersAuth(token) });
+  const reponse = await appelerServeur(`${BASE}/stock/rotation-lente?siteId=${siteId}`, { headers: headersAuth(token) });
   return lireJson<ProduitRotationLente[]>(reponse);
 }
 
 export async function chargerMouvementsProduit(token: string, idProduit: number): Promise<StockMouvement[]> {
-  const reponse = await fetch(`${BASE}/produits/${idProduit}/mouvements`, { headers: headersAuth(token) });
+  const reponse = await appelerServeur(`${BASE}/produits/${idProduit}/mouvements`, { headers: headersAuth(token) });
   return lireJson<StockMouvement[]>(reponse);
 }
 
@@ -737,7 +750,7 @@ export interface ReceptionnerAchatPayload {
 }
 
 export async function receptionnerAchatRequete(token: string, payload: ReceptionnerAchatPayload): Promise<Produit> {
-  const reponse = await fetch(`${BASE}/stock/achats`, {
+  const reponse = await appelerServeur(`${BASE}/stock/achats`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...headersAuth(token) },
     body: JSON.stringify(payload),
@@ -754,7 +767,7 @@ export interface EnregistrerCassePayload {
 }
 
 export async function enregistrerCasseRequete(token: string, payload: EnregistrerCassePayload): Promise<Produit> {
-  const reponse = await fetch(`${BASE}/stock/casses`, {
+  const reponse = await appelerServeur(`${BASE}/stock/casses`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...headersAuth(token) },
     body: JSON.stringify(payload),
@@ -771,7 +784,7 @@ export interface AjusterInventairePayload {
 }
 
 export async function ajusterInventaireRequete(token: string, payload: AjusterInventairePayload): Promise<Produit> {
-  const reponse = await fetch(`${BASE}/stock/inventaires`, {
+  const reponse = await appelerServeur(`${BASE}/stock/inventaires`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...headersAuth(token) },
     body: JSON.stringify(payload),
@@ -794,7 +807,7 @@ export interface TransfertResultat {
 
 // 5.2, 8.2 : transfert inter-site — mouvement double, article de destination créé si besoin
 export async function transfererStockRequete(token: string, payload: TransfererStockPayload): Promise<TransfertResultat> {
-  const reponse = await fetch(`${BASE}/stock/transferts`, {
+  const reponse = await appelerServeur(`${BASE}/stock/transferts`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...headersAuth(token) },
     body: JSON.stringify(payload),
@@ -811,7 +824,7 @@ export interface InitierPaiementMobilePayload {
 }
 
 export async function initierPaiementMobileRequete(token: string, payload: InitierPaiementMobilePayload): Promise<TransactionMobileMoney> {
-  const reponse = await fetch(`${BASE}/paiements-mobiles`, {
+  const reponse = await appelerServeur(`${BASE}/paiements-mobiles`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...headersAuth(token) },
     body: JSON.stringify(payload),
@@ -820,14 +833,14 @@ export async function initierPaiementMobileRequete(token: string, payload: Initi
 }
 
 export async function chargerTransactionMobile(token: string, idTransaction: number): Promise<TransactionMobileMoney> {
-  const reponse = await fetch(`${BASE}/paiements-mobiles/${idTransaction}`, { headers: headersAuth(token) });
+  const reponse = await appelerServeur(`${BASE}/paiements-mobiles/${idTransaction}`, { headers: headersAuth(token) });
   return lireJson<TransactionMobileMoney>(reponse);
 }
 
 // 6.6 : "polling ou callback/webhook" — sans webhook opérateur réel, la
 // caisse interroge périodiquement ce point d'entrée.
 export async function actualiserTransactionMobileRequete(token: string, idTransaction: number): Promise<TransactionMobileMoney> {
-  const reponse = await fetch(`${BASE}/paiements-mobiles/${idTransaction}/actualiser`, {
+  const reponse = await appelerServeur(`${BASE}/paiements-mobiles/${idTransaction}/actualiser`, {
     method: "POST",
     headers: headersAuth(token),
   });
@@ -836,7 +849,7 @@ export async function actualiserTransactionMobileRequete(token: string, idTransa
 
 // 8.6, 9.3 : tableau de bord de pilotage (Administrateur/Gérant/Comptable)
 export async function chargerIndicateursJour(token: string, siteId: number, aujourdHui: string): Promise<IndicateursJour> {
-  const reponse = await fetch(`${BASE}/tableau-bord/indicateurs?siteId=${siteId}&aujourdHui=${aujourdHui}`, { headers: headersAuth(token) });
+  const reponse = await appelerServeur(`${BASE}/tableau-bord/indicateurs?siteId=${siteId}&aujourdHui=${aujourdHui}`, { headers: headersAuth(token) });
   return lireJson<IndicateursJour>(reponse);
 }
 
@@ -849,7 +862,7 @@ export async function chargerEvolutionCA(
   libelleFamille?: string
 ): Promise<PointEvolutionCA[]> {
   const filtre = libelleFamille ? `&libelleFamille=${encodeURIComponent(libelleFamille)}` : "";
-  const reponse = await fetch(`${BASE}/tableau-bord/evolution-ca?siteId=${siteId}&aujourdHui=${aujourdHui}&jours=${jours}${filtre}`, {
+  const reponse = await appelerServeur(`${BASE}/tableau-bord/evolution-ca?siteId=${siteId}&aujourdHui=${aujourdHui}&jours=${jours}${filtre}`, {
     headers: headersAuth(token),
   });
   return lireJson<PointEvolutionCA[]>(reponse);
@@ -862,7 +875,7 @@ export interface VentilationCAFamille {
 }
 
 export async function chargerVentilationCA(token: string, siteId: number, aujourdHui: string): Promise<VentilationCAFamille[]> {
-  const reponse = await fetch(`${BASE}/tableau-bord/ventilation-ca?siteId=${siteId}&aujourdHui=${aujourdHui}`, { headers: headersAuth(token) });
+  const reponse = await appelerServeur(`${BASE}/tableau-bord/ventilation-ca?siteId=${siteId}&aujourdHui=${aujourdHui}`, { headers: headersAuth(token) });
   return lireJson<VentilationCAFamille[]>(reponse);
 }
 
@@ -875,7 +888,7 @@ export interface MargeArticle {
 }
 
 export async function chargerMargeParArticle(token: string, siteId: number, aujourdHui: string): Promise<MargeArticle[]> {
-  const reponse = await fetch(`${BASE}/tableau-bord/marge-par-article?siteId=${siteId}&aujourdHui=${aujourdHui}`, { headers: headersAuth(token) });
+  const reponse = await appelerServeur(`${BASE}/tableau-bord/marge-par-article?siteId=${siteId}&aujourdHui=${aujourdHui}`, { headers: headersAuth(token) });
   return lireJson<MargeArticle[]>(reponse);
 }
 
@@ -891,13 +904,13 @@ export interface StatutLicence {
 }
 
 export async function chargerEtatLicence(token: string): Promise<StatutLicence> {
-  const reponse = await fetch(`${BASE}/licence/etat`, { headers: headersAuth(token) });
+  const reponse = await appelerServeur(`${BASE}/licence/etat`, { headers: headersAuth(token) });
   return lireJson<StatutLicence>(reponse);
 }
 
 // pilote : l'administrateur prolonge l'abonnement en saisissant la nouvelle échéance (AAAA-MM-JJ)
 export async function prolongerLicenceRequete(token: string, dateExpiration: string): Promise<StatutLicence> {
-  const reponse = await fetch(`${BASE}/licence/expiration`, {
+  const reponse = await appelerServeur(`${BASE}/licence/expiration`, {
     method: "PUT",
     headers: { "Content-Type": "application/json", ...headersAuth(token) },
     body: JSON.stringify({ dateExpiration }),
@@ -906,23 +919,23 @@ export async function prolongerLicenceRequete(token: string, dateExpiration: str
 }
 
 export async function revaliderLicence(token: string): Promise<StatutLicence> {
-  const reponse = await fetch(`${BASE}/licence/revalider`, { method: "POST", headers: headersAuth(token) });
+  const reponse = await appelerServeur(`${BASE}/licence/revalider`, { method: "POST", headers: headersAuth(token) });
   return lireJson<StatutLicence>(reponse);
 }
 
 export async function chargerValorisationStock(token: string, siteId: number): Promise<number> {
-  const reponse = await fetch(`${BASE}/tableau-bord/valorisation-stock?siteId=${siteId}`, { headers: headersAuth(token) });
+  const reponse = await appelerServeur(`${BASE}/tableau-bord/valorisation-stock?siteId=${siteId}`, { headers: headersAuth(token) });
   const { valorisation } = await lireJson<{ valorisation: number }>(reponse);
   return valorisation;
 }
 
 export async function chargerEncaissementsJour(token: string, siteId: number, aujourdHui: string): Promise<VentilationPaiement[]> {
-  const reponse = await fetch(`${BASE}/tableau-bord/encaissements-jour?siteId=${siteId}&aujourdHui=${aujourdHui}`, { headers: headersAuth(token) });
+  const reponse = await appelerServeur(`${BASE}/tableau-bord/encaissements-jour?siteId=${siteId}&aujourdHui=${aujourdHui}`, { headers: headersAuth(token) });
   return lireJson<VentilationPaiement[]>(reponse);
 }
 
 export async function chargerCommissionsCanalplusEnCours(token: string, siteId: number): Promise<CommissionCanalplusEnCours[]> {
-  const reponse = await fetch(`${BASE}/tableau-bord/commissions-canalplus?siteId=${siteId}`, { headers: headersAuth(token) });
+  const reponse = await appelerServeur(`${BASE}/tableau-bord/commissions-canalplus?siteId=${siteId}`, { headers: headersAuth(token) });
   return lireJson<CommissionCanalplusEnCours[]>(reponse);
 }
 
@@ -938,14 +951,14 @@ export interface ResumeApporteur {
 }
 
 export async function chargerResumesApporteurs(token: string): Promise<ResumeApporteur[]> {
-  const reponse = await fetch(`${BASE}/tableau-bord/apporteurs`, { headers: headersAuth(token) });
+  const reponse = await appelerServeur(`${BASE}/tableau-bord/apporteurs`, { headers: headersAuth(token) });
   return lireJson<ResumeApporteur[]>(reponse);
 }
 
 // 8.7 : gestion des comptes utilisateurs, des sites et journal d'audit —
 // réservé à l'Administrateur
 export async function chargerUtilisateurs(token: string): Promise<CompteUtilisateur[]> {
-  const reponse = await fetch(`${BASE}/utilisateurs`, { headers: headersAuth(token) });
+  const reponse = await appelerServeur(`${BASE}/utilisateurs`, { headers: headersAuth(token) });
   return lireJson<CompteUtilisateur[]>(reponse);
 }
 
@@ -959,7 +972,7 @@ export interface CreerCompteUtilisateurPayload {
 }
 
 export async function creerCompteUtilisateurRequete(token: string, payload: CreerCompteUtilisateurPayload): Promise<CompteUtilisateur> {
-  const reponse = await fetch(`${BASE}/utilisateurs`, {
+  const reponse = await appelerServeur(`${BASE}/utilisateurs`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...headersAuth(token) },
     body: JSON.stringify(payload),
@@ -972,7 +985,7 @@ export async function modifierCompteUtilisateurRequete(
   idUser: number,
   payload: { actif?: boolean; role?: Role }
 ): Promise<CompteUtilisateur> {
-  const reponse = await fetch(`${BASE}/utilisateurs/${idUser}`, {
+  const reponse = await appelerServeur(`${BASE}/utilisateurs/${idUser}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json", ...headersAuth(token) },
     body: JSON.stringify(payload),
@@ -982,7 +995,7 @@ export async function modifierCompteUtilisateurRequete(
 
 // 8.7, 11.2 : réinitialisation du mot de passe d'un compte existant
 export async function reinitialiserMotDePasseRequete(token: string, idUser: number, motDePasse: string): Promise<CompteUtilisateur> {
-  const reponse = await fetch(`${BASE}/utilisateurs/${idUser}/mot-de-passe`, {
+  const reponse = await appelerServeur(`${BASE}/utilisateurs/${idUser}/mot-de-passe`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...headersAuth(token) },
     body: JSON.stringify({ motDePasse }),
@@ -993,7 +1006,7 @@ export async function reinitialiserMotDePasseRequete(token: string, idUser: numb
 // 2.5.1 : chacun change SON mot de passe (l'actuel est revérifié côté serveur). L'ancien jeton cesse alors de valoir (11.2) :
 // le serveur en renvoie un neuf, à garder pour poursuivre la session.
 export async function changerSonMotDePasseRequete(token: string, motDePasseActuel: string, nouveauMotDePasse: string): Promise<string> {
-  const reponse = await fetch(`${BASE}/auth/mot-de-passe`, {
+  const reponse = await appelerServeur(`${BASE}/auth/mot-de-passe`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...headersAuth(token) },
     body: JSON.stringify({ motDePasseActuel, nouveauMotDePasse }),
@@ -1003,12 +1016,12 @@ export async function changerSonMotDePasseRequete(token: string, motDePasseActue
 }
 
 export async function chargerSites(token: string): Promise<Site[]> {
-  const reponse = await fetch(`${BASE}/sites`, { headers: headersAuth(token) });
+  const reponse = await appelerServeur(`${BASE}/sites`, { headers: headersAuth(token) });
   return lireJson<Site[]>(reponse);
 }
 
 export async function creerSiteRequete(token: string, payload: { nom: string; adresse?: string }): Promise<Site> {
-  const reponse = await fetch(`${BASE}/sites`, {
+  const reponse = await appelerServeur(`${BASE}/sites`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...headersAuth(token) },
     body: JSON.stringify(payload),
@@ -1021,7 +1034,7 @@ export async function modifierSiteRequete(
   idSite: number,
   payload: { nom?: string; adresse?: string; actif?: boolean }
 ): Promise<Site> {
-  const reponse = await fetch(`${BASE}/sites/${idSite}`, {
+  const reponse = await appelerServeur(`${BASE}/sites/${idSite}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json", ...headersAuth(token) },
     body: JSON.stringify(payload),
@@ -1036,14 +1049,14 @@ export async function chargerJournalAudit(token: string, tableCible?: string, av
   if (tableCible) parametres.set("tableCible", tableCible);
   if (avantId !== undefined) parametres.set("avantId", String(avantId));
   const requete = parametres.toString();
-  const reponse = await fetch(`${BASE}/audit${requete ? `?${requete}` : ""}`, { headers: headersAuth(token) });
+  const reponse = await appelerServeur(`${BASE}/audit${requete ? `?${requete}` : ""}`, { headers: headersAuth(token) });
   return lireJson<EntreeJournalAudit[]>(reponse);
 }
 
 // 8.8 : back-office catalogue — familles, formules, options (paramétrage
 // sans intervention développeur), réservé à l'encadrement (gestionCatalogue)
 export async function chargerFamilles(token: string): Promise<Famille[]> {
-  const reponse = await fetch(`${BASE}/catalogue/familles`, { headers: headersAuth(token) });
+  const reponse = await appelerServeur(`${BASE}/catalogue/familles`, { headers: headersAuth(token) });
   return lireJson<Famille[]>(reponse);
 }
 
@@ -1064,12 +1077,12 @@ export interface ResultatChargementDepart {
 }
 
 export async function chargerOperateursDepart(token: string): Promise<OperateurDepart[]> {
-  const reponse = await fetch(`${BASE}/catalogue/depart`, { headers: headersAuth(token) });
+  const reponse = await appelerServeur(`${BASE}/catalogue/depart`, { headers: headersAuth(token) });
   return lireJson<OperateurDepart[]>(reponse);
 }
 
 export async function chargerCatalogueDepartRequete(token: string, operateurs: string[]): Promise<ResultatChargementDepart> {
-  const reponse = await fetch(`${BASE}/catalogue/depart`, {
+  const reponse = await appelerServeur(`${BASE}/catalogue/depart`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...headersAuth(token) },
     body: JSON.stringify({ operateurs }),
@@ -1078,7 +1091,7 @@ export async function chargerCatalogueDepartRequete(token: string, operateurs: s
 }
 
 export async function creerFamilleRequete(token: string, payload: { libelle: string }): Promise<Famille> {
-  const reponse = await fetch(`${BASE}/catalogue/familles`, {
+  const reponse = await appelerServeur(`${BASE}/catalogue/familles`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...headersAuth(token) },
     body: JSON.stringify(payload),
@@ -1089,7 +1102,7 @@ export async function creerFamilleRequete(token: string, payload: { libelle: str
 // toutes les formules de la famille, y compris désactivées (contrairement à
 // chargerCatalogue, filtré actif = 1 pour la vente)
 export async function chargerFormulesFamille(token: string, idFamille: number): Promise<Formule[]> {
-  const reponse = await fetch(`${BASE}/catalogue/formules?idFamille=${idFamille}`, { headers: headersAuth(token) });
+  const reponse = await appelerServeur(`${BASE}/catalogue/formules?idFamille=${idFamille}`, { headers: headersAuth(token) });
   return lireJson<Formule[]>(reponse);
 }
 
@@ -1103,7 +1116,7 @@ export interface CreerFormulePayload {
 }
 
 export async function creerFormuleRequete(token: string, payload: CreerFormulePayload): Promise<Formule> {
-  const reponse = await fetch(`${BASE}/catalogue/formules`, {
+  const reponse = await appelerServeur(`${BASE}/catalogue/formules`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...headersAuth(token) },
     body: JSON.stringify(payload),
@@ -1121,7 +1134,7 @@ export interface ModifierFormulePayload {
 }
 
 export async function modifierFormuleRequete(token: string, idFormule: number, payload: ModifierFormulePayload): Promise<Formule> {
-  const reponse = await fetch(`${BASE}/catalogue/formules/${idFormule}`, {
+  const reponse = await appelerServeur(`${BASE}/catalogue/formules/${idFormule}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json", ...headersAuth(token) },
     body: JSON.stringify(payload),
@@ -1130,12 +1143,12 @@ export async function modifierFormuleRequete(token: string, idFormule: number, p
 }
 
 export async function chargerOptions(token: string): Promise<OptionCatalogue[]> {
-  const reponse = await fetch(`${BASE}/catalogue/options`, { headers: headersAuth(token) });
+  const reponse = await appelerServeur(`${BASE}/catalogue/options`, { headers: headersAuth(token) });
   return lireJson<OptionCatalogue[]>(reponse);
 }
 
 export async function creerOptionRequete(token: string, payload: { libelle: string; prix: number }): Promise<OptionCatalogue> {
-  const reponse = await fetch(`${BASE}/catalogue/options`, {
+  const reponse = await appelerServeur(`${BASE}/catalogue/options`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...headersAuth(token) },
     body: JSON.stringify(payload),
@@ -1144,7 +1157,7 @@ export async function creerOptionRequete(token: string, payload: { libelle: stri
 }
 
 export async function modifierOptionRequete(token: string, idOption: number, payload: { libelle?: string; prix?: number }): Promise<OptionCatalogue> {
-  const reponse = await fetch(`${BASE}/catalogue/options/${idOption}`, {
+  const reponse = await appelerServeur(`${BASE}/catalogue/options/${idOption}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json", ...headersAuth(token) },
     body: JSON.stringify(payload),
@@ -1156,7 +1169,7 @@ export async function lierOptionFormuleRequete(
   token: string,
   payload: { idFormule: number; idOption: number; prixSurcharge?: number }
 ): Promise<void> {
-  const reponse = await fetch(`${BASE}/catalogue/options/compat`, {
+  const reponse = await appelerServeur(`${BASE}/catalogue/options/compat`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...headersAuth(token) },
     body: JSON.stringify(payload),
@@ -1165,7 +1178,7 @@ export async function lierOptionFormuleRequete(
 }
 
 export async function delierOptionFormuleRequete(token: string, idOption: number, idFormule: number): Promise<void> {
-  const reponse = await fetch(`${BASE}/catalogue/options/${idOption}/compat/${idFormule}`, {
+  const reponse = await appelerServeur(`${BASE}/catalogue/options/${idOption}/compat/${idFormule}`, {
     method: "DELETE",
     headers: headersAuth(token),
   });
@@ -1177,7 +1190,7 @@ export async function delierOptionFormuleRequete(token: string, idOption: number
 
 // 5.1.1, 8.8 : back-office des règles de prix dynamique des kits
 export async function chargerKits(token: string, idFamille: number): Promise<KitBrut[]> {
-  const reponse = await fetch(`${BASE}/catalogue/kits?idFamille=${idFamille}`, { headers: headersAuth(token) });
+  const reponse = await appelerServeur(`${BASE}/catalogue/kits?idFamille=${idFamille}`, { headers: headersAuth(token) });
   return lireJson<KitBrut[]>(reponse);
 }
 
@@ -1192,7 +1205,7 @@ export interface CreerKitPayload {
 }
 
 export async function creerKitRequete(token: string, payload: CreerKitPayload): Promise<KitBrut> {
-  const reponse = await fetch(`${BASE}/catalogue/kits`, {
+  const reponse = await appelerServeur(`${BASE}/catalogue/kits`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...headersAuth(token) },
     body: JSON.stringify(payload),
@@ -1210,7 +1223,7 @@ export interface ModifierKitPayload {
 }
 
 export async function modifierKitRequete(token: string, idKit: number, payload: ModifierKitPayload): Promise<KitBrut> {
-  const reponse = await fetch(`${BASE}/catalogue/kits/${idKit}`, {
+  const reponse = await appelerServeur(`${BASE}/catalogue/kits/${idKit}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json", ...headersAuth(token) },
     body: JSON.stringify(payload),
@@ -1222,7 +1235,7 @@ export async function definirPrixDecodeurKitRequete(
   token: string,
   payload: { idKit: number; idFormule: number; prixDecodeur: number }
 ): Promise<void> {
-  const reponse = await fetch(`${BASE}/catalogue/kits/prix-decodeur`, {
+  const reponse = await appelerServeur(`${BASE}/catalogue/kits/prix-decodeur`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...headersAuth(token) },
     body: JSON.stringify(payload),
@@ -1231,7 +1244,7 @@ export async function definirPrixDecodeurKitRequete(
 }
 
 export async function supprimerPrixDecodeurKitRequete(token: string, idKit: number, idFormule: number): Promise<void> {
-  const reponse = await fetch(`${BASE}/catalogue/kits/${idKit}/prix-decodeur/${idFormule}`, {
+  const reponse = await appelerServeur(`${BASE}/catalogue/kits/${idKit}/prix-decodeur/${idFormule}`, {
     method: "DELETE",
     headers: headersAuth(token),
   });
@@ -1250,12 +1263,12 @@ export interface ComposantKit {
 }
 
 export async function chargerComposantsKit(token: string, idKit: number): Promise<ComposantKit[]> {
-  const reponse = await fetch(`${BASE}/catalogue/kits/${idKit}/composants`, { headers: headersAuth(token) });
+  const reponse = await appelerServeur(`${BASE}/catalogue/kits/${idKit}/composants`, { headers: headersAuth(token) });
   return lireJson<ComposantKit[]>(reponse);
 }
 
 export async function definirComposantKitRequete(token: string, payload: ComposantKit): Promise<ComposantKit> {
-  const reponse = await fetch(`${BASE}/catalogue/kits/composants`, {
+  const reponse = await appelerServeur(`${BASE}/catalogue/kits/composants`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...headersAuth(token) },
     body: JSON.stringify(payload),
@@ -1264,7 +1277,7 @@ export async function definirComposantKitRequete(token: string, payload: Composa
 }
 
 export async function supprimerComposantKitRequete(token: string, idKit: number, idProduit: number): Promise<void> {
-  const reponse = await fetch(`${BASE}/catalogue/kits/${idKit}/composants/${idProduit}`, {
+  const reponse = await appelerServeur(`${BASE}/catalogue/kits/${idKit}/composants/${idProduit}`, {
     method: "DELETE",
     headers: headersAuth(token),
   });
@@ -1276,7 +1289,7 @@ export async function supprimerComposantKitRequete(token: string, idKit: number,
 
 // 6.7 : en-tête entreprise/site pour le ticket de caisse et la facture pro-forma
 export async function chargerInfosEntreprise(token: string): Promise<InfosEntreprise> {
-  const reponse = await fetch(`${BASE}/entreprise`, { headers: headersAuth(token) });
+  const reponse = await appelerServeur(`${BASE}/entreprise`, { headers: headersAuth(token) });
   return lireJson<InfosEntreprise>(reponse);
 }
 
@@ -1284,7 +1297,7 @@ export async function chargerInfosEntreprise(token: string): Promise<InfosEntrep
 export async function televerserLogoEntreprise(token: string, fichier: File): Promise<InfosEntreprise["entreprise"]> {
   const corps = new FormData();
   corps.append("file", fichier);
-  const reponse = await fetch(`${BASE}/entreprise/logo`, {
+  const reponse = await appelerServeur(`${BASE}/entreprise/logo`, {
     method: "POST",
     headers: headersAuth(token), // pas de Content-Type explicite : le navigateur pose la frontière multipart
     body: corps,
@@ -1296,7 +1309,7 @@ export async function televerserLogoEntreprise(token: string, fichier: File): Pr
 // src> classique ne peut pas la porter, on récupère donc le fichier en blob
 // puis on crée une URL locale temporaire (même approche que les photos SAV)
 export async function chargerUrlLogoEntreprise(token: string): Promise<string | null> {
-  const reponse = await fetch(`${BASE}/entreprise/logo`, { headers: headersAuth(token) });
+  const reponse = await appelerServeur(`${BASE}/entreprise/logo`, { headers: headersAuth(token) });
   if (!reponse.ok) return null;
   return URL.createObjectURL(await reponse.blob());
 }
@@ -1324,7 +1337,7 @@ export async function modifierEntrepriseRequete(
     adressePubliqueVerification?: string | null;
   }
 ): Promise<InfosEntreprise["entreprise"]> {
-  const reponse = await fetch(`${BASE}/entreprise`, {
+  const reponse = await appelerServeur(`${BASE}/entreprise`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json", ...headersAuth(token) },
     body: JSON.stringify(payload),
@@ -1335,7 +1348,7 @@ export async function modifierEntrepriseRequete(
 // 11.4, 6.7 : configure l'imprimante réseau ESC/POS du site de l'appelant
 // — chaîne vide pour imprimanteHote efface la configuration.
 export async function configurerImprimanteRequete(token: string, payload: { imprimanteHote?: string; imprimantePort?: number }): Promise<InfosEntreprise["site"]> {
-  const reponse = await fetch(`${BASE}/site/imprimante`, {
+  const reponse = await appelerServeur(`${BASE}/site/imprimante`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json", ...headersAuth(token) },
     body: JSON.stringify(payload),
@@ -1359,7 +1372,7 @@ export interface TicketImpressionPayload {
 }
 
 export async function imprimerTicketEscPosRequete(token: string, payload: TicketImpressionPayload): Promise<{ imprime: boolean }> {
-  const reponse = await fetch(`${BASE}/impression/ticket`, {
+  const reponse = await appelerServeur(`${BASE}/impression/ticket`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...headersAuth(token) },
     body: JSON.stringify(payload),
@@ -1375,14 +1388,14 @@ export interface Sauvegarde {
 }
 
 export async function chargerSauvegardes(token: string): Promise<Sauvegarde[]> {
-  const reponse = await fetch(`${BASE}/sauvegarde`, { headers: headersAuth(token) });
+  const reponse = await appelerServeur(`${BASE}/sauvegarde`, { headers: headersAuth(token) });
   return lireJson<Sauvegarde[]>(reponse);
 }
 
 // « Exporter mes données » (2.6) : déclenche une sauvegarde à la demande et
 // renvoie le fichier à télécharger (nom de fichier lu depuis Content-Disposition).
 export async function exporterDonneesRequete(token: string): Promise<{ blob: Blob; nomFichier: string }> {
-  const reponse = await fetch(`${BASE}/sauvegarde/export`, { method: "POST", headers: headersAuth(token) });
+  const reponse = await appelerServeur(`${BASE}/sauvegarde/export`, { method: "POST", headers: headersAuth(token) });
   if (!reponse.ok) {
     const corps = await reponse.json().catch(() => null);
     const message = corps?.erreur ?? "Erreur inattendue";
@@ -1396,7 +1409,7 @@ export async function exporterDonneesRequete(token: string): Promise<{ blob: Blo
 
 // 5.9 : comptes partagés streaming (Netflix, Prime Vidéo, IPTV…)
 export async function chargerComptesPartages(token: string, siteId: number): Promise<ComptePartage[]> {
-  const reponse = await fetch(`${BASE}/comptes-partages?siteId=${siteId}`, { headers: headersAuth(token) });
+  const reponse = await appelerServeur(`${BASE}/comptes-partages?siteId=${siteId}`, { headers: headersAuth(token) });
   return lireJson<ComptePartage[]>(reponse);
 }
 
@@ -1410,7 +1423,7 @@ export interface CreerComptePartagePayload {
 }
 
 export async function creerComptePartageRequete(token: string, payload: CreerComptePartagePayload): Promise<ComptePartage> {
-  const reponse = await fetch(`${BASE}/comptes-partages`, {
+  const reponse = await appelerServeur(`${BASE}/comptes-partages`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...headersAuth(token) },
     body: JSON.stringify(payload),
@@ -1427,7 +1440,7 @@ export interface ModifierComptePartagePayload {
 }
 
 export async function modifierComptePartageRequete(token: string, idComptePartage: number, payload: ModifierComptePartagePayload): Promise<ComptePartage> {
-  const reponse = await fetch(`${BASE}/comptes-partages/${idComptePartage}`, {
+  const reponse = await appelerServeur(`${BASE}/comptes-partages/${idComptePartage}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json", ...headersAuth(token) },
     body: JSON.stringify(payload),
@@ -1436,7 +1449,7 @@ export async function modifierComptePartageRequete(token: string, idComptePartag
 }
 
 export async function chargerFicheComptePartage(token: string, idComptePartage: number): Promise<FicheComptePartage> {
-  const reponse = await fetch(`${BASE}/comptes-partages/${idComptePartage}/fiche`, { headers: headersAuth(token) });
+  const reponse = await appelerServeur(`${BASE}/comptes-partages/${idComptePartage}/fiche`, { headers: headersAuth(token) });
   return lireJson<FicheComptePartage>(reponse);
 }
 
@@ -1466,22 +1479,22 @@ export interface ComptageCloture {
 }
 
 export async function chargerClotureOuverte(token: string, siteId: number): Promise<ClotureCaisse | null> {
-  const reponse = await fetch(`${BASE}/cloture-caisse/ouverte?siteId=${siteId}`, { headers: headersAuth(token) });
+  const reponse = await appelerServeur(`${BASE}/cloture-caisse/ouverte?siteId=${siteId}`, { headers: headersAuth(token) });
   return lireJson<ClotureCaisse | null>(reponse);
 }
 
 export async function chargerClotures(token: string, siteId: number): Promise<ClotureCaisse[]> {
-  const reponse = await fetch(`${BASE}/cloture-caisse?siteId=${siteId}`, { headers: headersAuth(token) });
+  const reponse = await appelerServeur(`${BASE}/cloture-caisse?siteId=${siteId}`, { headers: headersAuth(token) });
   return lireJson<ClotureCaisse[]>(reponse);
 }
 
 export async function chargerComptagesCloture(token: string, idCloture: number): Promise<ComptageCloture[]> {
-  const reponse = await fetch(`${BASE}/cloture-caisse/${idCloture}/comptages`, { headers: headersAuth(token) });
+  const reponse = await appelerServeur(`${BASE}/cloture-caisse/${idCloture}/comptages`, { headers: headersAuth(token) });
   return lireJson<ComptageCloture[]>(reponse);
 }
 
 export async function ouvrirCaisseRequete(token: string, payload: { siteId: number; userId: number; fondOuverture: number }): Promise<ClotureCaisse> {
-  const reponse = await fetch(`${BASE}/cloture-caisse/ouvrir`, {
+  const reponse = await appelerServeur(`${BASE}/cloture-caisse/ouvrir`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...headersAuth(token) },
     body: JSON.stringify(payload),
@@ -1499,7 +1512,7 @@ export async function fermerCaisseRequete(
   idCloture: number,
   payload: { userId: number; comptages: { mode: ModePaiementCloture; montantCompte: number }[] }
 ): Promise<FermerCaisseResultat> {
-  const reponse = await fetch(`${BASE}/cloture-caisse/${idCloture}/fermer`, {
+  const reponse = await appelerServeur(`${BASE}/cloture-caisse/${idCloture}/fermer`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...headersAuth(token) },
     body: JSON.stringify(payload),
@@ -1510,6 +1523,6 @@ export async function fermerCaisseRequete(
 // 13.1 : fiche de vérification publique d'une facture (QR code) — aucune
 // authentification, appelée depuis VerificationFacturePage
 export async function chargerVerificationFacture(idFacture: number, jeton: string): Promise<VerificationFacture> {
-  const reponse = await fetch(`${BASE}/verification/factures/${idFacture}/${jeton}`);
+  const reponse = await appelerServeur(`${BASE}/verification/factures/${idFacture}/${jeton}`);
   return lireJson<VerificationFacture>(reponse);
 }

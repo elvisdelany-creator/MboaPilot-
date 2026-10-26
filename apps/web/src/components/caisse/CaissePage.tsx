@@ -10,6 +10,7 @@ import {
   chargerProduits,
   chargerUrlLogoEntreprise,
   creerVenteRequete,
+  encaisserSoldeFactureRequete,
   ErreurAuthentification,
   imprimerTicketEscPosRequete,
   reabonnerRequete,
@@ -96,6 +97,12 @@ export function CaissePage({ onNaviguer, onOuvrirCatalogueAdministration, abonne
     // confirmation Mobile Money arrivera plus tard, de façon asynchrone)
     recuBase: Omit<RecuVente, "montantEncaisse" | "statutFacture">;
   } | null>(null);
+  // 6.6 : vente dont le paiement Mobile Money a échoué ou expiré. Sa facture existe déjà (BROUILLON) et son stock est déjà sorti :
+  // « choisir un autre mode de paiement » doit l'encaisser, pas recréer une seconde vente (deux factures, deux sorties de stock)
+  const [venteAReprendre, setVenteAReprendre] = useState<NonNullable<typeof paiementMobile> | null>(null);
+  useEffect(() => {
+    if (paiementMobile) setVenteAReprendre(paiementMobile);
+  }, [paiementMobile]);
   const [infosEntreprise, setInfosEntreprise] = useState<InfosEntreprise | null>(null);
   // 3.2.1, 13.2 : logo affiché en en-tête du ticket de caisse et de la facture pro-forma
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
@@ -336,6 +343,7 @@ export function CaissePage({ onNaviguer, onOuvrirCatalogueAdministration, abonne
   }, [familleSelectionneeId, formuleSelectionnee]);
 
   function reinitialiserTicket() {
+    setVenteAReprendre(null);
     setFormuleSelectionnee(null);
     setKitSelectionne(null);
     setIdsOptionsSelectionnees([]);
@@ -387,6 +395,7 @@ export function CaissePage({ onNaviguer, onOuvrirCatalogueAdministration, abonne
   }
 
   function reinitialiserTicketProduits() {
+    setVenteAReprendre(null);
     setPanierProduits([]);
     setAbonneSelectionne(null);
   }
@@ -396,6 +405,44 @@ export function CaissePage({ onNaviguer, onOuvrirCatalogueAdministration, abonne
   );
   const totalTicketProduits = panierProduits.reduce((somme, l) => somme + l.produit.prixVente * l.quantite - l.remise, 0);
 
+  // la vente à reprendre ne vaut que pour le MÊME ticket : si le caissier l'a modifié depuis, une nouvelle vente s'ouvre et l'ancienne
+  // facture reste à régler (il en est averti, elle n'est pas perdue en silence)
+  function venteAReprendrePourCeTicket(total: number, lignes: LigneRecu[]) {
+    if (!venteAReprendre) return null;
+    if (venteAReprendre.recuBase.total === total && JSON.stringify(venteAReprendre.recuBase.lignes) === JSON.stringify(lignes)) return venteAReprendre;
+    toast.warning(`La vente précédente (facture n° ${venteAReprendre.idFacture}, ${formateurFcfa.format(venteAReprendre.recuBase.total)} FCFA) n'a pas été encaissée : elle reste à régler.`);
+    setVenteAReprendre(null);
+    return null;
+  }
+
+  async function reprendreEncaissement(reprise: NonNullable<typeof paiementMobile>, paiement: PaiementSaisi) {
+    if (paiement.mode === "MOBILE_MONEY") {
+      // nouvelle tentative sur la même facture
+      setPaiementMobile({ ...reprise, montant: paiement.montant, numeroTelephone: paiement.numeroTelephone, parcours: paiement.parcours });
+      return;
+    }
+    await encaisserSoldeFactureRequete(token, reprise.idFacture, {
+      userId: utilisateur.idUser,
+      montant: paiement.montant,
+      modePaiement: paiement.mode,
+      banque: paiement.mode === "CHEQUE" || paiement.mode === "VIREMENT" ? paiement.banque : undefined,
+      numeroCheque: paiement.mode === "CHEQUE" ? paiement.numeroCheque : undefined,
+      titulaireCheque: paiement.mode === "CHEQUE" ? paiement.titulaireCheque : undefined,
+      dateCheque: paiement.mode === "CHEQUE" ? paiement.dateCheque : undefined,
+      referenceVirement: paiement.mode === "VIREMENT" ? paiement.referenceVirement : undefined,
+    });
+    toast.success(`${reprise.recuBase.operation === "Vente" ? "Vente" : reprise.recuBase.operation} encaissée — facture n° ${reprise.idFacture}.`);
+    setRecu({ ...reprise.recuBase, modePaiement: paiement.mode, montantEncaisse: paiement.montant, dateHeure: new Date().toISOString(), statutFacture: "VALIDEE" });
+    if (reprise.recuBase.operation === "Vente") {
+      reinitialiserTicketProduits();
+      chargerProduits(token, utilisateur.siteId)
+        .then((data) => setProduits(data.filter((p) => p.type === "BIEN" || p.type === "SERVICE")))
+        .catch(() => {});
+    } else {
+      reinitialiserTicket();
+    }
+  }
+
   // verrou synchrone : l'état « en cours » ne se met à jour qu'au prochain rendu, et des déclenchements qui arrivent avant lui
   // (double clic, Entrée répétée) encaissaient chacun la vente une fois de plus
   const [executerUneFois] = useState(creerVerrouSoumission);
@@ -404,8 +451,13 @@ export function CaissePage({ onNaviguer, onOuvrirCatalogueAdministration, abonne
 
   async function validerVenteProduitsSansVerrou(paiement: PaiementSaisi) {
     if (panierProduits.length === 0) return;
+    const reprise = venteAReprendrePourCeTicket(totalTicketProduits, lignesTicketProduits);
     setEnCours(true);
     try {
+      if (reprise) {
+        await reprendreEncaissement(reprise, paiement);
+        return;
+      }
       // 6.5 : chèque et virement s'encaissent immédiatement, comme le comptant
       // (seul Mobile Money n'encaisse rien à cet appel, voir plus bas)
       const montantEncaisse = paiement.mode === "MOBILE_MONEY" ? 0 : paiement.montant;
@@ -481,8 +533,13 @@ export function CaissePage({ onNaviguer, onOuvrirCatalogueAdministration, abonne
 
   async function validerSansVerrou(paiement: PaiementSaisi) {
     if (!abonneSelectionne || !formuleSelectionnee) return;
+    const reprise = venteAReprendrePourCeTicket(totalTicket, lignesTicket);
     setEnCours(true);
     try {
+      if (reprise) {
+        await reprendreEncaissement(reprise, paiement);
+        return;
+      }
       const aujourdHui = jourDouala();
       // 6.6 : Mobile Money n'encaisse jamais dans cet appel — la facture est
       // créée BROUILLON (montantEncaisse=0), puis le paiement est initié à
@@ -705,6 +762,7 @@ export function CaissePage({ onNaviguer, onOuvrirCatalogueAdministration, abonne
         onFerme={() => setPaiementMobile(null)}
         onSucces={() => {
           toast.success("Paiement Mobile Money confirmé — facture encaissée.");
+          setVenteAReprendre(null);
           if (paiementMobile) setRecu({ ...paiementMobile.recuBase, montantEncaisse: paiementMobile.montant, statutFacture: "VALIDEE" });
           const venteProduits = paiementMobile?.recuBase.operation === "Vente";
           setPaiementMobile(null);

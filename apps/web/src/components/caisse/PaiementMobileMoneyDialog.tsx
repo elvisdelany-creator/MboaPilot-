@@ -13,6 +13,7 @@ import {
   actualiserTransactionMobileRequete,
   initierPaiementMobileRequete,
   ErreurAuthentification,
+  ErreurReseau,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import type { ParcoursPaiementMobile, StatutPaiementMobile } from "@/lib/types";
@@ -47,6 +48,9 @@ export function PaiementMobileMoneyDialog({ ouvert, idFacture, montant, numeroTe
 
   const [statut, setStatut] = useState<StatutPaiementMobile | null>(null);
   const [idTransaction, setIdTransaction] = useState<number | null>(null);
+  // serveur injoignable pendant l'attente : on continue d'interroger, mais le caissier n'est pas piégé dans une fenêtre sans issue
+  const [connexionPerdue, setConnexionPerdue] = useState(false);
+  const [initiationEchouee, setInitiationEchouee] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   function arreterPolling() {
@@ -70,16 +74,23 @@ export function PaiementMobileMoneyDialog({ ouvert, idFacture, montant, numeroTe
     if (!ouvert || idFacture === null) {
       setStatut(null);
       setIdTransaction(null);
+      setConnexionPerdue(false);
+      setInitiationEchouee(false);
       arreterPolling();
       return;
     }
+    setConnexionPerdue(false);
+    setInitiationEchouee(false);
 
     initierPaiementMobileRequete(token, { idFacture, numeroTelephone, montant, parcours })
       .then((transaction) => {
         setStatut(transaction.statut);
         setIdTransaction(transaction.idTransaction);
       })
-      .catch((e) => gererErreur(e, "Échec de l'initiation du paiement mobile."));
+      .catch((e) => {
+        setInitiationEchouee(true);
+        gererErreur(e, "Échec de l'initiation du paiement mobile.");
+      });
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ouvert, idFacture]);
@@ -93,8 +104,18 @@ export function PaiementMobileMoneyDialog({ ouvert, idFacture, montant, numeroTe
 
     intervalRef.current = setInterval(() => {
       actualiserTransactionMobileRequete(token, idTransaction)
-        .then((transaction) => setStatut(transaction.statut))
-        .catch((e) => gererErreur(e, "Échec de la vérification du paiement mobile."));
+        .then((transaction) => {
+          setConnexionPerdue(false);
+          setStatut(transaction.statut);
+        })
+        .catch((e) => {
+          // une coupure passagère n'arrête pas l'interrogation : le paiement du client peut aboutir pendant ce temps
+          if (e instanceof ErreurReseau) {
+            setConnexionPerdue(true);
+            return;
+          }
+          gererErreur(e, "Échec de la vérification du paiement mobile.");
+        });
     }, INTERVALLE_POLLING_MS);
 
     return arreterPolling;
@@ -102,10 +123,22 @@ export function PaiementMobileMoneyDialog({ ouvert, idFacture, montant, numeroTe
   }, [idTransaction, statut]);
 
   const echoue = statut === "ECHOUEE" || statut === "EXPIREE";
+  // la fenêtre ne se ferme qu'une fois le résultat connu, ou si le serveur est injoignable (sinon le caissier serait piégé)
+  const fermable = echoue || connexionPerdue || initiationEchouee;
 
   return (
     <Dialog open={ouvert} onOpenChange={(v) => !v && onFerme()}>
-      <DialogContent showCloseButton={echoue}>
+      {/* Pas de fermeture pendant l'attente : la croix est déjà masquée, mais Échap et un clic à côté fermaient la fenêtre et laissaient une
+          facture en brouillon, un stock sorti et une transaction en attente indéfiniment. On ne ferme qu'une fois le résultat connu. */}
+      <DialogContent
+        showCloseButton={fermable}
+        onEscapeKeyDown={(e) => {
+          if (!fermable && statut !== "REUSSIE") e.preventDefault();
+        }}
+        onInteractOutside={(e) => {
+          if (!fermable && statut !== "REUSSIE") e.preventDefault();
+        }}
+      >
         <DialogHeader>
           <DialogTitle>Paiement Mobile Money</DialogTitle>
           <DialogDescription>
@@ -129,7 +162,13 @@ export function PaiementMobileMoneyDialog({ ouvert, idFacture, montant, numeroTe
           )}
         </div>
 
-        {echoue && (
+        {connexionPerdue && !echoue && (
+          <p className="text-center text-xs text-destructive" role="alert">
+            Connexion au serveur interrompue, nouvelle tentative en cours. Le paiement du client peut avoir abouti : vérifiez avant d'encaisser autrement.
+          </p>
+        )}
+
+        {fermable && (
           <Button variant="outline" className="cursor-pointer" onClick={onFerme}>
             Fermer et choisir un autre mode de paiement
           </Button>

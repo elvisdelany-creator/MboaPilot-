@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { eq } from "drizzle-orm";
 import { creerDbTest, type Db } from "../../test-utils/db.js";
 import * as schema from "../../db/schema.js";
-import { creerAvoir } from "./avoir.service.js";
+import { creerAvoir, listerLignesFacture } from "./avoir.service.js";
 import { soldeFacture } from "@mboapilot/shared";
 import { fermerCaisse, obtenirComptagesCloture, ouvrirCaisse } from "../caisse/cloture-caisse.service.js";
 
@@ -96,6 +96,33 @@ describe("creerAvoir (6.4)", () => {
     // le reliquat exact (1) reste créditable
     const resultat = creerAvoir(db, { idFactureOrigine: idFactureValidee, lignes: [{ idLigneOrigine: idLigneProduitSuivi, quantite: 1 }], restituerStock: false, userId });
     expect(resultat.montantTotal).toBe(-2500);
+  });
+
+  // la fenêtre d'avoir doit savoir ce qui a déjà été crédité : elle proposait « 3 × 2 500 » alors qu'il n'en restait qu'un, et le refus
+  // arrivait à la validation, en parlant de « la ligne 7 » que personne ne connaît
+  it("expose, pour chaque ligne, la quantité encore disponible à créditer", () => {
+    const avant = listerLignesFacture(db, idFactureValidee);
+    expect(avant.find((l) => l.idLigne === idLigneProduitSuivi)?.quantiteDisponible).toBe(3);
+
+    creerAvoir(db, { idFactureOrigine: idFactureValidee, lignes: [{ idLigneOrigine: idLigneProduitSuivi, quantite: 2 }], restituerStock: false, userId });
+
+    const apres = listerLignesFacture(db, idFactureValidee);
+    expect(apres.find((l) => l.idLigne === idLigneProduitSuivi)?.quantiteDisponible).toBe(1);
+    expect(apres.find((l) => l.idLigne === idLigneSansStock)?.quantiteDisponible).toBe(1);
+  });
+
+  it("une ligne intégralement créditée n'a plus rien de disponible", () => {
+    creerAvoir(db, { idFactureOrigine: idFactureValidee, lignes: [{ idLigneOrigine: idLigneProduitSuivi, quantite: 3 }], restituerStock: false, userId });
+
+    expect(listerLignesFacture(db, idFactureValidee).find((l) => l.idLigne === idLigneProduitSuivi)?.quantiteDisponible).toBe(0);
+  });
+
+  it("le refus nomme l'article et ce qui reste, pas un numéro de ligne interne", () => {
+    creerAvoir(db, { idFactureOrigine: idFactureValidee, lignes: [{ idLigneOrigine: idLigneProduitSuivi, quantite: 2 }], restituerStock: false, userId });
+
+    expect(() =>
+      creerAvoir(db, { idFactureOrigine: idFactureValidee, lignes: [{ idLigneOrigine: idLigneProduitSuivi, quantite: 2 }], restituerStock: false, userId })
+    ).toThrow("Quantité à créditer (2) supérieure à ce qui reste disponible pour « Télécommande » (1)");
   });
 
   it("restitue le stock uniquement si demandé, et uniquement pour un produit suivi", () => {

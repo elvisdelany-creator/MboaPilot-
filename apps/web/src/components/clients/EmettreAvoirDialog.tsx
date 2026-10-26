@@ -71,7 +71,7 @@ export function EmettreAvoirDialog({ facture, onFerme, onSucces }: Props) {
   function basculerLigne(ligne: LigneFacture, coche: boolean) {
     setSelection((s) => {
       const copie = { ...s };
-      if (coche) copie[ligne.idLigne] = ligne.quantite;
+      if (coche) copie[ligne.idLigne] = ligne.quantiteDisponible;
       else delete copie[ligne.idLigne];
       return copie;
     });
@@ -131,6 +131,7 @@ export function EmettreAvoirDialog({ facture, onFerme, onSucces }: Props) {
                 <Checkbox
                   id={`avoir-ligne-${ligne.idLigne}`}
                   checked={coche}
+                  disabled={ligne.quantiteDisponible <= 0}
                   onCheckedChange={(v) => basculerLigne(ligne, v === true)}
                 />
                 <Label htmlFor={`avoir-ligne-${ligne.idLigne}`} className="flex-1 font-normal text-card-foreground">
@@ -138,15 +139,22 @@ export function EmettreAvoirDialog({ facture, onFerme, onSucces }: Props) {
                   <span className="ml-1 text-xs text-muted-foreground">
                     ({ligne.quantite} × {formateurFcfa.format(Math.round(ligne.prixApplique / ligne.quantite))} FCFA)
                   </span>
+                  {ligne.quantiteDisponible < ligne.quantite && (
+                    <span className="ml-1 text-xs text-muted-foreground">
+                      — {ligne.quantiteDisponible > 0 ? `${ligne.quantiteDisponible} encore à créditer` : "déjà intégralement crédité"}
+                    </span>
+                  )}
                 </Label>
                 <Input
                   type="number"
                   min={1}
-                  max={ligne.quantite}
+                  max={ligne.quantiteDisponible}
                   aria-label={`Quantité à créditer — ${ligne.libelleProduit ?? ligne.libelleKit ?? "Abonnement"}`}
                   disabled={!coche}
-                  value={selection[ligne.idLigne] ?? ligne.quantite}
-                  onChange={(e) => setSelection((s) => ({ ...s, [ligne.idLigne]: Number(e.target.value) }))}
+                  value={selection[ligne.idLigne] ?? ligne.quantiteDisponible}
+                  onChange={(e) =>
+                    setSelection((s) => ({ ...s, [ligne.idLigne]: Math.max(1, Math.min(Number(e.target.value), ligne.quantiteDisponible)) }))
+                  }
                   className="h-9 w-20 tabular-nums"
                 />
               </li>

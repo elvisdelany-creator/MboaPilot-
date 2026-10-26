@@ -48,6 +48,30 @@ export function creerAvoir(db: Db, params: CreerAvoirParams): AvoirResultat {
   return db.transaction(() => creerAvoirSansTransaction(db, params));
 }
 
+// quantité d'une ligne encore créditable : ce qui a été facturé moins ce que les avoirs déjà émis en ont repris
+function quantiteDisponibleLigne(db: Db, ligne: { idLigne: number; quantite: number }): number {
+  const dejaCredite = db
+    .select()
+    .from(schema.ligneVente)
+    .where(eq(schema.ligneVente.ligneOrigineId, ligne.idLigne))
+    .all()
+    .reduce((somme, l) => somme + l.quantite, 0);
+  return ligne.quantite - dejaCredite;
+}
+
+// ce que l'utilisateur reconnaît à l'écran : l'article, le kit ou l'abonnement, jamais le numéro de ligne interne
+function libelleLigne(db: Db, ligne: { idProduit: number | null; idKit: number | null; numeroAbonnement: number | null }): string {
+  if (ligne.idProduit !== null) {
+    const produit = db.select().from(schema.produit).where(eq(schema.produit.idProduit, ligne.idProduit)).get();
+    if (produit) return produit.libelle;
+  }
+  if (ligne.idKit !== null) {
+    const kit = db.select().from(schema.kit).where(eq(schema.kit.idKit, ligne.idKit)).get();
+    if (kit) return kit.libelle;
+  }
+  return ligne.numeroAbonnement !== null ? `Abonnement n°${ligne.numeroAbonnement}` : "cette ligne";
+}
+
 function creerAvoirSansTransaction(db: Db, params: CreerAvoirParams): AvoirResultat {
   const origine = db.select().from(schema.facture).where(eq(schema.facture.idFacture, params.idFactureOrigine)).get();
   if (!origine) throw new Error(`Facture ${params.idFactureOrigine} introuvable`);
@@ -63,15 +87,9 @@ function creerAvoirSansTransaction(db: Db, params: CreerAvoirParams): AvoirResul
       throw new Error(`Ligne ${ligneInput.idLigneOrigine} introuvable sur la facture ${origine.idFacture}`);
     }
 
-    const dejaCredite = db
-      .select()
-      .from(schema.ligneVente)
-      .where(eq(schema.ligneVente.ligneOrigineId, ligneOrigine.idLigne))
-      .all()
-      .reduce((somme, l) => somme + l.quantite, 0);
-    const disponible = ligneOrigine.quantite - dejaCredite;
+    const disponible = quantiteDisponibleLigne(db, ligneOrigine);
     if (ligneInput.quantite > disponible) {
-      throw new Error(`Quantité à créditer (${ligneInput.quantite}) supérieure à ce qui reste disponible sur la ligne ${ligneOrigine.idLigne} (${disponible})`);
+      throw new Error(`Quantité à créditer (${ligneInput.quantite}) supérieure à ce qui reste disponible pour « ${libelleLigne(db, ligneOrigine)} » (${disponible})`);
     }
 
     const prixUnitaire = Math.round(ligneOrigine.prixApplique / ligneOrigine.quantite);
@@ -177,7 +195,7 @@ export function listerAvoirsFacture(db: Db, idFacture: number) {
 // 6.4 : lignes d'une facture, enrichies du libellé de l'article/kit, pour
 // choisir quoi créditer lors de l'émission d'un avoir
 export function listerLignesFacture(db: Db, idFacture: number) {
-  return db
+  const lignes = db
     .select({
       idLigne: schema.ligneVente.idLigne,
       idProduit: schema.ligneVente.idProduit,
@@ -194,4 +212,6 @@ export function listerLignesFacture(db: Db, idFacture: number) {
     .leftJoin(schema.kit, eq(schema.ligneVente.idKit, schema.kit.idKit))
     .where(eq(schema.ligneVente.idFacture, idFacture))
     .all();
+  // la fenêtre d'avoir doit savoir ce qui a déjà été crédité, sinon elle propose des quantités que le serveur refusera
+  return lignes.map((l) => ({ ...l, quantiteDisponible: quantiteDisponibleLigne(db, l) }));
 }

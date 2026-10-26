@@ -129,6 +129,8 @@ export interface LigneFacture {
   idKit: number | null;
   numeroAbonnement: number | null;
   quantite: number;
+  // 6.4 : quantité encore créditable (facturée moins ce que les avoirs déjà émis en ont repris)
+  quantiteDisponible: number;
   prixApplique: number;
   ligneOrigineId: number | null;
   libelleProduit: string | null;

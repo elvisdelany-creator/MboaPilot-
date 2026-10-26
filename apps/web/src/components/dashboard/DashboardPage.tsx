@@ -15,11 +15,13 @@ import {
   chargerProduitsRotationLente,
   chargerResumesApporteurs,
   chargerValorisationStock,
+  chargerVentesEnAttente,
   chargerVentilationCA,
   ErreurAuthentification,
   type MargeArticle,
   type ProduitRotationLente,
   type ResumeApporteur,
+  type VenteEnAttente,
   type VentilationCAFamille,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
@@ -28,6 +30,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { EvolutionCaChart } from "./EvolutionCaChart";
+import { AnnulerVenteEnAttenteDialog } from "./AnnulerVenteEnAttenteDialog";
 import type {
   AbonnementExpire,
   AlerteEcheance,
@@ -85,6 +88,8 @@ export function DashboardPage({ onNaviguer, onReabonnerDepuisAlerte, onReabonner
   // 5.2 : mouvements correctifs de stock (achat, transfert) réservés à
   // l'encadrement, comme sur la page Catalogue elle-même (gestionStock)
   const peutGererStock = ["ADMINISTRATEUR", "GERANT"].includes(session!.utilisateur.role);
+  // 6.4, 9.1 : annuler une vente jamais encaissée est réservé à l'encadrement, comme l'annulation d'un paiement
+  const peutAnnulerVentes = peutGererStock;
   // « Réabonner » ouvre la Caisse : proposé seulement aux rôles qui y ont accès (2.5.1)
   const peutVendre = peutAccederVue(session!.utilisateur.role as RoleUtilisateur, "caisse");
 
@@ -110,6 +115,9 @@ export function DashboardPage({ onNaviguer, onReabonnerDepuisAlerte, onReabonner
   const [commissionsCanalplus, setCommissionsCanalplus] = useState<CommissionCanalplusEnCours[]>([]);
   // 8.6, 6.3 : "Suivi des apporteurs d'affaires"
   const [resumesApporteurs, setResumesApporteurs] = useState<ResumeApporteur[]>([]);
+  // 6.4 : ventes de produits jamais encaissées (paiement Mobile Money abandonné), stock déjà sorti
+  const [ventesEnAttente, setVentesEnAttente] = useState<VenteEnAttente[]>([]);
+  const [venteAAnnuler, setVenteAAnnuler] = useState<VenteEnAttente | null>(null);
 
   function gererErreur(erreur: unknown, messageParDefaut: string) {
     if (erreur instanceof ErreurAuthentification) {
@@ -169,6 +177,10 @@ export function DashboardPage({ onNaviguer, onReabonnerDepuisAlerte, onReabonner
     chargerResumesApporteurs(token)
       .then(setResumesApporteurs)
       .catch(() => setResumesApporteurs([]));
+    if (!peutAnnulerVentes) return;
+    chargerVentesEnAttente(token)
+      .then(setVentesEnAttente)
+      .catch(() => setVentesEnAttente([]));
   }
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -323,6 +335,38 @@ export function DashboardPage({ onNaviguer, onReabonnerDepuisAlerte, onReabonner
                   <span className="tabular-nums font-medium text-card-foreground">{alertesStock.length}</span>
                 </div>
               </Card>
+            </div>
+          )}
+
+          {peutAnnulerVentes && ventesEnAttente.length > 0 && (
+            <div className="mb-8">
+              <h2 className="font-heading text-lg font-semibold text-foreground">Ventes sans encaissement</h2>
+              <p className="mb-3 text-sm text-muted-foreground">
+                Ces ventes ont sorti du stock mais n'ont rien encaissé (paiement Mobile Money abandonné). Annulez-les pour remettre les articles en stock.
+              </p>
+              <ul className="space-y-2">
+                {ventesEnAttente.map((v) => (
+                  <li key={v.idFacture}>
+                    <Card className="flex-row items-center justify-between gap-3 p-3">
+                      <div>
+                        <p className="font-medium text-card-foreground">
+                          Facture n° {v.idFacture} · {formateurFcfa.format(v.montantTotal)} FCFA · {v.client ?? "sans client"}
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          {formateurDateCourte.format(lireDateServeur(v.dateCreation))} · {v.lignes.map((l) => `${l.quantite} × ${l.libelle}`).join(", ")}
+                        </p>
+                      </div>
+                      {v.paiementEnCours ? (
+                        <span className="text-sm text-muted-foreground">Paiement en cours…</span>
+                      ) : (
+                        <Button variant="outline" size="sm" className="cursor-pointer" onClick={() => setVenteAAnnuler(v)}>
+                          Annuler la vente
+                        </Button>
+                      )}
+                    </Card>
+                  </li>
+                ))}
+              </ul>
             </div>
           )}
 
@@ -533,6 +577,15 @@ export function DashboardPage({ onNaviguer, onReabonnerDepuisAlerte, onReabonner
           )}
         </div>
       </main>
+
+      <AnnulerVenteEnAttenteDialog
+        vente={venteAAnnuler}
+        onFerme={() => setVenteAAnnuler(null)}
+        onSucces={() => {
+          setVenteAAnnuler(null);
+          charger();
+        }}
+      />
     </div>
   );
 }

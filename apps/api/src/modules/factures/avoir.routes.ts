@@ -7,6 +7,7 @@ import * as schema from "../../db/schema.js";
 import { creerAvoir, listerLignesFacture, type LigneAvoirInput, type RemboursementAvoirInput } from "./avoir.service.js";
 import { encaisserSoldeFacture, type EncaisserSoldeParams } from "./paiement-complementaire.service.js";
 import { annulerPaiement } from "./annulation-paiement.service.js";
+import { annulerFactureEnAttente, listerVentesEnAttente } from "./annulation-facture.service.js";
 import { confirmerRapprochementVirement } from "./paiement.repository.js";
 import { envoyerErreur } from "../../lib/erreurs-api.js";
 
@@ -95,6 +96,35 @@ export function registerAvoirRoutes(app: FastifyInstance, db: Db, guards: RouteG
       }
       try {
         reply.code(200).send(annulerPaiement(db, { idPaiement, userId: Number(request.query.userId) }));
+      } catch (erreur) {
+        envoyerErreur(reply, erreur);
+      }
+    }
+  );
+
+  // 6.4, 9.1, 11.5 : ventes de produits jamais encaissées (paiement Mobile Money abandonné) — leur stock est sorti et, sans
+  // client, aucune fiche ne les montre. Liste et annulation tracée, réservées à l'encadrement comme l'annulation de paiement.
+  app.get(
+    "/api/v1/factures/en-attente",
+    { preHandler: [guards.authRequis, guards.gestionAvoirs] },
+    async (request, reply) => {
+      reply.code(200).send(listerVentesEnAttente(db, request.user.siteId));
+    }
+  );
+
+  app.delete<{ Params: { idFacture: string } }>(
+    "/api/v1/factures/:idFacture/en-attente",
+    { preHandler: [guards.authRequis, guards.gestionAvoirs] },
+    async (request, reply) => {
+      const idFacture = Number(request.params.idFacture);
+      const facture = db.select().from(schema.facture).where(eq(schema.facture.idFacture, idFacture)).get();
+      if (facture && !siteAutorise(request.user, facture.siteId)) {
+        reply.code(403).send(ERREUR_SITE_FACTURE);
+        return;
+      }
+      try {
+        // l'auteur est celui du jeton, jamais un paramètre de la requête
+        reply.code(200).send(annulerFactureEnAttente(db, { idFacture, userId: request.user.idUser }));
       } catch (erreur) {
         envoyerErreur(reply, erreur);
       }

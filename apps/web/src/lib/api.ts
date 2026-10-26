@@ -206,6 +206,27 @@ export async function encaisserSoldeFactureRequete(token: string, idFacture: num
   return lireJson<EncaisserSoldeResultat>(reponse);
 }
 
+// 6.4, 9.1 : vente de produits jamais encaissée (paiement Mobile Money abandonné) — son stock est sorti
+export interface VenteEnAttente {
+  idFacture: number;
+  dateCreation: string;
+  montantTotal: number;
+  client: string | null;
+  lignes: { libelle: string; quantite: number }[];
+  paiementEnCours: boolean;
+}
+
+export async function chargerVentesEnAttente(token: string): Promise<VenteEnAttente[]> {
+  const reponse = await appelerServeur(`${BASE}/factures/en-attente`, { headers: headersAuth(token) });
+  return lireJson<VenteEnAttente[]>(reponse);
+}
+
+// annulation tracée côté serveur : stock restitué, facture supprimée
+export async function annulerVenteEnAttenteRequete(token: string, idFacture: number): Promise<{ idFacture: number; montantTotal: number }> {
+  const reponse = await appelerServeur(`${BASE}/factures/${idFacture}/en-attente`, { method: "DELETE", headers: headersAuth(token) });
+  return lireJson<{ idFacture: number; montantTotal: number }>(reponse);
+}
+
 // 9.1, 11.5 : annulation d'un paiement mal saisi (mauvais mode, mauvais
 // montant) — opération destructrice, journalisée côté serveur
 export interface AnnulerPaiementResultat {

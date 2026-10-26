@@ -2132,6 +2132,88 @@ describe("Annulation d'un paiement mal saisi (9.1, 11.5)", () => {
   });
 });
 
+// 6.4, 9.1, 11.5 : une vente de produits jamais encaissée (paiement Mobile Money abandonné) laissait son stock sorti sans issue
+describe("Ventes en attente : liste et annulation (6.4, 9.1)", () => {
+  let idProduit: number;
+  const venteEnAttente = (siteDeLaVente = siteId) => {
+    db.update(schema.produit).set({ quantiteStock: 7 }).where(eq(schema.produit.idProduit, idProduit)).run();
+    const facture = db.insert(schema.facture).values({ siteId: siteDeLaVente, montantTotal: 7500, creePar: userId }).returning().get();
+    db.insert(schema.ligneVente).values({ idFacture: facture.idFacture, idProduit, quantite: 3, prixApplique: 7500 }).run();
+    return facture;
+  };
+
+  beforeEach(() => {
+    idProduit = db
+      .insert(schema.produit)
+      .values({ siteId, type: "BIEN", libelle: "Décodeur", prixVente: 2500, suiviStock: 1, quantiteStock: 10 })
+      .returning()
+      .get().idProduit;
+  });
+
+  it("un gérant voit les ventes en attente de son site, puis en annule une : stock restitué, suppression journalisée à son nom", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const gerant = creerUtilisateur(db, { siteId, nom: "Gerant", prenom: "G", identifiant: "gerant1", motDePasse: "motdepasse-secret", role: "GERANT" });
+    const token = await connecter(app, "gerant1");
+    const facture = venteEnAttente();
+
+    const liste = await app.inject({ method: "GET", url: "/api/v1/factures/en-attente", headers: authHeader(token) });
+    expect(liste.statusCode).toBe(200);
+    expect(liste.json()).toMatchObject([{ idFacture: facture.idFacture, montantTotal: 7500, lignes: [{ libelle: "Décodeur", quantite: 3 }] }]);
+
+    const annulation = await app.inject({ method: "DELETE", url: `/api/v1/factures/${facture.idFacture}/en-attente?userId=${userId}`, headers: authHeader(token) });
+
+    expect(annulation.statusCode).toBe(200);
+    expect(db.select().from(schema.facture).where(eq(schema.facture.idFacture, facture.idFacture)).get()).toBeUndefined();
+    expect(db.select().from(schema.produit).where(eq(schema.produit.idProduit, idProduit)).get()?.quantiteStock).toBe(10);
+    const audit = db.select().from(schema.journalAudit).where(eq(schema.journalAudit.tableCible, "facture")).all();
+    expect(audit).toHaveLength(1);
+    expect(audit[0].utilisateurId).toBe(gerant.idUser); // l'auteur du jeton, jamais celui du paramètre
+  });
+
+  it("une facture déjà encaissée répond 400 avec le chemin de l'avoir, sans rien supprimer", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    creerUtilisateur(db, { siteId, nom: "Gerant", prenom: "G", identifiant: "gerant1", motDePasse: "motdepasse-secret", role: "GERANT" });
+    const token = await connecter(app, "gerant1");
+    const facture = venteEnAttente();
+    db.update(schema.facture).set({ statut: "VALIDEE" }).where(eq(schema.facture.idFacture, facture.idFacture)).run();
+
+    const annulation = await app.inject({ method: "DELETE", url: `/api/v1/factures/${facture.idFacture}/en-attente`, headers: authHeader(token) });
+
+    expect(annulation.statusCode).toBe(400);
+    expect(annulation.json().erreur).toMatch(/avoir/i);
+    expect(db.select().from(schema.facture).all()).toHaveLength(1);
+  });
+
+  it("un caissier ne peut ni lister ni annuler (403)", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const token = await connecter(app);
+    const facture = venteEnAttente();
+
+    const liste = await app.inject({ method: "GET", url: "/api/v1/factures/en-attente", headers: authHeader(token) });
+    const annulation = await app.inject({ method: "DELETE", url: `/api/v1/factures/${facture.idFacture}/en-attente`, headers: authHeader(token) });
+
+    expect(liste.statusCode).toBe(403);
+    expect(annulation.statusCode).toBe(403);
+    expect(db.select().from(schema.facture).all()).toHaveLength(1);
+  });
+
+  it("un gérant ne voit ni n'annule les ventes d'un autre site (403)", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    creerUtilisateur(db, { siteId, nom: "Gerant", prenom: "G", identifiant: "gerant1", motDePasse: "motdepasse-secret", role: "GERANT" });
+    const token = await connecter(app, "gerant1");
+    const idEntreprise = db.select().from(schema.site).where(eq(schema.site.idSite, siteId)).get()!.idEntreprise;
+    const autreSite = db.insert(schema.site).values({ idEntreprise, nom: "Site B" }).returning().get().idSite;
+    const facture = venteEnAttente(autreSite);
+
+    const liste = await app.inject({ method: "GET", url: "/api/v1/factures/en-attente", headers: authHeader(token) });
+    const annulation = await app.inject({ method: "DELETE", url: `/api/v1/factures/${facture.idFacture}/en-attente`, headers: authHeader(token) });
+
+    expect(liste.json()).toEqual([]);
+    expect(annulation.statusCode).toBe(403);
+    expect(db.select().from(schema.facture).all()).toHaveLength(1);
+  });
+});
+
 // 6.5 : "Virement bancaire — Différée (rapprochement)", contrairement au
 // comptant et au chèque qui sont "Immédiate"
 describe("Rapprochement bancaire d'un virement (6.5)", () => {

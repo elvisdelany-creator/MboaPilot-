@@ -469,6 +469,7 @@ export function CaissePage({ onNaviguer, onOuvrirCatalogueAdministration, abonne
         lignes: panierProduits.map((l) => ({ idProduit: l.produit.idProduit, quantite: l.quantite, remise: l.remise || undefined })),
         montantEncaisse,
         totalAttendu: totalTicketProduits,
+        paiementMobileDiffere: paiement.mode === "MOBILE_MONEY" || undefined,
         modePaiement: paiement.mode === "MOBILE_MONEY" ? undefined : paiement.mode,
         banque: paiement.mode === "CHEQUE" || paiement.mode === "VIREMENT" ? paiement.banque : undefined,
         numeroCheque: paiement.mode === "CHEQUE" ? paiement.numeroCheque : undefined,
@@ -691,6 +692,9 @@ export function CaissePage({ onNaviguer, onOuvrirCatalogueAdministration, abonne
                 onModifierRemise={modifierRemiseProduit}
                 plafondRemise={plafondRemise}
                 plafondRemisePourcent={plafondRemisePourcent}
+                // une vente à reprendre (Mobile Money non abouti) existe déjà côté serveur : son client, ou l'absence de client,
+                // est acquis
+                clientRattache={abonneSelectionne !== null || venteAReprendre !== null}
                 enCours={enCours}
                 onValider={validerVenteProduits}
                 onImprimerProForma={() => setProFormaVisible(true)}

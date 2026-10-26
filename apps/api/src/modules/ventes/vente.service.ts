@@ -28,6 +28,9 @@ export interface CreerVenteProduitsParams {
   totalAttendu?: number;
   // 6.5 : moyen de paiement de l'encaissement — comptant par défaut ; le
   // Mobile Money suit son propre parcours dédié (paiement-mobile), jamais ici
+  // paiement Mobile Money : la facture est créée ici sans encaissement, puis réglée aussitôt par le parcours dédié
+  // (encaisserSoldeFactureRequete) — le client n'est donc pas encore débiteur d'un solde, même sans fiche client
+  paiementMobileDiffere?: boolean;
   modePaiement?: "CASH" | "CHEQUE" | "VIREMENT";
   banque?: string; // chèque : "Banque" ; virement : "Banque émettrice"
   numeroCheque?: string;
@@ -43,6 +46,16 @@ export interface VenteResultat {
   statutFacture: "BROUILLON" | "VALIDEE";
   montantTotal: number;
   montantTaxe: number;
+}
+
+// 6.4 : « un solde restant dû reste visible » — il l'est dans les « Impayées » du client. Une vente non soldée sans client
+// laissait une dette sans débiteur, introuvable, avec un stock déjà sorti : elle est refusée avant toute écriture.
+function exigerClientSiNonSolde(params: CreerVenteProduitsParams, montantTotal: number): void {
+  if (params.idAbonne != null || params.nouvelAbonne || params.paiementMobileDiffere === true) return;
+  const resteDu = montantTotal - params.montantEncaisse;
+  if (resteDu <= 0) return;
+  const fcfa = (n: number) => `${new Intl.NumberFormat("fr-FR").format(n)} FCFA`;
+  throw new Error(`Une vente non soldée doit être rattachée à un client : il resterait ${fcfa(resteDu)} dû sur ${fcfa(montantTotal)}. Choisissez ou créez un client, ou encaissez la totalité.`);
 }
 
 // 5.2, 5.3, 8.5, 9.2 : vente rapide de produits physiques et services hors
@@ -80,6 +93,7 @@ function creerVenteProduitsSansTransaction(db: Db, params: CreerVenteProduitsPar
 
   const montantTotal = lignesResolues.reduce((somme, l) => somme + l.prixApplique, 0);
   verifierTotalAttendu(montantTotal, params.totalAttendu);
+  exigerClientSiNonSolde(params, montantTotal);
 
   // 3.2.3, 6.1, 8.8 : "porte le total, la TVA/taxes le cas échéant" — figée
   // au taux en vigueur à cet instant, jamais recalculée après coup

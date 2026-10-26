@@ -10,6 +10,7 @@ let siteId: number;
 let userId: number;
 let idBien: number;
 let idService: number;
+let idClient: number;
 
 beforeEach(() => {
   db = creerDbTest();
@@ -25,6 +26,7 @@ beforeEach(() => {
     .values({ siteId, type: "BIEN", libelle: "Télécommande universelle", prixVente: 2500, suiviStock: 1, quantiteStock: 10 })
     .returning()
     .get().idProduit;
+  idClient = db.insert(schema.abonne).values({ siteId, nom: "Client", prenom: "Test", telephone: "690000099" }).returning().get().idAbonne;
   idService = db
     .insert(schema.produit)
     .values({ siteId, type: "SERVICE", libelle: "Installation à domicile", prixVente: 5000, suiviStock: 0 })
@@ -37,6 +39,7 @@ describe("creerVenteProduits (5.2, 5.3, 8.5)", () => {
     const resultat = creerVenteProduits(db, {
       siteId,
       userId,
+      idAbonne: idClient,
       lignes: [
         { idProduit: idBien, quantite: 2 },
         { idProduit: idService, quantite: 1 },
@@ -57,6 +60,7 @@ describe("creerVenteProduits (5.2, 5.3, 8.5)", () => {
     creerVenteProduits(db, {
       siteId,
       userId,
+      idAbonne: idClient,
       lignes: [
         { idProduit: idBien, quantite: 3 },
         { idProduit: idService, quantite: 1 },
@@ -72,7 +76,7 @@ describe("creerVenteProduits (5.2, 5.3, 8.5)", () => {
   });
 
   it("laisse la facture en BROUILLON sans encaissement, et la valide dès qu'un montant est encaissé", () => {
-    const brouillon = creerVenteProduits(db, { siteId, userId, lignes: [{ idProduit: idBien, quantite: 1 }], montantEncaisse: 0 });
+    const brouillon = creerVenteProduits(db, { siteId, userId, idAbonne: idClient, lignes: [{ idProduit: idBien, quantite: 1 }], montantEncaisse: 0 });
     expect(brouillon.statutFacture).toBe("BROUILLON");
 
     const validee = creerVenteProduits(db, { siteId, userId, lignes: [{ idProduit: idBien, quantite: 1 }], montantEncaisse: 2500 });
@@ -122,7 +126,7 @@ describe("creerVenteProduits (5.2, 5.3, 8.5)", () => {
     const factureAvecAbonne = db.select().from(schema.facture).where(eq(schema.facture.idFacture, avecAbonne.idFacture)).get();
     expect(factureAvecAbonne?.idAbonne).toBe(abonne.idAbonne);
 
-    const sansAbonne = creerVenteProduits(db, { siteId, userId, lignes: [{ idProduit: idBien, quantite: 1 }], montantEncaisse: 0 });
+    const sansAbonne = creerVenteProduits(db, { siteId, userId, lignes: [{ idProduit: idBien, quantite: 1 }], montantEncaisse: 2500 });
     const factureSansAbonne = db.select().from(schema.facture).where(eq(schema.facture.idFacture, sansAbonne.idFacture)).get();
     expect(factureSansAbonne?.idAbonne).toBeNull();
   });
@@ -182,6 +186,7 @@ describe("creerVenteProduits (5.2, 5.3, 8.5)", () => {
     const resultat = creerVenteProduits(db, {
       siteId,
       userId,
+      idAbonne: idClient,
       lignes: [{ idProduit: idBien, quantite: 2, remise: 500 }],
       montantEncaisse: 0,
     });
@@ -204,7 +209,7 @@ describe("creerVenteProduits (5.2, 5.3, 8.5)", () => {
   });
 
   it("6.4 : une vente à total positif sans encaissement reste BROUILLON", () => {
-    const resultat = creerVenteProduits(db, { siteId, userId, lignes: [{ idProduit: idService, quantite: 1, remise: 1000 }], montantEncaisse: 0 });
+    const resultat = creerVenteProduits(db, { siteId, userId, idAbonne: idClient, lignes: [{ idProduit: idService, quantite: 1, remise: 1000 }], montantEncaisse: 0 });
 
     expect(resultat.statutFacture).toBe("BROUILLON");
   });
@@ -225,7 +230,7 @@ describe("creerVenteProduits (5.2, 5.3, 8.5)", () => {
   it("persiste le montant de taxe calculé au taux en vigueur à la création", () => {
     db.update(schema.entreprise).set({ tauxTva: 2000 }).run(); // 20 %
 
-    const resultat = creerVenteProduits(db, { siteId, userId, lignes: [{ idProduit: idService, quantite: 1 }], montantEncaisse: 0 });
+    const resultat = creerVenteProduits(db, { siteId, userId, idAbonne: idClient, lignes: [{ idProduit: idService, quantite: 1 }], montantEncaisse: 0 });
 
     const facture = db.select().from(schema.facture).where(eq(schema.facture.idFacture, resultat.idFacture)).get();
     expect(facture?.montantTaxe).toBe(833); // 5000 TTC -> HT 4167, taxe 833
@@ -287,5 +292,59 @@ describe("creerVenteProduits : total attendu à la caisse", () => {
     const resultat = creerVenteProduits(db, { siteId, userId, lignes: [{ idProduit: idBien, quantite: 2, remise: 500 }], montantEncaisse: 4500, totalAttendu: 4500 });
 
     expect(resultat.montantTotal).toBe(4500);
+  });
+});
+
+// 6.4 : « un solde restant dû reste visible » : il l'est dans les « Impayées » d'un client. Une vente non soldée sans client laissait une
+// dette sans débiteur, introuvable, avec un stock déjà sorti.
+describe("creerVenteProduits : une vente non soldée exige un client (6.4)", () => {
+  let idAbonne: number;
+  beforeEach(() => {
+    idAbonne = db.insert(schema.abonne).values({ siteId, nom: "Mballa", prenom: "Sylvie", telephone: "690000001" }).returning().get().idAbonne;
+  });
+  const nombreFactures = () => db.select().from(schema.facture).all().length;
+  const stock = () => db.select().from(schema.produit).where(eq(schema.produit.idProduit, idBien)).get()!.quantiteStock;
+
+  it("refuse une vente sans client et sans rien encaisser, sans toucher au stock ni créer de facture", () => {
+    expect(() => creerVenteProduits(db, { siteId, userId, lignes: [{ idProduit: idBien, quantite: 2 }], montantEncaisse: 0 })).toThrow(/client/i);
+
+    expect(nombreFactures()).toBe(0);
+    expect(stock()).toBe(10);
+  });
+
+  it("refuse un acompte sans client, en annonçant le reste dû", () => {
+    expect(() => creerVenteProduits(db, { siteId, userId, lignes: [{ idProduit: idBien, quantite: 2 }], montantEncaisse: 1000 })).toThrow(/4\s000 FCFA/);
+
+    expect(nombreFactures()).toBe(0);
+    expect(stock()).toBe(10);
+  });
+
+  it("accepte l'acompte et la vente à crédit quand un client est rattaché (existant ou créé à la caisse)", () => {
+    const acompte = creerVenteProduits(db, { siteId, userId, idAbonne, lignes: [{ idProduit: idBien, quantite: 1 }], montantEncaisse: 1000 });
+    const credit = creerVenteProduits(db, { siteId, userId, nouvelAbonne: { nom: "Fotso", prenom: "Marie", telephone: "690000002" }, lignes: [{ idProduit: idBien, quantite: 1 }], montantEncaisse: 0 });
+
+    expect(acompte.statutFacture).toBe("VALIDEE");
+    expect(credit.statutFacture).toBe("BROUILLON");
+    expect(db.select().from(schema.facture).where(eq(schema.facture.idFacture, credit.idFacture)).get()?.idAbonne).not.toBeNull();
+  });
+
+  it("traite un idAbonne nul (corps JSON) comme l'absence de client", () => {
+    expect(() => creerVenteProduits(db, { siteId, userId, idAbonne: null as unknown as undefined, lignes: [{ idProduit: idBien, quantite: 1 }], montantEncaisse: 0 })).toThrow(/client/i);
+  });
+
+  it("accepte sans client une vente soldée, y compris avec monnaie rendue", () => {
+    expect(() => creerVenteProduits(db, { siteId, userId, lignes: [{ idProduit: idBien, quantite: 1 }], montantEncaisse: 2500 })).not.toThrow();
+    expect(() => creerVenteProduits(db, { siteId, userId, lignes: [{ idProduit: idBien, quantite: 1 }], montantEncaisse: 3000 })).not.toThrow();
+  });
+
+  it("accepte sans client une vente intégralement remisée : rien n'est dû", () => {
+    db.update(schema.entreprise).set({ plafondRemiseCaissierPourcent: 100 }).run();
+    expect(() => creerVenteProduits(db, { siteId, userId, lignes: [{ idProduit: idService, quantite: 1, remise: 5000 }], montantEncaisse: 0 })).not.toThrow();
+  });
+
+  it("accepte sans client le paiement Mobile Money différé : la facture est réglée aussitôt après par le parcours dédié", () => {
+    const resultat = creerVenteProduits(db, { siteId, userId, lignes: [{ idProduit: idBien, quantite: 1 }], montantEncaisse: 0, paiementMobileDiffere: true });
+
+    expect(resultat.statutFacture).toBe("BROUILLON");
   });
 });

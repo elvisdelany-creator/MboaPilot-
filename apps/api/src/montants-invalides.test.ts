@@ -68,7 +68,8 @@ beforeEach(() => {
   }).numeroAbonnement;
 
   // facture de vente partiellement payée (solde dû), pour l'encaissement complémentaire et l'avoir
-  const vente = creerVenteProduits(db, { siteId, userId, lignes: [{ idProduit, quantite: 2 }], montantEncaisse: 1000 });
+  const client = creerAbonne(db, { siteId, nom: "Mballa", prenom: "Sylvie", telephone: "690000333" });
+  const vente = creerVenteProduits(db, { siteId, userId, idAbonne: client.idAbonne, lignes: [{ idProduit, quantite: 2 }], montantEncaisse: 1000 });
   idFacture = vente.idFacture;
   idLigne = db.select().from(schema.ligneVente).all().find((l) => l.idFacture === idFacture)!.idLigne;
 });

@@ -26,6 +26,8 @@ interface Props {
   // (null : pas de plafond propre au rôle)
   plafondRemise: (prixBase: number) => number;
   plafondRemisePourcent: number | null;
+  // 6.4 : un solde restant dû doit avoir un débiteur — sans client, seule une vente soldée (ou Mobile Money) peut être validée
+  clientRattache: boolean;
   enCours: boolean;
   onValider: (paiement: PaiementSaisi) => void;
   onImprimerProForma: () => void;
@@ -48,6 +50,7 @@ export function TicketProduitsPanel({
   onModifierRemise,
   plafondRemise,
   plafondRemisePourcent,
+  clientRattache,
   enCours,
   onValider,
   onImprimerProForma,
@@ -68,9 +71,12 @@ export function TicketProduitsPanel({
   const [confirmationSurpaiement, setConfirmationSurpaiement] = useState(false);
   useEffect(() => setMontant(total), [total]);
 
+  const soldeSansClient = !clientRattache && modePaiement === "CASH" && total > 0 && montant < total;
+
   const pretAValider =
     panier.length > 0 &&
     !enCours &&
+    !soldeSansClient &&
     (modePaiement === "CASH" ||
       (modePaiement === "CHEQUE" && banque.trim() && numeroCheque.trim() && titulaireCheque.trim() && dateCheque) ||
       (modePaiement === "VIREMENT" && banque.trim() && referenceVirement.trim()) ||
@@ -209,7 +215,12 @@ export function TicketProduitsPanel({
               }}
               className="mt-1 h-11 text-base tabular-nums"
             />
-            {montant > 0 && montant < total && (
+            {soldeSansClient && (
+              <p className="mt-1 text-sm text-alert-j3-fg">
+                Il resterait {formateurFcfa.format(total - montant)} FCFA dû : sélectionnez ou créez un client (en haut de la caisse), ou encaissez la totalité.
+              </p>
+            )}
+            {clientRattache && montant > 0 && montant < total && (
               <p className="mt-1 text-sm text-alert-j3-fg">
                 Encaissement partiel — solde de {formateurFcfa.format(total - montant)} FCFA restant dû.
               </p>

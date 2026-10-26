@@ -359,6 +359,9 @@ export interface CreerVentePayload {
   montantEncaisse: number;
   // total affiché à la caisse : le serveur refuse l'opération si un prix a changé entre-temps
   totalAttendu?: number;
+  // Mobile Money : la facture est créée sans encaissement puis réglée aussitôt par le parcours dédié — seule vente non
+  // soldée que le serveur accepte sans client
+  paiementMobileDiffere?: boolean;
   modePaiement?: ModePaiementEncaissement;
   banque?: string;
   numeroCheque?: string;

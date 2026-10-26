@@ -43,7 +43,7 @@ import { ChangerFormuleDialog } from "./ChangerFormuleDialog";
 import { ClotureCaissePanel } from "./ClotureCaissePanel";
 import { RecuVentePrintable, type LigneRecu, type RecuVente } from "./RecuVentePrintable";
 import { FactureProFormaPrintable } from "./FactureProFormaPrintable";
-import { creerVerrouSoumission, jourDouala, ligneAvecRemise, plafondRemiseCaissier } from "@mboapilot/shared";
+import { classerEncaissement, creerVerrouSoumission, jourDouala, ligneAvecRemise, plafondRemiseCaissier } from "@mboapilot/shared";
 
 interface Props {
   onNaviguer: (vue: Vue) => void;
@@ -53,6 +53,8 @@ interface Props {
   abonneInitial?: Abonne;
   idFamilleInitiale?: number;
 }
+
+const formateurFcfa = new Intl.NumberFormat("fr-FR");
 
 // une famille sans formule ni kit à vendre (toutes ses formules désactivées, ou pas encore de formule) n'a pas à occuper une
 // catégorie vide à la caisse : « Disney+ » du catalogue de départ, tant que son tarif n'est pas renseigné, par exemple
@@ -444,7 +446,14 @@ export function CaissePage({ onNaviguer, onOuvrirCatalogueAdministration, abonne
         return;
       }
 
-      toast.success(resultat.statutFacture === "VALIDEE" ? "Vente encaissée." : "Vente enregistrée — en attente d'encaissement.");
+      const etatVente = classerEncaissement(totalTicketProduits, paiement.montant, resultat.statutFacture);
+      toast.success(
+        etatVente.type === "TOTAL"
+          ? "Vente encaissée."
+          : etatVente.type === "PARTIEL"
+            ? `Vente enregistrée — acompte de ${formateurFcfa.format(etatVente.encaisse)} FCFA encaissé, solde restant dû ${formateurFcfa.format(etatVente.reste)} FCFA.`
+            : "Vente enregistrée — en attente d'encaissement."
+      );
       setRecu({
         operation: "Vente",
         numeroAbonnement: null,
@@ -542,10 +551,14 @@ export function CaissePage({ onNaviguer, onOuvrirCatalogueAdministration, abonne
         return;
       }
 
+      const etat = classerEncaissement(totalTicket, paiement.montant, resultat.statutFacture);
+      const debut = `${operation} — abonnement n° ${resultat.numeroAbonnement}`;
       toast.success(
-        resultat.statutFacture === "VALIDEE"
-          ? `${operation} — abonnement n° ${resultat.numeroAbonnement} — facture encaissée.`
-          : `${operation} — abonnement n° ${resultat.numeroAbonnement} — facture en attente d'encaissement.`
+        etat.type === "TOTAL"
+          ? `${debut} — facture encaissée.`
+          : etat.type === "PARTIEL"
+            ? `${debut} — acompte de ${formateurFcfa.format(etat.encaisse)} FCFA encaissé, solde restant dû ${formateurFcfa.format(etat.reste)} FCFA.`
+            : `${debut} — facture en attente d'encaissement.`
       );
       setRecu({
         operation,

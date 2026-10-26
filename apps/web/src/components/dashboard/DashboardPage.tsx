@@ -342,7 +342,7 @@ export function DashboardPage({ onNaviguer, onReabonnerDepuisAlerte, onReabonner
             <div className="mb-8">
               <h2 className="font-heading text-lg font-semibold text-foreground">Ventes sans encaissement</h2>
               <p className="mb-3 text-sm text-muted-foreground">
-                Ces ventes ont sorti du stock mais n'ont rien encaissé (paiement Mobile Money abandonné). Annulez-les pour remettre les articles en stock.
+                Ces ventes n'ont rien encaissé (paiement Mobile Money abandonné) : leur stock est sorti ou leur abonnement est ouvert. Annulez-les pour tout remettre en ordre.
               </p>
               <ul className="space-y-2">
                 {ventesEnAttente.map((v) => (
@@ -350,7 +350,7 @@ export function DashboardPage({ onNaviguer, onReabonnerDepuisAlerte, onReabonner
                     <Card className="flex-row items-center justify-between gap-3 p-3">
                       <div>
                         <p className="font-medium text-card-foreground">
-                          Facture n° {v.idFacture} · {formateurFcfa.format(v.montantTotal)} FCFA · {v.client ?? "sans client"}
+                          Facture n° {v.idFacture} · {formateurFcfa.format(v.montantTotal)} FCFA · {v.client ?? "sans client"}{v.numeroAbonnement !== null && ` · abonnement n° ${v.numeroAbonnement}`}
                         </p>
                         <p className="text-sm text-muted-foreground">
                           {formateurDateCourte.format(lireDateServeur(v.dateCreation))} · {v.lignes.map((l) => `${l.quantite} × ${l.libelle}`).join(", ")}
@@ -360,7 +360,7 @@ export function DashboardPage({ onNaviguer, onReabonnerDepuisAlerte, onReabonner
                         <span className="text-sm text-muted-foreground">Paiement en cours…</span>
                       ) : (
                         <Button variant="outline" size="sm" className="cursor-pointer" onClick={() => setVenteAAnnuler(v)}>
-                          Annuler la vente
+                          {v.type === "ABONNEMENT" ? "Annuler le recrutement" : "Annuler la vente"}
                         </Button>
                       )}
                     </Card>

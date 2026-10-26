@@ -26,7 +26,11 @@ export function AnnulerVenteEnAttenteDialog({ vente, onFerme, onSucces }: Props)
     setEnCours(true);
     try {
       await annulerVenteEnAttenteRequete(token, vente.idFacture);
-      toast.success(`Vente annulée — facture n° ${vente.idFacture}, stock restitué.`);
+      toast.success(
+        vente.type === "ABONNEMENT"
+          ? `Recrutement annulé — facture n° ${vente.idFacture}, abonnement n° ${vente.numeroAbonnement} supprimé.`
+          : `Vente annulée — facture n° ${vente.idFacture}, stock restitué.`
+      );
       onSucces();
     } catch (erreur) {
       if (erreur instanceof ErreurAuthentification) {
@@ -44,7 +48,7 @@ export function AnnulerVenteEnAttenteDialog({ vente, onFerme, onSucces }: Props)
     <Dialog open={vente !== null} onOpenChange={(v) => !v && !enCours && onFerme()}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Annuler cette vente</DialogTitle>
+          <DialogTitle>{vente?.type === "ABONNEMENT" ? "Annuler ce recrutement" : "Annuler cette vente"}</DialogTitle>
           <DialogDescription>
             {vente && `Facture n° ${vente.idFacture} — ${formateurFcfa.format(vente.montantTotal)} FCFA — ${vente.client ?? "sans client"}`}
           </DialogDescription>
@@ -63,8 +67,9 @@ export function AnnulerVenteEnAttenteDialog({ vente, onFerme, onSucces }: Props)
         <div className="flex items-start gap-2 rounded-lg border border-destructive/40 bg-destructive/5 p-4">
           <AlertTriangle className="mt-0.5 size-4 shrink-0 text-destructive" aria-hidden="true" />
           <p className="text-sm text-card-foreground">
-            Aucun encaissement n'a été enregistré sur cette vente. Elle sera supprimée et ses articles remis en stock. Cette action
-            est journalisée et irréversible.
+            {vente?.type === "ABONNEMENT"
+              ? `Aucun encaissement n'a été enregistré. La facture et l'abonnement n° ${vente.numeroAbonnement} seront supprimés, la commission en attente aussi, et le matériel du kit remis en stock. Le client est conservé. Cette action est journalisée et irréversible.`
+              : "Aucun encaissement n'a été enregistré sur cette vente. Elle sera supprimée et ses articles remis en stock. Cette action est journalisée et irréversible."}
           </p>
         </div>
 

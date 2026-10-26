@@ -206,12 +206,15 @@ export async function encaisserSoldeFactureRequete(token: string, idFacture: num
   return lireJson<EncaisserSoldeResultat>(reponse);
 }
 
-// 6.4, 9.1 : vente de produits jamais encaissée (paiement Mobile Money abandonné) — son stock est sorti
+// 6.4, 9.1 : vente de produits ou recrutement jamais encaissé (paiement Mobile Money abandonné) — stock sorti, abonnement ouvert
 export interface VenteEnAttente {
   idFacture: number;
   dateCreation: string;
   montantTotal: number;
   client: string | null;
+  type: "PRODUITS" | "ABONNEMENT";
+  // recrutement jamais payé : l'abonnement qui s'annule avec la facture
+  numeroAbonnement: number | null;
   lignes: { libelle: string; quantite: number }[];
   paiementEnCours: boolean;
 }
@@ -221,7 +224,7 @@ export async function chargerVentesEnAttente(token: string): Promise<VenteEnAtte
   return lireJson<VenteEnAttente[]>(reponse);
 }
 
-// annulation tracée côté serveur : stock restitué, facture supprimée
+// annulation tracée côté serveur : stock restitué, facture (et abonnement d'un recrutement) supprimés
 export async function annulerVenteEnAttenteRequete(token: string, idFacture: number): Promise<{ idFacture: number; montantTotal: number }> {
   const reponse = await appelerServeur(`${BASE}/factures/${idFacture}/en-attente`, { method: "DELETE", headers: headersAuth(token) });
   return lireJson<{ idFacture: number; montantTotal: number }>(reponse);

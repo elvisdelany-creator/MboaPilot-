@@ -246,6 +246,30 @@ describe("changerStatutSav — cycle de vie (5.10)", () => {
     expect(notifications[0]).toMatchObject({ canal: "SMS", evenement: "SAV_PRET", statutEnvoi: "SIMULEE", idDossierSav: idDossierAvecAbonne });
   });
 
+  // le SMS dit qui écrit, pour quel dossier, et ce qu'il faut prévoir : « Votre appareil est prêt » seul ne dit rien à un client qui a
+  // laissé du matériel dans plusieurs boutiques, et ne dit pas combien apporter
+  it("8.4 : le SMS « Prêt » nomme la boutique, le dossier et le montant à régler", () => {
+    const idDossier = creerDossierSav(db, { siteId, descriptionPanne: "Ne s'allume plus", sousGarantie: false, userId, clientNom: "Mendo Luc", clientTelephone: "677889900" }).idDossierSav;
+    changerStatutSav(db, { idDossierSav: idDossier, nouveauStatut: "DIAGNOSTIC", userId });
+    changerStatutSav(db, { idDossierSav: idDossier, nouveauStatut: "REPARATION", userId });
+
+    changerStatutSav(db, { idDossierSav: idDossier, nouveauStatut: "PRET", userId, montantMainOeuvre: 5000 });
+
+    const notification = db.select().from(schema.notification).where(eq(schema.notification.idDossierSav, idDossier)).get();
+    expect(notification?.message).toBe(`Boutique Test : votre appareil (dossier n°${idDossier}) est prêt à être récupéré. Montant à régler : 5 000 FCFA.`);
+  });
+
+  it("8.4 : le SMS « Prêt » d'un dossier sous garantie sans frais annonce qu'il n'y a rien à régler", () => {
+    const idDossier = creerDossierSav(db, { siteId, descriptionPanne: "Ne s'allume plus", sousGarantie: true, userId, clientNom: "Mendo Luc", clientTelephone: "677889900" }).idDossierSav;
+    changerStatutSav(db, { idDossierSav: idDossier, nouveauStatut: "DIAGNOSTIC", userId });
+    changerStatutSav(db, { idDossierSav: idDossier, nouveauStatut: "REPARATION", userId });
+
+    changerStatutSav(db, { idDossierSav: idDossier, nouveauStatut: "PRET", userId, montantMainOeuvre: 5000 });
+
+    const notification = db.select().from(schema.notification).where(eq(schema.notification.idDossierSav, idDossier)).get();
+    expect(notification?.message).toContain("est prêt à être récupéré. Aucun frais à régler.");
+  });
+
   it("8.4 : n'envoie aucune notification pour un dossier sans abonné ni téléphone de client ponctuel", () => {
     // idDossierSav (fixture par défaut) n'a ni abonné ni téléphone renseigné
     changerStatutSav(db, { idDossierSav, nouveauStatut: "DIAGNOSTIC", userId });

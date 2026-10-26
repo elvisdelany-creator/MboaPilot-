@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm";
-import { extraireTaxeDuTTC, peutTransitionnerSav, type StatutSav } from "@mboapilot/shared";
+import { extraireTaxeDuTTC, messageSavPret, peutTransitionnerSav, type StatutSav } from "@mboapilot/shared";
 import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
 import { enregistrerMouvement } from "../stock/stock.repository.js";
@@ -178,18 +178,24 @@ export function changerStatutSav(
     // 8.4 : notification au client lorsque l'appareil passe au statut « Prêt »
     // — pour un abonné comme pour un client ponctuel (sav_dossier.client_telephone),
     // dès lors qu'un canal de contact est disponible.
+    // le SMS dit qui écrit, pour quel dossier, et ce qu'il faut prévoir à la remise de l'appareil
+    const messagePret = messageSavPret({
+      entreprise: db.select().from(schema.entreprise).get()?.nom ?? "",
+      numeroDossier: dossier.idDossierSav,
+      montantDu: montantFacture,
+    });
     if (dossier.idAbonne !== null) {
       envoyerNotificationAbonne(db, fournisseurNotification, {
         idAbonne: dossier.idAbonne,
         evenement: "SAV_PRET",
-        message: "Votre appareil est prêt à être récupéré.",
+        message: messagePret,
         idDossierSav: dossier.idDossierSav,
       });
     } else if (dossier.clientTelephone) {
       envoyerNotificationClientPonctuel(db, fournisseurNotification, {
         telephone: dossier.clientTelephone,
         evenement: "SAV_PRET",
-        message: "Votre appareil est prêt à être récupéré.",
+        message: messagePret,
         idDossierSav: dossier.idDossierSav,
       });
     }

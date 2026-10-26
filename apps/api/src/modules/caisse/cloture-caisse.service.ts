@@ -108,7 +108,19 @@ export function fermerCaisse(db: Db, params: FermerCaisseParams) {
       .innerJoin(schema.facture, eq(schema.paiement.idFacture, schema.facture.idFacture))
       .where(and(eq(schema.facture.siteId, cloture.siteId), eq(schema.paiement.mode, mode), gte(schema.paiement.datePaiement, depuis)))
       .get();
-    const montantTheorique = (mode === "CASH" ? cloture.fondOuverture : 0) + Number(paiements?.total ?? 0);
+    // 6.3 : une commission d'apporteur réglée en espèces sort du tiroir ; sans cette déduction, chaque règlement laissait le tiroir en
+    // déficit de son montant à la clôture. Seul le comptant est concerné (un chèque ou un virement ne passe pas par le tiroir), et le
+    // tiroir est celui du site de l'utilisateur qui a réglé.
+    const reglementsEspeces =
+      mode === "CASH"
+        ? db
+            .select({ total: sql<number>`coalesce(sum(${schema.reglementCommission.montant}), 0)` })
+            .from(schema.reglementCommission)
+            .innerJoin(schema.utilisateur, eq(schema.reglementCommission.utilisateurId, schema.utilisateur.idUser))
+            .where(and(eq(schema.utilisateur.siteId, cloture.siteId), eq(schema.reglementCommission.modePaiement, "CASH"), gte(schema.reglementCommission.dateReglement, depuis)))
+            .get()
+        : undefined;
+    const montantTheorique = (mode === "CASH" ? cloture.fondOuverture : 0) + Number(paiements?.total ?? 0) - Number(reglementsEspeces?.total ?? 0);
     const montantCompte = comptagesSaisis.find((c) => c.mode === mode)?.montantCompte ?? 0;
     return { mode, montantTheorique, montantCompte, ecart: montantCompte - montantTheorique };
   });

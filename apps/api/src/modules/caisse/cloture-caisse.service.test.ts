@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { creerDbTest, type Db } from "../../test-utils/db.js";
 import * as schema from "../../db/schema.js";
 import { fermerCaisse, obtenirClotureOuverte, ouvrirCaisse } from "./cloture-caisse.service.js";
+import { creerApporteur } from "../apporteurs/apporteur.repository.js";
 
 let db: Db;
 let siteId: number;
@@ -148,6 +149,69 @@ describe("fermerCaisse (13.1) — écart théorique/réel par mode de paiement",
     fermerCaisse(db, { idCloture: cloture.idCloture, userId: caissierId, comptages: [{ mode: "CASH", montantCompte: 5000 }] });
 
     expect(() => fermerCaisse(db, { idCloture: cloture.idCloture, userId: caissierId, comptages: [{ mode: "CASH", montantCompte: 5000 }] })).toThrow(/déjà fermée/i);
+  });
+});
+
+// 6.3, 13.1 : un règlement de commission en espèces sort physiquement du tiroir-caisse. Le théorique ne comptait que les encaissements et
+// les remboursements d'avoir : chaque commission payée en espèces laissait donc le tiroir en déficit de son montant à la clôture, un faux écart.
+describe("fermerCaisse (13.1) — règlements de commission d'apporteur", () => {
+  function regler(montant: number, modePaiement: "CASH" | "CHEQUE" | "VIREMENT" | "MOBILE_MONEY", options: { utilisateurId?: number; dateReglement?: string } = {}) {
+    const apporteur = db.select().from(schema.sousDistributeur).get() ?? creerApporteur(db, { nom: "Agence Kamga", tauxCommissionDefaut: 100 });
+    db.insert(schema.reglementCommission)
+      .values({ apporteurId: apporteur.idApporteur, montant, modePaiement, utilisateurId: options.utilisateurId ?? caissierId, ...(options.dateReglement !== undefined && { dateReglement: options.dateReglement }) })
+      .run();
+  }
+
+  it("un règlement en espèces est déduit du théorique des espèces : le tiroir compté ne présente aucun écart", () => {
+    const cloture = ouvrirCaisse(db, { siteId, userId: caissierId, fondOuverture: 10000 });
+    encaisserVente(30000, "CASH");
+    regler(4000, "CASH");
+
+    const resultat = fermerCaisse(db, { idCloture: cloture.idCloture, userId: caissierId, comptages: [{ mode: "CASH", montantCompte: 36000 }] }); // 10 000 + 30 000 − 4 000
+
+    const cash = resultat.comptages.find((c) => c.mode === "CASH")!;
+    expect(cash.montantTheorique).toBe(36000);
+    expect(cash.ecart).toBe(0);
+  });
+
+  it("un règlement par chèque, virement ou Mobile Money ne sort pas d'espèces du tiroir", () => {
+    const cloture = ouvrirCaisse(db, { siteId, userId: caissierId, fondOuverture: 10000 });
+    encaisserVente(30000, "CASH");
+    regler(4000, "VIREMENT");
+    regler(1000, "CHEQUE");
+    regler(500, "MOBILE_MONEY");
+
+    const resultat = fermerCaisse(db, { idCloture: cloture.idCloture, userId: caissierId, comptages: [{ mode: "CASH", montantCompte: 40000 }] });
+
+    expect(resultat.comptages.find((c) => c.mode === "CASH")!.montantTheorique).toBe(40000);
+    expect(resultat.comptages.find((c) => c.mode === "VIREMENT")!.montantTheorique).toBe(0);
+  });
+
+  it("un règlement fait avant la dernière clôture n'est pas déduit une seconde fois à la clôture suivante", () => {
+    const premiere = ouvrirCaisse(db, { siteId, userId: caissierId, fondOuverture: 5000 });
+    regler(2000, "CASH", { dateReglement: "2025-01-01 09:00:00" });
+    fermerCaisse(db, { idCloture: premiere.idCloture, userId: caissierId, comptages: [{ mode: "CASH", montantCompte: 3000 }] });
+
+    const seconde = ouvrirCaisse(db, { siteId, userId: caissierId, fondOuverture: 3000 });
+    encaisserVente(1000, "CASH");
+    const resultat = fermerCaisse(db, { idCloture: seconde.idCloture, userId: caissierId, comptages: [{ mode: "CASH", montantCompte: 4000 }] });
+
+    expect(resultat.comptages.find((c) => c.mode === "CASH")!.montantTheorique).toBe(4000);
+  });
+
+  it("le règlement fait par un utilisateur d'un autre site ne sort pas de ce tiroir", () => {
+    const autreSite = db.insert(schema.site).values({ idEntreprise: db.select().from(schema.entreprise).get()!.idEntreprise, nom: "Site B" }).returning().get().idSite;
+    const autreUtilisateur = db
+      .insert(schema.utilisateur)
+      .values({ siteId: autreSite, nom: "C", prenom: "D", identifiant: "cd", motDePasseHash: "h", role: "GERANT" })
+      .returning()
+      .get().idUser;
+    const cloture = ouvrirCaisse(db, { siteId, userId: caissierId, fondOuverture: 10000 });
+    regler(4000, "CASH", { utilisateurId: autreUtilisateur });
+
+    const resultat = fermerCaisse(db, { idCloture: cloture.idCloture, userId: caissierId, comptages: [{ mode: "CASH", montantCompte: 10000 }] });
+
+    expect(resultat.comptages.find((c) => c.mode === "CASH")!.montantTheorique).toBe(10000);
   });
 });
 

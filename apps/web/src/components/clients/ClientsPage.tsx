@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
   ArrowUpCircle,
+  Ban,
   ChevronDown,
   ChevronUp,
   GitMerge,
@@ -45,6 +46,7 @@ import { AnonymiserAbonneDialog } from "./AnonymiserAbonneDialog";
 import { EmettreAvoirDialog } from "./EmettreAvoirDialog";
 import { EncaisserSoldeDialog } from "./EncaisserSoldeDialog";
 import { AnnulerPaiementDialog } from "./AnnulerPaiementDialog";
+import { ResilierAbonnementDialog } from "./ResilierAbonnementDialog";
 import { ConfirmerRapprochementDialog } from "./ConfirmerRapprochementDialog";
 import type { Abonne, AbonnementAvecFormule, CatalogueFamille, DossierSavDetaille, Facture, Fiche360, Paiement } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -116,6 +118,8 @@ export function ClientsPage({ onNaviguer, onReabonnerDepuisFiche }: Props) {
   const [anonymiserCible, setAnonymiserCible] = useState<Abonne | null>(null);
   const [echangeMaterielCible, setEchangeMaterielCible] = useState<number | null>(null);
   const [changerFormuleCible, setChangerFormuleCible] = useState<AbonnementAvecFormule | null>(null);
+  // 4.3 : abonnement ACTIF à résilier (action manuelle, état terminal)
+  const [resiliationCible, setResiliationCible] = useState<AbonnementAvecFormule | null>(null);
   const [filtreFacture, setFiltreFacture] = useState<"toutes" | "impayees">("toutes");
   // 6.4 : facture à créditer par avoir — depuis l'onglet Facturation
   const [avoirCible, setAvoirCible] = useState<Facture | null>(null);
@@ -222,6 +226,7 @@ export function ClientsPage({ onNaviguer, onReabonnerDepuisFiche }: Props) {
   function onActionAbonnementReussie() {
     setEchangeMaterielCible(null);
     setChangerFormuleCible(null);
+    setResiliationCible(null);
     if (idSelectionne !== null) rechargerFiche(idSelectionne);
   }
 
@@ -419,6 +424,17 @@ export function ClientsPage({ onNaviguer, onReabonnerDepuisFiche }: Props) {
                                   >
                                     <Wrench className="size-3.5" />
                                     Échanger le matériel
+                                  </Button>
+                                )}
+                                {a.statut === "ACTIF" && peutEmettreAvoir && (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="cursor-pointer gap-1 text-destructive hover:text-destructive"
+                                    onClick={() => setResiliationCible(a)}
+                                  >
+                                    <Ban className="size-3.5" />
+                                    Résilier
                                   </Button>
                                 )}
                               </div>
@@ -745,6 +761,14 @@ export function ClientsPage({ onNaviguer, onReabonnerDepuisFiche }: Props) {
       <EchangeMaterielDialog
         numeroAbonnement={echangeMaterielCible}
         onFerme={() => setEchangeMaterielCible(null)}
+        onSucces={onActionAbonnementReussie}
+      />
+
+      <ResilierAbonnementDialog
+        numeroAbonnement={resiliationCible?.numeroAbonnement ?? null}
+        libelle={resiliationCible ? `${resiliationCible.familleLibelle} — ${resiliationCible.formuleLibelle}` : ""}
+        commissionEnCours={!!resiliationCible && !!fiche && fiche.commissionsCanalplus.some((c) => c.numeroAbonnement === resiliationCible.numeroAbonnement && c.statut === "EN_COURS")}
+        onFerme={() => setResiliationCible(null)}
         onSucces={onActionAbonnementReussie}
       />
 

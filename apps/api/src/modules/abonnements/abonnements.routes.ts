@@ -3,13 +3,14 @@ import type { FastifyInstance } from "fastify";
 import { jourDouala } from "@mboapilot/shared";
 import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
-import type { RouteGuards } from "../auth/auth.plugin.js";
+import type { Guard, RouteGuards } from "../auth/auth.plugin.js";
 import { siteAutorise } from "../auth/auth.plugin.js";
 import { trouverAbonne } from "../abonnes/abonne.repository.js";
 import { recruterAbonne, type RecruterAbonneParams } from "./recrutement.service.js";
 import { reabonner, type ReabonnerParams } from "./reabonnement.service.js";
 import { echangerMateriel, type EchangerMaterielParams } from "./echange-materiel.service.js";
 import { changerFormule, type ChangerFormuleParams } from "./changement-formule.service.js";
+import { resilierAbonnement } from "./resiliation.service.js";
 import { listerAbonnementsParAbonne } from "./abonnement.repository.js";
 import { envoyerErreur } from "../../lib/erreurs-api.js";
 
@@ -41,7 +42,26 @@ function abonnementAutreSite(db: Db, appelant: Appelant, numeroAbonnement: numbe
 
 // 11.2 : les opérations de vente (recrutement, réabonnement) sont réservées aux
 // rôles habilités à encaisser — cohérent avec le périmètre de l'écran de caisse.
-export function registerAbonnementsRoutes(app: FastifyInstance, db: Db, guards: RouteGuards) {
+export function registerAbonnementsRoutes(app: FastifyInstance, db: Db, guards: RouteGuards & { gestionResiliation: Guard }) {
+  // 4.3 : résiliation manuelle (demande du client, litige, matériel non restitué) — réservée à l'encadrement. Le jour vient du
+  // serveur et l'auteur du jeton : ni l'un ni l'autre ne se confient au poste.
+  app.post<{ Params: { numeroAbonnement: string }; Body: { motif: string } }>(
+    "/api/v1/abonnements/:numeroAbonnement/resiliation",
+    { preHandler: [guards.authRequis, guards.gestionResiliation] },
+    async (request, reply) => {
+      const numeroAbonnement = Number(request.params.numeroAbonnement);
+      if (abonnementAutreSite(db, request.user, numeroAbonnement)) {
+        reply.code(403).send(ERREUR_SITE_ABONNEMENT);
+        return;
+      }
+      try {
+        reply.code(200).send(resilierAbonnement(db, { numeroAbonnement, userId: request.user.idUser, aujourdHui: jourDouala(), motif: request.body.motif }));
+      } catch (erreur) {
+        envoyerErreur(reply, erreur);
+      }
+    }
+  );
+
   app.get<{ Params: { idAbonne: string } }>(
     "/api/v1/abonnes/:idAbonne/abonnements",
     { preHandler: [guards.authRequis, guards.ventes] },

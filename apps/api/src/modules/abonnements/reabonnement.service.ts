@@ -57,6 +57,10 @@ function reabonnerSansTransaction(db: Db, params: ReabonnerParams): Reabonnement
     .where(eq(schema.abonnement.numeroAbonnement, params.numeroAbonnement))
     .get();
   if (!abonnementActuel) throw new Error(`Abonnement ${params.numeroAbonnement} introuvable`);
+  // 4.3 : RESILIE est un état terminal — « un nouvel abonnement (nouveau numéro) peut être recréé pour le même abonné »
+  if (abonnementActuel.statut === "RESILIE") {
+    throw new Error("Cet abonnement est résilié : il ne se renouvelle pas, créez un nouvel abonnement pour ce client");
+  }
   // de quoi défaire le réabonnement s'il n'est jamais payé (annulation-facture.service.ts)
   const etatAvant = etatAbonnement(db, params.numeroAbonnement);
   const reperHistorique = dernierIdHistorique(db);
@@ -104,17 +108,17 @@ function reabonnerSansTransaction(db: Db, params: ReabonnerParams): Reabonnement
   // Basé sur les dates réelles, jamais sur le statut stocké : le job
   // quotidien qui bascule le statut à EXPIRE ne tourne qu'une fois par jour,
   // et un client peut se réabonner avant son passage (statut encore ACTIF
-  // alors que la date de fin est déjà dépassée) — seule une résiliation
-  // explicite (RESILIE) est exclue du délai de grâce.
+  // alors que la date de fin est déjà dépassée). Un abonnement RESILIE est
+  // refusé plus haut : il ne se renouvelle pas (4.3).
   const delaiGrace = trouverDelaiGraceReabonnementEntreprise(db);
   const joursDepuisExpiration = -joursAvantEcheance(abonnementActuel.dateFin, params.aujourdHui);
-  const dansLeDelaiDeGrace = abonnementActuel.statut !== "RESILIE" && joursDepuisExpiration > 0 && joursDepuisExpiration <= delaiGrace;
+  const dansLeDelaiDeGrace = joursDepuisExpiration > 0 && joursDepuisExpiration <= delaiGrace;
 
   // 4.3, 7.2 : un réabonnement fait AVANT la fin de la période (ou le jour même) prolonge la période en cours, sans perdre un seul jour
   // déjà payé : la nouvelle période démarre le lendemain de la fin actuelle. Partir de la date du paiement faisait perdre au client
   // les jours qui lui restaient (23 jours de service pour 30 payés à 7 jours de l'échéance) et annulait à tort la commission CANAL+
   // d'un client pourtant jamais interrompu (6.2). Après l'échéance, la date du réabonnement (ou le délai de grâce) s'applique toujours.
-  const avantLEcheance = abonnementActuel.statut !== "RESILIE" && joursAvantEcheance(abonnementActuel.dateFin, params.aujourdHui) >= 0;
+  const avantLEcheance = joursAvantEcheance(abonnementActuel.dateFin, params.aujourdHui) >= 0;
   const dateDebut = avantLEcheance ? decalerJour(abonnementActuel.dateFin, 1) : dansLeDelaiDeGrace ? abonnementActuel.dateFin : params.aujourdHui;
   const dateFin = calculerDateFin(dateDebut, formule.dureeCycles, formule.modeDuree);
 

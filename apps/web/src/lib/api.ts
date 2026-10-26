@@ -582,6 +582,16 @@ export interface ChangerFormulePayload {
   referenceVirement?: string;
 }
 
+// 4.3 : résiliation manuelle d'un abonnement ACTIF (état terminal) — motif obligatoire, historisé côté serveur
+export async function resilierAbonnementRequete(token: string, numeroAbonnement: number, motif: string): Promise<{ numeroAbonnement: number; commissionAnnulee: boolean }> {
+  const reponse = await appelerServeur(`${BASE}/abonnements/${numeroAbonnement}/resiliation`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headersAuth(token) },
+    body: JSON.stringify({ motif }),
+  });
+  return lireJson<{ numeroAbonnement: number; commissionAnnulee: boolean }>(reponse);
+}
+
 export async function changerFormuleRequete(
   token: string,
   numeroAbonnement: number,

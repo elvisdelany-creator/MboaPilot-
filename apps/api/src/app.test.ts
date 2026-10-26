@@ -2214,6 +2214,77 @@ describe("Ventes en attente : liste et annulation (6.4, 9.1)", () => {
   });
 });
 
+// 4.3 : résiliation manuelle d'un abonnement — « action explicite d'un utilisateur habilité »
+describe("Résiliation d'un abonnement (4.3)", () => {
+  const abonnementActif = (siteDeLAbonnement = siteId) => {
+    const abonne = db.insert(schema.abonne).values({ siteId: siteDeLAbonnement, nom: "Ngo", prenom: "Paul", telephone: "677000555" }).returning().get();
+    return db
+      .insert(schema.abonnement)
+      .values({ idAbonne: abonne.idAbonne, idFormule, siteId: siteDeLAbonnement, dateDebut: jourDouala(), dateFin: "2099-01-01", creePar: userId })
+      .returning()
+      .get();
+  };
+
+  it("un gérant résilie un abonnement : statut RESILIE, historique à son nom avec le motif", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const gerant = creerUtilisateur(db, { siteId, nom: "Gerant", prenom: "G", identifiant: "gerant1", motDePasse: "motdepasse-secret", role: "GERANT" });
+    const token = await connecter(app, "gerant1");
+    const abonnement = abonnementActif();
+
+    const reponse = await app.inject({
+      method: "POST",
+      url: `/api/v1/abonnements/${abonnement.numeroAbonnement}/resiliation`,
+      headers: authHeader(token),
+      payload: { motif: "Demande du client", userId },
+    });
+
+    expect(reponse.statusCode).toBe(200);
+    expect(db.select().from(schema.abonnement).where(eq(schema.abonnement.numeroAbonnement, abonnement.numeroAbonnement)).get()?.statut).toBe("RESILIE");
+    const histo = db.select().from(schema.historiqueAbonnement).all();
+    expect(histo).toHaveLength(1);
+    expect(histo[0].utilisateurId).toBe(gerant.idUser); // l'auteur du jeton, jamais celui du corps
+    expect(histo[0].motif).toContain("Demande du client");
+  });
+
+  it("refuse sans motif (400), sans rien modifier", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    creerUtilisateur(db, { siteId, nom: "Gerant", prenom: "G", identifiant: "gerant1", motDePasse: "motdepasse-secret", role: "GERANT" });
+    const token = await connecter(app, "gerant1");
+    const abonnement = abonnementActif();
+
+    const reponse = await app.inject({ method: "POST", url: `/api/v1/abonnements/${abonnement.numeroAbonnement}/resiliation`, headers: authHeader(token), payload: {} });
+
+    expect(reponse.statusCode).toBe(400);
+    expect(reponse.json().erreur).toMatch(/motif/i);
+    expect(db.select().from(schema.abonnement).where(eq(schema.abonnement.numeroAbonnement, abonnement.numeroAbonnement)).get()?.statut).toBe("ACTIF");
+  });
+
+  it("un caissier ne peut pas résilier (403)", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const token = await connecter(app);
+    const abonnement = abonnementActif();
+
+    const reponse = await app.inject({ method: "POST", url: `/api/v1/abonnements/${abonnement.numeroAbonnement}/resiliation`, headers: authHeader(token), payload: { motif: "x" } });
+
+    expect(reponse.statusCode).toBe(403);
+    expect(db.select().from(schema.abonnement).where(eq(schema.abonnement.numeroAbonnement, abonnement.numeroAbonnement)).get()?.statut).toBe("ACTIF");
+  });
+
+  it("un gérant ne résilie pas l'abonnement d'un autre site (403)", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    creerUtilisateur(db, { siteId, nom: "Gerant", prenom: "G", identifiant: "gerant1", motDePasse: "motdepasse-secret", role: "GERANT" });
+    const token = await connecter(app, "gerant1");
+    const idEntreprise = db.select().from(schema.site).where(eq(schema.site.idSite, siteId)).get()!.idEntreprise;
+    const autreSite = db.insert(schema.site).values({ idEntreprise, nom: "Site B" }).returning().get().idSite;
+    const abonnement = abonnementActif(autreSite);
+
+    const reponse = await app.inject({ method: "POST", url: `/api/v1/abonnements/${abonnement.numeroAbonnement}/resiliation`, headers: authHeader(token), payload: { motif: "x" } });
+
+    expect(reponse.statusCode).toBe(403);
+    expect(db.select().from(schema.abonnement).where(eq(schema.abonnement.numeroAbonnement, abonnement.numeroAbonnement)).get()?.statut).toBe("ACTIF");
+  });
+});
+
 // 6.5 : "Virement bancaire — Différée (rapprochement)", contrairement au
 // comptant et au chèque qui sont "Immédiate"
 describe("Rapprochement bancaire d'un virement (6.5)", () => {

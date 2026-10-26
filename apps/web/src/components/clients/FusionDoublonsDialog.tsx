@@ -96,6 +96,7 @@ export function FusionDoublonsDialog({ abonnePrincipal, onFerme, onSucces }: Pro
               value={terme}
               onChange={(e) => setTerme(e.target.value)}
               placeholder="Rechercher la fiche doublon (nom, téléphone, n° abonné)…"
+              aria-label="Rechercher la fiche doublon"
               className="h-11"
             />
             {resultats.length > 0 && (

@@ -143,6 +143,7 @@ export function EmettreAvoirDialog({ facture, onFerme, onSucces }: Props) {
                   type="number"
                   min={1}
                   max={ligne.quantite}
+                  aria-label={`Quantité à créditer — ${ligne.libelleProduit ?? ligne.libelleKit ?? "Abonnement"}`}
                   disabled={!coche}
                   value={selection[ligne.idLigne] ?? ligne.quantite}
                   onChange={(e) => setSelection((s) => ({ ...s, [ligne.idLigne]: Number(e.target.value) }))}

@@ -53,6 +53,11 @@ function DialogContent({
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
   showCloseButton?: boolean
 }) {
+  // Les fenêtres de l'application sont pilotées par un état, sans <DialogTrigger> : Radix ne sait alors pas où rendre le focus
+  // à la fermeture, et il tombait sur la page (le clavier repartait du début). On retient l'élément qui avait le focus à
+  // l'ouverture (le bouton cliqué) et on le lui rend, s'il existe encore.
+  const declencheur = React.useRef<HTMLElement | null>(null)
+  const { onOpenAutoFocus, onCloseAutoFocus, ...reste } = props
   return (
     <DialogPortal data-slot="dialog-portal">
       <DialogOverlay />
@@ -62,7 +67,20 @@ function DialogContent({
           "fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg border bg-background p-6 shadow-lg duration-200 outline-none data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 sm:max-w-lg",
           className
         )}
-        {...props}
+        {...reste}
+        onOpenAutoFocus={(event) => {
+          declencheur.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
+          onOpenAutoFocus?.(event)
+        }}
+        onCloseAutoFocus={(event) => {
+          onCloseAutoFocus?.(event)
+          if (event.defaultPrevented) return
+          const cible = declencheur.current
+          if (cible && cible !== document.body && document.body.contains(cible)) {
+            event.preventDefault()
+            cible.focus()
+          }
+        }}
       >
         {children}
         {showCloseButton && (
@@ -71,7 +89,7 @@ function DialogContent({
             className="absolute top-4 right-4 rounded-xs opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:outline-hidden disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4"
           >
             <XIcon />
-            <span className="sr-only">Close</span>
+            <span className="sr-only">Fermer</span>
           </DialogPrimitive.Close>
         )}
       </DialogPrimitive.Content>

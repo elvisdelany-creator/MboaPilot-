@@ -2,6 +2,7 @@ import { eq, sql } from "drizzle-orm";
 import { peutTransitionnerPaiementMobile } from "@mboapilot/shared";
 import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
+import { paiementMobileEnCours } from "../factures/paiement.repository.js";
 import type { FournisseurPaiementMobile, ParcoursPaiementMobile } from "./fournisseur.js";
 import { creerSuiviCommissionCanalplus } from "../abonnements/suivi-commission-canalplus.repository.js";
 import { verifierEntier } from "../../lib/validation.js";
@@ -48,13 +49,7 @@ export async function initierPaiementMobile(db: Db, fournisseur: FournisseurPaie
   // confirmations aboutissent et le client est débité deux fois. Jugé sur la
   // date d'expiration réelle (et non sur le seul statut, actualisé à la
   // demande) pour qu'un client dont le code n'a pas été saisi puisse réessayer.
-  const enAttente = db
-    .select()
-    .from(schema.transactionMobileMoney)
-    .where(eq(schema.transactionMobileMoney.idFacture, params.idFacture))
-    .all()
-    .some((t) => (t.statut === "INITIEE" || t.statut === "EN_ATTENTE") && new Date(t.dateExpiration).getTime() > Date.now());
-  if (enAttente) throw new Error("Un paiement Mobile Money est déjà en attente de confirmation pour cette facture");
+  if (paiementMobileEnCours(db, params.idFacture)) throw new Error("Un paiement Mobile Money est déjà en attente de confirmation pour cette facture");
 
   const dateExpiration = new Date(Date.now() + DELAI_EXPIRATION_MINUTES * 60 * 1000).toISOString();
 

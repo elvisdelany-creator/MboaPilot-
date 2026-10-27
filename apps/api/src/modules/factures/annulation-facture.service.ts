@@ -3,6 +3,7 @@ import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
 import { enregistrerMouvement } from "../stock/stock.repository.js";
 import { restituerComposantsKit } from "../stock/stock.service.js";
+import { paiementMobileEnCours } from "./paiement.repository.js";
 import { etatAbonnement, type DetailsOperationEnAttente, type TypeOperationAbonnement } from "../abonnements/operation-en-attente.repository.js";
 
 export interface AnnulerFactureEnAttenteParams {
@@ -34,8 +35,6 @@ type Facture = typeof schema.facture.$inferSelect;
 type Nature = { type: "PRODUITS" } | { type: "ABONNEMENT"; numeroAbonnement: number } | { type: TypeOperationAbonnement; numeroAbonnement: number };
 
 const MESSAGE_ABONNEMENT_EVOLUE = "L'abonnement a évolué depuis cette opération : annulez d'abord l'opération plus récente";
-
-const STATUTS_MOBILE_OUVERTS = ["INITIEE", "EN_ATTENTE"] as const;
 
 // 6.4 : une facture BROUILLON « reste modifiable sans restriction » ; 9.1, 11.5 : aucune suppression de vente sans confirmation
 // ni traçabilité. Une vente dont le paiement Mobile Money n'a jamais abouti laissait sa facture BROUILLON, son stock sorti et,
@@ -81,17 +80,6 @@ function natureDeLaVente(db: Db, facture: Facture): Nature | null {
   return { type: "ABONNEMENT", numeroAbonnement };
 }
 
-// Le statut d'une transaction n'est actualisé qu'à la demande (paiement-mobile.service.ts) : c'est la date d'expiration qui dit
-// si elle peut encore aboutir. Jugée sur le seul statut, une transaction abandonnée bloquerait l'annulation pour toujours.
-function paiementMobileOuvert(db: Db, idFacture: number): boolean {
-  return db
-    .select()
-    .from(schema.transactionMobileMoney)
-    .where(and(eq(schema.transactionMobileMoney.idFacture, idFacture), inArray(schema.transactionMobileMoney.statut, [...STATUTS_MOBILE_OUVERTS])))
-    .all()
-    .some((t) => new Date(t.dateExpiration).getTime() > Date.now());
-}
-
 export function annulerFactureEnAttente(db: Db, params: AnnulerFactureEnAttenteParams): AnnulerFactureEnAttenteResultat {
   // atomique : stock restitué, trace d'audit et suppressions s'écrivent ensemble
   return db.transaction(() => {
@@ -107,7 +95,7 @@ export function annulerFactureEnAttente(db: Db, params: AnnulerFactureEnAttenteP
         "Seule une vente de produits ou un recrutement sans encaissement peut être annulé : cette facture porte un réabonnement, un changement d'abonnement, un échange de matériel ou un dossier SAV"
       );
     }
-    if (paiementMobileOuvert(db, facture.idFacture)) {
+    if (paiementMobileEnCours(db, facture.idFacture)) {
       throw new Error("Un paiement Mobile Money est en cours sur cette vente : attendez son résultat avant de l'annuler");
     }
     const operation = operationEnAttente(db, facture.idFacture);
@@ -233,7 +221,7 @@ export function listerVentesEnAttente(db: Db, siteId: number): VenteEnAttente[] 
         return operation ? blocageOperation(db, operation) : null;
       })(),
       lignes: lignesDeFacture(db, facture.idFacture).map((ligne) => ({ libelle: libelleLigne(db, ligne), quantite: ligne.quantite })),
-      paiementEnCours: paiementMobileOuvert(db, facture.idFacture),
+      paiementEnCours: paiementMobileEnCours(db, facture.idFacture),
     });
   }
   return ventes;

@@ -95,6 +95,52 @@ describe("creerPaiement — monnaie rendue (8.5, 9.2, 13.1)", () => {
   });
 });
 
+// 6.6 : un paiement Mobile Money en cours peut encore aboutir. Encaisser la facture autrement pendant ce temps la faisait payer deux fois :
+// 5 000 FCFA en espèces, puis 5 000 FCFA débités au client à la confirmation, sur une facture de 5 000.
+describe("creerPaiement — paiement Mobile Money en cours (6.6)", () => {
+  const transaction = (statut: "INITIEE" | "EN_ATTENTE" | "REUSSIE" | "ECHOUEE" | "EXPIREE", dateExpiration: string) =>
+    db
+      .insert(schema.transactionMobileMoney)
+      .values({ idFacture, parcours: "USSD_CLIENT", numeroTelephone: "690000000", montant: 10000, statut, dateExpiration })
+      .run();
+  const dansLeFutur = () => new Date(Date.now() + 5 * 60_000).toISOString();
+  const dansLePasse = () => new Date(Date.now() - 5 * 60_000).toISOString();
+  const nombrePaiements = () => db.select().from(schema.paiement).all().length;
+
+  it.each(["INITIEE", "EN_ATTENTE"] as const)("refuse un encaissement tant qu'une transaction %s peut encore aboutir", (statut) => {
+    transaction(statut, dansLeFutur());
+
+    for (const mode of ["CASH", "CHEQUE", "VIREMENT"] as const) {
+      expect(() => creerPaiement(db, { idFacture, mode, montant: 10000, utilisateurId: userId, banque: "B", numeroCheque: "1", titulaireCheque: "T", dateCheque: "2026-09-01", referenceVirement: "R" })).toThrow(
+        /Mobile Money.*en cours/i
+      );
+    }
+    expect(nombrePaiements()).toBe(0);
+  });
+
+  it("accepte l'encaissement quand la transaction est échouée, expirée, réussie, ou restée EN_ATTENTE au-delà de son délai", () => {
+    transaction("ECHOUEE", dansLeFutur());
+    transaction("EXPIREE", dansLeFutur());
+    transaction("EN_ATTENTE", dansLePasse()); // le statut n'est actualisé qu'à la demande : seule la date dit qu'elle ne peut plus aboutir
+
+    expect(() => creerPaiement(db, { idFacture, mode: "CASH", montant: 10000, utilisateurId: userId })).not.toThrow();
+  });
+
+  it("ne bloque jamais un remboursement (montant négatif d'un avoir)", () => {
+    transaction("EN_ATTENTE", dansLeFutur());
+
+    expect(() => creerPaiement(db, { idFacture, mode: "CASH", montant: -2000, utilisateurId: userId })).not.toThrow();
+  });
+
+  it("n'affecte que la facture concernée", () => {
+    const abonne = db.select().from(schema.abonne).get()!;
+    const autre = db.insert(schema.facture).values({ siteId: abonne.siteId, idAbonne: abonne.idAbonne, creePar: userId, montantTotal: 3000 }).returning().get();
+    transaction("EN_ATTENTE", dansLeFutur());
+
+    expect(() => creerPaiement(db, { idFacture: autre.idFacture, mode: "CASH", montant: 3000, utilisateurId: userId })).not.toThrow();
+  });
+});
+
 describe("confirmerRapprochementVirement (6.5)", () => {
   it("passe un virement EN_ATTENTE à RAPPROCHE", () => {
     const paiement = creerPaiement(db, { idFacture, mode: "VIREMENT", montant: 10000, utilisateurId: userId, referenceVirement: "VIR-001" });

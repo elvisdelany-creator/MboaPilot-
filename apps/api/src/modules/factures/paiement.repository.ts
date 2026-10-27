@@ -1,4 +1,4 @@
-import { eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
 
@@ -43,11 +43,29 @@ function montantEncaisseNet(db: Db, params: CreerPaiementParams): number {
   return solde > 0 ? Math.min(params.montant, solde) : params.montant;
 }
 
+// 6.6 : un paiement Mobile Money encore ouvert peut aboutir à tout moment. Le statut d'une transaction n'est actualisé qu'à la
+// demande (paiement-mobile.service.ts) : c'est la date d'expiration qui dit si elle peut encore aboutir. Jugée sur le seul statut,
+// une transaction abandonnée bloquerait la facture pour toujours.
+export function paiementMobileEnCours(db: Db, idFacture: number): boolean {
+  return db
+    .select()
+    .from(schema.transactionMobileMoney)
+    .where(and(eq(schema.transactionMobileMoney.idFacture, idFacture), inArray(schema.transactionMobileMoney.statut, ["INITIEE", "EN_ATTENTE"])))
+    .all()
+    .some((t) => new Date(t.dateExpiration).getTime() > Date.now());
+}
+
 // 6.5 : "Comptant" et "Chèque" ont une validation "Immédiate" ; seul le
 // "Virement bancaire" est "Différée (rapprochement)" — un virement démarre
 // donc EN_ATTENTE de rapprochement, les autres modes n'ont aucun statut
 // (null, notion non applicable).
 export function creerPaiement(db: Db, params: CreerPaiementParams) {
+  // encaisser autrement pendant qu'un Mobile Money peut encore aboutir ferait payer deux fois le client : les 5 000 FCFA en espèces,
+  // puis les 5 000 FCFA débités à la confirmation. Un remboursement (montant négatif, avoir) n'est jamais bloqué, et la confirmation
+  // du Mobile Money enregistre son propre paiement sans passer ici.
+  if (params.montant > 0 && paiementMobileEnCours(db, params.idFacture)) {
+    throw new Error("Un paiement Mobile Money est en cours sur cette facture : attendez son résultat avant d'encaisser autrement, sous peine de faire payer le client deux fois");
+  }
   return db
     .insert(schema.paiement)
     .values({

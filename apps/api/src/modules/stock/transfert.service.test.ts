@@ -29,6 +29,60 @@ beforeEach(() => {
     .get().idProduit;
 });
 
+// 5.2 : le coût de revient se recalcule en coût moyen pondéré à chaque entrée de stock — un transfert est une entrée au site
+// destination, qui reçoit des unités au coût du site source. Laissé tel quel, le coût du destinataire ne bougeait pas : la valorisation
+// du stock et la marge de ce site étaient fausses dès que les deux sites ne payaient pas l'article au même prix.
+describe("transfererStock : coût moyen pondéré au site destination (5.2)", () => {
+  const produitDestination = (quantiteStock: number, coutRevient: number) =>
+    db
+      .insert(schema.produit)
+      .values({ siteId: siteDestination, type: "BIEN", libelle: "Décodeur GLOBALZ", prixVente: 15000, coutRevient, suiviStock: 1, quantiteStock })
+      .returning()
+      .get().idProduit;
+  const cout = (idProduit: number) => db.select().from(schema.produit).where(eq(schema.produit.idProduit, idProduit)).get()!.coutRevient;
+
+  it("pondère le coût des unités reçues avec celui du stock déjà présent au site destination", () => {
+    const idDestination = produitDestination(6, 12000); // source : 9 000 le décodeur
+
+    const resultat = transfererStock(db, { idProduitSource, siteDestinationId: siteDestination, quantite: 4, userId });
+
+    expect(resultat.produitDestination.quantiteStock).toBe(10);
+    expect(cout(idDestination)).toBe(Math.round((6 * 12000 + 4 * 9000) / 10)); // 10 800
+    expect(resultat.produitDestination.coutRevient).toBe(10800);
+  });
+
+  it("reprend le coût de la source quand le site destination n'a aucune unité en stock", () => {
+    const idDestination = produitDestination(0, 12000);
+
+    transfererStock(db, { idProduitSource, siteDestinationId: siteDestination, quantite: 4, userId });
+
+    expect(cout(idDestination)).toBe(9000);
+  });
+
+  it("n'altère pas le coût du site source, qui perd seulement des unités", () => {
+    produitDestination(6, 12000);
+
+    const resultat = transfererStock(db, { idProduitSource, siteDestinationId: siteDestination, quantite: 4, userId });
+
+    expect(resultat.produitSource.coutRevient).toBe(9000);
+  });
+
+  it("garde le coût de la source sur un article créé au site destination", () => {
+    const resultat = transfererStock(db, { idProduitSource, siteDestinationId: siteDestination, quantite: 4, userId });
+
+    expect(resultat.produitDestination.coutRevient).toBe(9000);
+    expect(resultat.produitDestination.quantiteStock).toBe(4);
+  });
+
+  it("n'écrit rien quand le transfert est refusé faute de stock source", () => {
+    const idDestination = produitDestination(6, 12000);
+
+    expect(() => transfererStock(db, { idProduitSource, siteDestinationId: siteDestination, quantite: 11, userId })).toThrow(/Stock insuffisant/);
+
+    expect(cout(idDestination)).toBe(12000);
+  });
+});
+
 describe("transfererStock (5.2, 8.2)", () => {
   it("décrémente le site source et incrémente un produit déjà existant au site destination", () => {
     const idProduitDestination = db

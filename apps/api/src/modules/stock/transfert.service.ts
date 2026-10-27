@@ -1,5 +1,5 @@
 import { and, eq } from "drizzle-orm";
-import { normaliserLibelle } from "@mboapilot/shared";
+import { calculerCoutMoyenPondere, normaliserLibelle } from "@mboapilot/shared";
 import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
 import { enregistrerMouvement } from "./stock.repository.js";
@@ -80,7 +80,11 @@ function transfererStockSansTransaction(db: Db, params: TransfererStockParams): 
     utilisateurId: params.userId,
   });
 
-  const produitDestination = enregistrerMouvement(db, {
+  // 5.2 : une entrée de stock recalcule le coût de revient en coût moyen pondéré — les unités transférées arrivent au coût du site
+  // source, pondéré avec le stock que le site destination détient déjà (calculé avant que le mouvement n'en change la quantité)
+  const coutMoyenDestination = calculerCoutMoyenPondere(destination.quantiteStock, destination.coutRevient, params.quantite, source.coutRevient);
+
+  enregistrerMouvement(db, {
     idProduit: destination.idProduit,
     siteId: params.siteDestinationId,
     typeMouvement: "TRANSFERT_ENTREE",
@@ -88,6 +92,13 @@ function transfererStockSansTransaction(db: Db, params: TransfererStockParams): 
     motif: params.motif,
     utilisateurId: params.userId,
   });
+
+  const produitDestination = db
+    .update(schema.produit)
+    .set({ coutRevient: coutMoyenDestination })
+    .where(eq(schema.produit.idProduit, destination.idProduit))
+    .returning()
+    .get();
 
   return { produitSource, produitDestination };
 }

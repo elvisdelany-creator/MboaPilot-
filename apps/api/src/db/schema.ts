@@ -580,6 +580,11 @@ export const clotureCaisse = sqliteTable("cloture_caisse", {
   fermePar: integer("ferme_par").references(() => utilisateur.idUser),
   dateFermeture: text("date_fermeture"),
   ecartTotal: integer("ecart_total"),
+  // frontière exacte avec la session suivante : le dernier paiement et le dernier règlement d'apporteur existant à la fermeture. La
+  // session suivante compte strictement après, sans dépendre de la seconde de fermeture. Vides pour une clôture antérieure à cette
+  // règle : la frontière retombe alors sur sa date de fermeture.
+  dernierPaiementCompte: integer("dernier_paiement_compte"),
+  dernierReglementCompte: integer("dernier_reglement_compte"),
 });
 
 // écart théorique (calculé depuis les paiements encaissés) / réel (comptage

@@ -197,6 +197,78 @@ describe("listerClotures (13.1) — historique des sessions", () => {
   });
 });
 
+// 13.1 : la frontière entre deux sessions se jugeait à la seconde près (`>=` sur la date de fermeture) : un encaissement fait dans la même
+// seconde que la fermeture était compté deux fois, dans la session fermée puis dans la suivante. Chaque clôture retient désormais le
+// dernier paiement et le dernier règlement qu'elle a comptés : la session suivante reprend strictement après.
+describe("fermerCaisse (13.1) — frontière exacte entre deux sessions", () => {
+  const comptage = (cash: number) => [{ mode: "CASH" as const, montantCompte: cash }];
+  const theoriqueCash = (resultat: ReturnType<typeof fermerCaisse>) => resultat.comptages.find((c) => c.mode === "CASH")!.montantTheorique;
+
+  it("ne recompte pas, dans la session suivante, un encaissement déjà compté, même fait dans la même seconde que la fermeture", () => {
+    const premiere = ouvrirCaisse(db, { siteId, userId: caissierId, fondOuverture: 10000 });
+    encaisserVente(2500, "CASH");
+    fermerCaisse(db, { idCloture: premiere.idCloture, userId: caissierId, comptages: comptage(12500) });
+
+    const seconde = ouvrirCaisse(db, { siteId, userId: caissierId, fondOuverture: 0 });
+    encaisserVente(3000, "CASH");
+    const resultat = fermerCaisse(db, { idCloture: seconde.idCloture, userId: caissierId, comptages: comptage(3000) });
+
+    expect(theoriqueCash(resultat)).toBe(3000);
+    expect(resultat.cloture.ecartTotal).toBe(0);
+  });
+
+  it("compte, dans la session suivante, un encaissement fait après la fermeture et avant l'ouverture, même dans la même seconde", () => {
+    const premiere = ouvrirCaisse(db, { siteId, userId: caissierId, fondOuverture: 10000 });
+    fermerCaisse(db, { idCloture: premiere.idCloture, userId: caissierId, comptages: comptage(10000) });
+    encaisserVente(1500, "CASH"); // caisse fermée : rien n'empêche de vendre
+
+    const seconde = ouvrirCaisse(db, { siteId, userId: caissierId, fondOuverture: 500 });
+    const resultat = fermerCaisse(db, { idCloture: seconde.idCloture, userId: caissierId, comptages: comptage(2000) });
+
+    expect(theoriqueCash(resultat)).toBe(2000); // fond 500 + 1 500 encaissés pendant l'intervalle
+  });
+
+  it("ne déduit pas deux fois un règlement d'apporteur en espèces fait dans la même seconde que la fermeture", () => {
+    const apporteur = creerApporteur(db, { nom: "Agence Kamga", tauxCommissionDefaut: 100 });
+    const premiere = ouvrirCaisse(db, { siteId, userId: caissierId, fondOuverture: 10000 });
+    db.insert(schema.reglementCommission).values({ apporteurId: apporteur.idApporteur, montant: 4000, modePaiement: "CASH", utilisateurId: caissierId }).run();
+    fermerCaisse(db, { idCloture: premiere.idCloture, userId: caissierId, comptages: comptage(6000) });
+
+    const seconde = ouvrirCaisse(db, { siteId, userId: caissierId, fondOuverture: 6000 });
+    const resultat = fermerCaisse(db, { idCloture: seconde.idCloture, userId: caissierId, comptages: comptage(6000) });
+
+    expect(theoriqueCash(resultat)).toBe(6000);
+  });
+
+  it("retombe sur la date de fermeture pour une clôture déjà en base, qui n'a retenu aucune frontière", () => {
+    db.insert(schema.clotureCaisse)
+      .values({ siteId, fondOuverture: 1000, ouvertPar: caissierId, statut: "FERMEE", fermePar: caissierId, dateOuverture: "2025-01-01 08:00:00", dateFermeture: "2025-01-01 18:00:00", ecartTotal: 0 })
+      .run();
+    encaisserVente(4000, "CASH", "2025-01-01 12:00:00"); // avant la fermeture : déjà compté par l'ancienne clôture
+    encaisserVente(600, "CASH", "2025-01-02 09:00:00"); // après
+
+    const seconde = ouvrirCaisse(db, { siteId, userId: caissierId, fondOuverture: 1000 });
+    const resultat = fermerCaisse(db, { idCloture: seconde.idCloture, userId: caissierId, comptages: comptage(1600) });
+
+    expect(theoriqueCash(resultat)).toBe(1600);
+  });
+
+  it("garde les paiements des autres sites hors du théorique et de la frontière", () => {
+    const idEntreprise = db.select().from(schema.site).get()!.idEntreprise;
+    const autreSite = db.insert(schema.site).values({ idEntreprise, nom: "Site B" }).returning().get().idSite;
+    const premiere = ouvrirCaisse(db, { siteId, userId: caissierId, fondOuverture: 1000 });
+    fermerCaisse(db, { idCloture: premiere.idCloture, userId: caissierId, comptages: comptage(1000) });
+    const factureB = db.insert(schema.facture).values({ siteId: autreSite, idAbonne: null, creePar: caissierId, montantTotal: 9000, statut: "VALIDEE" }).returning().get();
+    db.insert(schema.paiement).values({ idFacture: factureB.idFacture, mode: "CASH", montant: 9000, utilisateurId: caissierId }).run();
+    encaisserVente(700, "CASH");
+
+    const seconde = ouvrirCaisse(db, { siteId, userId: caissierId, fondOuverture: 1000 });
+    const resultat = fermerCaisse(db, { idCloture: seconde.idCloture, userId: caissierId, comptages: comptage(1700) });
+
+    expect(theoriqueCash(resultat)).toBe(1700);
+  });
+});
+
 describe("fermerCaisse (13.1) — règlements de commission d'apporteur", () => {
   function regler(montant: number, modePaiement: "CASH" | "CHEQUE" | "VIREMENT" | "MOBILE_MONEY", options: { utilisateurId?: number; dateReglement?: string } = {}) {
     const apporteur = db.select().from(schema.sousDistributeur).get() ?? creerApporteur(db, { nom: "Agence Kamga", tauxCommissionDefaut: 100 });

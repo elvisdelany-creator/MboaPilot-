@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, sql } from "drizzle-orm";
+import { and, desc, eq, gt, gte, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
 import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
@@ -117,13 +117,18 @@ export function fermerCaisse(db: Db, params: FermerCaisseParams) {
     .orderBy(desc(schema.clotureCaisse.idCloture))
     .get();
   const depuis = derniereClotureFermee?.dateFermeture ?? "0000-00-00 00:00:00";
+  // La frontière se juge au dernier paiement et au dernier règlement que la clôture précédente a comptés (leurs identifiants ne font
+  // que croître), pas à la seconde de sa fermeture : un encaissement fait dans la même seconde était compté deux fois. Une clôture
+  // antérieure à cette règle n'a pas retenu de frontière : on retombe sur sa date de fermeture.
+  const apresPaiement = derniereClotureFermee?.dernierPaiementCompte ?? null;
+  const apresReglement = derniereClotureFermee?.dernierReglementCompte ?? null;
 
   const comptages = MODES_PAIEMENT.map((mode) => {
     const paiements = db
       .select({ total: sql<number>`coalesce(sum(${schema.paiement.montant}), 0)` })
       .from(schema.paiement)
       .innerJoin(schema.facture, eq(schema.paiement.idFacture, schema.facture.idFacture))
-      .where(and(eq(schema.facture.siteId, cloture.siteId), eq(schema.paiement.mode, mode), gte(schema.paiement.datePaiement, depuis)))
+      .where(and(eq(schema.facture.siteId, cloture.siteId), eq(schema.paiement.mode, mode), apresPaiement !== null ? gt(schema.paiement.idPaiement, apresPaiement) : gte(schema.paiement.datePaiement, depuis)))
       .get();
     // 6.3 : une commission d'apporteur réglée en espèces sort du tiroir ; sans cette déduction, chaque règlement laissait le tiroir en
     // déficit de son montant à la clôture. Seul le comptant est concerné (un chèque ou un virement ne passe pas par le tiroir), et le
@@ -134,7 +139,7 @@ export function fermerCaisse(db: Db, params: FermerCaisseParams) {
             .select({ total: sql<number>`coalesce(sum(${schema.reglementCommission.montant}), 0)` })
             .from(schema.reglementCommission)
             .innerJoin(schema.utilisateur, eq(schema.reglementCommission.utilisateurId, schema.utilisateur.idUser))
-            .where(and(eq(schema.utilisateur.siteId, cloture.siteId), eq(schema.reglementCommission.modePaiement, "CASH"), gte(schema.reglementCommission.dateReglement, depuis)))
+            .where(and(eq(schema.utilisateur.siteId, cloture.siteId), eq(schema.reglementCommission.modePaiement, "CASH"), apresReglement !== null ? gt(schema.reglementCommission.idReglement, apresReglement) : gte(schema.reglementCommission.dateReglement, depuis)))
             .get()
         : undefined;
     const montantTheorique = (mode === "CASH" ? cloture.fondOuverture : 0) + Number(paiements?.total ?? 0) - Number(reglementsEspeces?.total ?? 0);
@@ -160,7 +165,14 @@ export function fermerCaisse(db: Db, params: FermerCaisseParams) {
 
     const fermee = db
       .update(schema.clotureCaisse)
-      .set({ statut: "FERMEE", fermePar: params.userId, dateFermeture, ecartTotal })
+      .set({
+        statut: "FERMEE",
+        fermePar: params.userId,
+        dateFermeture,
+        ecartTotal,
+        dernierPaiementCompte: Number(db.select({ dernier: sql<number>`coalesce(max(${schema.paiement.idPaiement}), 0)` }).from(schema.paiement).get()?.dernier ?? 0),
+        dernierReglementCompte: Number(db.select({ dernier: sql<number>`coalesce(max(${schema.reglementCommission.idReglement}), 0)` }).from(schema.reglementCommission).get()?.dernier ?? 0),
+      })
       .where(eq(schema.clotureCaisse.idCloture, params.idCloture))
       .returning()
       .get();

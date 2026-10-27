@@ -246,6 +246,13 @@
       "when": 1793036363511,
       "tag": "0034_operation_abonnement_en_attente",
       "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "6",
+      "when": 1793125509046,
+      "tag": "0035_frontiere_cloture_caisse",
+      "breakpoints": true
     }
   ]
 }

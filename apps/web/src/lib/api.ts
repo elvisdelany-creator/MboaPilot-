@@ -1508,6 +1508,9 @@ export interface ClotureCaisse {
   fermePar: number | null;
   dateFermeture: string | null;
   ecartTotal: number | null;
+  // renseignés par l'historique des sessions (qui a ouvert, qui a fermé)
+  ouvertParNom?: string | null;
+  fermeParNom?: string | null;
 }
 
 export interface ComptageCloture {

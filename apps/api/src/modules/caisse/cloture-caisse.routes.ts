@@ -22,9 +22,10 @@ export function registerClotureCaisseRoutes(app: FastifyInstance, db: Db, guards
     }
   );
 
+  // historique des sessions et comptages : les écarts de caisse de chacun, réservés à l'encadrement qui valide les clôtures
   app.get(
     "/api/v1/cloture-caisse",
-    { preHandler: [guards.authRequis, guards.ventes] },
+    { preHandler: [guards.authRequis, guards.validationCloture] },
     async (request, reply) => {
       reply.code(200).send(listerClotures(db, request.user.siteId));
     }
@@ -32,7 +33,7 @@ export function registerClotureCaisseRoutes(app: FastifyInstance, db: Db, guards
 
   app.get<{ Params: { idCloture: string } }>(
     "/api/v1/cloture-caisse/:idCloture/comptages",
-    { preHandler: [guards.authRequis, guards.ventes] },
+    { preHandler: [guards.authRequis, guards.validationCloture] },
     async (request, reply) => {
       const idCloture = Number(request.params.idCloture);
       const cloture = db.select().from(schema.clotureCaisse).where(eq(schema.clotureCaisse.idCloture, idCloture)).get();

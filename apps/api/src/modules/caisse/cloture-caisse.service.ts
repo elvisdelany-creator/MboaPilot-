@@ -1,4 +1,5 @@
 import { and, desc, eq, gte, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/sqlite-core";
 import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
 
@@ -52,8 +53,24 @@ export function obtenirClotureOuverte(db: Db, siteId: number) {
     .get();
 }
 
-export function listerClotures(db: Db, siteId: number) {
-  return db.select().from(schema.clotureCaisse).where(eq(schema.clotureCaisse.siteId, siteId)).orderBy(desc(schema.clotureCaisse.idCloture)).all();
+// 13.1 : historique des sessions d'un site, les plus récentes d'abord, avec le nom de qui a ouvert et de qui a fermé (un identifiant
+// d'utilisateur ne dit rien au gérant qui relit un écart). Borné : un site qui ouvre sa caisse chaque jour accumule des milliers de lignes.
+const LIMITE_HISTORIQUE_CLOTURES = 90;
+
+export function listerClotures(db: Db, siteId: number, limite = LIMITE_HISTORIQUE_CLOTURES) {
+  const ouvreur = alias(schema.utilisateur, "ouvreur");
+  const fermeur = alias(schema.utilisateur, "fermeur");
+  const nom = (prenom: string | null, famille: string | null) => (prenom === null && famille === null ? null : `${prenom ?? ""} ${famille ?? ""}`.trim());
+  return db
+    .select({ cloture: schema.clotureCaisse, ouvreurPrenom: ouvreur.prenom, ouvreurNom: ouvreur.nom, fermeurPrenom: fermeur.prenom, fermeurNom: fermeur.nom })
+    .from(schema.clotureCaisse)
+    .leftJoin(ouvreur, eq(schema.clotureCaisse.ouvertPar, ouvreur.idUser))
+    .leftJoin(fermeur, eq(schema.clotureCaisse.fermePar, fermeur.idUser))
+    .where(eq(schema.clotureCaisse.siteId, siteId))
+    .orderBy(desc(schema.clotureCaisse.idCloture))
+    .limit(limite)
+    .all()
+    .map((l) => ({ ...l.cloture, ouvertParNom: nom(l.ouvreurPrenom, l.ouvreurNom), fermeParNom: nom(l.fermeurPrenom, l.fermeurNom) }));
 }
 
 export function obtenirComptagesCloture(db: Db, idCloture: number) {

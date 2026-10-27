@@ -4644,7 +4644,10 @@ describe("Clôture de caisse quotidienne (13.1)", () => {
     expect(ouverte.statusCode).toBe(200);
     expect(ouverte.json()).toBeNull();
 
-    const liste = await app.inject({ method: "GET", url: `/api/v1/cloture-caisse?siteId=${autreSite}`, headers: authHeader(token) });
+    // la liste de l'historique est réservée à l'encadrement : un gérant demande le site B et ne reçoit que le sien
+    creerUtilisateur(db, { siteId, nom: "Ger", prenom: "F", identifiant: "gerant1", motDePasse: "motdepasse-secret", role: "GERANT" });
+    const tokenGerant = await connecter(app, "gerant1");
+    const liste = await app.inject({ method: "GET", url: `/api/v1/cloture-caisse?siteId=${autreSite}`, headers: authHeader(tokenGerant) });
     expect(liste.statusCode).toBe(200);
     expect(liste.json()).toHaveLength(0);
 
@@ -4656,6 +4659,37 @@ describe("Clôture de caisse quotidienne (13.1)", () => {
     });
     expect(ouverture.statusCode).toBe(201);
     expect(db.select().from(schema.clotureCaisse).where(eq(schema.clotureCaisse.idCloture, ouverture.json().idCloture)).get()?.siteId).toBe(siteId);
+  });
+
+  // 13.1 : l'historique des sessions montre les écarts de caisse de chacun — réservé à l'encadrement qui valide les clôtures, pas au
+  // caissier dont le tiroir est justement contrôlé
+  it("réserve l'historique des sessions et leurs comptages à l'encadrement (403 pour un caissier)", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    creerUtilisateur(db, { siteId, nom: "Ger", prenom: "F", identifiant: "gerant1", motDePasse: "motdepasse-secret", role: "GERANT" });
+    const tokenGerant = await connecter(app, "gerant1");
+    const tokenCaissier = await connecter(app);
+    const cloture = db.insert(schema.clotureCaisse).values({ siteId, statut: "OUVERTE", fondOuverture: 10000, ouvertPar: userId }).returning().get();
+
+    const listeCaissier = await app.inject({ method: "GET", url: "/api/v1/cloture-caisse", headers: authHeader(tokenCaissier) });
+    const comptagesCaissier = await app.inject({ method: "GET", url: `/api/v1/cloture-caisse/${cloture.idCloture}/comptages`, headers: authHeader(tokenCaissier) });
+    const listeGerant = await app.inject({ method: "GET", url: "/api/v1/cloture-caisse", headers: authHeader(tokenGerant) });
+
+    expect(listeCaissier.statusCode).toBe(403);
+    expect(comptagesCaissier.statusCode).toBe(403);
+    expect(listeGerant.statusCode).toBe(200);
+    expect(listeGerant.json()).toMatchObject([{ idCloture: cloture.idCloture, fondOuverture: 10000, ouvertParNom: "B A", fermeParNom: null }]);
+  });
+
+  it("laisse un caissier ouvrir la caisse et consulter la session ouverte", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const tokenCaissier = await connecter(app);
+
+    const ouverture = await app.inject({ method: "POST", url: "/api/v1/cloture-caisse/ouvrir", headers: authHeader(tokenCaissier), payload: { fondOuverture: 5000 } });
+    const ouverte = await app.inject({ method: "GET", url: "/api/v1/cloture-caisse/ouverte", headers: authHeader(tokenCaissier) });
+
+    expect(ouverture.statusCode).toBe(201);
+    expect(ouverte.statusCode).toBe(200);
+    expect(ouverte.json()).toMatchObject({ fondOuverture: 5000, statut: "OUVERTE" });
   });
 
   // 2.5.2 : contrairement à l'ouverture et à la liste (cloisonnées par le

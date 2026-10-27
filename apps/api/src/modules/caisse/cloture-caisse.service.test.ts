@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { eq } from "drizzle-orm";
 import { creerDbTest, type Db } from "../../test-utils/db.js";
 import * as schema from "../../db/schema.js";
-import { fermerCaisse, obtenirClotureOuverte, ouvrirCaisse } from "./cloture-caisse.service.js";
+import { fermerCaisse, listerClotures, obtenirClotureOuverte, ouvrirCaisse } from "./cloture-caisse.service.js";
 import { creerApporteur } from "../apporteurs/apporteur.repository.js";
 
 let db: Db;
@@ -154,6 +154,49 @@ describe("fermerCaisse (13.1) — écart théorique/réel par mode de paiement",
 
 // 6.3, 13.1 : un règlement de commission en espèces sort physiquement du tiroir-caisse. Le théorique ne comptait que les encaissements et
 // les remboursements d'avoir : chaque commission payée en espèces laissait donc le tiroir en déficit de son montant à la clôture, un faux écart.
+// 13.1 : « c'est l'un des premiers contrôles qu'un gérant réclamera à l'usage » — l'historique des sessions, avec qui a ouvert et fermé
+describe("listerClotures (13.1) — historique des sessions", () => {
+  const comptagesJuste = (cash: number) => [
+    { mode: "CASH" as const, montantCompte: cash },
+    { mode: "CHEQUE" as const, montantCompte: 0 },
+    { mode: "VIREMENT" as const, montantCompte: 0 },
+    { mode: "MOBILE_MONEY" as const, montantCompte: 0 },
+  ];
+  const gerant = () => db.select().from(schema.utilisateur).where(eq(schema.utilisateur.identifiant, "ge")).get()!.idUser;
+
+  it("nomme l'utilisateur qui a ouvert et celui qui a fermé la session, du plus récent au plus ancien", () => {
+    const premiere = ouvrirCaisse(db, { siteId, userId: caissierId, fondOuverture: 10000 });
+    fermerCaisse(db, { idCloture: premiere.idCloture, userId: gerant(), comptages: comptagesJuste(10000) });
+    ouvrirCaisse(db, { siteId, userId: caissierId, fondOuverture: 5000 });
+
+    const liste = listerClotures(db, siteId);
+
+    expect(liste.map((c) => c.fondOuverture)).toEqual([5000, 10000]);
+    expect(liste[0]).toMatchObject({ statut: "OUVERTE", ouvertParNom: "B A", fermeParNom: null });
+    expect(liste[1]).toMatchObject({ statut: "FERMEE", ouvertParNom: "B A", fermeParNom: "E G", ecartTotal: 0 });
+  });
+
+  it("ne liste que les sessions du site demandé", () => {
+    const idEntreprise = db.select().from(schema.site).get()!.idEntreprise;
+    const autreSite = db.insert(schema.site).values({ idEntreprise, nom: "Site B" }).returning().get().idSite;
+    ouvrirCaisse(db, { siteId: autreSite, userId: caissierId, fondOuverture: 1 });
+    ouvrirCaisse(db, { siteId, userId: caissierId, fondOuverture: 2 });
+
+    expect(listerClotures(db, siteId).map((c) => c.fondOuverture)).toEqual([2]);
+  });
+
+  it("borne l'historique aux sessions les plus récentes", () => {
+    for (let i = 0; i < 5; i++) {
+      const c = ouvrirCaisse(db, { siteId, userId: caissierId, fondOuverture: i });
+      fermerCaisse(db, { idCloture: c.idCloture, userId: gerant(), comptages: comptagesJuste(i) });
+    }
+
+    const liste = listerClotures(db, siteId, 3);
+
+    expect(liste.map((c) => c.fondOuverture)).toEqual([4, 3, 2]);
+  });
+});
+
 describe("fermerCaisse (13.1) — règlements de commission d'apporteur", () => {
   function regler(montant: number, modePaiement: "CASH" | "CHEQUE" | "VIREMENT" | "MOBILE_MONEY", options: { utilisateurId?: number; dateReglement?: string } = {}) {
     const apporteur = db.select().from(schema.sousDistributeur).get() ?? creerApporteur(db, { nom: "Agence Kamga", tauxCommissionDefaut: 100 });

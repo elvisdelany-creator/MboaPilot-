@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Lock, Unlock } from "lucide-react";
+import { History, Lock, Unlock } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -15,6 +15,7 @@ import {
   type ModePaiementCloture,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
+import { HistoriqueCloturesDialog } from "./HistoriqueCloturesDialog";
 
 const formateurFcfa = new Intl.NumberFormat("fr-FR");
 const MODES: ModePaiementCloture[] = ["CASH", "CHEQUE", "VIREMENT", "MOBILE_MONEY"];
@@ -32,6 +33,7 @@ export function ClotureCaissePanel() {
 
   const [clotureOuverte, setClotureOuverte] = useState<ClotureCaisse | null>(null);
   const [dialogOuvert, setDialogOuvert] = useState(false);
+  const [historiqueOuvert, setHistoriqueOuvert] = useState(false);
   const [fondOuverture, setFondOuverture] = useState(0);
   const [comptages, setComptages] = useState<Record<ModePaiementCloture, number>>({ CASH: 0, CHEQUE: 0, VIREMENT: 0, MOBILE_MONEY: 0 });
   const [resultat, setResultat] = useState<FermerCaisseResultat | null>(null);
@@ -103,6 +105,13 @@ export function ClotureCaissePanel() {
         {clotureOuverte ? <Unlock className="size-4" /> : <Lock className="size-4" />}
         {clotureOuverte ? "Caisse ouverte" : "Caisse fermée"}
       </Button>
+      {peutValiderFermeture && (
+        <Button variant="outline" className="h-9 cursor-pointer gap-2" onClick={() => setHistoriqueOuvert(true)}>
+          <History className="size-4" aria-hidden="true" />
+          Historique
+        </Button>
+      )}
+      {peutValiderFermeture && <HistoriqueCloturesDialog open={historiqueOuvert} onFerme={() => setHistoriqueOuvert(false)} />}
 
       <Dialog open={dialogOuvert} onOpenChange={(v) => !v && fermerDialog()}>
         <DialogContent>

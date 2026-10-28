@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { LIMITE_RESULTATS_RECHERCHE_ABONNES, MESSAGE_FORME_TELEPHONE, telephoneValide } from "@mboapilot/shared";
+import { LIMITE_RESULTATS_RECHERCHE_ABONNES, MESSAGE_FORME_TELEPHONE, memeTelephone, telephoneValide } from "@mboapilot/shared";
 import { Search, UserPlus, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -25,6 +25,10 @@ export function RechercheAbonne({ siteId, abonneSelectionne, onSelectionner }: P
   const [formulaireOuvert, setFormulaireOuvert] = useState(false);
   const [nouveau, setNouveau] = useState({ nom: "", prenom: "", telephone: "" });
   const telephoneInvalide = nouveau.telephone.trim() !== "" && !telephoneValide(nouveau.telephone);
+  // 7.1 : « si le client existe déjà (recherche par téléphone…), sa fiche existante est sélectionnée » — avant de créer, on cherche un client
+  // qui a ce numéro et on le propose ; un numéro peut être partagé (famille), donc on ne bloque jamais
+  const [doublons, setDoublons] = useState<Abonne[]>([]);
+  const [verificationEnCours, setVerificationEnCours] = useState(false);
   const [idApporteur, setIdApporteur] = useState(AUCUN_APPORTEUR);
   const [apporteurs, setApporteurs] = useState<Apporteur[]>([]);
 
@@ -49,6 +53,40 @@ export function RechercheAbonne({ siteId, abonneSelectionne, onSelectionner }: P
       .then(setApporteurs)
       .catch(() => setApporteurs([]));
   }, [formulaireOuvert, session]);
+
+  function fermerFormulaire() {
+    setFormulaireOuvert(false);
+    setNouveau({ nom: "", prenom: "", telephone: "" });
+    setIdApporteur(AUCUN_APPORTEUR);
+    setDoublons([]);
+  }
+
+  function creerClient() {
+    onSelectionner({
+      nom: nouveau.nom.trim(),
+      prenom: nouveau.prenom.trim(),
+      telephone: nouveau.telephone.trim(),
+      apporteurId: idApporteur === AUCUN_APPORTEUR ? undefined : Number(idApporteur),
+    });
+    fermerFormulaire();
+  }
+
+  async function confirmerNouveauClient() {
+    if (!session) return;
+    setVerificationEnCours(true);
+    try {
+      const memeNumero = (await rechercherAbonnes(session.token, siteId, nouveau.telephone.trim())).filter((a) => memeTelephone(a.telephone, nouveau.telephone));
+      if (memeNumero.length > 0) {
+        setDoublons(memeNumero);
+        return;
+      }
+    } catch {
+      // la vérification est une aide : si elle échoue, elle ne doit pas empêcher la vente
+    } finally {
+      setVerificationEnCours(false);
+    }
+    creerClient();
+  }
 
   if (abonneSelectionne) {
     const libelle =
@@ -157,7 +195,10 @@ export function RechercheAbonne({ siteId, abonneSelectionne, onSelectionner }: P
                 id="nouveau-telephone"
                 type="tel"
                 value={nouveau.telephone}
-                onChange={(e) => setNouveau((n) => ({ ...n, telephone: e.target.value }))}
+                onChange={(e) => {
+                  setNouveau((n) => ({ ...n, telephone: e.target.value }));
+                  setDoublons([]);
+                }}
                 maxLength={30}
                 aria-invalid={telephoneInvalide ? true : undefined}
                 aria-describedby={telephoneInvalide ? "nouveau-telephone-erreur" : undefined}
@@ -190,23 +231,42 @@ export function RechercheAbonne({ siteId, abonneSelectionne, onSelectionner }: P
               </div>
             )}
           </div>
+          {doublons.length > 0 && (
+            <div role="alert" className="mt-3 rounded-lg border border-alert-j3-fg/40 bg-alert-j3-bg/25 p-3">
+              <p className="text-sm font-medium text-card-foreground">
+                {doublons.length === 1 ? "Ce numéro est déjà celui d'un client :" : "Ce numéro est déjà celui de plusieurs clients :"}
+              </p>
+              <ul className="mt-2 space-y-2">
+                {doublons.slice(0, 3).map((a) => (
+                  <li key={a.idAbonne} className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="min-w-0 text-sm text-card-foreground">
+                      {a.prenom} {a.nom} — n° {a.idAbonne}
+                    </span>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="cursor-pointer"
+                      onClick={() => {
+                        onSelectionner(a);
+                        fermerFormulaire();
+                      }}
+                    >
+                      Utiliser cette fiche
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-2 text-xs text-card-foreground">Un numéro peut être partagé (famille) : vous pouvez aussi créer un nouveau client.</p>
+            </div>
+          )}
           <Button
             type="button"
             className="mt-3 w-full cursor-pointer"
-            disabled={!nouveau.nom.trim() || !nouveau.prenom.trim() || !telephoneValide(nouveau.telephone)}
-            onClick={() => {
-              onSelectionner({
-                nom: nouveau.nom.trim(),
-                prenom: nouveau.prenom.trim(),
-                telephone: nouveau.telephone.trim(),
-                apporteurId: idApporteur === AUCUN_APPORTEUR ? undefined : Number(idApporteur),
-              });
-              setFormulaireOuvert(false);
-              setNouveau({ nom: "", prenom: "", telephone: "" });
-              setIdApporteur(AUCUN_APPORTEUR);
-            }}
+            disabled={!nouveau.nom.trim() || !nouveau.prenom.trim() || !telephoneValide(nouveau.telephone) || verificationEnCours}
+            onClick={doublons.length > 0 ? creerClient : confirmerNouveauClient}
           >
-            Confirmer le nouveau client
+            {verificationEnCours ? "Vérification…" : doublons.length > 0 ? "Créer un nouveau client quand même" : "Confirmer le nouveau client"}
           </Button>
         </div>
       )}

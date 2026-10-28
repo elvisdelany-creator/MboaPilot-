@@ -153,7 +153,7 @@ export function TicketPanel({
   }
 
   return (
-    <aside className="flex w-64 shrink-0 flex-col border-l border-border bg-card lg:w-80">
+    <aside className="flex w-full shrink-0 flex-col border-t border-border bg-card md:w-64 md:border-l md:border-t-0 lg:w-80">
       <div className="flex-1 overflow-y-auto p-4">
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Ticket en cours</h2>

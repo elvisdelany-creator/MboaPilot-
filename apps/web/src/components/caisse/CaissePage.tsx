@@ -675,7 +675,8 @@ export function CaissePage({ onNaviguer, onOuvrirCatalogueAdministration, abonne
       ) : famillesChargees && produitsCharges && familles.length === 0 && produits.length === 0 ? (
         <CatalogueVideGuide role={utilisateur.role} onNaviguer={onNaviguer} onOuvrirCatalogueAdministration={onOuvrirCatalogueAdministration} />
       ) : (
-        <div className="flex min-h-0 flex-1">
+        // sous 768 px les trois zones (familles, articles, ticket) s'empilent et la page défile ; au-delà, trois colonnes
+        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto md:flex-row md:overflow-visible">
           <CategoriesPanel
             familles={familles}
             familleSelectionnee={familleSelectionneeId}

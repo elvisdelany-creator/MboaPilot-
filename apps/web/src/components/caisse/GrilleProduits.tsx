@@ -89,7 +89,7 @@ export function GrilleProduits({ produits, onAjouter }: Props) {
   }
 
   return (
-    <div className="flex-1 overflow-y-auto p-4">
+    <div className="p-4 md:flex-1 md:overflow-y-auto">
       <Input
         ref={champRecherche}
         value={recherche}

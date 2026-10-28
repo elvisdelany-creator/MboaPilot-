@@ -37,7 +37,7 @@ export function GrilleArticles({
   }
 
   return (
-    <div className="flex-1 overflow-y-auto p-4">
+    <div className="p-4 md:flex-1 md:overflow-y-auto">
       <section aria-labelledby="titre-formules">
         <h2 id="titre-formules" className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
           Formules

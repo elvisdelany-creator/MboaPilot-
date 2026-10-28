@@ -233,9 +233,9 @@ export function DashboardPage({ onNaviguer, onReabonnerDepuisAlerte, onReabonner
 
           {peutPiloter && evolutionCA.length > 0 && (
             <div className="mb-8">
-              <div className="mb-3 flex items-center justify-between gap-2">
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                 <h2 className="font-heading text-lg font-semibold text-foreground">Évolution du chiffre d'affaires</h2>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   {/* 9.3 : "filtrable... par famille d'activité" */}
                   {ventilationCA.length > 0 && (
                     <Select value={familleCAFiltre ?? "toutes"} onValueChange={(v) => setFamilleCAFiltre(v === "toutes" ? null : v)}>
@@ -347,7 +347,7 @@ export function DashboardPage({ onNaviguer, onReabonnerDepuisAlerte, onReabonner
               <ul className="space-y-2">
                 {ventesEnAttente.map((v) => (
                   <li key={v.idFacture}>
-                    <Card className="flex-row items-center justify-between gap-3 p-3">
+                    <Card className="flex-row flex-wrap items-center justify-between gap-3 p-3">
                       <div>
                         <p className="font-medium text-card-foreground">
                           Facture n° {v.idFacture} · {formateurFcfa.format(v.montantTotal)} FCFA · {v.client ?? "sans client"}{v.numeroAbonnement !== null && ` · abonnement n° ${v.numeroAbonnement}`}
@@ -378,7 +378,7 @@ export function DashboardPage({ onNaviguer, onReabonnerDepuisAlerte, onReabonner
               <ul className="space-y-2">
                 {commissionsCanalplus.map((c) => (
                   <li key={c.commission.idSuivi}>
-                    <Card className="flex-row items-center justify-between gap-3 p-3">
+                    <Card className="flex-row flex-wrap items-center justify-between gap-3 p-3">
                       <div>
                         <p className="font-medium text-card-foreground">
                           {c.abonne.prenom} {c.abonne.nom}
@@ -401,7 +401,7 @@ export function DashboardPage({ onNaviguer, onReabonnerDepuisAlerte, onReabonner
               <ul className="space-y-2">
                 {resumesApporteurs.map((r) => (
                   <li key={r.idApporteur}>
-                    <Card className="flex-row items-center justify-between gap-3 p-3">
+                    <Card className="flex-row flex-wrap items-center justify-between gap-3 p-3">
                       <div className="flex items-center gap-3">
                         <span className="flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-xs font-semibold text-muted-foreground">
                           <Users className="size-3.5" aria-hidden="true" />

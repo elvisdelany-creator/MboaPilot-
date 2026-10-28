@@ -28,6 +28,7 @@ import {
   LIMITE_RESULTATS_RECHERCHE_ABONNES,
 } from "@mboapilot/shared";
 import { chargerCatalogue, chargerDossierSav, chargerFiche360, rechercherAbonnes, ErreurAuthentification } from "@/lib/api";
+import { useDefilerVersDetail } from "@/lib/defiler-vers-detail";
 import { useAuth } from "@/lib/auth-context";
 import { AppHeader, type Vue } from "@/components/layout/AppHeader";
 import { Button } from "@/components/ui/button";
@@ -107,6 +108,7 @@ export function ClientsPage({ onNaviguer, onReabonnerDepuisFiche }: Props) {
   const [rechercheEnCours, setRechercheEnCours] = useState(false);
   const derniereRequete = useRef(0);
   const [idSelectionne, setIdSelectionne] = useState<number | null>(null);
+  const refDetail = useDefilerVersDetail<HTMLDivElement>(idSelectionne);
   const [fiche, setFiche] = useState<Fiche360 | null>(null);
   const [catalogue, setCatalogue] = useState<CatalogueFamille[]>([]);
   const [modifierOuvert, setModifierOuvert] = useState(false);
@@ -247,8 +249,9 @@ export function ClientsPage({ onNaviguer, onReabonnerDepuisFiche }: Props) {
         <AppHeader vueActive="clients" onNaviguer={onNaviguer} />
       </div>
 
-      <div className="flex min-h-0 flex-1">
-        <div className="no-print flex w-80 shrink-0 flex-col border-r border-border">
+      {/* sous 768 px la liste et le détail s'empilent (le détail était écrasé dans moins de 60 px) ; au-delà, deux colonnes */}
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto md:flex-row md:overflow-visible">
+        <div className="no-print flex w-full shrink-0 flex-col border-b border-border md:w-80 md:border-b-0 md:border-r">
           <div className="border-b border-border p-4">
             <h1 className="mb-2 font-heading text-sm font-semibold uppercase tracking-wide text-muted-foreground">Clients</h1>
             <Input
@@ -259,7 +262,7 @@ export function ClientsPage({ onNaviguer, onReabonnerDepuisFiche }: Props) {
               className="h-10"
             />
           </div>
-          <ul className="flex-1 overflow-y-auto">
+          <ul className="max-h-60 overflow-y-auto md:max-h-none md:flex-1">
             {terme.trim() && resultats.length === 0 && rechercheEnCours && (
               <li role="status" className="p-4 text-sm text-muted-foreground">
                 Recherche…
@@ -301,7 +304,7 @@ export function ClientsPage({ onNaviguer, onReabonnerDepuisFiche }: Props) {
           </ul>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-6">
+        <div ref={refDetail} className="p-4 md:flex-1 md:overflow-y-auto md:p-6">
           {!fiche && (
             <div className="no-print flex h-full items-center justify-center text-muted-foreground">
               <div className="text-center">

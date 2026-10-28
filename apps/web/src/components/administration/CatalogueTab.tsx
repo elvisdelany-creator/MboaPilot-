@@ -241,9 +241,9 @@ export function CatalogueTab() {
   return (
     <div className="space-y-8">
       <div className="space-y-3">
-        <div className="flex items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Familles et formules</p>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Button variant="outline" size="sm" className="cursor-pointer" onClick={() => setDepartOuvert(true)}>
               Catalogue de départ
             </Button>
@@ -290,7 +290,7 @@ export function CatalogueTab() {
                     <li className="text-sm text-muted-foreground">Aucune formule.</li>
                   )}
                   {(formulesParFamille[famille.idFamille] ?? []).map((f) => (
-                    <li key={f.idFormule} className="flex items-center justify-between gap-2 rounded-md border border-border px-3 py-2">
+                    <li key={f.idFormule} className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border px-3 py-2">
                       <div className="text-sm">
                         <span className="font-medium text-card-foreground">{f.libelle}</span>
                         <span className="text-muted-foreground">
@@ -298,7 +298,7 @@ export function CatalogueTab() {
                           — {formateurFcfa.format(f.prix)} FCFA · rang {f.rang} · {LIBELLES_MODE_DUREE[f.modeDuree]} × {f.dureeCycles}
                         </span>
                       </div>
-                      <div className="flex shrink-0 items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
                         <Badge variant={f.actif === 1 ? "default" : "outline"}>{f.actif === 1 ? "Active" : "Inactive"}</Badge>
                         <Button
                           variant="outline"

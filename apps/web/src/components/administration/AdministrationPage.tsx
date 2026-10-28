@@ -199,14 +199,14 @@ export function AdministrationPage({ onNaviguer, ongletInitial }: Props) {
                   const soiMeme = c.idUser === utilisateur.idUser;
                   return (
                     <li key={c.idUser}>
-                      <Card className="flex-row items-center justify-between gap-3 p-3">
+                      <Card className="flex-row flex-wrap items-center justify-between gap-3 p-3">
                         <div>
                           <p className="font-medium text-card-foreground">
                             {c.prenom} {c.nom} {soiMeme && <span className="text-muted-foreground">(vous)</span>}
                           </p>
                           <p className="text-sm text-muted-foreground">@{c.identifiant}</p>
                         </div>
-                        <div className="flex shrink-0 items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
                           <Select value={c.role} onValueChange={(v) => changerRole(c, v as Role)}>
                             <SelectTrigger className="h-9 w-44" aria-label={`Rôle de ${c.prenom} ${c.nom}`}>
                               <SelectValue />

@@ -11,6 +11,7 @@ import {
   importerCatalogueCsvRequete,
   ErreurAuthentification,
 } from "@/lib/api";
+import { useDefilerVersDetail } from "@/lib/defiler-vers-detail";
 import { useAuth } from "@/lib/auth-context";
 import { AppHeader, type Vue } from "@/components/layout/AppHeader";
 import { Button } from "@/components/ui/button";
@@ -64,6 +65,7 @@ export function StockPage({ onNaviguer, idProduitInitial, actionInitiale }: Prop
   const [produits, setProduits] = useState<Produit[] | null>(null);
   const [alertes, setAlertes] = useState<Produit[]>([]);
   const [idSelectionne, setIdSelectionne] = useState<number | null>(null);
+  const refDetail = useDefilerVersDetail<HTMLDivElement>(idSelectionne);
   const [mouvements, setMouvements] = useState<StockMouvement[]>([]);
   const [historiquePrix, setHistoriquePrix] = useState<HistoriquePrixProduit[]>([]);
   const [dialogueOuvert, setDialogueOuvert] = useState<"achat" | "casse" | "inventaire" | "transfert" | null>(null);
@@ -178,8 +180,9 @@ export function StockPage({ onNaviguer, idProduitInitial, actionInitiale }: Prop
     <div className="flex h-dvh flex-col bg-background">
       <AppHeader vueActive="stock" onNaviguer={onNaviguer} />
 
-      <div className="flex min-h-0 flex-1">
-        <div className="flex w-80 shrink-0 flex-col border-r border-border">
+      {/* sous 768 px la liste et le détail s'empilent (le détail était écrasé dans moins de 60 px) ; au-delà, deux colonnes */}
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto md:flex-row md:overflow-visible">
+        <div className="flex w-full shrink-0 flex-col border-b border-border md:w-80 md:border-b-0 md:border-r">
           <div className="flex items-center justify-between border-b border-border p-4">
             <h1 className="font-heading text-sm font-semibold uppercase tracking-wide text-muted-foreground">Catalogue</h1>
             <Button size="sm" className="cursor-pointer gap-1" onClick={() => setArticleDialogueOuvert("creation")}>
@@ -216,7 +219,7 @@ export function StockPage({ onNaviguer, idProduitInitial, actionInitiale }: Prop
               }}
             />
           </div>
-          <ul className="flex-1 overflow-y-auto">
+          <ul className="max-h-60 overflow-y-auto md:max-h-none md:flex-1">
             {produits?.length === 0 && <li className="p-4 text-sm text-muted-foreground">Aucun article dans le catalogue.</li>}
             {produits?.map((p) => (
               <li key={p.idProduit}>
@@ -245,7 +248,7 @@ export function StockPage({ onNaviguer, idProduitInitial, actionInitiale }: Prop
           </ul>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-6">
+        <div ref={refDetail} className="p-4 md:flex-1 md:overflow-y-auto md:p-6">
           {!produitSelectionne && (
             <div className="flex h-full items-center justify-center text-muted-foreground">
               <div className="text-center">

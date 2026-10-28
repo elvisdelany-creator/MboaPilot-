@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import { ImagePlus, Plus, Wrench } from "lucide-react";
 import { peutTransitionnerSav, type StatutSav, lireDateServeur } from "@mboapilot/shared";
 import { chargerDossierSav, chargerDossiersSav, chargerUrlPhotoSav, televerserPhotoSav, ErreurAuthentification } from "@/lib/api";
+import { useDefilerVersDetail } from "@/lib/defiler-vers-detail";
 import { useAuth } from "@/lib/auth-context";
 import { AppHeader, type Vue } from "@/components/layout/AppHeader";
 import { Button } from "@/components/ui/button";
@@ -63,6 +64,7 @@ export function SavPage({ onNaviguer }: Props) {
 
   const [dossiers, setDossiers] = useState<DossierSav[] | null>(null);
   const [idSelectionne, setIdSelectionne] = useState<number | null>(null);
+  const refDetail = useDefilerVersDetail<HTMLDivElement>(idSelectionne);
   const [detail, setDetail] = useState<DossierSavDetaille | null>(null);
   const [nouveauOuvert, setNouveauOuvert] = useState(false);
   const [pieceOuvert, setPieceOuvert] = useState(false);
@@ -150,8 +152,9 @@ export function SavPage({ onNaviguer }: Props) {
     <div className="flex h-dvh flex-col bg-background">
       <AppHeader vueActive="sav" onNaviguer={onNaviguer} />
 
-      <div className="flex min-h-0 flex-1">
-        <div className="flex w-80 shrink-0 flex-col border-r border-border">
+      {/* sous 768 px la liste et le détail s'empilent (le détail était écrasé dans moins de 60 px) ; au-delà, deux colonnes */}
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto md:flex-row md:overflow-visible">
+        <div className="flex w-full shrink-0 flex-col border-b border-border md:w-80 md:border-b-0 md:border-r">
           <div className="flex items-center justify-between border-b border-border p-4">
             <h1 className="font-heading text-sm font-semibold uppercase tracking-wide text-muted-foreground">Dossiers SAV</h1>
             <Button size="sm" className="cursor-pointer gap-1" onClick={() => setNouveauOuvert(true)}>
@@ -159,7 +162,7 @@ export function SavPage({ onNaviguer }: Props) {
               Nouveau
             </Button>
           </div>
-          <ul className="flex-1 overflow-y-auto">
+          <ul className="max-h-60 overflow-y-auto md:max-h-none md:flex-1">
             {dossiers?.length === 0 && <li className="p-4 text-sm text-muted-foreground">Aucun dossier.</li>}
             {dossiers?.map((d) => (
               <li key={d.idDossierSav}>
@@ -182,7 +185,7 @@ export function SavPage({ onNaviguer }: Props) {
           </ul>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-6">
+        <div ref={refDetail} className="p-4 md:flex-1 md:overflow-y-auto md:p-6">
           {!detail && (
             <div className="flex h-full items-center justify-center text-muted-foreground">
               <div className="text-center">

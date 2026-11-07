@@ -1,7 +1,7 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { eq } from "drizzle-orm";
 import { creerDbTest, type Db } from "../../test-utils/db.js";
-import { actualiserStatutTransaction, initierPaiementMobile } from "./paiement-mobile.service.js";
+import { actualiserStatutTransaction, DELAI_DERNIERE_CONSULTATION_MS, initierPaiementMobile } from "./paiement-mobile.service.js";
 import type { FournisseurPaiementMobile, StatutFournisseur } from "./fournisseur.js";
 import * as schema from "../../db/schema.js";
 
@@ -211,28 +211,82 @@ describe("actualiserStatutTransaction (6.6)", () => {
   });
 
   // 6.6 : "EXPIRÉE : Délai de validation dépassé (OTP non saisi à temps) : la
-  // transaction est annulée et doit être relancée" — vérifié indépendamment
-  // du fournisseur, qui peut ne jamais se prononcer sur une transaction
-  // abandonnée par le client (ex. USSD fermé sans saisir l'OTP).
-  it("EXPIREE : une transaction dont le délai de validation est dépassé expire sans jamais interroger le fournisseur", async () => {
-    const transaction = await initierPaiementMobile(db, fournisseur, {
-      idFacture,
-      numeroTelephone: "690000000",
-      montant: 5000,
-      parcours: "USSD_CLIENT",
-    });
+  // transaction est annulée et doit être relancée" — décidé localement : l'expiration ne dépend jamais de ce que répond le
+  // fournisseur, qui peut ne jamais se prononcer sur une transaction abandonnée (USSD fermé sans saisir l'OTP).
+  // Mais l'opérateur est seul à savoir si le client a été DÉBITÉ : il est consulté une dernière fois avant d'expirer. Sans cela, un
+  // client débité à la dernière seconde (ou un poste qui n'a pas pu interroger à temps) ne voyait jamais son paiement enregistré, et
+  // le caissier pouvait encaisser en espèces : le client payait deux fois.
+  async function transactionExpiree() {
+    const transaction = await initierPaiementMobile(db, fournisseur, { idFacture, numeroTelephone: "690000000", montant: 5000, parcours: "USSD_CLIENT" });
     db.update(schema.transactionMobileMoney)
       .set({ dateExpiration: "2020-01-01T00:00:00.000Z" })
       .where(eq(schema.transactionMobileMoney.idTransaction, transaction.idTransaction))
       .run();
+    return transaction;
+  }
+  const paiements = () => db.select().from(schema.paiement).where(eq(schema.paiement.idFacture, idFacture)).all();
+  const statutFacture = () => db.select().from(schema.facture).where(eq(schema.facture.idFacture, idFacture)).get()?.statut;
+
+  it("EXPIREE : une transaction dont le délai de validation est dépassé expire quand l'opérateur ne confirme rien", async () => {
+    const transaction = await transactionExpiree();
 
     const resultat = await actualiserStatutTransaction(db, fournisseur, transaction.idTransaction, userId);
 
     expect(resultat.statut).toBe("EXPIREE");
+    expect(fournisseur.appelsConsulterStatut).toBe(1); // la dernière consultation, avant d'expirer
+    expect(statutFacture()).toBe("BROUILLON");
+    expect(paiements()).toHaveLength(0);
+  });
+
+  it("enregistre le paiement d'un client débité à la dernière seconde : l'opérateur dit « réussie » après le délai local", async () => {
+    const transaction = await transactionExpiree();
+    fournisseur.statut = "REUSSIE";
+
+    const resultat = await actualiserStatutTransaction(db, fournisseur, transaction.idTransaction, userId);
+
+    expect(resultat.statut).toBe("REUSSIE");
+    expect(statutFacture()).toBe("VALIDEE");
+    expect(paiements()).toMatchObject([{ mode: "MOBILE_MONEY", montant: 5000, referenceTransaction: "REF-TEST-1" }]);
+  });
+
+  it("expire quand l'opérateur dit « échouée »", async () => {
+    const transaction = await transactionExpiree();
+    fournisseur.statut = "ECHOUEE";
+
+    expect((await actualiserStatutTransaction(db, fournisseur, transaction.idTransaction, userId)).statut).toBe("EXPIREE");
+    expect(paiements()).toHaveLength(0);
+  });
+
+  it("expire quand l'opérateur est injoignable : l'expiration ne dépend jamais de sa réponse", async () => {
+    const transaction = await transactionExpiree();
+    fournisseur.consulterStatut = async () => {
+      throw new Error("réseau coupé");
+    };
+
+    expect((await actualiserStatutTransaction(db, fournisseur, transaction.idTransaction, userId)).statut).toBe("EXPIREE");
+  });
+
+  it("expire quand l'opérateur ne répond pas du tout, sans bloquer le poste au-delà du délai prévu", async () => {
+    vi.useFakeTimers();
+    try {
+      const transaction = await transactionExpiree();
+      fournisseur.consulterStatut = () => new Promise(() => {}); // ne répond jamais
+
+      const attente = actualiserStatutTransaction(db, fournisseur, transaction.idTransaction, userId);
+      await vi.advanceTimersByTimeAsync(DELAI_DERNIERE_CONSULTATION_MS + 100);
+
+      expect((await attente).statut).toBe("EXPIREE");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("ne consulte pas l'opérateur pour une transaction qui ne lui est jamais parvenue (sans référence)", async () => {
+    const transaction = await transactionExpiree();
+    db.update(schema.transactionMobileMoney).set({ referenceTransaction: null }).where(eq(schema.transactionMobileMoney.idTransaction, transaction.idTransaction)).run();
+
+    expect((await actualiserStatutTransaction(db, fournisseur, transaction.idTransaction, userId)).statut).toBe("EXPIREE");
     expect(fournisseur.appelsConsulterStatut).toBe(0);
-    const facture = db.select().from(schema.facture).where(eq(schema.facture.idFacture, idFacture)).get();
-    expect(facture?.statut).toBe("BROUILLON");
-    expect(db.select().from(schema.paiement).where(eq(schema.paiement.idFacture, idFacture)).all()).toHaveLength(0);
   });
 
   it("n'expire pas une transaction encore dans son délai de validation", async () => {
@@ -265,7 +319,8 @@ describe("actualiserStatutTransaction (6.6)", () => {
     const resultat = await actualiserStatutTransaction(db, fournisseur, transaction.idTransaction, userId);
 
     expect(resultat.statut).toBe("EXPIREE");
-    expect(fournisseur.appelsConsulterStatut).toBe(0);
+    // une seule consultation, lors de l'expiration : une transaction déjà expirée n'est plus interrogée
+    expect(fournisseur.appelsConsulterStatut).toBe(1);
   });
 });
 

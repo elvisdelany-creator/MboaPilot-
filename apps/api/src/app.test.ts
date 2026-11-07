@@ -5311,6 +5311,48 @@ describe("mode dégradé de la licence : blocage des écritures (10.4)", () => {
     expect(reponse.json().erreur).toMatch(/mode dégradé/i);
   });
 
+  // Un client paie par Mobile Money, puis la licence bascule en mode dégradé avant la confirmation : l'argent est pris. Enregistrer ce
+  // paiement n'est pas une nouvelle vente, c'est constater de l'argent déjà encaissé ; le refuser le laissait sans trace dans l'application.
+  it("laisse enregistrer le paiement Mobile Money d'une transaction déjà initiée, mais refuse toute nouvelle vente ou initiation", async () => {
+    const fournisseur = new FournisseurPaiementMobileFactice();
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST, fournisseurPaiementMobile: fournisseur });
+    const token = await connecter(app);
+    const recrutement = await app.inject({
+      method: "POST",
+      url: "/api/v1/recrutements",
+      headers: authHeader(token),
+      payload: { siteId, userId, aujourdHui: "2025-11-16", abonne: { nom: "Nga", prenom: "Paul", telephone: "690000000" }, idFormule, montantEncaisse: 0 },
+    });
+    const { idFacture } = recrutement.json();
+    const initiation = await app.inject({
+      method: "POST",
+      url: "/api/v1/paiements-mobiles",
+      headers: authHeader(token),
+      payload: { idFacture, numeroTelephone: "690000000", montant: 13000, parcours: "USSD_CLIENT" },
+    });
+    expect(initiation.statusCode).toBe(201);
+
+    // la licence bascule après l'initiation, avant la confirmation (celle de l'installation existe déjà : on l'expire, on n'en ajoute pas une)
+    db.update(schema.licence).set({ dateExpirationAbonnement: "2020-01-01" }).run();
+    fournisseur.statut = "REUSSIE"; // le client a été débité
+
+    const confirmation = await app.inject({ method: "POST", url: `/api/v1/paiements-mobiles/${initiation.json().idTransaction}/actualiser`, headers: authHeader(token) });
+    expect(confirmation.statusCode).toBe(200);
+    expect(confirmation.json().statut).toBe("REUSSIE");
+    expect(db.select().from(schema.facture).where(eq(schema.facture.idFacture, idFacture)).get()?.statut).toBe("VALIDEE");
+
+    // tout le reste reste en lecture seule
+    const nouvelleInitiation = await app.inject({
+      method: "POST",
+      url: "/api/v1/paiements-mobiles",
+      headers: authHeader(token),
+      payload: { idFacture, numeroTelephone: "690000000", montant: 1000, parcours: "USSD_CLIENT" },
+    });
+    const vente = await app.inject({ method: "POST", url: "/api/v1/ventes", headers: authHeader(token), payload: { siteId, userId, lignes: [{ idProduit: 1, quantite: 1 }], montantEncaisse: 0 } });
+    expect(nouvelleInitiation.statusCode).toBe(403);
+    expect(vente.statusCode).toBe(403);
+  });
+
   // la cause change l'action à mener : une échéance se prolonge (administrateur), un délai de grâce dépassé se lève par une revalidation
   it("dit « expirée » quand l'abonnement a expiré, et « non revalidée » quand seul le délai de grâce hors ligne est dépassé", async () => {
     const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });

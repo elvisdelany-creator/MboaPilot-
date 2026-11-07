@@ -3,7 +3,7 @@ import { peutTransitionnerPaiementMobile } from "@mboapilot/shared";
 import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
 import { paiementMobileEnCours } from "../factures/paiement.repository.js";
-import type { FournisseurPaiementMobile, ParcoursPaiementMobile } from "./fournisseur.js";
+import type { FournisseurPaiementMobile, ParcoursPaiementMobile, StatutFournisseur } from "./fournisseur.js";
 import { creerSuiviCommissionCanalplus } from "../abonnements/suivi-commission-canalplus.repository.js";
 import { verifierEntier } from "../../lib/validation.js";
 import { telephoneObligatoire } from "../../lib/champs-texte.js";
@@ -89,6 +89,26 @@ export function trouverTransaction(db: Db, idTransaction: number) {
   return db.select().from(schema.transactionMobileMoney).where(eq(schema.transactionMobileMoney.idTransaction, idTransaction)).get();
 }
 
+// dernière consultation d'une transaction déjà expirée : jamais bloquante (un opérateur qui ne répond pas ne retient pas le poste) et jamais
+// en erreur (panne, réseau coupé) — dans les deux cas « on ne sait pas », donc l'expiration a lieu
+export const DELAI_DERNIERE_CONSULTATION_MS = 5000;
+
+async function consulterSansBloquer(fournisseur: FournisseurPaiementMobile, reference: string): Promise<StatutFournisseur | null> {
+  let minuteur: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      fournisseur.consulterStatut(reference),
+      new Promise<null>((resolve) => {
+        minuteur = setTimeout(() => resolve(null), DELAI_DERNIERE_CONSULTATION_MS);
+      }),
+    ]);
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(minuteur);
+  }
+}
+
 // 6.6 : interroge le fournisseur (polling) et applique la transition — le
 // callback/webhook officiel viendra remplacer cet appel manuel sans changer
 // la logique métier ci-dessous. Idempotent : un état terminal ne rappelle
@@ -100,10 +120,21 @@ export async function actualiserStatutTransaction(db: Db, fournisseur: Fournisse
   if (transaction.statut !== "EN_ATTENTE" && transaction.statut !== "INITIEE") return transaction;
 
   // 6.6 : "EXPIRÉE : Délai de validation dépassé (OTP non saisi à temps) :
-  // la transaction est annulée" — vérifié avant toute consultation du
-  // fournisseur, qui peut ne jamais se prononcer sur une transaction
-  // abandonnée par le client (ex. USSD fermé sans saisir l'OTP).
-  if (new Date(transaction.dateExpiration).getTime() <= Date.now()) {
+  // la transaction est annulée" — décidé localement : l'expiration ne dépend jamais de ce que répond le fournisseur, qui peut ne
+  // jamais se prononcer sur une transaction abandonnée par le client (ex. USSD fermé sans saisir l'OTP). Mais seul l'opérateur sait si
+  // le client a été DÉBITÉ : il est consulté une dernière fois, sans jamais bloquer ni échouer (délai, panne). S'il confirme le
+  // paiement, il est enregistré ; sinon l'expiration a lieu — sans cela, un client débité à la dernière seconde ne voyait jamais son
+  // paiement enregistré et pouvait payer une seconde fois en espèces.
+  const expiree = new Date(transaction.dateExpiration).getTime() <= Date.now();
+  if (!transaction.referenceTransaction && !expiree) return transaction;
+
+  const statutFournisseur: StatutFournisseur | null = transaction.referenceTransaction
+    ? expiree
+      ? await consulterSansBloquer(fournisseur, transaction.referenceTransaction)
+      : await fournisseur.consulterStatut(transaction.referenceTransaction)
+    : null;
+
+  if (expiree && statutFournisseur !== "REUSSIE") {
     return db
       .update(schema.transactionMobileMoney)
       .set({ statut: "EXPIREE" })
@@ -111,13 +142,10 @@ export async function actualiserStatutTransaction(db: Db, fournisseur: Fournisse
       .returning()
       .get();
   }
+  if (statutFournisseur === null || !peutTransitionnerPaiementMobile(transaction.statut, statutFournisseur)) return transaction;
 
-  if (!transaction.referenceTransaction) return transaction;
-
-  const statutFournisseur = await fournisseur.consulterStatut(transaction.referenceTransaction);
-  if (!peutTransitionnerPaiementMobile(transaction.statut, statutFournisseur)) return transaction;
-
-  const referenceFournisseurTransaction = transaction.referenceTransaction; // déjà vérifiée non nulle plus haut
+  const referenceFournisseurTransaction = transaction.referenceTransaction;
+  if (!referenceFournisseurTransaction) return transaction; // un statut du fournisseur suppose une référence : garde de typage
   // atomique : le paiement, la validation de la facture, la promotion de la commission et le statut de la
   // transaction s'écrivent ensemble — un échec laissait un paiement sans facture validée
   return db.transaction(() => {

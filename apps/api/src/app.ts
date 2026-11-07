@@ -60,6 +60,11 @@ export interface BuildAppOptions {
 // données toujours possible", 10.3).
 const PREFIXES_ECRITURE_TOUJOURS_AUTORISES = ["/api/v1/auth", "/api/v1/licence", "/api/v1/sauvegarde", "/api/v1/installation"];
 
+// Seule exception « métier » : constater un paiement Mobile Money DÉJÀ initié. Le client a été débité avant la bascule en mode dégradé ;
+// refuser d'enregistrer cet argent déjà encaissé le laissait sans trace, et la vente non payée. Ce n'est ni une vente ni une initiation
+// de paiement (elles restent refusées) : on n'ajoute rien à ce qui s'est passé, on le constate.
+const CONFIRMATION_PAIEMENT_MOBILE = /^\/api\/v1\/paiements-mobiles\/\d+\/actualiser$/;
+
 // Politique de contenu de la page de l'interface : tout vient du poste lui-même. Les styles en ligne sont tolérés (attributs
 // `style` de React, feuille d'impression) ; le QR s'affiche en data:, les logos et photos en blob:. Aucun script extérieur,
 // aucun objet, aucun affichage de l'application dans le cadre d'un autre site.
@@ -99,7 +104,7 @@ export function buildApp(db: Db, options: BuildAppOptions) {
   app.addHook("preHandler", async (request, reply) => {
     if (request.method === "GET" || request.method === "HEAD") return;
     const chemin = request.url.split("?")[0];
-    if (PREFIXES_ECRITURE_TOUJOURS_AUTORISES.some((prefixe) => chemin.startsWith(prefixe))) return;
+    if (PREFIXES_ECRITURE_TOUJOURS_AUTORISES.some((prefixe) => chemin.startsWith(prefixe)) || CONFIRMATION_PAIEMENT_MOBILE.test(chemin)) return;
 
     const licence = obtenirOuCreerLicence(db, new Date().toISOString());
     const statut = calculerEtatLicence(licence, new Date().toISOString());

@@ -172,6 +172,74 @@ describe("modifierProduit (8.2 : édition d'une fiche article, historique des pr
 // que l'export CSV du catalogue, appliqué à la consultation ouverte à tout
 // rôle (caisse, SAV) du produit brut : coût de revient et marge masqués
 // pour les rôles hors Administrateur/Gérant.
+// 5.2, 9.2 : « code interne/code-barres » — la scanette de la caisse ajoute l'article dont le code correspond exactement. Deux articles avec
+// le même code faisaient ajouter silencieusement le premier trouvé (un câble à 2 500 au lieu d'une antenne à 8 000), et un code enregistré
+// avec des espaces autour n'était jamais retrouvé par la scanette.
+describe("code-barres : unique par site et normalisé (5.2, 9.2)", () => {
+  const nouveau = (libelle: string, codeBarres?: string, site = siteId) => creerProduit(db, { siteId: site, type: "BIEN", libelle, prixVente: 2500, codeBarres });
+  const compte = () => db.select().from(schema.produit).all().length;
+
+  it("refuse un code déjà porté par un autre article du site, en nommant cet article, sans rien créer", () => {
+    nouveau("Câble HDMI", "6001234567890");
+
+    expect(() => nouveau("Câble HDMI 2 m", "6001234567890")).toThrow(/déjà.*« Câble HDMI »/);
+
+    expect(compte()).toBe(1);
+  });
+
+  it("reconnaît le même code malgré la casse et les espaces autour", () => {
+    nouveau("Prise A", "ABC-123");
+
+    expect(() => nouveau("Prise B", "  abc-123 ")).toThrow(/déjà/);
+  });
+
+  it("accepte le même code sur un autre site : chaque boutique a son catalogue", () => {
+    nouveau("Câble HDMI", "6001234567890");
+
+    expect(() => nouveau("Câble HDMI", "6001234567890", autreSiteId)).not.toThrow();
+  });
+
+  it("enregistre le code sans les espaces autour, et un code vide comme absent", () => {
+    expect(nouveau("Antenne", "  6009876543210  ").codeBarres).toBe("6009876543210");
+    expect(nouveau("Sans code", "   ").codeBarres).toBeNull();
+    expect(nouveau("Sans code 2", "").codeBarres).toBeNull();
+  });
+
+  it("autorise plusieurs articles sans code", () => {
+    expect(() => {
+      nouveau("A");
+      nouveau("B");
+      nouveau("C", "");
+    }).not.toThrow();
+  });
+
+  it("refuse de modifier un article vers le code d'un autre, et laisse l'article inchangé", () => {
+    nouveau("Câble HDMI", "111");
+    const antenne = nouveau("Antenne", "222");
+
+    expect(() => modifierProduit(db, antenne.idProduit, { codeBarres: "111", userId })).toThrow(/déjà.*« Câble HDMI »/);
+
+    expect(trouverProduit(db, antenne.idProduit)?.codeBarres).toBe("222");
+  });
+
+  it("laisse un article garder son propre code quand on modifie autre chose (ou qu'on renvoie le même code)", () => {
+    const cable = nouveau("Câble HDMI", "111");
+
+    expect(() => modifierProduit(db, cable.idProduit, { libelle: "Câble HDMI 1 m", codeBarres: "111", userId })).not.toThrow();
+    expect(() => modifierProduit(db, cable.idProduit, { prixVente: 3000, userId })).not.toThrow();
+    expect(trouverProduit(db, cable.idProduit)?.codeBarres).toBe("111");
+  });
+
+  it("efface le code quand on envoie un texte vide, et le libère pour un autre article", () => {
+    const cable = nouveau("Câble HDMI", "111");
+
+    modifierProduit(db, cable.idProduit, { codeBarres: "", userId });
+
+    expect(trouverProduit(db, cable.idProduit)?.codeBarres).toBeNull();
+    expect(() => nouveau("Autre câble", "111")).not.toThrow();
+  });
+});
+
 describe("estRoleEncadrement (8.2)", () => {
   it("Administrateur et Gérant sont de l'encadrement", () => {
     expect(estRoleEncadrement("ADMINISTRATEUR")).toBe(true);

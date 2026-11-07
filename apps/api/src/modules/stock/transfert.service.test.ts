@@ -155,6 +155,23 @@ describe("transfererStock (5.2, 8.2)", () => {
     expect(resultat.produitDestination.codeBarres).toBe("1234567890128");
   });
 
+  // 5.2, 9.2 : deux articles d'un même site ne partagent jamais un code-barres (la scanette ajouterait le mauvais) — l'article créé par le
+  // transfert ne reprend donc pas un code déjà porté, au site destination, par un autre article
+  it("crée l'article destination sans code-barres quand un autre article de ce site le porte déjà", () => {
+    db.update(schema.produit).set({ codeBarres: "1234567890128" }).where(eq(schema.produit.idProduit, idProduitSource)).run();
+    const autre = db
+      .insert(schema.produit)
+      .values({ siteId: siteDestination, type: "BIEN", libelle: "Autre article B", codeBarres: " 1234567890128", prixVente: 1000, suiviStock: 1, quantiteStock: 1 })
+      .returning()
+      .get();
+
+    const resultat = transfererStock(db, { idProduitSource, siteDestinationId: siteDestination, quantite: 3, userId });
+
+    expect(resultat.produitDestination.idProduit).not.toBe(autre.idProduit);
+    expect(resultat.produitDestination.codeBarres).toBeNull();
+    expect(db.select().from(schema.produit).where(eq(schema.produit.idProduit, autre.idProduit)).get()?.codeBarres).toBe(" 1234567890128");
+  });
+
   it("journalise un mouvement double : TRANSFERT_SORTIE au site source, TRANSFERT_ENTREE au site destination", () => {
     const resultat = transfererStock(db, { idProduitSource, siteDestinationId: siteDestination, quantite: 4, motif: "Réassort boutique B", userId });
 

@@ -3,6 +3,7 @@ import { calculerCoutMoyenPondere, normaliserLibelle } from "@mboapilot/shared";
 import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
 import { enregistrerMouvement } from "./stock.repository.js";
+import { normaliserCodeBarres, trouverProduitParCodeBarres } from "../produits/produit.repository.js";
 
 export interface TransfererStockParams {
   idProduitSource: number;
@@ -51,6 +52,9 @@ function transfererStockSansTransaction(db: Db, params: TransfererStockParams): 
   let destination = candidatsDestination.find((p) => normaliserLibelle(p.libelle) === normaliserLibelle(source.libelle));
 
   if (!destination) {
+    // un code-barres n'appartient qu'à un article par site : l'article créé ici ne reprend pas un code déjà porté par un autre
+    const codeSource = normaliserCodeBarres(source.codeBarres) ?? null;
+    const codeReprenable = codeSource && !trouverProduitParCodeBarres(db, params.siteDestinationId, codeSource) ? codeSource : null;
     destination = db
       .insert(schema.produit)
       .values({
@@ -58,7 +62,7 @@ function transfererStockSansTransaction(db: Db, params: TransfererStockParams): 
         type: source.type,
         libelle: source.libelle,
         categorie: source.categorie,
-        codeBarres: source.codeBarres,
+        codeBarres: codeReprenable,
         prixVente: source.prixVente,
         coutRevient: source.coutRevient,
         margeType: source.margeType,

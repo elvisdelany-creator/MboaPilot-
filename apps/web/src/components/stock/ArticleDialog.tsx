@@ -98,7 +98,8 @@ export function ArticleDialog({ ouvert, produit, onFerme, onSucces }: Props) {
       const champsCommuns = {
         libelle: libelle.trim(),
         categorie: categorie.trim() || undefined,
-        codeBarres: codeBarres.trim() || undefined,
+        // texte vide = « pas de code » : à la modification il efface l'ancien code (rien envoyé le laisserait en place)
+        codeBarres: codeBarres.trim(),
         prixVente: Number(prixVente),
         coutRevient: coutRevientNum,
         margeType,

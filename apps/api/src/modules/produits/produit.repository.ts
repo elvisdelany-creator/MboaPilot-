@@ -1,4 +1,4 @@
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { calculerMarge, type MargeType } from "@mboapilot/shared";
 import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
@@ -38,6 +38,32 @@ function verifierChampsProduit(input: { libelle?: unknown; categorie?: unknown; 
   verifierEntier(input.coutRevient, "Le coût de revient", { max: PLAFOND_PRIX_FCFA, nullable: false });
 }
 
+// 5.2, 9.2 : le code-barres est comparé sans espaces autour ni casse (la scanette le fait aussi). Un texte vide veut dire « pas de code ».
+// undefined = champ absent de la requête.
+export function normaliserCodeBarres(code: string | null | undefined): string | null | undefined {
+  if (code === undefined) return undefined;
+  if (code === null) return null;
+  const propre = code.trim();
+  return propre === "" ? null : propre;
+}
+
+// L'article du site qui porte déjà ce code, le cas échéant (hors `sauf`, l'article en cours de modification)
+export function trouverProduitParCodeBarres(db: Db, siteId: number, code: string, sauf?: number) {
+  return db
+    .select()
+    .from(schema.produit)
+    .where(and(eq(schema.produit.siteId, siteId), sql`lower(trim(${schema.produit.codeBarres})) = ${code.trim().toLowerCase()}`))
+    .all()
+    .find((p) => p.idProduit !== sauf);
+}
+
+// Deux articles du même site avec le même code font ajouter silencieusement le premier trouvé à la caisse (le mauvais prix) : refusé.
+function exigerCodeBarresLibre(db: Db, siteId: number, code: string | null | undefined, sauf?: number) {
+  if (!code) return;
+  const autre = trouverProduitParCodeBarres(db, siteId, code, sauf);
+  if (autre) throw new Error(`Le code-barres « ${code} » est déjà celui de l'article « ${autre.libelle} »`);
+}
+
 export interface CreerProduitInput {
   siteId: number;
   type: "BIEN" | "SERVICE" | "SAV" | "KIT";
@@ -68,6 +94,9 @@ export function creerProduit(db: Db, input: CreerProduitInput) {
   verifierEntier(input.coutRevient, "Le coût de revient", { nullable: false });
   verifierEntier(input.seuilAlerte, "Le seuil d'alerte");
 
+  const codeBarres = normaliserCodeBarres(input.codeBarres);
+  exigerCodeBarresLibre(db, input.siteId, codeBarres);
+
   const margeType = input.margeType ?? "VALEUR";
   const coutRevient = input.coutRevient ?? 0;
   const marge = calculerMarge({
@@ -84,7 +113,7 @@ export function creerProduit(db: Db, input: CreerProduitInput) {
       type: input.type,
       libelle: input.libelle,
       categorie: input.categorie,
-      codeBarres: input.codeBarres,
+      codeBarres,
       prixVente: input.prixVente,
       coutRevient,
       margeType,
@@ -127,6 +156,11 @@ function modifierProduitSansTransaction(db: Db, idProduit: number, input: Modifi
   verifierEntier(input.coutRevient, "Le coût de revient", { nullable: false });
   verifierEntier(input.seuilAlerte, "Le seuil d'alerte");
 
+  // undefined = inchangé ; texte vide ou null = effacé
+  const codeSaisi = normaliserCodeBarres(input.codeBarres);
+  const codeBarres = codeSaisi === undefined ? avant.codeBarres : codeSaisi;
+  exigerCodeBarresLibre(db, avant.siteId, codeBarres, idProduit);
+
   const margeType = input.margeType ?? avant.margeType;
   const coutRevient = input.coutRevient ?? avant.coutRevient;
   const marge = calculerMarge({
@@ -155,7 +189,7 @@ function modifierProduitSansTransaction(db: Db, idProduit: number, input: Modifi
     .set({
       libelle: input.libelle ?? avant.libelle,
       categorie: input.categorie ?? avant.categorie,
-      codeBarres: input.codeBarres ?? avant.codeBarres,
+      codeBarres,
       prixVente,
       coutRevient,
       margeType,

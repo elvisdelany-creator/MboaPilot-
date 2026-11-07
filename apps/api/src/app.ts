@@ -131,6 +131,8 @@ export function buildApp(db: Db, options: BuildAppOptions) {
   const gestionComptesPartages = exigerRole("ADMINISTRATEUR", "GERANT");
   // 4.3 : résiliation manuelle d'un abonnement — « utilisateur habilité », donc l'encadrement
   const gestionResiliation = exigerRole("ADMINISTRATEUR", "GERANT");
+  // reprise d'un abonné qui existait avant l'application : crée un abonnement actif sans rien encaisser, donc l'encadrement
+  const gestionReprise = exigerRole("ADMINISTRATEUR", "GERANT");
   // 6.4 : émission d'un avoir — correction financière, réservée à l'encadrement
   const gestionAvoirs = exigerRole("ADMINISTRATEUR", "GERANT");
   // 13.1 : "validation par un rôle habilité" pour la fermeture de caisse — encadrement uniquement
@@ -156,7 +158,7 @@ export function buildApp(db: Db, options: BuildAppOptions) {
   // jamais lisibles par ce partenaire externe
   const lectureInterne = exigerRole("ADMINISTRATEUR", "GERANT", "CAISSIER", "TECHNICIEN_SAV", "COMPTABLE");
 
-  registerAbonnementsRoutes(app, db, { authRequis, ventes, gestionResiliation });
+  registerAbonnementsRoutes(app, db, { authRequis, ventes, gestionResiliation, gestionReprise });
   // 11.3 : anonymisation (droit de suppression) réservée à l'Administrateur seul
   registerAbonnesRoutes(app, db, { authRequis, ventes, fusionAbonnes, anonymisationAbonne: admin, lectureFinanciere, rechercheAbonnes });
   registerCatalogueRoutes(app, db, { authRequis, gestionCatalogue, lectureInterne });

@@ -11,6 +11,7 @@ import { reabonner, type ReabonnerParams } from "./reabonnement.service.js";
 import { echangerMateriel, type EchangerMaterielParams } from "./echange-materiel.service.js";
 import { changerFormule, type ChangerFormuleParams } from "./changement-formule.service.js";
 import { resilierAbonnement } from "./resiliation.service.js";
+import { reprendreAbonneExistant, type ReprendreAbonneParams } from "./reprise.service.js";
 import { listerAbonnementsParAbonne } from "./abonnement.repository.js";
 import { envoyerErreur } from "../../lib/erreurs-api.js";
 
@@ -42,7 +43,7 @@ function abonnementAutreSite(db: Db, appelant: Appelant, numeroAbonnement: numbe
 
 // 11.2 : les opérations de vente (recrutement, réabonnement) sont réservées aux
 // rôles habilités à encaisser — cohérent avec le périmètre de l'écran de caisse.
-export function registerAbonnementsRoutes(app: FastifyInstance, db: Db, guards: RouteGuards & { gestionResiliation: Guard }) {
+export function registerAbonnementsRoutes(app: FastifyInstance, db: Db, guards: RouteGuards & { gestionResiliation: Guard; gestionReprise: Guard }) {
   // 4.3 : résiliation manuelle (demande du client, litige, matériel non restitué) — réservée à l'encadrement. Le jour vient du
   // serveur et l'auteur du jeton : ni l'un ni l'autre ne se confient au poste.
   app.post<{ Params: { numeroAbonnement: string }; Body: { motif: string } }>(
@@ -72,6 +73,28 @@ export function registerAbonnementsRoutes(app: FastifyInstance, db: Db, guards: 
         return;
       }
       reply.code(200).send(listerAbonnementsParAbonne(db, idAbonne));
+    }
+  );
+
+  // reprise d'un abonné qui existait avant l'application : sa vraie date de fin, sans fausse vente. Le site, l'auteur et le jour
+  // viennent du serveur, comme pour un recrutement ; réservée à l'encadrement (un abonnement actif se crée sans rien encaisser).
+  app.post<{ Body: Omit<ReprendreAbonneParams, "siteId" | "userId" | "aujourdHui"> }>(
+    "/api/v1/abonnements/reprise",
+    { preHandler: [guards.authRequis, guards.gestionReprise] },
+    async (request, reply) => {
+      if (!request.body?.abonne || typeof request.body.abonne !== "object") {
+        reply.code(400).send({ erreur: "Les informations de l'abonné sont obligatoires" });
+        return;
+      }
+      if ("idAbonne" in request.body.abonne && abonneAutreSite(db, request.user, request.body.abonne.idAbonne)) {
+        reply.code(403).send(ERREUR_SITE_ABONNE);
+        return;
+      }
+      try {
+        reply.code(201).send(reprendreAbonneExistant(db, { ...request.body, siteId: request.user.siteId, userId: request.user.idUser, aujourdHui: jourDouala() }));
+      } catch (erreur) {
+        envoyerErreur(reply, erreur);
+      }
     }
   );
 

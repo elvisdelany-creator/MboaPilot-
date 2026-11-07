@@ -612,6 +612,24 @@ export async function resilierAbonnementRequete(token: string, numeroAbonnement:
   return lireJson<{ numeroAbonnement: number; commissionAnnulee: boolean }>(reponse);
 }
 
+// reprise d'un abonné qui existait avant l'application : sa vraie date de fin, sans facture ni paiement ni commission (encadrement)
+export interface ReprendreAbonnePayload {
+  abonne: { idAbonne: number } | NouvelAbonne;
+  idFormule: number;
+  dateFin: string; // AAAA-MM-JJ
+  numeroSerie?: string;
+  idComptePartage?: number;
+}
+
+export async function reprendreAbonneRequete(token: string, payload: ReprendreAbonnePayload): Promise<{ numeroAbonnement: number; idAbonne: number; statut: "ACTIF" | "EXPIRE" }> {
+  const reponse = await appelerServeur(`${BASE}/abonnements/reprise`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headersAuth(token) },
+    body: JSON.stringify(payload),
+  });
+  return lireJson<{ numeroAbonnement: number; idAbonne: number; statut: "ACTIF" | "EXPIRE" }>(reponse);
+}
+
 export async function changerFormuleRequete(
   token: string,
   numeroAbonnement: number,

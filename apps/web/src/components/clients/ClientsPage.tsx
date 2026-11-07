@@ -6,6 +6,7 @@ import {
   ChevronDown,
   ChevronUp,
   GitMerge,
+  History,
   Mail,
   MessageSquare,
   Pencil,
@@ -48,6 +49,7 @@ import { EmettreAvoirDialog } from "./EmettreAvoirDialog";
 import { EncaisserSoldeDialog } from "./EncaisserSoldeDialog";
 import { AnnulerPaiementDialog } from "./AnnulerPaiementDialog";
 import { ResilierAbonnementDialog } from "./ResilierAbonnementDialog";
+import { ReprendreAbonneDialog } from "./ReprendreAbonneDialog";
 import { ConfirmerRapprochementDialog } from "./ConfirmerRapprochementDialog";
 import type { Abonne, AbonnementAvecFormule, CatalogueFamille, DossierSavDetaille, Facture, Fiche360, Paiement } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -206,6 +208,9 @@ export function ClientsPage({ onNaviguer, onReabonnerDepuisFiche }: Props) {
   }
 
   const peutFusionner = utilisateur.role === "ADMINISTRATEUR" || utilisateur.role === "GERANT";
+  // reprise d'un abonné qui existait avant l'application : crée un abonnement actif sans rien encaisser, donc l'encadrement
+  const peutReprendre = utilisateur.role === "ADMINISTRATEUR" || utilisateur.role === "GERANT";
+  const [repriseOuverte, setRepriseOuverte] = useState(false);
   // 11.3 : droit de suppression — sensibilité plus élevée que la fusion, réservé à l'Administrateur seul
   const peutAnonymiser = utilisateur.role === "ADMINISTRATEUR";
   // 6.4 : émission d'un avoir — correction financière, réservée à l'encadrement
@@ -261,6 +266,12 @@ export function ClientsPage({ onNaviguer, onReabonnerDepuisFiche }: Props) {
               aria-label="Rechercher un client"
               className="h-10"
             />
+            {peutReprendre && (
+              <Button variant="outline" size="sm" className="mt-2 w-full cursor-pointer gap-2" onClick={() => setRepriseOuverte(true)}>
+                <History className="size-4" aria-hidden="true" />
+                Reprendre un abonné existant
+              </Button>
+            )}
           </div>
           <ul className="max-h-60 overflow-y-auto md:max-h-none md:flex-1">
             {terme.trim() && resultats.length === 0 && rechercheEnCours && (
@@ -765,6 +776,19 @@ export function ClientsPage({ onNaviguer, onReabonnerDepuisFiche }: Props) {
         numeroAbonnement={echangeMaterielCible}
         onFerme={() => setEchangeMaterielCible(null)}
         onSucces={onActionAbonnementReussie}
+      />
+
+      <ReprendreAbonneDialog
+        ouvert={repriseOuverte}
+        catalogue={catalogue}
+        onFerme={() => setRepriseOuverte(false)}
+        onSucces={(idAbonne) => {
+          setRepriseOuverte(false);
+          // le n° d'abonné est une clé de recherche : le client repris apparaît dans la liste et sa fiche s'ouvre
+          setTerme(String(idAbonne));
+          setIdSelectionne(idAbonne);
+          rechargerFiche(idAbonne);
+        }}
       />
 
       <ResilierAbonnementDialog

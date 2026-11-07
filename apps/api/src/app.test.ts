@@ -214,6 +214,75 @@ describe("Garde d'authentification (11.2 : RBAC de bout en bout, jamais uniqueme
   });
 });
 
+// Jour 1 en boutique : les abonnés qui existaient avant l'application se reprennent avec leur vraie date de fin, sans fausse vente.
+// Réservé à l'encadrement (une reprise crée un abonnement actif sans rien encaisser) ; site, auteur et jour viennent du serveur.
+describe("POST /api/v1/abonnements/reprise (4.1, 7.1)", () => {
+  async function gerant() {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const gerantId = creerUtilisateur(db, { siteId, nom: "Ger", prenom: "G", identifiant: "gerant1", motDePasse: "motdepasse-secret", role: "GERANT" }).idUser;
+    return { app, gerantId, token: await connecter(app, "gerant1") };
+  }
+  const corps = () => ({ abonne: { nom: "Ngo", prenom: "Paul", telephone: "677000555" }, idFormule, dateFin: new Date(Date.now() + 10 * 86400000).toISOString().slice(0, 10) });
+
+  it("un gérant reprend un abonné existant : abonnement actif à la vraie date de fin, aucune facture", async () => {
+    const { app, token, gerantId } = await gerant();
+
+    const reponse = await app.inject({ method: "POST", url: "/api/v1/abonnements/reprise", headers: authHeader(token), payload: corps() });
+
+    expect(reponse.statusCode).toBe(201);
+    const abonnement = db.select().from(schema.abonnement).where(eq(schema.abonnement.numeroAbonnement, reponse.json().numeroAbonnement)).get()!;
+    expect(abonnement).toMatchObject({ dateFin: corps().dateFin, statut: "ACTIF", siteId, creePar: gerantId });
+    expect(db.select().from(schema.facture).all()).toHaveLength(0);
+    expect(db.select().from(schema.paiement).all()).toHaveLength(0);
+  });
+
+  it("ignore le site, l'auteur et le jour envoyés par le poste", async () => {
+    const { app, token, gerantId } = await gerant();
+    const idEntreprise = db.select().from(schema.site).where(eq(schema.site.idSite, siteId)).get()!.idEntreprise;
+    const autreSite = db.insert(schema.site).values({ idEntreprise, nom: "Site B" }).returning().get().idSite;
+
+    const reponse = await app.inject({ method: "POST", url: "/api/v1/abonnements/reprise", headers: authHeader(token), payload: { ...corps(), siteId: autreSite, userId, aujourdHui: "2020-01-01" } });
+
+    expect(reponse.statusCode).toBe(201);
+    const abonnement = db.select().from(schema.abonnement).where(eq(schema.abonnement.numeroAbonnement, reponse.json().numeroAbonnement)).get()!;
+    expect(abonnement.siteId).toBe(siteId);
+    expect(abonnement.creePar).toBe(gerantId);
+    expect(abonnement.dateDebut).not.toBe("2020-01-01");
+  });
+
+  it("refuse un caissier (403) : une reprise crée un abonnement actif sans rien encaisser", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const token = await connecter(app);
+
+    const reponse = await app.inject({ method: "POST", url: "/api/v1/abonnements/reprise", headers: authHeader(token), payload: corps() });
+
+    expect(reponse.statusCode).toBe(403);
+    expect(db.select().from(schema.abonnement).all()).toHaveLength(0);
+  });
+
+  it("refuse un abonné d'un autre site (403)", async () => {
+    const { app, token } = await gerant();
+    const idEntreprise = db.select().from(schema.site).where(eq(schema.site.idSite, siteId)).get()!.idEntreprise;
+    const autreSite = db.insert(schema.site).values({ idEntreprise, nom: "Site B" }).returning().get().idSite;
+    const idAbonne = db.insert(schema.abonne).values({ siteId: autreSite, nom: "Ailleurs", prenom: "A", telephone: "699000000" }).returning().get().idAbonne;
+
+    const reponse = await app.inject({ method: "POST", url: "/api/v1/abonnements/reprise", headers: authHeader(token), payload: { ...corps(), abonne: { idAbonne } } });
+
+    expect(reponse.statusCode).toBe(403);
+  });
+
+  it("refuse une date de fin invalide et une requête vide par un 400 explicite, jamais un 500", async () => {
+    const { app, token } = await gerant();
+
+    for (const payload of [{ ...corps(), dateFin: "25/11/2026" }, { ...corps(), dateFin: undefined }, {}, { ...corps(), abonne: undefined }]) {
+      const reponse = await app.inject({ method: "POST", url: "/api/v1/abonnements/reprise", headers: authHeader(token), payload });
+      expect(reponse.statusCode, JSON.stringify(payload)).toBe(400);
+      expect(reponse.json().erreur).toEqual(expect.any(String));
+    }
+    expect(db.select().from(schema.abonnement).all()).toHaveLength(0);
+  });
+});
+
 describe("POST /api/v1/recrutements", () => {
   // constaté en test grandeur nature (balayage des routes avec un corps vide) :
   // l'absence du champ « abonne » faisait lever une TypeError hors du bloc

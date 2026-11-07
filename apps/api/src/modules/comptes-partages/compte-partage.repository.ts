@@ -2,7 +2,7 @@ import { and, eq } from "drizzle-orm";
 import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
 import { chiffrer, dechiffrer } from "../../config/chiffrement.js";
-import { normaliserLibelle } from "@mboapilot/shared";
+import { normaliserLibelle, peutAffecterEcran } from "@mboapilot/shared";
 import { texteObligatoire, verifierLongueurTexte } from "../../lib/champs-texte.js";
 import { verifierBooleen, verifierEntier } from "../../lib/validation.js";
 
@@ -82,6 +82,23 @@ export function creerComptePartage(db: Db, input: CreerComptePartageInput) {
     .returning()
     .get();
   return dechiffrerCompte(compte);
+}
+
+// 5.9 : un abonnement ne s'attache qu'à un compte de sa boutique et de sa famille, actif, qui a encore un écran libre — vérifié par le
+// recrutement comme par la reprise d'un abonné existant, et non par la seule liste de l'écran (page non rafraîchie, appel direct)
+export function exigerComptePartageDisponible(db: Db, params: { idComptePartage: number; siteId: number; idFamille: number }) {
+  const comptePartage = trouverComptePartage(db, params.idComptePartage);
+  if (!comptePartage) throw new Error(`Compte partagé ${params.idComptePartage} introuvable`);
+  // 2.5.2 : le compte d'une autre boutique ne se remplit pas depuis celle-ci (un simple numéro suffisait)
+  if (comptePartage.siteId !== params.siteId) throw new Error(`Le compte partagé "${comptePartage.libelle}" n'appartient pas à votre site`);
+  // 5.9 : un écran Netflix ne sert pas un abonnement CANAL+ — l'interface filtre par famille, l'API doit aussi
+  if (comptePartage.idFamille !== params.idFamille) throw new Error(`Le compte partagé "${comptePartage.libelle}" n'est pas de la famille de cette formule`);
+  // 5.9 : un compte désactivé n'apparaît déjà plus dans la liste de la caisse
+  if (comptePartage.actif !== 1) throw new Error(`Le compte partagé "${comptePartage.libelle}" est désactivé`);
+  const ecransOccupes = compterEcransOccupes(db, params.idComptePartage);
+  if (!peutAffecterEcran(comptePartage.nombreEcransMax, ecransOccupes)) {
+    throw new Error(`Capacité atteinte : ${comptePartage.libelle} n'a plus d'écran disponible (${ecransOccupes}/${comptePartage.nombreEcransMax})`);
+  }
 }
 
 export function trouverComptePartage(db: Db, idComptePartage: number) {

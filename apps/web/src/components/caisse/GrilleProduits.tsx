@@ -13,6 +13,7 @@ interface Props {
 }
 
 const formateurFcfa = new Intl.NumberFormat("fr-FR");
+const LIMITE_ARTICLES_AFFICHES = 400;
 
 // 5.2, 5.3, 9.2 : grille des produits physiques et services, hors catalogue
 // d'abonnement — un clic ajoute une unité au panier (7.2, GrilleArticles)
@@ -23,6 +24,10 @@ export function GrilleProduits({ produits, onAjouter }: Props) {
   const [recherche, setRecherche] = useState("");
   const champRecherche = useRef<HTMLInputElement>(null);
   const produitsFiltres = filtrerArticles(produits, recherche);
+  // une carte par article : 3 000 références faisaient ~12 000 nœuds, une grille de 0,5 à 1,7 s à l'ouverture et ~60 ms à chaque frappe
+  // sur un poste de développement (bien plus sur une tablette de caisse). Personne ne fait défiler 3 000 cartes : on en montre
+  // LIMITE_ARTICLES_AFFICHES, la recherche et le scan portent toujours sur tout le catalogue.
+  const produitsAffiches = produitsFiltres.slice(0, LIMITE_ARTICLES_AFFICHES);
 
   // Poste avec souris et clavier : le champ est prêt à recevoir la scanette dès l'ouverture de la grille, sans clic préalable.
   // Sur tablette tactile, on ne le prend pas : cela ferait surgir le clavier à l'écran par-dessus la grille.
@@ -43,8 +48,8 @@ export function GrilleProduits({ produits, onAjouter }: Props) {
     }
   }
 
-  const biens = produitsFiltres.filter((p) => p.type === "BIEN");
-  const services = produitsFiltres.filter((p) => p.type === "SERVICE");
+  const biens = produitsAffiches.filter((p) => p.type === "BIEN");
+  const services = produitsAffiches.filter((p) => p.type === "SERVICE");
 
   if (produits.length === 0) {
     return (
@@ -101,6 +106,11 @@ export function GrilleProduits({ produits, onAjouter }: Props) {
       />
       {produitsFiltres.length === 0 && (
         <p className="text-center text-muted-foreground">Aucun article ne correspond à « {recherche} ».</p>
+      )}
+      {produitsFiltres.length > LIMITE_ARTICLES_AFFICHES && (
+        <p role="status" className="mb-4 text-sm text-muted-foreground">
+          {LIMITE_ARTICLES_AFFICHES} articles affichés sur {produitsFiltres.length} : tapez un libellé ou scannez un code-barres pour trouver les autres.
+        </p>
       )}
       {grille("Produits", biens)}
       {grille("Services", services)}

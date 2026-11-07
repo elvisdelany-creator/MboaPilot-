@@ -15,7 +15,6 @@ import { AppHeader, type Vue } from "@/components/layout/AppHeader";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { NouveauCompteDialog } from "./NouveauCompteDialog";
@@ -44,6 +43,17 @@ const ROLES: Role[] = ["ADMINISTRATEUR", "GERANT", "CAISSIER", "TECHNICIEN_SAV",
 const LIBELLES_ACTION: Record<string, string> = { CREATION: "Création", MODIFICATION: "Modification", SUPPRESSION: "Suppression" };
 // taille de page du serveur (audit.repository.ts)
 const TAILLE_PAGE_JOURNAL = 200;
+// choix de la liste du journal : un périmètre, ou une source précise (jamais un nom de table à taper)
+const FILTRES_JOURNAL: { valeur: string; libelle: string; parametres: { perimetre?: string; tableCible?: string } }[] = [
+  { valeur: "gestion", libelle: "Gestion (hors ventes)", parametres: { perimetre: "gestion" } },
+  { valeur: "ventes", libelle: "Ventes et encaissements", parametres: { perimetre: "ventes" } },
+  { valeur: "tout", libelle: "Tout", parametres: { perimetre: "tout" } },
+  { valeur: "configuration", libelle: "Configuration seulement", parametres: { perimetre: "configuration" } },
+  { valeur: "stock", libelle: "Stock seulement", parametres: { tableCible: "stock_mouvement" } },
+  { valeur: "abonnements", libelle: "Abonnements seulement", parametres: { tableCible: "historique_abonnement" } },
+  { valeur: "prix", libelle: "Prix des articles seulement", parametres: { tableCible: "historique_prix_produit" } },
+  { valeur: "sav", libelle: "SAV seulement", parametres: { tableCible: "sav_historique" } },
+];
 
 const formateurDateHeure = new Intl.DateTimeFormat("fr-FR", { dateStyle: "short", timeStyle: "short" });
 
@@ -66,7 +76,8 @@ export function AdministrationPage({ onNaviguer, ongletInitial }: Props) {
   // le serveur renvoie les 200 entrées les plus récentes : une page pleine laisse supposer qu'il y en a d'anciennes
   const [journalPeutRemonter, setJournalPeutRemonter] = useState(false);
   const [journalEnCoursDeRemontee, setJournalEnCoursDeRemontee] = useState(false);
-  const [filtreTable, setFiltreTable] = useState("");
+  const [filtreJournal, setFiltreJournal] = useState("gestion");
+  const parametresJournal = FILTRES_JOURNAL.find((f) => f.valeur === filtreJournal)?.parametres ?? {};
   const [nouveauCompteOuvert, setNouveauCompteOuvert] = useState(false);
   const [nouveauSiteOuvert, setNouveauSiteOuvert] = useState(false);
   const [compteReinitCible, setCompteReinitCible] = useState<CompteUtilisateur | null>(null);
@@ -93,7 +104,7 @@ export function AdministrationPage({ onNaviguer, ongletInitial }: Props) {
   }
 
   function rechargerJournal() {
-    chargerJournalAudit(token, filtreTable.trim() || undefined)
+    chargerJournalAudit(token, parametresJournal)
       .then((entrees) => {
         setJournal(entrees);
         setJournalPeutRemonter(entrees.length >= TAILLE_PAGE_JOURNAL);
@@ -104,7 +115,7 @@ export function AdministrationPage({ onNaviguer, ongletInitial }: Props) {
   function remonterJournal() {
     if (!journal || journal.length === 0) return;
     setJournalEnCoursDeRemontee(true);
-    chargerJournalAudit(token, filtreTable.trim() || undefined, journal[journal.length - 1].curseur)
+    chargerJournalAudit(token, parametresJournal, journal[journal.length - 1].curseur)
       .then((entrees) => {
         setJournal((courant) => [...(courant ?? []), ...entrees]);
         setJournalPeutRemonter(entrees.length >= TAILLE_PAGE_JOURNAL);
@@ -126,7 +137,7 @@ export function AdministrationPage({ onNaviguer, ongletInitial }: Props) {
     const identifiant = setTimeout(rechargerJournal, 200);
     return () => clearTimeout(identifiant);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token, filtreTable]);
+  }, [token, filtreJournal]);
 
   async function changerRole(compte: CompteUtilisateur, role: Role) {
     try {
@@ -287,12 +298,18 @@ export function AdministrationPage({ onNaviguer, ongletInitial }: Props) {
             <TabsContent value="audit" className="space-y-3">
               <div className="flex items-center justify-between gap-2">
                 <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Entrées affichées ({journal?.length ?? 0})</p>
-                <Input
-                  value={filtreTable}
-                  onChange={(e) => setFiltreTable(e.target.value)}
-                  placeholder="Filtrer par table (ex. stock_mouvement)…"
-                  className="h-9 w-72"
-                />
+                <Select value={filtreJournal} onValueChange={setFiltreJournal}>
+                  <SelectTrigger className="h-9 w-64" aria-label="Contenu du journal">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {FILTRES_JOURNAL.map((f) => (
+                      <SelectItem key={f.valeur} value={f.valeur}>
+                        {f.libelle}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               {journal?.length === 0 && <p className="text-sm text-muted-foreground">Aucune entrée.</p>}
               <ul className="space-y-1.5">

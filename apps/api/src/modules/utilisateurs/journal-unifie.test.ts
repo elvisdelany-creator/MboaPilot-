@@ -153,3 +153,92 @@ describe("listerJournalUnifie : pagination par curseur (11.5)", () => {
     expect(() => listerJournalUnifie(db, { curseur: "n'importe quoi" })).toThrow(/curseur/i);
   });
 });
+
+// Spec 11.5 : « création de facture, encaissement » doivent figurer au journal. Chaque vente ajoute une facture et un encaissement : le
+// périmètre par défaut reste la gestion (config, stock, abonnements, prix, SAV) pour que les gestes rares ne soient pas noyés ; un
+// choix « ventes » montre les factures et les encaissements, « tout » les deux.
+describe("listerJournalUnifie : ventes et encaissements (11.5)", () => {
+  let idAbonneClient: number;
+  beforeEach(() => {
+    idAbonneClient = db.insert(schema.abonne).values({ siteId, nom: "Ngo", prenom: "Marie", telephone: "677000555" }).returning().get().idAbonne;
+  });
+
+  function vente(partiel: Partial<typeof schema.facture.$inferInsert> = {}) {
+    return db.insert(schema.facture).values({ siteId, idAbonne: idAbonneClient, creePar: userId, statut: "VALIDEE", montantTotal: 11900, montantTaxe: 1900, dateCreation: "2026-11-07 10:00:00", ...partiel }).returning().get();
+  }
+  function encaissement(idFacture: number, partiel: Partial<typeof schema.paiement.$inferInsert> = {}) {
+    return db.insert(schema.paiement).values({ idFacture, mode: "CASH", montant: 11900, utilisateurId: userId, datePaiement: "2026-11-07 10:01:00", ...partiel }).returning().get();
+  }
+
+  it("par défaut, les ventes et encaissements n'encombrent pas le journal de gestion", () => {
+    encaissement(vente().idFacture);
+    mouvement("ACHAT", 5, "2026-11-07 09:00:00");
+
+    expect(listerJournalUnifie(db).map((e) => e.tableCible)).toEqual(["stock_mouvement"]);
+  });
+
+  it("le périmètre « ventes » montre une facture et son encaissement, auteur compris", () => {
+    const f = vente();
+    const p = encaissement(f.idFacture, { mode: "VIREMENT", banque: "Afriland", referenceVirement: "VIR-001" });
+    mouvement("ACHAT", 5, "2026-11-07 09:00:00");
+
+    const journal = listerJournalUnifie(db, { perimetre: "ventes" });
+
+    expect(journal.map((e) => e.tableCible)).toEqual(["paiement", "facture"]);
+    expect(journal[0]).toMatchObject({ action: "CREATION", idCible: String(p.idPaiement), utilisateurNom: "Nga" });
+    expect(JSON.parse(journal[0].valeurApres!)).toEqual({ idFacture: f.idFacture, mode: "VIREMENT", montant: 11900, banque: "Afriland", reference: "VIR-001" });
+    expect(journal[1]).toMatchObject({ action: "CREATION", idCible: String(f.idFacture), utilisateurNom: "Nga" });
+    expect(JSON.parse(journal[1].valeurApres!)).toEqual({ type: "Vente", statut: "VALIDEE", client: "Marie Ngo", totalTtc: 11900, tva: 1900 });
+  });
+
+  it("une facture sans client, un avoir et une vente en attente de paiement sont décrits tels quels", () => {
+    vente({ idAbonne: null, statut: "BROUILLON", montantTotal: 2500, montantTaxe: 0, dateCreation: "2026-11-07 10:02:00" });
+    const origine = vente({ dateCreation: "2026-11-07 10:03:00" });
+    vente({ type: "AVOIR", factureOrigineId: origine.idFacture, montantTotal: -2500, montantTaxe: -399, dateCreation: "2026-11-07 10:04:00" });
+
+    const [avoir, , enAttente] = listerJournalUnifie(db, { perimetre: "ventes" }).map((e) => JSON.parse(e.valeurApres!));
+
+    expect(avoir).toMatchObject({ type: "Avoir", totalTtc: -2500, tva: -399 });
+    expect(enAttente).toMatchObject({ client: "Sans client", statut: "BROUILLON" });
+  });
+
+  it("le périmètre « tout » mêle gestion et ventes, le plus récent en tête", () => {
+    mouvement("ACHAT", 5, "2026-11-07 09:00:00");
+    vente({ dateCreation: "2026-11-07 10:00:00" });
+
+    expect(listerJournalUnifie(db, { perimetre: "tout" }).map((e) => e.tableCible)).toEqual(["facture", "stock_mouvement"]);
+  });
+
+  it("le périmètre « configuration » ne montre que le journal central", () => {
+    db.insert(schema.journalAudit).values({ utilisateurId: userId, action: "MODIFICATION", tableCible: "formule", idCible: "1", dateAction: "2026-11-07 08:00:00" }).run();
+    mouvement("ACHAT", 5, "2026-11-07 09:00:00");
+
+    expect(listerJournalUnifie(db, { perimetre: "configuration" }).map((e) => e.tableCible)).toEqual(["formule"]);
+  });
+
+  it("un filtre par table désigne la source quel que soit le périmètre : « facture » ou « paiement » suffisent", () => {
+    const f = vente();
+    encaissement(f.idFacture);
+
+    expect(listerJournalUnifie(db, { tableCible: "facture" }).map((e) => e.tableCible)).toEqual(["facture"]);
+    expect(listerJournalUnifie(db, { tableCible: "paiement" }).map((e) => e.tableCible)).toEqual(["paiement"]);
+  });
+
+  it("pagine sans doublon ni trou à travers les ventes et les encaissements", () => {
+    for (let i = 0; i < 6; i++) {
+      const f = vente({ dateCreation: "2026-11-07 10:00:00" });
+      encaissement(f.idFacture, { datePaiement: "2026-11-07 10:00:00" });
+    }
+
+    const p1 = listerJournalUnifie(db, { perimetre: "ventes", limite: 5 });
+    const p2 = listerJournalUnifie(db, { perimetre: "ventes", limite: 5, curseur: p1[4].curseur });
+    const p3 = listerJournalUnifie(db, { perimetre: "ventes", limite: 5, curseur: p2[4].curseur });
+
+    expect([p1.length, p2.length, p3.length]).toEqual([5, 5, 2]);
+    expect(new Set([...p1, ...p2, ...p3].map((e) => e.curseur)).size).toBe(12);
+  });
+
+  it("refuse un périmètre inconnu", () => {
+    expect(() => listerJournalUnifie(db, { perimetre: "n-importe-quoi" as never })).toThrow(/périmètre/i);
+  });
+});

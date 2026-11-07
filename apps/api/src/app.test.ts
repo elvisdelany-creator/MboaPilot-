@@ -5812,6 +5812,24 @@ describe("GET /api/v1/audit : pagination (11.5)", () => {
       expect(refus.json().erreur).toEqual(expect.any(String));
     }
   });
+
+  // spec 11.5 : « création de facture, encaissement » — au journal, mais hors du périmètre par défaut (chaque vente ajoute deux lignes)
+  it("montre les factures et les encaissements dans le périmètre « ventes », pas par défaut, et refuse un périmètre inconnu (400)", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    creerUtilisateur(db, { siteId, nom: "Admin", prenom: "D", identifiant: "admin1", motDePasse: "motdepasse-secret", role: "ADMINISTRATEUR" });
+    const token = await connecter(app, "admin1");
+    const f = db.insert(schema.facture).values({ siteId, statut: "VALIDEE", montantTotal: 5000, creePar: userId }).returning().get();
+    db.insert(schema.paiement).values({ idFacture: f.idFacture, mode: "CASH", montant: 5000, utilisateurId: userId }).run();
+
+    const parDefaut = await app.inject({ method: "GET", url: "/api/v1/audit", headers: authHeader(token) });
+    const ventes = await app.inject({ method: "GET", url: "/api/v1/audit?perimetre=ventes", headers: authHeader(token) });
+    const refus = await app.inject({ method: "GET", url: "/api/v1/audit?perimetre=n-importe-quoi", headers: authHeader(token) });
+
+    expect(parDefaut.json().some((e: { tableCible: string }) => e.tableCible === "facture" || e.tableCible === "paiement")).toBe(false);
+    expect(ventes.json().map((e: { tableCible: string }) => e.tableCible).sort()).toEqual(["facture", "paiement"]);
+    expect(refus.statusCode).toBe(400);
+    expect(refus.json().erreur).toMatch(/périmètre/i);
+  });
 });
 
 // docs/exploitation.md §3 : restaurer sur un autre poste sans copier `logos/` ni `sav-photos/` est un cas

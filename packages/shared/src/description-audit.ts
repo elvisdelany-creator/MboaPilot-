@@ -28,6 +28,7 @@ const OBJETS: Record<string, string> = {
   utilisateur: "Utilisateur",
   cloture_caisse: "Clôture de caisse",
   paiement: "Paiement",
+  facture: "Facture",
   formule: "Formule",
   option_complement: "Option",
   kit: "Kit",
@@ -43,6 +44,7 @@ const OBJETS: Record<string, string> = {
 
 // valeurs techniques que la direction doit lire en français, par champ ; une valeur inconnue reste telle quelle
 const LIBELLES_VALEURS: Record<string, Record<string, string>> = {
+  mode: { CASH: "Espèces", CHEQUE: "Chèque", VIREMENT: "Virement", MOBILE_MONEY: "Mobile Money" },
   typeMouvement: {
     ACHAT: "Achat",
     VENTE: "Vente",
@@ -64,6 +66,9 @@ const LIBELLES_VALEURS: Record<string, Record<string, string>> = {
     LIVRE: "Livré",
     IRREPARABLE: "Irréparable",
     ABANDONNE: "Abandonné",
+    // facture : une vente sans encaissement reste « en attente » (comme à l'écran du tableau de bord)
+    BROUILLON: "En attente de paiement",
+    VALIDEE: "Validée",
   },
 };
 
@@ -132,9 +137,14 @@ const CHAMPS: Record<string, string> = {
   numeroSerie: "N° de série",
   prixVente: "Prix de vente",
   coutRevient: "Coût de revient",
+  type: "Type",
+  client: "Client",
+  totalTtc: "Total TTC",
+  tva: "dont TVA",
+  reference: "Référence",
 };
 
-const CHAMPS_FCFA = new Set(["prix", "prixFixe", "prixParaboleAccessoires", "prixKitReference", "prixDecodeur", "prixSurcharge", "ecartTotal", "montant", "prixVente", "coutRevient"]);
+const CHAMPS_FCFA = new Set(["prix", "prixFixe", "prixParaboleAccessoires", "prixKitReference", "prixDecodeur", "prixSurcharge", "ecartTotal", "montant", "prixVente", "coutRevient", "totalTtc", "tva"]);
 const CHAMPS_BOOLEENS = new Set(["actif", "politiqueMdpExigerMajuscule", "politiqueMdpExigerChiffre", "politiqueMdpExigerCaractereSpecial"]);
 
 function groupeMilliers(n: number): string {

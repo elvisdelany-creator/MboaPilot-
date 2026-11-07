@@ -10,7 +10,7 @@ import {
   type ModifierUtilisateurInput,
 } from "./utilisateur.repository.js";
 import { creerSite, listerSites, modifierSite, trouverSite, type CreerSiteInput, type ModifierSiteInput } from "./site.repository.js";
-import { listerJournalUnifie } from "./audit.repository.js";
+import { listerJournalUnifie, type PerimetreJournal } from "./audit.repository.js";
 import { envoyerErreur } from "../../lib/erreurs-api.js";
 
 type CreerUtilisateurBody = Omit<CreerUtilisateurInput, "siteId"> & { siteId?: number };
@@ -117,15 +117,17 @@ export function registerUtilisateursRoutes(app: FastifyInstance, db: Db, guards:
     }
   );
 
-  app.get<{ Querystring: { tableCible?: string; limite?: string; curseur?: string } }>(
+  app.get<{ Querystring: { tableCible?: string; perimetre?: string; limite?: string; curseur?: string } }>(
     "/api/v1/audit",
     { preHandler: [guards.authRequis, guards.admin] },
     async (request, reply) => {
-      const { tableCible, limite, curseur } = request.query;
+      const { tableCible, perimetre, limite, curseur } = request.query;
       try {
         reply.code(200).send(
           listerJournalUnifie(db, {
             tableCible,
+            perimetre: perimetre as PerimetreJournal | undefined, // un périmètre inconnu est refusé (400) par le service
+
             limite: limite !== undefined ? Number(limite) : undefined,
             curseur,
           })

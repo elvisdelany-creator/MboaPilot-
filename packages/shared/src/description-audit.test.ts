@@ -148,3 +148,50 @@ describe("decrireEntreeAudit : gestes tracés dans les historiques (11.5)", () =
     expect(d.changements.map((c) => c.apres)).toEqual(["FERMEE", "FUTUR"]);
   });
 });
+
+// Ventes et encaissements au journal (11.5) : une facture et un paiement se lisent en français, avec le mode de paiement traduit.
+describe("decrireEntreeAudit : factures et encaissements (11.5)", () => {
+  it("décrit une facture : type, statut, client, total TTC et TVA", () => {
+    const d = decrireEntreeAudit({ ...base, action: "CREATION", tableCible: "facture", idCible: "12", valeurApres: '{"type":"Vente","statut":"VALIDEE","client":"Marie Ngo","totalTtc":11900,"tva":1900}' });
+
+    expect(d.objet).toBe("Facture");
+    expect(d.reference).toBe("12");
+    expect(d.changements).toEqual([
+      { champ: "Type", avant: null, apres: "Vente" },
+      { champ: "Statut", avant: null, apres: "Validée" },
+      { champ: "Client", avant: null, apres: "Marie Ngo" },
+      { champ: "Total TTC", avant: null, apres: "11 900 FCFA" },
+      { champ: "dont TVA", avant: null, apres: "1 900 FCFA" },
+    ]);
+  });
+
+  it("une vente en attente de paiement le dit clairement", () => {
+    const d = decrireEntreeAudit({ ...base, tableCible: "facture", valeurApres: '{"statut":"BROUILLON"}' });
+    expect(d.changements[0].apres).toBe("En attente de paiement");
+  });
+
+  it("décrit un encaissement par virement avec sa banque et sa référence", () => {
+    const d = decrireEntreeAudit({ ...base, action: "CREATION", tableCible: "paiement", idCible: "7", valeurApres: '{"idFacture":12,"mode":"VIREMENT","montant":11900,"banque":"Afriland","reference":"VIR-001"}' });
+
+    expect(d.objet).toBe("Paiement");
+    expect(d.changements).toEqual([
+      { champ: "N° de facture", avant: null, apres: "12" },
+      { champ: "Mode", avant: null, apres: "Virement" },
+      { champ: "Montant", avant: null, apres: "11 900 FCFA" },
+      { champ: "Banque", avant: null, apres: "Afriland" },
+      { champ: "Référence", avant: null, apres: "VIR-001" },
+    ]);
+  });
+
+  it.each([
+    ["CASH", "Espèces"],
+    ["CHEQUE", "Chèque"],
+    ["MOBILE_MONEY", "Mobile Money"],
+  ])("mode de paiement %s → %s", (code, libelle) => {
+    expect(decrireEntreeAudit({ ...base, tableCible: "paiement", valeurApres: JSON.stringify({ mode: code }) }).changements[0].apres).toBe(libelle);
+  });
+
+  it("un remboursement s'affiche en négatif", () => {
+    expect(decrireEntreeAudit({ ...base, tableCible: "paiement", valeurApres: '{"montant":-2500}' }).changements[0].apres).toBe("-2 500 FCFA");
+  });
+});

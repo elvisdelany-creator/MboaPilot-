@@ -14,8 +14,15 @@ function borneLimite(limite: number | undefined): number {
 // 11.5, 8.7 : « qui a fait quoi » se cherche en un seul endroit. Les gestes de gestion tracés dans leurs propres historiques
 // (mouvements de stock, statuts/formules/matériel d'abonnement, prix d'article, étapes SAV) sont lus ici avec le journal central,
 // sans les écrire une seconde fois : le journal ne grossit pas, et un historique ne peut pas diverger de sa copie.
+// Chaque vente ajoute une facture et un encaissement : les mêler par défaut aux gestes de gestion (rares : un tarif, un compte, un
+// inventaire) les noierait. « gestion » (par défaut) = journal central, stock, abonnements, prix, SAV ; « ventes » = factures et
+// encaissements (et les suppressions de factures/paiements du journal central) ; « configuration » = journal central seul ; « tout ».
+export const PERIMETRES_JOURNAL = ["gestion", "ventes", "configuration", "tout"] as const;
+export type PerimetreJournal = (typeof PERIMETRES_JOURNAL)[number];
+
 export interface JournalUnifieFiltre {
-  tableCible?: string;
+  tableCible?: string; // désigne une source précise, quel que soit le périmètre
+  perimetre?: PerimetreJournal; // « gestion » par défaut
   limite?: number; // 200 par défaut, 1 000 au maximum
   curseur?: string; // le `curseur` de la dernière entrée déjà reçue : uniquement des entrées plus anciennes
 }
@@ -40,6 +47,8 @@ const RANG_STOCK = 2;
 const RANG_ABONNEMENT = 3;
 const RANG_PRIX = 4;
 const RANG_SAV = 5;
+const RANG_FACTURE = 6;
+const RANG_PAIEMENT = 7;
 
 interface PointCurseur {
   date: string;
@@ -71,7 +80,13 @@ function nonNul<T extends Record<string, unknown>>(objet: T): Partial<T> {
 export function listerJournalUnifie(db: Db, filtre: JournalUnifieFiltre = {}): EntreeJournalUnifiee[] {
   const limite = borneLimite(filtre.limite);
   const point = filtre.curseur !== undefined ? lireCurseur(filtre.curseur) : undefined;
-  const voulue = (table: string) => filtre.tableCible === undefined || filtre.tableCible === "" || filtre.tableCible === table;
+  const perimetre = filtre.perimetre ?? "gestion";
+  if (!(PERIMETRES_JOURNAL as readonly string[]).includes(perimetre)) throw new Error(`Périmètre du journal d'audit inconnu : ${perimetre}`);
+  const parTable = filtre.tableCible !== undefined && filtre.tableCible !== "";
+  // une table désignée l'emporte sur le périmètre ; sinon le périmètre décide des sources lues
+  const SOURCES_GESTION = ["stock_mouvement", "historique_abonnement", "historique_prix_produit", "sav_historique"];
+  const SOURCES_VENTES = ["facture", "paiement"];
+  const voulue = (table: string) => (parTable ? filtre.tableCible === table : perimetre === "tout" || (perimetre === "gestion" && SOURCES_GESTION.includes(table)) || (perimetre === "ventes" && SOURCES_VENTES.includes(table)));
 
   const entrees: (EntreeJournalUnifiee & { rang: number; id: number })[] = [];
   const ajouter = (rang: number, id: number, entree: Omit<EntreeJournalUnifiee, "curseur">) =>
@@ -81,7 +96,9 @@ export function listerJournalUnifie(db: Db, filtre: JournalUnifieFiltre = {}): E
   // journal central
   {
     const conditions = [];
-    if (filtre.tableCible) conditions.push(eq(schema.journalAudit.tableCible, filtre.tableCible));
+    if (parTable) conditions.push(eq(schema.journalAudit.tableCible, filtre.tableCible!));
+    // « ventes » : du journal central, seules les suppressions/annulations de factures et de paiements racontent l'histoire des ventes
+    else if (perimetre === "ventes") conditions.push(inArray(schema.journalAudit.tableCible, SOURCES_VENTES));
     const reprise = apresCurseur(schema.journalAudit.dateAction, schema.journalAudit.idAudit, RANG_JOURNAL, point);
     if (reprise) conditions.push(reprise);
     const lignes = db
@@ -217,6 +234,60 @@ export function listerJournalUnifie(db: Db, filtre: JournalUnifieFiltre = {}): E
         valeurAvant: histo.statutAvant === null ? null : JSON.stringify({ statut: histo.statutAvant }),
         valeurApres: JSON.stringify({ statut: histo.statutApres, ...nonNul({ motif: histo.motif }) }),
         dateAction: histo.dateChangement,
+      });
+    }
+  }
+
+  // factures créées (ventes, avoirs, ventes en attente de paiement) : qui a facturé quoi, à qui, pour combien
+  if (voulue("facture")) {
+    const reprise = apresCurseur(schema.facture.dateCreation, schema.facture.idFacture, RANG_FACTURE, point);
+    const lignes = db
+      .select({ ...auteur, facture: schema.facture, clientPrenom: schema.abonne.prenom, clientNom: schema.abonne.nom })
+      .from(schema.facture)
+      .leftJoin(schema.utilisateur, eq(schema.facture.creePar, schema.utilisateur.idUser))
+      .leftJoin(schema.abonne, eq(schema.facture.idAbonne, schema.abonne.idAbonne))
+      .where(reprise)
+      .orderBy(desc(schema.facture.dateCreation), desc(schema.facture.idFacture))
+      .limit(limite)
+      .all();
+    for (const { facture: f, nom, prenom, clientPrenom, clientNom } of lignes) {
+      ajouter(RANG_FACTURE, f.idFacture, {
+        utilisateurId: f.creePar,
+        utilisateurNom: nom,
+        utilisateurPrenom: prenom,
+        action: "CREATION",
+        tableCible: "facture",
+        idCible: String(f.idFacture),
+        valeurAvant: null,
+        valeurApres: JSON.stringify({ type: f.type === "AVOIR" ? "Avoir" : "Vente", statut: f.statut, client: clientNom === null ? "Sans client" : `${clientPrenom} ${clientNom}`, totalTtc: f.montantTotal, tva: f.montantTaxe }),
+        dateAction: f.dateCreation,
+      });
+    }
+  }
+
+  // encaissements et remboursements : qui a encaissé combien, par quel moyen, avec quelle référence
+  if (voulue("paiement")) {
+    const reprise = apresCurseur(schema.paiement.datePaiement, schema.paiement.idPaiement, RANG_PAIEMENT, point);
+    const lignes = db
+      .select({ ...auteur, paiement: schema.paiement })
+      .from(schema.paiement)
+      .leftJoin(schema.utilisateur, eq(schema.paiement.utilisateurId, schema.utilisateur.idUser))
+      .where(reprise)
+      .orderBy(desc(schema.paiement.datePaiement), desc(schema.paiement.idPaiement))
+      .limit(limite)
+      .all();
+    for (const { paiement: p, nom, prenom } of lignes) {
+      const reference = p.mode === "CHEQUE" ? p.numeroCheque : p.mode === "VIREMENT" ? p.referenceVirement : p.mode === "MOBILE_MONEY" ? p.referenceTransaction : null;
+      ajouter(RANG_PAIEMENT, p.idPaiement, {
+        utilisateurId: p.utilisateurId,
+        utilisateurNom: nom,
+        utilisateurPrenom: prenom,
+        action: "CREATION",
+        tableCible: "paiement",
+        idCible: String(p.idPaiement),
+        valeurAvant: null,
+        valeurApres: JSON.stringify({ idFacture: p.idFacture, mode: p.mode, montant: p.montant, ...nonNul({ banque: p.banque, reference }) }),
+        dateAction: p.datePaiement,
       });
     }
   }

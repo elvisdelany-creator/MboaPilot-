@@ -1154,9 +1154,10 @@ export async function modifierSiteRequete(
 
 // le journal est paginé côté serveur (200 entrées par défaut) : curseur = celui de la plus ancienne
 // entrée déjà affichée, pour remonter dans le temps
-export async function chargerJournalAudit(token: string, tableCible?: string, curseur?: string): Promise<EntreeJournalAudit[]> {
+export async function chargerJournalAudit(token: string, filtre: { perimetre?: string; tableCible?: string }, curseur?: string): Promise<EntreeJournalAudit[]> {
   const parametres = new URLSearchParams();
-  if (tableCible) parametres.set("tableCible", tableCible);
+  if (filtre.perimetre) parametres.set("perimetre", filtre.perimetre);
+  if (filtre.tableCible) parametres.set("tableCible", filtre.tableCible);
   if (curseur !== undefined) parametres.set("curseur", curseur);
   const requete = parametres.toString();
   const reponse = await appelerServeur(`${BASE}/audit${requete ? `?${requete}` : ""}`, { headers: headersAuth(token) });

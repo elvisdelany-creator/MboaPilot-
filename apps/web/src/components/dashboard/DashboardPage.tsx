@@ -34,6 +34,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { EvolutionCaChart } from "./EvolutionCaChart";
 import { AnnulerVenteEnAttenteDialog, LIBELLE_ANNULATION } from "./AnnulerVenteEnAttenteDialog";
 import { ConfirmerRapprochementDialog } from "@/components/clients/ConfirmerRapprochementDialog";
+import { ExportComptableCard } from "./ExportComptableCard";
 import type {
   AbonnementExpire,
   AlerteEcheance,
@@ -464,6 +465,8 @@ export function DashboardPage({ onNaviguer, onReabonnerDepuisAlerte, onReabonner
               </ul>
             </div>
           )}
+
+          {peutPiloter && <ExportComptableCard />}
 
           <div className="mb-4 flex items-center justify-between gap-2">
             <h2 className="font-heading text-lg font-semibold text-foreground">Abonnements à échéance</h2>

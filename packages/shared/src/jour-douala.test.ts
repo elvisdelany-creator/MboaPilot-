@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bornesJourDouala, jourDouala } from "./jour-douala.js";
+import { bornesJourDouala, heureDouala, jourDouala } from "./jour-douala.js";
 
 describe("jourDouala : le jour de la boutique est celui de Douala (UTC+1, sans changement d'heure)", () => {
   it("00h30 à Douala est encore la veille en UTC : c'est bien le nouveau jour", () => {
@@ -47,5 +47,19 @@ describe("bornesJourDouala : plage UTC (format SQLite) couvrant un jour de Doual
     expect(dans("2026-10-20 22:59:59")).toBe(false);
     expect(dans("2026-10-21 22:59:59")).toBe(true);
     expect(dans("2026-10-21 23:00:00")).toBe(false);
+  });
+});
+
+describe("heureDouala : l'heure affichée aux comptables est celle de Douala", () => {
+  it("ajoute une heure à l'horodatage SQLite (UTC)", () => {
+    expect(heureDouala("2026-11-03 09:05:00")).toBe("10:05");
+  });
+
+  it("passe minuit : 23h30 UTC est 00h30 le lendemain à Douala", () => {
+    expect(heureDouala("2026-10-31 23:30:00")).toBe("00:30");
+  });
+
+  it("lit aussi une date ISO", () => {
+    expect(heureDouala("2026-11-03T22:59:00.000Z")).toBe("23:59");
   });
 });

@@ -23,7 +23,7 @@ export { validerMotDePasse, POLITIQUE_MDP_PAR_DEFAUT, type PolitiqueMotDePasse }
 export { normaliserLibelle } from "./normaliser-libelle.js";
 export { lireDateServeur } from "./date-serveur.js";
 export { filtrerArticles, resoudreEntreeRecherche, type ArticleRecherchable, type EntreeRecherche } from "./saisie-recherche-article.js";
-export { bornesJourDouala, jourDouala } from "./jour-douala.js";
+export { bornesJourDouala, heureDouala, jourDouala } from "./jour-douala.js";
 export { LIMITE_RESULTATS_RECHERCHE_ABONNES } from "./limite-recherche.js";
 export { MESSAGE_FORME_TELEPHONE, memeTelephone, telephoneValide } from "./telephone.js";
 export { lireEntierSaisi } from "./saisie-entier.js";
@@ -42,3 +42,4 @@ export { peutAccederVue, vuesAccessibles, type RoleUtilisateur, type VueApplicat
 export { decrireEntreeAudit, type ChangementAudit, type DescriptionAudit, type EntreeAuditBrute } from "./description-audit.js";
 export { construireUrlVerification, erreurAdressePublique, normaliserAdressePublique } from "./adresse-publique.js";
 export { brouillonCaisseEstVide, DUREE_BROUILLON_CAISSE_MS, lireBrouillonCaisse, serialiserBrouillonCaisse, type BrouillonCaisse, type LigneBrouillonCaisse } from "./brouillon-caisse.js";
+export { periodeDuMois } from "./periode-mois.js";

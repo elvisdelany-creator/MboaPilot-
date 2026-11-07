@@ -13,6 +13,12 @@ export function jourDouala(instant: Date | string = new Date()): string {
   return new Date(date.getTime() + DECALAGE_DOUALA_MS).toISOString().slice(0, 10);
 }
 
+// heure HH:MM à Douala d'un instant, même formats que jourDouala
+export function heureDouala(instant: Date | string): string {
+  const date = typeof instant === "string" ? lireDateServeur(instant) : instant;
+  return new Date(date.getTime() + DECALAGE_DOUALA_MS).toISOString().slice(11, 16);
+}
+
 function horodatageSqlite(date: Date): string {
   return date.toISOString().replace("T", " ").slice(0, 19);
 }

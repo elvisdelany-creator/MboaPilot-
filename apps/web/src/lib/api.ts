@@ -250,6 +250,34 @@ export async function annulerPaiementRequete(token: string, idPaiement: number, 
   return lireJson<AnnulerPaiementResultat>(reponse);
 }
 
+// export comptable (offre Pro) : journaux des ventes et des encaissements d'une période (jours de Douala, bornes incluses)
+export interface ApercuExportComptable {
+  ventes: { nombre: number; totalTtc: number; totalTva: number };
+  encaissements: { nombre: number; total: number };
+}
+
+export type JournalComptable = "ventes" | "encaissements";
+
+async function lireErreurExport(reponse: Response): Promise<never> {
+  const corps = await reponse.json().catch(() => null);
+  const message = corps?.erreur ?? "Erreur inattendue";
+  if (reponse.status === 401) throw new ErreurAuthentification(message);
+  throw new Error(message);
+}
+
+export async function chargerApercuExportComptable(token: string, du: string, au: string): Promise<ApercuExportComptable> {
+  const reponse = await appelerServeur(`${BASE}/export-comptable/apercu?du=${du}&au=${au}`, { headers: headersAuth(token) });
+  if (!reponse.ok) return lireErreurExport(reponse);
+  return lireJson<ApercuExportComptable>(reponse);
+}
+
+export async function exporterJournalComptableRequete(token: string, journal: JournalComptable, du: string, au: string): Promise<{ csv: string; nomFichier: string }> {
+  const reponse = await appelerServeur(`${BASE}/export-comptable/${journal}?du=${du}&au=${au}`, { headers: headersAuth(token) });
+  if (!reponse.ok) return lireErreurExport(reponse);
+  const nomFichier = /filename=([^;]+)/.exec(reponse.headers.get("content-disposition") ?? "")?.[1]?.trim() ?? `journal-${journal}-${du}-${au}.csv`;
+  return { csv: await reponse.text(), nomFichier };
+}
+
 // 6.5 : virements encaissés, pas encore retrouvés sur le relevé bancaire (le plus ancien d'abord) — `total` peut dépasser la liste
 export interface VirementARapprocher {
   idPaiement: number;

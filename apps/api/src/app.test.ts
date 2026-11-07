@@ -283,6 +283,93 @@ describe("POST /api/v1/abonnements/reprise (4.1, 7.1)", () => {
   });
 });
 
+// Offre Pro : « export comptable ». Deux journaux CSV et un aperçu des totaux, pour l'encadrement et le comptable ; le site vient du
+// jeton, jamais de la requête.
+describe("GET /api/v1/export-comptable (journal des ventes et des encaissements)", () => {
+  async function comptable() {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    creerUtilisateur(db, { siteId, nom: "Compta", prenom: "C", identifiant: "compta1", motDePasse: "motdepasse-secret", role: "COMPTABLE" });
+    return { app, token: await connecter(app, "compta1") };
+  }
+  function uneVenteDeNovembre() {
+    const f = db.insert(schema.facture).values({ siteId, statut: "VALIDEE", montantTotal: 11900, montantTaxe: 1900, creePar: userId, dateCreation: "2026-11-03 09:00:00" }).returning().get();
+    db.insert(schema.paiement).values({ idFacture: f.idFacture, mode: "VIREMENT", montant: 11900, utilisateurId: userId, banque: "Afriland", referenceVirement: "VIR-001", statutRapprochement: "EN_ATTENTE", datePaiement: "2026-11-03 09:05:00" }).run();
+    return f;
+  }
+  const periode = "du=2026-11-01&au=2026-11-30";
+
+  it("un comptable télécharge le journal des ventes en CSV, avec un nom de fichier qui dit la période", async () => {
+    const { app, token } = await comptable();
+    const f = uneVenteDeNovembre();
+
+    const reponse = await app.inject({ method: "GET", url: `/api/v1/export-comptable/ventes?${periode}`, headers: authHeader(token) });
+
+    expect(reponse.statusCode).toBe(200);
+    expect(reponse.headers["content-type"]).toMatch(/text\/csv/);
+    expect(reponse.headers["content-disposition"]).toContain("journal-ventes-2026-11-01-2026-11-30.csv");
+    const [entete, ligne] = reponse.body.split("\r\n");
+    expect(entete.startsWith("Date;N° facture;Type")).toBe(true);
+    expect(ligne.startsWith(`03/11/2026;${f.idFacture};Vente`)).toBe(true);
+  });
+
+  it("télécharge le journal des encaissements, avec la référence du virement à chercher sur le relevé", async () => {
+    const { app, token } = await comptable();
+    uneVenteDeNovembre();
+
+    const reponse = await app.inject({ method: "GET", url: `/api/v1/export-comptable/encaissements?${periode}`, headers: authHeader(token) });
+
+    expect(reponse.statusCode).toBe(200);
+    expect(reponse.headers["content-disposition"]).toContain("journal-encaissements-2026-11-01-2026-11-30.csv");
+    expect(reponse.body).toContain("Virement;11900;Afriland;VIR-001;En attente");
+  });
+
+  it("l'aperçu annonce les nombres et les totaux des deux fichiers", async () => {
+    const { app, token } = await comptable();
+    uneVenteDeNovembre();
+
+    const reponse = await app.inject({ method: "GET", url: `/api/v1/export-comptable/apercu?${periode}`, headers: authHeader(token) });
+
+    expect(reponse.statusCode).toBe(200);
+    expect(reponse.json()).toEqual({ ventes: { nombre: 1, totalTtc: 11900, totalTva: 1900 }, encaissements: { nombre: 1, total: 11900 } });
+  });
+
+  it("ne sort que le site de l'appelant, même si la requête en désigne un autre", async () => {
+    const { app, token } = await comptable();
+    const idEntreprise = db.select().from(schema.site).where(eq(schema.site.idSite, siteId)).get()!.idEntreprise;
+    const autreSite = db.insert(schema.site).values({ idEntreprise, nom: "Site B" }).returning().get().idSite;
+    db.insert(schema.facture).values({ siteId: autreSite, statut: "VALIDEE", montantTotal: 5000, creePar: userId, dateCreation: "2026-11-03 09:00:00" }).run();
+
+    const reponse = await app.inject({ method: "GET", url: `/api/v1/export-comptable/apercu?${periode}&siteId=${autreSite}`, headers: authHeader(token) });
+
+    expect(reponse.json().ventes.nombre).toBe(0);
+  });
+
+  it("refuse un caissier (403) : un export de période livre toute la comptabilité", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const token = await connecter(app);
+
+    for (const chemin of ["ventes", "encaissements", "apercu"]) {
+      const reponse = await app.inject({ method: "GET", url: `/api/v1/export-comptable/${chemin}?${periode}`, headers: authHeader(token) });
+      expect(reponse.statusCode, chemin).toBe(403);
+    }
+  });
+
+  it("refuse une période invalide ou absente par un 400 explicite", async () => {
+    const { app, token } = await comptable();
+
+    for (const requete of ["", "du=2026-11-30&au=2026-11-01", "du=n-importe-quoi&au=2026-11-30", "du=2025-01-01&au=2026-11-30"]) {
+      const reponse = await app.inject({ method: "GET", url: `/api/v1/export-comptable/ventes?${requete}`, headers: authHeader(token) });
+      expect(reponse.statusCode, requete).toBe(400);
+      expect(reponse.json().erreur).toEqual(expect.any(String));
+    }
+  });
+
+  it("refuse sans jeton (401)", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    expect((await app.inject({ method: "GET", url: `/api/v1/export-comptable/ventes?${periode}` })).statusCode).toBe(401);
+  });
+});
+
 describe("POST /api/v1/recrutements", () => {
   // constaté en test grandeur nature (balayage des routes avec un corps vide) :
   // l'absence du champ « abonne » faisait lever une TypeError hors du bloc

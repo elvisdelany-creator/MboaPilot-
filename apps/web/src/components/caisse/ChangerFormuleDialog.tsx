@@ -203,7 +203,7 @@ export function ChangerFormuleDialog({ numeroAbonnement, formuleActuelle, formul
                 )}
               >
                 <span className="font-medium text-card-foreground">{formule.libelle}</span>
-                <span className="tabular-nums text-primary">+{formateurFcfa.format(validation.montantDifferentiel)} FCFA</span>
+                <span className="tabular-nums text-primary-texte">+{formateurFcfa.format(validation.montantDifferentiel)} FCFA</span>
               </button>
             ))}
           </div>

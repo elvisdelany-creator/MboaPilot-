@@ -67,7 +67,7 @@ export function GrilleArticles({
                   </Badge>
                 )}
                 <span className="font-heading font-semibold text-card-foreground">{formule.libelle}</span>
-                <span className="text-lg font-semibold tabular-nums text-primary">
+                <span className="text-lg font-semibold tabular-nums text-primary-texte">
                   {formateurFcfa.format(formule.prix)} FCFA
                 </span>
               </Card>

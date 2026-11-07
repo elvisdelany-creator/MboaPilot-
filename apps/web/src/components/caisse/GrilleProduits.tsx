@@ -85,7 +85,7 @@ export function GrilleProduits({ produits, onAjouter }: Props) {
                 </Badge>
               )}
               <span className="font-heading font-semibold text-card-foreground">{produit.libelle}</span>
-              <span className="text-lg font-semibold tabular-nums text-primary">{formateurFcfa.format(produit.prixVente)} FCFA</span>
+              <span className="text-lg font-semibold tabular-nums text-primary-texte">{formateurFcfa.format(produit.prixVente)} FCFA</span>
             </Card>
           ))}
         </div>

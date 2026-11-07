@@ -215,7 +215,7 @@ export function EchangeMaterielDialog({ numeroAbonnement, onFerme, onSucces }: P
 
           <div className="flex items-center justify-between text-sm font-medium">
             <span>Montant à facturer</span>
-            <span className="tabular-nums text-primary">{formateurFcfa.format(montantFacture)} FCFA</span>
+            <span className="tabular-nums text-primary-texte">{formateurFcfa.format(montantFacture)} FCFA</span>
           </div>
 
           {montantFacture > 0 && (

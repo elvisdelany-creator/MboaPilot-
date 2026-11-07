@@ -56,7 +56,7 @@ export function LicenceBanner({ token }: { token: string }) {
   return (
     <div
       className={`no-print flex items-center justify-between gap-4 px-4 py-2 text-sm ${
-        degradee ? "bg-destructive text-white" : "bg-amber-500 text-amber-950"
+        degradee ? "bg-destructive-fond text-white" : "bg-amber-500 text-amber-950"
       }`}
     >
       <span>

@@ -78,7 +78,7 @@ export function FicheApporteurPanel({ fiche, onEnregistrerReglement }: Props) {
       <div className="grid grid-cols-2 gap-3">
         <Card className="gap-1 p-4">
           <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Chiffre d'affaires généré</p>
-          <p className="text-xl font-semibold tabular-nums text-primary">{formateurFcfa.format(fiche.chiffreAffaires)} FCFA</p>
+          <p className="text-xl font-semibold tabular-nums text-primary-texte">{formateurFcfa.format(fiche.chiffreAffaires)} FCFA</p>
         </Card>
         <Card className="gap-1 p-4">
           <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Abonnés recrutés</p>
@@ -135,7 +135,7 @@ export function FicheApporteurPanel({ fiche, onEnregistrerReglement }: Props) {
           </Card>
           <Card className="gap-1 p-3">
             <p className="text-xs text-muted-foreground">Solde dû</p>
-            <p className="text-base font-semibold tabular-nums text-primary">{formateurFcfa.format(fiche.soldeCommissionDu)}</p>
+            <p className="text-base font-semibold tabular-nums text-primary-texte">{formateurFcfa.format(fiche.soldeCommissionDu)}</p>
           </Card>
         </div>
 

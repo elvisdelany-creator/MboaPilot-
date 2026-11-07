@@ -238,7 +238,7 @@ export function SavPage({ onNaviguer }: Props) {
                 {detail.facture && (
                   <div className="flex items-center justify-between text-sm font-medium">
                     <span>Facture</span>
-                    <span className="tabular-nums text-primary">
+                    <span className="tabular-nums text-primary-texte">
                       {formateurFcfa.format(detail.facture.montantTotal)} FCFA —{" "}
                       {soldeRestant <= 0
                         ? "encaissée"

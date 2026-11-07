@@ -58,7 +58,7 @@ export function VerificationFacturePage() {
         {!chargement && resultat && (
           <>
             <div className="flex flex-col items-center gap-2 text-center">
-              <CheckCircle2 className="size-10 text-primary" aria-hidden="true" />
+              <CheckCircle2 className="size-10 text-primary-texte" aria-hidden="true" />
               <p className="font-heading text-lg font-semibold text-foreground">Document authentique</p>
               <p className="text-sm text-muted-foreground">
                 {resultat.facture.type === "AVOIR" ? "Avoir" : "Facture"} n° {resultat.facture.idFacture} — {resultat.entreprise.nom}

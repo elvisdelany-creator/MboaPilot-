@@ -28,7 +28,7 @@ export function CatalogueVideGuide({ role, onNaviguer, onOuvrirCatalogueAdminist
           <ul className="space-y-4">
             {peutAjouterArticles && (
               <li className="flex items-start gap-3">
-                <Boxes className="mt-0.5 size-5 shrink-0 text-primary" aria-hidden="true" />
+                <Boxes className="mt-0.5 size-5 shrink-0 text-primary-texte" aria-hidden="true" />
                 <div className="space-y-2">
                   <p className="text-sm text-foreground">
                     <span className="font-medium">Articles et services</span> : décodeurs, câbles, installation… (vous pouvez aussi importer un fichier CSV).
@@ -41,7 +41,7 @@ export function CatalogueVideGuide({ role, onNaviguer, onOuvrirCatalogueAdminist
             )}
             {peutCreerFormules && (
               <li className="flex items-start gap-3">
-                <Tv className="mt-0.5 size-5 shrink-0 text-primary" aria-hidden="true" />
+                <Tv className="mt-0.5 size-5 shrink-0 text-primary-texte" aria-hidden="true" />
                 <div className="space-y-2">
                   <p className="text-sm text-foreground">
                     <span className="font-medium">Abonnements</span> : une famille (DSTV, CANAL+…), puis ses formules et ses kits.

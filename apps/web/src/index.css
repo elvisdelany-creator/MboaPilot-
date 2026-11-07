@@ -28,6 +28,9 @@
   --accent: #047857;
   --accent-foreground: #ffffff;
   --destructive: #dc2626;
+  /* fond rouge des boutons/badges destructifs (blanc dessus : 4,8:1) et bleu du texte courant, séparés de --destructive et --primary */
+  --destructive-fond: #dc2626;
+  --primary-texte: #1e3a5f;
   --destructive-foreground: #ffffff;
   --border: #e4e7eb;
   --input: #e4e7eb;
@@ -64,6 +67,9 @@
     --accent: #10b981;
     --accent-foreground: #052e1f;
     --destructive: #ef4444;
+    /* le rouge clair lit bien en texte sur fond sombre mais pas en fond sous du blanc (3,8:1) ; le bleu de marque ne lit pas en texte (3,3:1) */
+    --destructive-fond: #dc2626;
+    --primary-texte: #6f9fd8;
     --destructive-foreground: #ffffff;
     --border: #1f2937;
     --input: #1f2937;
@@ -94,6 +100,8 @@
   --accent: #10b981;
   --accent-foreground: #052e1f;
   --destructive: #ef4444;
+  --destructive-fond: #dc2626;
+  --primary-texte: #6f9fd8;
   --destructive-foreground: #ffffff;
   --border: #1f2937;
   --input: #1f2937;
@@ -124,6 +132,8 @@
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
+  --color-destructive-fond: var(--destructive-fond);
+  --color-primary-texte: var(--primary-texte);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);

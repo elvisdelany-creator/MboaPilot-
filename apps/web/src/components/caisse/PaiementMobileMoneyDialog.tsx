@@ -147,7 +147,7 @@ export function PaiementMobileMoneyDialog({ ouvert, idFacture, montant, numeroTe
         </DialogHeader>
 
         <div className="flex flex-col items-center gap-4 py-6 text-center">
-          {statut === "REUSSIE" && <CheckCircle2 className="size-12 text-primary" aria-hidden="true" />}
+          {statut === "REUSSIE" && <CheckCircle2 className="size-12 text-primary-texte" aria-hidden="true" />}
           {echoue && <XCircle className="size-12 text-destructive" aria-hidden="true" />}
           {!echoue && statut !== "REUSSIE" && <Loader2 className="size-12 animate-spin text-muted-foreground" aria-hidden="true" />}
 

@@ -184,7 +184,7 @@ export function TicketProduitsPanel({
 
         <div className="flex items-center justify-between text-base font-semibold">
           <span>Total</span>
-          <span className="tabular-nums text-primary">{formateurFcfa.format(total)} FCFA</span>
+          <span className="tabular-nums text-primary-texte">{formateurFcfa.format(total)} FCFA</span>
         </div>
 
         <div className="mt-4">

@@ -225,7 +225,7 @@ export function DashboardPage({ onNaviguer, onReabonnerDepuisAlerte, onReabonner
             <div className="mb-8 grid grid-cols-2 gap-3 sm:grid-cols-4">
               <Card className="gap-1 p-4">
                 <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">CA du jour</p>
-                <p className="text-xl font-semibold tabular-nums text-primary">{formateurFcfa.format(indicateurs.chiffreAffairesJour)}</p>
+                <p className="text-xl font-semibold tabular-nums text-primary-texte">{formateurFcfa.format(indicateurs.chiffreAffairesJour)}</p>
               </Card>
               <Card className="gap-1 p-4">
                 <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Marge estimée</p>
@@ -328,7 +328,7 @@ export function DashboardPage({ onNaviguer, onReabonnerDepuisAlerte, onReabonner
                 {totalEncaisseJour > 0 && (
                   <div className="mt-1 flex items-center justify-between border-t border-border pt-2 text-sm font-semibold">
                     <span>Total</span>
-                    <span className="tabular-nums text-primary">{formateurFcfa.format(totalEncaisseJour)} FCFA</span>
+                    <span className="tabular-nums text-primary-texte">{formateurFcfa.format(totalEncaisseJour)} FCFA</span>
                   </div>
                 )}
               </Card>
@@ -432,7 +432,7 @@ export function DashboardPage({ onNaviguer, onReabonnerDepuisAlerte, onReabonner
                           Abonnement n° {c.commission.numeroAbonnement} · fin probatoire {formateurDateCourte.format(lireDateServeur(c.commission.dateFinProbatoire))}
                         </p>
                       </div>
-                      <span className="tabular-nums font-medium text-primary">{formateurFcfa.format(c.commission.montantCommission)} FCFA</span>
+                      <span className="tabular-nums font-medium text-primary-texte">{formateurFcfa.format(c.commission.montantCommission)} FCFA</span>
                     </Card>
                   </li>
                 ))}
@@ -458,7 +458,7 @@ export function DashboardPage({ onNaviguer, onReabonnerDepuisAlerte, onReabonner
                           </span>
                         )}
                       </div>
-                      <span className="tabular-nums font-medium text-primary">{formateurFcfa.format(r.chiffreAffaires)} FCFA CA</span>
+                      <span className="tabular-nums font-medium text-primary-texte">{formateurFcfa.format(r.chiffreAffaires)} FCFA CA</span>
                     </Card>
                   </li>
                 ))}

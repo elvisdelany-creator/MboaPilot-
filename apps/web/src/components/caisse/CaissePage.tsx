@@ -44,7 +44,19 @@ import { ChangerFormuleDialog } from "./ChangerFormuleDialog";
 import { ClotureCaissePanel } from "./ClotureCaissePanel";
 import { RecuVentePrintable, type LigneRecu, type RecuVente } from "./RecuVentePrintable";
 import { FactureProFormaPrintable } from "./FactureProFormaPrintable";
-import { classerEncaissement, creerVerrouSoumission, jourDouala, ligneAvecRemise, messageStockInsuffisant, peutAjouterAuPanier, plafondRemiseCaissier } from "@mboapilot/shared";
+import {
+  classerEncaissement,
+  creerVerrouSoumission,
+  jourDouala,
+  ligneAvecRemise,
+  lireBrouillonCaisse,
+  messageStockInsuffisant,
+  peutAjouterAuPanier,
+  plafondRemiseCaissier,
+  serialiserBrouillonCaisse,
+  type BrouillonCaisse,
+} from "@mboapilot/shared";
+import { cleBrouillonCaisse, ecrireStockageBrouillon, lireStockageBrouillon } from "@/lib/brouillon-caisse-stockage";
 
 interface Props {
   onNaviguer: (vue: Vue) => void;
@@ -227,6 +239,62 @@ export function CaissePage({ onNaviguer, onOuvrirCatalogueAdministration, abonne
       .catch((e) => gererErreur(e, "Impossible de charger le catalogue de produits/services."));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, utilisateur.siteId]);
+
+  // Brouillon du ticket : le caissier qui va consulter un client ou le stock, ou qui recharge la page par mégarde, retrouve son ticket.
+  // Restauré une seule fois, quand le catalogue et les produits sont là (le brouillon ne garde que des identifiants : les prix et le
+  // stock affichés sont ceux d'aujourd'hui). Un réabonnement ouvert depuis une alerte (abonneInitial) est un geste explicite : il ne se
+  // mélange pas à un ancien brouillon, et le remplace dès qu'il change.
+  const cleBrouillon = cleBrouillonCaisse(utilisateur.idUser);
+  const [brouillonTraite, setBrouillonTraite] = useState(false);
+  const [relanceBrouillon, setRelanceBrouillon] = useState(0);
+  useEffect(() => {
+    if (brouillonTraite || !famillesChargees || !produitsCharges) return;
+    setBrouillonTraite(true);
+    if (abonneInitial) return;
+    const brouillon = lireBrouillonCaisse(lireStockageBrouillon(cleBrouillon), Date.now());
+    if (!brouillon) return;
+
+    const formule = brouillon.idFormule !== null ? familles.flatMap((f) => f.formules).find((fo) => fo.idFormule === brouillon.idFormule) : undefined;
+    const kit = brouillon.idKit !== null ? familles.flatMap((f) => f.kits).find((k) => k.idKit === brouillon.idKit) : undefined;
+    const familleId = formule?.idFamille ?? kit?.idFamille ?? (familles.some((f) => f.idFamille === brouillon.idFamille) ? brouillon.idFamille : null);
+    // une quantité qui dépasserait le stock d'aujourd'hui est ramenée au disponible, comme à l'ajout
+    const lignes: LignePanier[] = brouillon.lignes.flatMap((l) => {
+      const produit = produits.find((p) => p.idProduit === l.idProduit);
+      if (!produit) return [];
+      let quantite = 0;
+      while (quantite < l.quantite && peutAjouterAuPanier(produit, quantite)) quantite++;
+      return quantite > 0 ? [{ produit, quantite, remise: l.remise }] : [];
+    });
+
+    setAbonneSelectionne(brouillon.abonne as unknown as Abonne | NouvelAbonne | null);
+    if (familleId !== null) setFamilleSelectionneeId(familleId);
+    if (formule) setFormuleSelectionnee(formule);
+    if (kit) setKitSelectionne(kit);
+    setIdsOptionsSelectionnees(brouillon.idsOptions);
+    setNumeroSerie(brouillon.numeroSerie);
+    setRemise(brouillon.remise);
+    setModeProduits(brouillon.modeProduits);
+    setPanierProduits(lignes);
+    toast.info("Ticket en cours retrouvé.");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [brouillonTraite, famillesChargees, produitsCharges]);
+
+  // enregistré à chaque changement, effacé dès que le ticket est vide (vente validée, ticket abandonné)
+  useEffect(() => {
+    if (!brouillonTraite) return;
+    const brouillon: BrouillonCaisse = {
+      abonne: abonneSelectionne as unknown as BrouillonCaisse["abonne"],
+      idFamille: familleSelectionneeId,
+      idFormule: formuleSelectionnee?.idFormule ?? null,
+      idKit: kitSelectionne?.idKit ?? null,
+      idsOptions: idsOptionsSelectionnees,
+      numeroSerie,
+      remise,
+      modeProduits,
+      lignes: panierProduits.map((l) => ({ idProduit: l.produit.idProduit, quantite: l.quantite, remise: l.remise })),
+    };
+    ecrireStockageBrouillon(cleBrouillon, serialiserBrouillonCaisse(brouillon, Date.now()));
+  }, [brouillonTraite, cleBrouillon, abonneSelectionne, familleSelectionneeId, formuleSelectionnee, kitSelectionne, idsOptionsSelectionnees, numeroSerie, remise, modeProduits, panierProduits, relanceBrouillon]);
 
   // 9.2 : dès qu'un abonné existant est sélectionné, on récupère ses abonnements
   // pour savoir si l'opération à venir sera un recrutement ou un réabonnement.
@@ -472,6 +540,8 @@ export function CaissePage({ onNaviguer, onOuvrirCatalogueAdministration, abonne
     if (panierProduits.length === 0) return;
     const reprise = venteAReprendrePourCeTicket(totalTicketProduits, lignesTicketProduits);
     setEnCours(true);
+    // la vente part : un rechargement avant la réponse ne doit pas ressusciter un ticket peut-être déjà enregistré (doublon)
+    ecrireStockageBrouillon(cleBrouillon, null);
     try {
       if (reprise) {
         await reprendreEncaissement(reprise, paiement);
@@ -548,6 +618,8 @@ export function CaissePage({ onNaviguer, onOuvrirCatalogueAdministration, abonne
       gererErreur(erreur, "Échec de la vente.");
     } finally {
       setEnCours(false);
+      // refusée ou échouée : le ticket est toujours là, on le garde de nouveau (réussie : le ticket vide efface le brouillon)
+      setRelanceBrouillon((v) => v + 1);
     }
   }
 
@@ -555,6 +627,8 @@ export function CaissePage({ onNaviguer, onOuvrirCatalogueAdministration, abonne
     if (!abonneSelectionne || !formuleSelectionnee) return;
     const reprise = venteAReprendrePourCeTicket(totalTicket, lignesTicket);
     setEnCours(true);
+    // la vente part : un rechargement avant la réponse ne doit pas ressusciter un ticket peut-être déjà enregistré (doublon)
+    ecrireStockageBrouillon(cleBrouillon, null);
     try {
       if (reprise) {
         await reprendreEncaissement(reprise, paiement);
@@ -655,6 +729,8 @@ export function CaissePage({ onNaviguer, onOuvrirCatalogueAdministration, abonne
       gererErreur(erreur, "Échec de l'opération.");
     } finally {
       setEnCours(false);
+      // refusée ou échouée : le ticket est toujours là, on le garde de nouveau (réussie : le ticket vide efface le brouillon)
+      setRelanceBrouillon((v) => v + 1);
     }
   }
 

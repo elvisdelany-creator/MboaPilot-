@@ -41,3 +41,4 @@ export { excedentEncaissementSuspect, SEUIL_EXCEDENT_ENCAISSEMENT_SUSPECT } from
 export { peutAccederVue, vuesAccessibles, type RoleUtilisateur, type VueApplication } from "./acces-vues.js";
 export { decrireEntreeAudit, type ChangementAudit, type DescriptionAudit, type EntreeAuditBrute } from "./description-audit.js";
 export { construireUrlVerification, erreurAdressePublique, normaliserAdressePublique } from "./adresse-publique.js";
+export { brouillonCaisseEstVide, DUREE_BROUILLON_CAISSE_MS, lireBrouillonCaisse, serialiserBrouillonCaisse, type BrouillonCaisse, type LigneBrouillonCaisse } from "./brouillon-caisse.js";

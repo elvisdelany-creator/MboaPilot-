@@ -160,12 +160,19 @@ export function StockPage({ onNaviguer, idProduitInitial, actionInitiale }: Prop
       // Excel (version française) enregistre en Windows-1252 : lire en UTF-8 abîmerait les accents en silence
       const contenuCsv = decoderTexteCsv(new Uint8Array(await fichier.arrayBuffer()));
       const resultat = await importerCatalogueCsvRequete(token, { siteId, userId: utilisateur.idUser, contenuCsv });
+      // le stock initial : dit combien de quantités de départ sont enregistrées, et que celles des articles déjà existants ne sont jamais touchées
+      const notesStock = [
+        resultat.stockInitialise > 0 ? `stock initial enregistré pour ${resultat.stockInitialise} article(s)` : "",
+        resultat.stockIgnore > 0 ? `stock ignoré pour ${resultat.stockIgnore} article(s) déjà existant(s) (utilisez « Ajuster l'inventaire »)` : "",
+      ].filter(Boolean);
+      const suffixeStock = notesStock.length > 0 ? ` — ${notesStock.join(", ")}` : "";
       if (resultat.erreurs.length === 0) {
-        toast.success(`Import réussi : ${resultat.crees} créé(s), ${resultat.misAJour} mis à jour.`);
+        toast.success(`Import réussi : ${resultat.crees} créé(s), ${resultat.misAJour} mis à jour${suffixeStock}.`);
       } else {
         toast.warning(
-          `Import partiel : ${resultat.crees} créé(s), ${resultat.misAJour} mis à jour, ${resultat.erreurs.length} ligne(s) ignorée(s).`,
-          { description: resultat.erreurs.slice(0, 5).map((e) => `Ligne ${e.ligne} : ${e.message}`).join("\n") }
+          `Import partiel : ${resultat.crees} créé(s), ${resultat.misAJour} mis à jour, ${resultat.erreurs.length} ligne(s) ignorée(s)${suffixeStock}.`,
+          // une erreur par ligne : collées sur un seul paragraphe, « …attendu Ligne 7 : … » devenait illisible
+          { description: <span className="whitespace-pre-line">{resultat.erreurs.slice(0, 5).map((e) => `Ligne ${e.ligne} : ${e.message}`).join("\n")}</span> }
         );
       }
       rechargerListe();
@@ -219,6 +226,9 @@ export function StockPage({ onNaviguer, idProduitInitial, actionInitiale }: Prop
               }}
             />
           </div>
+          <p className="border-b border-border px-3 py-2 text-xs text-muted-foreground">
+            Colonne facultative « Stock » : quantité de départ des articles créés par l'import. Le stock d'un article déjà existant n'est jamais modifié.
+          </p>
           <ul className="max-h-60 overflow-y-auto md:max-h-none md:flex-1">
             {produits?.length === 0 && <li className="p-4 text-sm text-muted-foreground">Aucun article dans le catalogue.</li>}
             {produits?.map((p) => (

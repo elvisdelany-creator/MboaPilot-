@@ -532,6 +532,9 @@ export interface ResultatImportCsv {
   crees: number;
   misAJour: number;
   erreurs: { ligne: number; message: string }[];
+  // colonne facultative « Stock » : quantités de départ enregistrées (articles créés) et ignorées (articles déjà existants)
+  stockInitialise: number;
+  stockIgnore: number;
 }
 
 export async function importerCatalogueCsvRequete(token: string, payload: ImporterCatalogueCsvPayload): Promise<ResultatImportCsv> {

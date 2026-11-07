@@ -182,3 +182,79 @@ describe("importerCatalogueCsv (8.2)", () => {
     expect(() => importerCatalogueCsv(db, siteId, "Foo,Bar\n1,2", userId)).toThrow(/colonnes/i);
   });
 });
+
+// Jour 1 en boutique : le commerçant importe ses centaines d'articles — mais sans colonne de stock, tous démarraient à 0 et il fallait
+// ouvrir « Ajuster l'inventaire » article par article. La colonne facultative « Stock » enregistre la quantité de départ des articles
+// CRÉÉS par l'import, tracée comme un ajustement d'inventaire. Jamais celle d'un article existant : réimporter un vieux fichier pour
+// changer des prix ne doit pas remettre le stock d'il y a un mois.
+describe("importerCatalogueCsv : stock initial (colonne facultative « Stock »)", () => {
+  const ENTETE = "Type;Libelle;Categorie;PrixVente;CoutRevient;SuiviStock;SeuilAlerte;Stock";
+  const stockDe = (libelle: string) => db.select().from(schema.produit).where(eq(schema.produit.libelle, libelle)).get()!.quantiteStock;
+  const mouvements = () => db.select().from(schema.stockMouvement).all();
+
+  it("enregistre la quantité de départ d'un article créé, comme un ajustement d'inventaire tracé", () => {
+    const resultat = importerCatalogueCsv(db, siteId, `${ENTETE}\nBIEN;Câble HDMI;;2500;1000;1;5;40`, userId);
+
+    expect(resultat).toMatchObject({ crees: 1, erreurs: [], stockInitialise: 1, stockIgnore: 0 });
+    expect(stockDe("Câble HDMI")).toBe(40);
+    expect(mouvements()).toMatchObject([{ typeMouvement: "INVENTAIRE", quantite: 40, utilisateurId: userId, siteId }]);
+    expect(mouvements()[0].motif).toMatch(/stock initial/i);
+  });
+
+  it("un fichier sans colonne « Stock » s'importe comme avant, stock à 0", () => {
+    const resultat = importerCatalogueCsv(db, siteId, "Type;Libelle;Categorie;PrixVente;CoutRevient;SuiviStock;SeuilAlerte\nBIEN;Câble HDMI;;2500;1000;1;5", userId);
+
+    expect(resultat).toMatchObject({ crees: 1, erreurs: [], stockInitialise: 0 });
+    expect(stockDe("Câble HDMI")).toBe(0);
+    expect(mouvements()).toHaveLength(0);
+  });
+
+  it("une cellule vide ou à 0 n'enregistre aucun mouvement", () => {
+    importerCatalogueCsv(db, siteId, `${ENTETE}\nBIEN;A;;100;;1;;\nBIEN;B;;100;;1;;0`, userId);
+
+    expect(mouvements()).toHaveLength(0);
+  });
+
+  it("ne touche JAMAIS au stock d'un article existant : il est compté comme ignoré", () => {
+    const existant = creerProduit(db, { siteId, type: "BIEN", libelle: "Câble HDMI", prixVente: 2500, suiviStock: true });
+    db.update(schema.produit).set({ quantiteStock: 7 }).where(eq(schema.produit.idProduit, existant.idProduit)).run();
+
+    const resultat = importerCatalogueCsv(db, siteId, `${ENTETE}\nBIEN;Câble HDMI;;3000;;1;;999`, userId);
+
+    expect(resultat).toMatchObject({ misAJour: 1, stockInitialise: 0, stockIgnore: 1 });
+    expect(stockDe("Câble HDMI")).toBe(7);
+    expect(mouvements()).toHaveLength(0);
+  });
+
+  it("refuse un stock invalide (négatif, décimal, texte) sans bloquer les autres lignes", () => {
+    const resultat = importerCatalogueCsv(db, siteId, `${ENTETE}\nBIEN;A;;100;;1;;-3\nBIEN;B;;100;;1;;2,5\nBIEN;C;;100;;1;;beaucoup\nBIEN;D;;100;;1;;12`, userId);
+
+    expect(resultat.crees).toBe(1);
+    expect(resultat.erreurs.map((e) => e.ligne)).toEqual([2, 3, 4]);
+    expect(resultat.erreurs.every((e) => /stock/i.test(e.message))).toBe(true);
+    expect(stockDe("D")).toBe(12);
+  });
+
+  it("refuse un stock sur un article non suivi en stock (service, ou SuiviStock à 0) : l'erreur le dit", () => {
+    const resultat = importerCatalogueCsv(db, siteId, `${ENTETE}\nSERVICE;Installation;;5000;;0;;10\nBIEN;Piles;;300;;1;;10`, userId);
+
+    expect(resultat.erreurs).toHaveLength(1);
+    expect(resultat.erreurs[0]).toMatchObject({ ligne: 2 });
+    expect(resultat.erreurs[0].message).toMatch(/suivi/i);
+    expect(db.select().from(schema.produit).where(eq(schema.produit.libelle, "Installation")).get()).toBeUndefined();
+    expect(stockDe("Piles")).toBe(10);
+  });
+
+  it("une ligne en erreur sur son stock n'enregistre ni l'article ni de mouvement", () => {
+    importerCatalogueCsv(db, siteId, `${ENTETE}\nBIEN;A;;100;;1;;-3`, userId);
+
+    expect(db.select().from(schema.produit).all()).toHaveLength(0);
+    expect(mouvements()).toHaveLength(0);
+  });
+
+  it("le coût de revient du CSV reste celui de l'article : le stock initial ne le recalcule pas", () => {
+    importerCatalogueCsv(db, siteId, `${ENTETE}\nBIEN;Câble HDMI;;2500;1000;1;;40`, userId);
+
+    expect(db.select().from(schema.produit).get()!.coutRevient).toBe(1000);
+  });
+});

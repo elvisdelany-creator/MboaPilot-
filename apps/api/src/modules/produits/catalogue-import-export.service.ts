@@ -1,6 +1,7 @@
 import { analyserCsv, construireCsv, normaliserLibelle } from "@mboapilot/shared";
 import type { Db } from "../../db/types.js";
 import { listerProduits, creerProduit, modifierProduit, type CreerProduitInput } from "./produit.repository.js";
+import { enregistrerMouvement } from "../stock/stock.repository.js";
 
 const COLONNES = ["Type", "Libelle", "Categorie", "PrixVente", "CoutRevient", "SuiviStock", "SeuilAlerte"] as const;
 const TYPES_VALIDES = ["BIEN", "SERVICE", "SAV", "KIT"] as const;
@@ -31,6 +32,10 @@ export interface ResultatImportCsv {
   crees: number;
   misAJour: number;
   erreurs: ErreurImportCsv[];
+  // colonne facultative « Stock » : articles créés dont la quantité de départ a été enregistrée, et lignes d'articles déjà existants
+  // dont la quantité a été ignorée (l'import ne modifie jamais le stock d'un article existant)
+  stockInitialise: number;
+  stockIgnore: number;
 }
 
 // 8.2 : import de catalogue (CSV) — associe chaque ligne à un article
@@ -49,7 +54,7 @@ export function importerCatalogueCsv(db: Db, siteId: number, contenuCsv: string,
   const produitsExistants = listerProduits(db, siteId);
   const parLibelleMinuscule = new Map(produitsExistants.map((p) => [normaliserLibelle(p.libelle), p]));
 
-  const resultat: ResultatImportCsv = { crees: 0, misAJour: 0, erreurs: [] };
+  const resultat: ResultatImportCsv = { crees: 0, misAJour: 0, erreurs: [], stockInitialise: 0, stockIgnore: 0 };
 
   // une seule transaction pour tout le fichier : bien plus rapide (une écriture disque par ligne sinon) et un import
   // interrompu (coupure de courant) ne laisse jamais un catalogue à moitié importé. Chaque ligne a son propre point
@@ -59,7 +64,7 @@ export function importerCatalogueCsv(db: Db, siteId: number, contenuCsv: string,
       const numeroLigne = index + 2; // +1 pour l'en-tête, +1 pour l'index 1-based
       try {
         db.transaction(() => {
-          const input = analyserLigneCsv(ligne);
+          const { stockInitial, ...input } = analyserLigneCsv(ligne);
           const existant = parLibelleMinuscule.get(normaliserLibelle(input.libelle));
           if (existant) {
             modifierProduit(db, existant.idProduit, {
@@ -70,10 +75,20 @@ export function importerCatalogueCsv(db: Db, siteId: number, contenuCsv: string,
               userId,
             });
             resultat.misAJour++;
+            // le stock d'un article existant a vécu depuis : réimporter un vieux fichier pour changer des prix ne doit pas le remettre à zéro
+            if (stockInitial !== undefined && stockInitial > 0) resultat.stockIgnore++;
           } else {
+            if (stockInitial !== undefined && stockInitial > 0 && !input.suiviStock) {
+              throw new Error("Un stock initial ne peut être saisi que pour un article suivi en stock (SuiviStock = 1)");
+            }
             const cree = creerProduit(db, { siteId, ...input });
             parLibelleMinuscule.set(normaliserLibelle(cree.libelle), cree);
             resultat.crees++;
+            // la quantité de départ, tracée comme n'importe quel ajustement d'inventaire (visible au journal d'audit)
+            if (stockInitial !== undefined && stockInitial > 0) {
+              enregistrerMouvement(db, { idProduit: cree.idProduit, siteId, typeMouvement: "INVENTAIRE", quantite: stockInitial, motif: "Stock initial (import CSV)", utilisateurId: userId });
+              resultat.stockInitialise++;
+            }
           }
         });
       } catch (erreur) {
@@ -90,7 +105,7 @@ function lireEntierPositif(valeur: string): number | undefined {
   return /^\d+$/.test(texte) ? Number(texte) : undefined;
 }
 
-function analyserLigneCsv(ligne: Record<string, string>): Omit<CreerProduitInput, "siteId"> {
+function analyserLigneCsv(ligne: Record<string, string>): Omit<CreerProduitInput, "siteId"> & { stockInitial?: number } {
   const type = ligne.Type.trim().toUpperCase();
   if (!(TYPES_VALIDES as readonly string[]).includes(type)) {
     throw new Error(`Type invalide "${ligne.Type}" — attendu : ${TYPES_VALIDES.join(", ")}`);
@@ -110,6 +125,11 @@ function analyserLigneCsv(ligne: Record<string, string>): Omit<CreerProduitInput
   const seuilAlerte = ligne.SeuilAlerte.trim() === "" ? undefined : lireEntierPositif(ligne.SeuilAlerte);
   if (ligne.SeuilAlerte.trim() !== "" && seuilAlerte === undefined) throw new Error(`Seuil d'alerte invalide "${ligne.SeuilAlerte}"`);
 
+  // colonne facultative : absente ou vide = pas de stock initial ; sinon un entier >= 0 (un « -3 » ou « 2,5 » est une faute de frappe)
+  const brutStock = ligne.Stock?.trim() ?? "";
+  const stockInitial = brutStock === "" ? undefined : lireEntierPositif(brutStock);
+  if (brutStock !== "" && stockInitial === undefined) throw new Error(`Stock initial invalide "${ligne.Stock}" — entier positif ou nul attendu`);
+
   return {
     type: type as CreerProduitInput["type"],
     libelle,
@@ -118,5 +138,6 @@ function analyserLigneCsv(ligne: Record<string, string>): Omit<CreerProduitInput
     coutRevient,
     suiviStock: ligne.SuiviStock.trim() === "1",
     seuilAlerte,
+    stockInitial,
   };
 }

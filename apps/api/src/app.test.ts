@@ -5538,7 +5538,7 @@ describe("Création d'article et de compte partagé : cloisonnement multi-site (
     });
 
     expect(reponse.statusCode).toBe(200);
-    expect(reponse.json()).toEqual({ crees: 0, misAJour: 1, erreurs: [] });
+    expect(reponse.json()).toEqual({ crees: 0, misAJour: 1, erreurs: [], stockInitialise: 0, stockIgnore: 0 });
     const historique = db.select().from(schema.historiquePrixProduit).where(eq(schema.historiquePrixProduit.idProduit, article.idProduit)).all();
     expect(historique).toHaveLength(1);
     expect(historique[0].utilisateurId).not.toBeNull();

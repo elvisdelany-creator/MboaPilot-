@@ -79,3 +79,72 @@ describe("decrireEntreeAudit (11.5)", () => {
     expect(decrireEntreeAudit({ ...base, valeurApres: "[1,2]" }).changements).toEqual([]);
   });
 });
+
+// Le journal lit aussi les historiques de stock, d'abonnement, de prix et de SAV (11.5, 8.7) : leurs valeurs sont des codes
+// techniques (ACHAT, RESILIE, DEVIS_ATTENTE…) que la direction doit lire en français.
+describe("decrireEntreeAudit : gestes tracés dans les historiques (11.5)", () => {
+  it("décrit un mouvement de stock avec son type en français", () => {
+    const d = decrireEntreeAudit({ ...base, action: "CREATION", tableCible: "stock_mouvement", idCible: "12", valeurApres: '{"article":"Câble HDMI","typeMouvement":"CASSE","quantite":1,"motif":"carton écrasé"}' });
+
+    expect(d.objet).toBe("Mouvement de stock");
+    expect(d.changements).toEqual([
+      { champ: "Article", avant: null, apres: "Câble HDMI" },
+      { champ: "Type de mouvement", avant: null, apres: "Casse / perte" },
+      { champ: "Quantité", avant: null, apres: "1" },
+      { champ: "Motif", avant: null, apres: "carton écrasé" },
+    ]);
+  });
+
+  it.each([
+    ["ACHAT", "Achat"],
+    ["INVENTAIRE", "Ajustement d'inventaire"],
+    ["TRANSFERT_ENTREE", "Transfert reçu"],
+    ["TRANSFERT_SORTIE", "Transfert envoyé"],
+    ["RETOUR_CLIENT", "Retour client"],
+  ])("type de mouvement %s → %s", (code, libelle) => {
+    const d = decrireEntreeAudit({ ...base, tableCible: "stock_mouvement", valeurApres: JSON.stringify({ typeMouvement: code }) });
+    expect(d.changements[0].apres).toBe(libelle);
+  });
+
+  it("décrit un changement de statut d'abonnement avec l'avant, l'après et le motif", () => {
+    const d = decrireEntreeAudit({ ...base, tableCible: "historique_abonnement", idCible: "7", valeurAvant: '{"statut":"ACTIF"}', valeurApres: '{"statut":"RESILIE","motif":"client parti"}' });
+
+    expect(d.objet).toBe("Abonnement");
+    expect(d.reference).toBe("7");
+    expect(d.changements).toEqual([
+      { champ: "Statut", avant: "Actif", apres: "Résilié" },
+      { champ: "Motif", avant: null, apres: "client parti" },
+    ]);
+  });
+
+  it("décrit un changement de formule et de matériel", () => {
+    const formule = decrireEntreeAudit({ ...base, tableCible: "historique_abonnement", valeurAvant: '{"formule":"EVASION"}', valeurApres: '{"formule":"ACCESS+"}' });
+    const materiel = decrireEntreeAudit({ ...base, tableCible: "historique_abonnement", valeurAvant: '{"numeroSerie":"A1"}', valeurApres: '{"numeroSerie":null}' });
+
+    expect(formule.changements).toEqual([{ champ: "Formule", avant: "EVASION", apres: "ACCESS+" }]);
+    expect(materiel.changements).toEqual([{ champ: "N° de série", avant: "A1", apres: "—" }]);
+  });
+
+  it("décrit un changement de prix d'article", () => {
+    const d = decrireEntreeAudit({ ...base, tableCible: "historique_prix_produit", valeurAvant: '{"article":"Câble HDMI","prixVente":2500,"coutRevient":1000}', valeurApres: '{"article":"Câble HDMI","prixVente":3000,"coutRevient":1100}' });
+
+    expect(d.objet).toBe("Prix d'un article");
+    expect(d.changements).toEqual([
+      { champ: "Article", avant: "Câble HDMI", apres: "Câble HDMI" },
+      { champ: "Prix de vente", avant: "2 500 FCFA", apres: "3 000 FCFA" },
+      { champ: "Coût de revient", avant: "1 000 FCFA", apres: "1 100 FCFA" },
+    ]);
+  });
+
+  it("décrit une étape de dossier SAV avec le statut en français", () => {
+    const d = decrireEntreeAudit({ ...base, tableCible: "sav_historique", idCible: "3", valeurAvant: '{"statut":"DIAGNOSTIC"}', valeurApres: '{"statut":"DEVIS_ATTENTE"}' });
+
+    expect(d.objet).toBe("Dossier SAV");
+    expect(d.changements).toEqual([{ champ: "Statut", avant: "En diagnostic", apres: "Devis en attente" }]);
+  });
+
+  it("laisse tel quel un statut ou un type qu'il ne connaît pas", () => {
+    const d = decrireEntreeAudit({ ...base, tableCible: "cloture_caisse", valeurApres: '{"statut":"FERMEE","typeMouvement":"FUTUR"}' });
+    expect(d.changements.map((c) => c.apres)).toEqual(["FERMEE", "FUTUR"]);
+  });
+});

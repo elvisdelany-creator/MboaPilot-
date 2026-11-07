@@ -34,6 +34,37 @@ const OBJETS: Record<string, string> = {
   kit_prix_decodeur: "Prix décodeur du kit",
   formule_option_compat: "Option / formule",
   entreprise: "Paramètres de l'entreprise",
+  // historiques lus avec le journal (stock, abonnement, prix, SAV)
+  stock_mouvement: "Mouvement de stock",
+  historique_abonnement: "Abonnement",
+  historique_prix_produit: "Prix d'un article",
+  sav_historique: "Dossier SAV",
+};
+
+// valeurs techniques que la direction doit lire en français, par champ ; une valeur inconnue reste telle quelle
+const LIBELLES_VALEURS: Record<string, Record<string, string>> = {
+  typeMouvement: {
+    ACHAT: "Achat",
+    VENTE: "Vente",
+    CASSE: "Casse / perte",
+    INVENTAIRE: "Ajustement d'inventaire",
+    TRANSFERT_ENTREE: "Transfert reçu",
+    TRANSFERT_SORTIE: "Transfert envoyé",
+    RETOUR_CLIENT: "Retour client",
+  },
+  statut: {
+    ACTIF: "Actif",
+    EXPIRE: "Expiré",
+    RESILIE: "Résilié",
+    RECU: "Reçu",
+    DIAGNOSTIC: "En diagnostic",
+    DEVIS_ATTENTE: "Devis en attente",
+    REPARATION: "En réparation",
+    PRET: "Prêt",
+    LIVRE: "Livré",
+    IRREPARABLE: "Irréparable",
+    ABANDONNE: "Abandonné",
+  },
 };
 
 const CHAMPS: Record<string, string> = {
@@ -92,9 +123,18 @@ const CHAMPS: Record<string, string> = {
   politiqueMdpExigerChiffre: "Mot de passe : chiffre exigé",
   politiqueMdpExigerCaractereSpecial: "Mot de passe : caractère spécial exigé",
   delaiGraceReabonnementJours: "Délai de grâce de réabonnement (jours)",
+  article: "Article",
+  typeMouvement: "Type de mouvement",
+  quantite: "Quantité",
+  motif: "Motif",
+  formule: "Formule",
+  options: "Options",
+  numeroSerie: "N° de série",
+  prixVente: "Prix de vente",
+  coutRevient: "Coût de revient",
 };
 
-const CHAMPS_FCFA = new Set(["prix", "prixFixe", "prixParaboleAccessoires", "prixKitReference", "prixDecodeur", "prixSurcharge", "ecartTotal", "montant"]);
+const CHAMPS_FCFA = new Set(["prix", "prixFixe", "prixParaboleAccessoires", "prixKitReference", "prixDecodeur", "prixSurcharge", "ecartTotal", "montant", "prixVente", "coutRevient"]);
 const CHAMPS_BOOLEENS = new Set(["actif", "politiqueMdpExigerMajuscule", "politiqueMdpExigerChiffre", "politiqueMdpExigerCaractereSpecial"]);
 
 function groupeMilliers(n: number): string {
@@ -118,7 +158,7 @@ function formaterValeur(champ: string, valeur: unknown): string {
   }
   if (typeof valeur === "boolean") return valeur ? "oui" : "non";
   if (typeof valeur === "object") return JSON.stringify(valeur);
-  return String(valeur);
+  return LIBELLES_VALEURS[champ]?.[String(valeur)] ?? String(valeur);
 }
 
 function analyserObjet(json: string | null): Record<string, unknown> | null {

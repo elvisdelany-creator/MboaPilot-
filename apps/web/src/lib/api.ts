@@ -1083,12 +1083,12 @@ export async function modifierSiteRequete(
   return lireJson<Site>(reponse);
 }
 
-// le journal est paginé côté serveur (200 entrées par défaut) : avantId = identifiant de la plus ancienne
+// le journal est paginé côté serveur (200 entrées par défaut) : curseur = celui de la plus ancienne
 // entrée déjà affichée, pour remonter dans le temps
-export async function chargerJournalAudit(token: string, tableCible?: string, avantId?: number): Promise<EntreeJournalAudit[]> {
+export async function chargerJournalAudit(token: string, tableCible?: string, curseur?: string): Promise<EntreeJournalAudit[]> {
   const parametres = new URLSearchParams();
   if (tableCible) parametres.set("tableCible", tableCible);
-  if (avantId !== undefined) parametres.set("avantId", String(avantId));
+  if (curseur !== undefined) parametres.set("curseur", curseur);
   const requete = parametres.toString();
   const reponse = await appelerServeur(`${BASE}/audit${requete ? `?${requete}` : ""}`, { headers: headersAuth(token) });
   return lireJson<EntreeJournalAudit[]>(reponse);

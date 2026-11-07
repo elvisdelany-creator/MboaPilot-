@@ -10,7 +10,7 @@ import {
   type ModifierUtilisateurInput,
 } from "./utilisateur.repository.js";
 import { creerSite, listerSites, modifierSite, trouverSite, type CreerSiteInput, type ModifierSiteInput } from "./site.repository.js";
-import { listerJournalAudit } from "./audit.repository.js";
+import { listerJournalUnifie } from "./audit.repository.js";
 import { envoyerErreur } from "../../lib/erreurs-api.js";
 
 type CreerUtilisateurBody = Omit<CreerUtilisateurInput, "siteId"> & { siteId?: number };
@@ -117,17 +117,17 @@ export function registerUtilisateursRoutes(app: FastifyInstance, db: Db, guards:
     }
   );
 
-  app.get<{ Querystring: { tableCible?: string; limite?: string; avantId?: string } }>(
+  app.get<{ Querystring: { tableCible?: string; limite?: string; curseur?: string } }>(
     "/api/v1/audit",
     { preHandler: [guards.authRequis, guards.admin] },
     async (request, reply) => {
-      const { tableCible, limite, avantId } = request.query;
+      const { tableCible, limite, curseur } = request.query;
       try {
         reply.code(200).send(
-          listerJournalAudit(db, {
+          listerJournalUnifie(db, {
             tableCible,
             limite: limite !== undefined ? Number(limite) : undefined,
-            avantId: avantId !== undefined ? Number(avantId) : undefined,
+            curseur,
           })
         );
       } catch (erreur) {

@@ -104,7 +104,7 @@ export function AdministrationPage({ onNaviguer, ongletInitial }: Props) {
   function remonterJournal() {
     if (!journal || journal.length === 0) return;
     setJournalEnCoursDeRemontee(true);
-    chargerJournalAudit(token, filtreTable.trim() || undefined, journal[journal.length - 1].idAudit)
+    chargerJournalAudit(token, filtreTable.trim() || undefined, journal[journal.length - 1].curseur)
       .then((entrees) => {
         setJournal((courant) => [...(courant ?? []), ...entrees]);
         setJournalPeutRemonter(entrees.length >= TAILLE_PAGE_JOURNAL);
@@ -290,7 +290,7 @@ export function AdministrationPage({ onNaviguer, ongletInitial }: Props) {
                 <Input
                   value={filtreTable}
                   onChange={(e) => setFiltreTable(e.target.value)}
-                  placeholder="Filtrer par table cible (ex. abonne, produit)…"
+                  placeholder="Filtrer par table (ex. stock_mouvement)…"
                   className="h-9 w-72"
                 />
               </div>
@@ -300,7 +300,7 @@ export function AdministrationPage({ onNaviguer, ongletInitial }: Props) {
                   // 11.5 : valeur avant/après de chaque changement, en clair
                   const description = decrireEntreeAudit(entree);
                   return (
-                    <li key={entree.idAudit}>
+                    <li key={entree.curseur}>
                       <Card className="gap-1 p-3">
                         <div className="flex items-center justify-between gap-2 text-sm">
                           <span className="font-medium text-card-foreground">

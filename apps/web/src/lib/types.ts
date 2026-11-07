@@ -196,7 +196,9 @@ export interface Site {
 }
 
 export interface EntreeJournalAudit {
-  idAudit: number;
+  // unique et stable : clé d'affichage et point de reprise pour remonter dans le temps (le journal central et les historiques
+  // de stock, d'abonnement, de prix et de SAV n'ont pas d'identifiant commun)
+  curseur: string;
   // 11.3, 11.5 : NULL pour une action système (job quotidien — anonymisation
   // automatique, expiration d'abonnement), jamais rattachée à un utilisateur humain
   utilisateurId: number | null;

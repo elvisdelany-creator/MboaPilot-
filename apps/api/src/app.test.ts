@@ -2326,6 +2326,36 @@ describe("Rapprochement bancaire d'un virement (6.5)", () => {
     expect(rapprochement.json().statutRapprochement).toBe("RAPPROCHE");
   });
 
+  // constaté en test grandeur nature : aucun écran ne listait les virements à vérifier sur le relevé, et celui d'une vente sans client
+  // enregistré n'avait aucune fiche d'où le rapprocher
+  it("un comptable liste les virements à rapprocher de son site, y compris celui d'une vente sans client", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    creerUtilisateur(db, { siteId, nom: "Compta", prenom: "C", identifiant: "comptable1", motDePasse: "motdepasse-secret", role: "COMPTABLE" });
+    const tokenComptable = await connecter(app, "comptable1");
+    const idEntreprise = db.select().from(schema.site).where(eq(schema.site.idSite, siteId)).get()!.idEntreprise;
+    const autreSite = db.insert(schema.site).values({ idEntreprise, nom: "Site B" }).returning().get().idSite;
+    const sansClient = db.insert(schema.facture).values({ siteId, statut: "VALIDEE", montantTotal: 2500, creePar: userId }).returning().get();
+    const ailleurs = db.insert(schema.facture).values({ siteId: autreSite, statut: "VALIDEE", montantTotal: 2500, creePar: userId }).returning().get();
+    db.insert(schema.paiement).values({ idFacture: sansClient.idFacture, mode: "VIREMENT", montant: 2500, utilisateurId: userId, banque: "Afriland", referenceVirement: "VIR-001", statutRapprochement: "EN_ATTENTE" }).run();
+    db.insert(schema.paiement).values({ idFacture: ailleurs.idFacture, mode: "VIREMENT", montant: 2500, utilisateurId: userId, referenceVirement: "AUTRE-SITE", statutRapprochement: "EN_ATTENTE" }).run();
+
+    const reponse = await app.inject({ method: "GET", url: "/api/v1/paiements/a-rapprocher", headers: authHeader(tokenComptable) });
+
+    expect(reponse.statusCode).toBe(200);
+    expect(reponse.json().total).toBe(1);
+    expect(reponse.json().virements).toHaveLength(1);
+    expect(reponse.json().virements[0]).toMatchObject({ referenceVirement: "VIR-001", banque: "Afriland", montant: 2500, abonneNom: null });
+  });
+
+  it("un caissier ne voit pas la liste des virements à rapprocher (403)", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const token = await connecter(app);
+
+    const reponse = await app.inject({ method: "GET", url: "/api/v1/paiements/a-rapprocher", headers: authHeader(token) });
+
+    expect(reponse.statusCode).toBe(403);
+  });
+
   it("un caissier ne peut pas confirmer un rapprochement (403)", async () => {
     const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
     const token = await connecter(app);

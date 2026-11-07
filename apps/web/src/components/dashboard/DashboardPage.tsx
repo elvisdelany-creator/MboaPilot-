@@ -17,12 +17,14 @@ import {
   chargerValorisationStock,
   chargerVentesEnAttente,
   chargerVentilationCA,
+  chargerVirementsARapprocher,
   ErreurAuthentification,
   type MargeArticle,
   type ProduitRotationLente,
   type ResumeApporteur,
   type VenteEnAttente,
   type VentilationCAFamille,
+  type VirementARapprocher,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { AppHeader, type Vue } from "@/components/layout/AppHeader";
@@ -31,6 +33,7 @@ import { Card } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { EvolutionCaChart } from "./EvolutionCaChart";
 import { AnnulerVenteEnAttenteDialog, LIBELLE_ANNULATION } from "./AnnulerVenteEnAttenteDialog";
+import { ConfirmerRapprochementDialog } from "@/components/clients/ConfirmerRapprochementDialog";
 import type {
   AbonnementExpire,
   AlerteEcheance,
@@ -118,6 +121,9 @@ export function DashboardPage({ onNaviguer, onReabonnerDepuisAlerte, onReabonner
   // 6.4 : ventes de produits jamais encaissées (paiement Mobile Money abandonné), stock déjà sorti
   const [ventesEnAttente, setVentesEnAttente] = useState<VenteEnAttente[]>([]);
   const [venteAAnnuler, setVenteAAnnuler] = useState<VenteEnAttente | null>(null);
+  // 6.5 : virements encaissés, à retrouver sur le relevé bancaire (rapprochement différé)
+  const [virementsARapprocher, setVirementsARapprocher] = useState<{ total: number; virements: VirementARapprocher[] }>({ total: 0, virements: [] });
+  const [virementARapprocher, setVirementARapprocher] = useState<VirementARapprocher | null>(null);
 
   function gererErreur(erreur: unknown, messageParDefaut: string) {
     if (erreur instanceof ErreurAuthentification) {
@@ -173,6 +179,10 @@ export function DashboardPage({ onNaviguer, onReabonnerDepuisAlerte, onReabonner
     chargerCommissionsCanalplusEnCours(token, siteId)
       .then(setCommissionsCanalplus)
       .catch(() => setCommissionsCanalplus([]));
+    // 6.5 : mêmes rôles que la confirmation du rapprochement (Administrateur, Gérant, Comptable)
+    chargerVirementsARapprocher(token)
+      .then(setVirementsARapprocher)
+      .catch(() => setVirementsARapprocher({ total: 0, virements: [] }));
     // 8.6, 6.3 : "Suivi des apporteurs d'affaires"
     chargerResumesApporteurs(token)
       .then(setResumesApporteurs)
@@ -369,6 +379,40 @@ export function DashboardPage({ onNaviguer, onReabonnerDepuisAlerte, onReabonner
                   </li>
                 ))}
               </ul>
+            </div>
+          )}
+
+          {peutPiloter && virementsARapprocher.total > 0 && (
+            <div className="mb-8">
+              <h2 className="font-heading text-lg font-semibold text-foreground">Virements à rapprocher ({virementsARapprocher.total})</h2>
+              <p className="mb-3 text-sm text-muted-foreground">
+                Encaissés par virement, pas encore retrouvés sur le relevé bancaire. Confirmez chacun une fois le versement vu sur le relevé.
+              </p>
+              <ul className="space-y-2">
+                {virementsARapprocher.virements.map((v) => (
+                  <li key={v.idPaiement}>
+                    <Card className="flex-row flex-wrap items-center justify-between gap-3 p-3">
+                      <div>
+                        <p className="font-medium text-card-foreground">
+                          {formateurFcfa.format(v.montant)} FCFA · {[v.banque, v.referenceVirement && `réf. ${v.referenceVirement}`].filter(Boolean).join(" · ") || "banque et référence non saisies"}
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          {formateurDateCourte.format(lireDateServeur(v.datePaiement))} · facture n° {v.idFacture} · {v.abonneNom !== null ? `${v.abonnePrenom} ${v.abonneNom}` : "sans client"}
+                          {v.auteurNom !== null && ` · encaissé par ${v.auteurPrenom} ${v.auteurNom}`}
+                        </p>
+                      </div>
+                      <Button variant="outline" size="sm" className="cursor-pointer" onClick={() => setVirementARapprocher(v)}>
+                        Confirmer le rapprochement
+                      </Button>
+                    </Card>
+                  </li>
+                ))}
+              </ul>
+              {virementsARapprocher.total > virementsARapprocher.virements.length && (
+                <p className="mt-2 text-sm text-muted-foreground">
+                  Les {virementsARapprocher.virements.length} plus anciens sont affichés ; les autres apparaîtront au fur et à mesure des confirmations.
+                </p>
+              )}
             </div>
           )}
 
@@ -579,6 +623,15 @@ export function DashboardPage({ onNaviguer, onReabonnerDepuisAlerte, onReabonner
           )}
         </div>
       </main>
+
+      <ConfirmerRapprochementDialog
+        paiement={virementARapprocher}
+        onFerme={() => setVirementARapprocher(null)}
+        onSucces={() => {
+          setVirementARapprocher(null);
+          charger();
+        }}
+      />
 
       <AnnulerVenteEnAttenteDialog
         vente={venteAAnnuler}

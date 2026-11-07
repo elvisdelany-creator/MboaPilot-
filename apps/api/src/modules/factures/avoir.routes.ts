@@ -8,7 +8,7 @@ import { creerAvoir, listerLignesFacture, type LigneAvoirInput, type Rembourseme
 import { encaisserSoldeFacture, type EncaisserSoldeParams } from "./paiement-complementaire.service.js";
 import { annulerPaiement } from "./annulation-paiement.service.js";
 import { annulerFactureEnAttente, listerVentesEnAttente } from "./annulation-facture.service.js";
-import { confirmerRapprochementVirement } from "./paiement.repository.js";
+import { confirmerRapprochementVirement, listerVirementsARapprocher } from "./paiement.repository.js";
 import { envoyerErreur } from "../../lib/erreurs-api.js";
 
 const ERREUR_SITE_FACTURE = { erreur: "Cette facture n'appartient pas à votre site" };
@@ -128,6 +128,15 @@ export function registerAvoirRoutes(app: FastifyInstance, db: Db, guards: RouteG
       } catch (erreur) {
         envoyerErreur(reply, erreur);
       }
+    }
+  );
+
+  // 6.5 : virements encaissés et pas encore retrouvés sur le relevé — la liste de travail du rapprochement, même rôles que sa confirmation
+  app.get(
+    "/api/v1/paiements/a-rapprocher",
+    { preHandler: [guards.authRequis, guards.gestionRapprochement] },
+    async (request, reply) => {
+      reply.code(200).send(listerVirementsARapprocher(db, request.user.siteId));
     }
   );
 

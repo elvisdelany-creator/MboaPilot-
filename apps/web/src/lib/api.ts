@@ -250,6 +250,26 @@ export async function annulerPaiementRequete(token: string, idPaiement: number, 
   return lireJson<AnnulerPaiementResultat>(reponse);
 }
 
+// 6.5 : virements encaissés, pas encore retrouvés sur le relevé bancaire (le plus ancien d'abord) — `total` peut dépasser la liste
+export interface VirementARapprocher {
+  idPaiement: number;
+  idFacture: number;
+  montant: number;
+  banque: string | null;
+  referenceVirement: string | null;
+  datePaiement: string;
+  // null : vente sans client enregistré
+  abonnePrenom: string | null;
+  abonneNom: string | null;
+  auteurPrenom: string | null;
+  auteurNom: string | null;
+}
+
+export async function chargerVirementsARapprocher(token: string): Promise<{ total: number; virements: VirementARapprocher[] }> {
+  const reponse = await appelerServeur(`${BASE}/paiements/a-rapprocher`, { headers: headersAuth(token) });
+  return lireJson<{ total: number; virements: VirementARapprocher[] }>(reponse);
+}
+
 // 6.5 : confirmation manuelle du rapprochement bancaire d'un virement
 export async function confirmerRapprochementRequete(token: string, idPaiement: number): Promise<Paiement> {
   const reponse = await appelerServeur(`${BASE}/paiements/${idPaiement}/rapprochement`, {

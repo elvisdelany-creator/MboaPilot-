@@ -1,4 +1,4 @@
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
 
@@ -87,6 +87,49 @@ export function creerPaiement(db: Db, params: CreerPaiementParams) {
 
 export function listerPaiementsFacture(db: Db, idFacture: number) {
   return db.select().from(schema.paiement).where(eq(schema.paiement.idFacture, idFacture)).all();
+}
+
+// 6.5 : virements encaissés mais pas encore retrouvés sur le relevé bancaire, du plus ancien au plus récent — le comptable les
+// vérifie dans cet ordre. Le bouton de rapprochement vivait seulement sur la fiche d'un client : un virement encaissé pour une vente
+// sans client enregistré (facture soldée, aucun abonné) ne pouvait plus être rapproché depuis l'application. Jointure gauche sur le
+// client pour cette raison. Un remboursement par virement (montant négatif, avoir) attend lui aussi sa confirmation.
+const LIMITE_VIREMENTS_A_RAPPROCHER = 200;
+
+export function listerVirementsARapprocher(db: Db, siteId: number, limite = LIMITE_VIREMENTS_A_RAPPROCHER) {
+  const enAttente = and(
+    eq(schema.facture.siteId, siteId),
+    eq(schema.paiement.mode, "VIREMENT"),
+    eq(schema.paiement.statutRapprochement, "EN_ATTENTE")
+  );
+  const total =
+    db
+      .select({ total: sql<number>`count(*)` })
+      .from(schema.paiement)
+      .innerJoin(schema.facture, eq(schema.paiement.idFacture, schema.facture.idFacture))
+      .where(enAttente)
+      .get()?.total ?? 0;
+  const virements = db
+    .select({
+      idPaiement: schema.paiement.idPaiement,
+      idFacture: schema.paiement.idFacture,
+      montant: schema.paiement.montant,
+      banque: schema.paiement.banque,
+      referenceVirement: schema.paiement.referenceVirement,
+      datePaiement: schema.paiement.datePaiement,
+      abonnePrenom: schema.abonne.prenom,
+      abonneNom: schema.abonne.nom,
+      auteurPrenom: schema.utilisateur.prenom,
+      auteurNom: schema.utilisateur.nom,
+    })
+    .from(schema.paiement)
+    .innerJoin(schema.facture, eq(schema.paiement.idFacture, schema.facture.idFacture))
+    .leftJoin(schema.abonne, eq(schema.facture.idAbonne, schema.abonne.idAbonne))
+    .leftJoin(schema.utilisateur, eq(schema.paiement.utilisateurId, schema.utilisateur.idUser))
+    .where(enAttente)
+    .orderBy(asc(schema.paiement.datePaiement), asc(schema.paiement.idPaiement))
+    .limit(limite)
+    .all();
+  return { total, virements };
 }
 
 // 6.5 : confirmation manuelle du rapprochement bancaire d'un virement, une

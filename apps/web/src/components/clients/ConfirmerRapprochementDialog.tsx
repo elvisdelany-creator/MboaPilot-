@@ -4,10 +4,10 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Button } from "@/components/ui/button";
 import { confirmerRapprochementRequete, ErreurAuthentification } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
-import type { Paiement } from "@/lib/types";
 
 interface Props {
-  paiement: Paiement | null;
+  // la banque et la référence, quand on les connaît, sont ce que le comptable cherche sur le relevé
+  paiement: { idPaiement: number; montant: number; banque?: string | null; referenceVirement?: string | null } | null;
   onFerme: () => void;
   onSucces: () => void;
 }
@@ -47,7 +47,12 @@ export function ConfirmerRapprochementDialog({ paiement, onFerme, onSucces }: Pr
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Confirmer le rapprochement bancaire</DialogTitle>
-          <DialogDescription>{paiement && `Virement — ${formateurFcfa.format(paiement.montant)} FCFA`}</DialogDescription>
+          <DialogDescription>
+            {paiement &&
+              ["Virement", `${formateurFcfa.format(paiement.montant)} FCFA`, paiement.banque, paiement.referenceVirement && `réf. ${paiement.referenceVirement}`]
+                .filter(Boolean)
+                .join(" — ")}
+          </DialogDescription>
         </DialogHeader>
 
         <p className="text-sm text-card-foreground">

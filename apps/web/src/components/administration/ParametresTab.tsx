@@ -625,6 +625,11 @@ export function ParametresTab() {
           Une sauvegarde automatique du fichier de données est effectuée chaque jour (conservation glissante sur 30 jours). Le bouton
           ci-dessous déclenche une sauvegarde immédiate et la télécharge.
         </p>
+        <p className="text-sm text-muted-foreground">
+          Le fichier ne contient ni la clé de chiffrement (<code>.encryption-key</code>), ni les photos SAV, ni le logo : copiez aussi le
+          dossier de données en entier sur un support externe, sinon les identifiants des comptes streaming seront illisibles après une
+          restauration sur un autre poste.
+        </p>
         <Button variant="outline" className="w-fit cursor-pointer gap-2" disabled={exportEnCours} onClick={exporterDonnees}>
           <Download className="size-4" />
           {exportEnCours ? "Export en cours…" : "Exporter mes données"}

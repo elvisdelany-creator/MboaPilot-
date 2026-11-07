@@ -114,6 +114,8 @@ export interface ComptePartage {
   nombreEcransMax: number;
   actif: number;
   ecransOccupes: number;
+  // vrai quand les identifiants stockés ne se déchiffrent pas avec la clé de cette installation (base restaurée sans sa clé)
+  identifiantsIllisibles: boolean;
 }
 
 export interface FicheComptePartage {

@@ -108,6 +108,12 @@ export function NouveauComptePartageDialog({ ouvert, familles, compte, onFerme, 
             <Label htmlFor="compte-partage-libelle">Libellé</Label>
             <Input id="compte-partage-libelle" value={libelle} onChange={(e) => setLibelle(e.target.value)} maxLength={100} placeholder="Compte Netflix Premium #1" className="mt-1" />
           </div>
+          {compte?.identifiantsIllisibles && (
+            <p role="alert" className="text-sm font-medium text-destructive">
+              Les identifiants enregistrés sont illisibles sur cette installation. Ressaisissez l'identifiant et le mot de passe : les laisser
+              vides les conserve tels quels, donc toujours illisibles.
+            </p>
+          )}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <Label htmlFor="compte-partage-identifiant">Identifiant</Label>

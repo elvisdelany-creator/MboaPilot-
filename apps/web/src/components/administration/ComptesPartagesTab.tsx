@@ -79,8 +79,8 @@ export function ComptesPartagesTab() {
         {comptes.map((c) => (
           <li key={c.idComptePartage}>
             <Card className="gap-2 p-3">
-              <div className="flex items-center justify-between gap-3">
-                <div>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0">
                   <p className="font-medium text-card-foreground">
                     {c.libelle} <span className="font-normal text-muted-foreground">— {libelleFamille(c.idFamille)}</span>
                   </p>
@@ -90,8 +90,14 @@ export function ComptesPartagesTab() {
                       {c.motDePasse ? ` · ${c.motDePasse}` : ""}
                     </p>
                   )}
+                  {c.identifiantsIllisibles && (
+                    <p className="text-sm font-medium text-destructive">
+                      Identifiants illisibles : ils ont été enregistrés avec une autre clé de chiffrement (base restaurée sans sa clé).
+                      Cliquez sur « Modifier » et ressaisissez l'identifiant et le mot de passe.
+                    </p>
+                  )}
                 </div>
-                <div className="flex shrink-0 items-center gap-2">
+                <div className="flex shrink-0 flex-wrap items-center gap-2">
                   <Badge variant={c.ecransOccupes >= c.nombreEcransMax ? "destructive" : "secondary"}>
                     {c.ecransOccupes} / {c.nombreEcransMax} écrans
                   </Badge>

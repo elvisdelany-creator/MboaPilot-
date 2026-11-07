@@ -34,6 +34,7 @@ export { ligneAvecRemise, type LigneMontant } from "./lignes-remise.js";
 export { messageRelanceEcheance, type DonneesRelanceEcheance } from "./message-relance.js";
 export { creerVerrouSoumission } from "./verrou-soumission.js";
 export { messageStockInsuffisant, peutAjouterAuPanier } from "./stock-vendable.js";
+export { causeModeDegrade, DELAI_GRACE_LICENCE_JOURS, messageModeDegrade, type CauseModeDegrade } from "./message-licence.js";
 export { classerEncaissement, type EtatEncaissement } from "./etat-encaissement.js";
 export { messageSavPret, type DonneesSavPret } from "./message-sav-pret.js";
 export { excedentEncaissementSuspect, SEUIL_EXCEDENT_ENCAISSEMENT_SUSPECT } from "./excedent-encaissement.js";

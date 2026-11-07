@@ -25,6 +25,7 @@ import { registerAvoirRoutes } from "./modules/factures/avoir.routes.js";
 import { registerLicenceRoutes } from "./modules/licence/licence.routes.js";
 import { registerInstallationRoutes } from "./modules/installation/installation.routes.js";
 import { obtenirOuCreerLicence, calculerEtatLicence } from "./modules/licence/licence.service.js";
+import { messageModeDegrade } from "@mboapilot/shared";
 import { registerClotureCaisseRoutes } from "./modules/caisse/cloture-caisse.routes.js";
 import { registerImpressionRoutes } from "./modules/impression/impression.routes.js";
 import { registerVerificationRoutes } from "./modules/verification/verification.routes.js";
@@ -100,9 +101,9 @@ export function buildApp(db: Db, options: BuildAppOptions) {
     if (PREFIXES_ECRITURE_TOUJOURS_AUTORISES.some((prefixe) => chemin.startsWith(prefixe))) return;
 
     const licence = obtenirOuCreerLicence(db, new Date().toISOString());
-    const { etat } = calculerEtatLicence(licence, new Date().toISOString());
-    if (etat === "DEGRADE") {
-      reply.code(403).send({ erreur: "Licence éditeur expirée : application en mode dégradé (lecture seule). Contactez votre éditeur pour réactiver l'abonnement." });
+    const statut = calculerEtatLicence(licence, new Date().toISOString());
+    if (statut.etat === "DEGRADE") {
+      reply.code(403).send({ erreur: messageModeDegrade(statut) });
     }
   });
 

@@ -1,10 +1,10 @@
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
-import { joursAvantEcheance } from "@mboapilot/shared";
+import { DELAI_GRACE_LICENCE_JOURS, joursAvantEcheance } from "@mboapilot/shared";
 import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
 
-export const DELAI_GRACE_JOURS = 21;
+export const DELAI_GRACE_JOURS = DELAI_GRACE_LICENCE_JOURS;
 const DUREE_ABONNEMENT_INITIAL_JOURS = 365;
 
 export interface LicenceInfo {

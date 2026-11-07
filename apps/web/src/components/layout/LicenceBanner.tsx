@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { causeModeDegrade, messageModeDegrade } from "@mboapilot/shared";
 import { chargerEtatLicence, revaliderLicence as revaliderLicenceRequete, type StatutLicence } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { EVENEMENT_LICENCE_MISE_A_JOUR } from "@/lib/evenements";
@@ -36,8 +37,11 @@ export function LicenceBanner({ token }: { token: string }) {
   async function revalider() {
     setRevalidationEnCours(true);
     try {
-      setStatut(await revaliderLicenceRequete(token));
-      toast.success("Licence revalidée.");
+      const apres = await revaliderLicenceRequete(token);
+      setStatut(apres);
+      // la revalidation ne repousse pas l'échéance : elle peut réussir sans sortir du mode dégradé, et le dire serait faux
+      if (apres.etat === "DEGRADE") toast.warning(messageModeDegrade(apres));
+      else toast.success("Licence revalidée.");
     } catch {
       toast.error("Revalidation impossible — vérifiez la connexion.");
     } finally {
@@ -46,6 +50,8 @@ export function LicenceBanner({ token }: { token: string }) {
   }
 
   const degradee = statut.etat === "DEGRADE";
+  // revalider ne lève que le délai de grâce hors ligne, jamais une échéance d'abonnement (qui se prolonge)
+  const revalidationUtile = degradee ? causeModeDegrade(statut) === "REVALIDATION" : !echeanceProche;
 
   return (
     <div
@@ -55,13 +61,12 @@ export function LicenceBanner({ token }: { token: string }) {
     >
       <span>
         {degradee
-          ? "Licence éditeur expirée : application en mode dégradé (lecture seule). Un administrateur peut prolonger l'abonnement dans Administration → Paramètres, ou contactez votre éditeur."
+          ? messageModeDegrade(statut)
           : echeanceProche
             ? `Votre abonnement MboaPilot expire dans ${statut.joursRestantsAbonnement} jour(s) (le ${formateurDate.format(new Date(`${statut.dateExpirationAbonnement.slice(0, 10)}T00:00:00`))}). Un administrateur peut le prolonger dans Administration → Paramètres.`
             : `Licence éditeur : ${statut.joursRestantsGrace} jour(s) restant(s) avant bascule en mode dégradé sans revalidation.`}
       </span>
-      {/* revalider ne repousse pas l'échéance de l'abonnement : le bouton n'a de sens que pour le délai de grâce hors ligne */}
-      {!echeanceProche && (
+      {revalidationUtile && (
         <Button size="sm" variant={degradee ? "secondary" : "outline"} disabled={revalidationEnCours} onClick={revalider}>
           Revalider maintenant
         </Button>

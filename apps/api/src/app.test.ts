@@ -5125,6 +5125,28 @@ describe("mode dégradé de la licence : blocage des écritures (10.4)", () => {
     expect(reponse.json().erreur).toMatch(/mode dégradé/i);
   });
 
+  // la cause change l'action à mener : une échéance se prolonge (administrateur), un délai de grâce dépassé se lève par une revalidation
+  it("dit « expirée » quand l'abonnement a expiré, et « non revalidée » quand seul le délai de grâce hors ligne est dépassé", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const token = await connecter(app);
+    const vendre = () =>
+      app.inject({ method: "POST", url: "/api/v1/ventes", headers: authHeader(token), payload: { siteId, userId, lignes: [{ idProduit: 1, quantite: 1 }], montantEncaisse: 0 } });
+
+    expirerLicence();
+    const echeance = (await vendre()).json().erreur as string;
+    db.delete(schema.licence).run();
+    db.insert(schema.licence)
+      .values({ empreinteInstallation: "inst-test", dateExpirationAbonnement: "2099-01-01", derniereRevalidationReussie: new Date(Date.now() - 40 * 86_400_000).toISOString() })
+      .run();
+    const grace = (await vendre()).json().erreur as string;
+
+    expect(echeance).toMatch(/expirée/i);
+    expect(echeance).toMatch(/prolong/i);
+    expect(grace).not.toMatch(/expirée/i);
+    expect(grace).toMatch(/revalid/i);
+    expect(grace).toMatch(/mode dégradé/i);
+  });
+
   it("laisse passer les lectures, l'état de la licence et la connexion", async () => {
     const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
     const token = await connecter(app);

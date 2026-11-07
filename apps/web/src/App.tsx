@@ -20,7 +20,7 @@ import type { Abonne, AbonnementExpire, AlerteEcheance, Produit } from "@/lib/ty
 
 type EtatVue =
   | { nom: "dashboard" }
-  | { nom: "caisse"; abonneInitial?: Abonne; idFamilleInitiale?: number }
+  | { nom: "caisse"; abonneInitial?: Abonne; idFamilleInitiale?: number; idFormuleInitiale?: number }
   | { nom: "sav" }
   | { nom: "apporteurs" }
   | { nom: "stock"; idProduitInitial?: number; actionInitiale?: "achat" | "transfert" }
@@ -77,19 +77,19 @@ function Contenu() {
   }
 
   function reabonnerDepuisAlerte(alerte: AlerteEcheance) {
-    setVue({ nom: "caisse", abonneInitial: alerte.abonne, idFamilleInitiale: alerte.formule.idFamille });
+    setVue({ nom: "caisse", abonneInitial: alerte.abonne, idFamilleInitiale: alerte.formule.idFamille, idFormuleInitiale: alerte.formule.idFormule });
   }
 
   // 4.4 : « réabonner » depuis la liste des abonnements expirés — même
   // parcours que le réabonnement en un clic sur une alerte à échéance
   function reabonnerDepuisExpire(abonnement: AbonnementExpire) {
-    setVue({ nom: "caisse", abonneInitial: abonnement.abonne, idFamilleInitiale: abonnement.formule.idFamille });
+    setVue({ nom: "caisse", abonneInitial: abonnement.abonne, idFamilleInitiale: abonnement.formule.idFamille, idFormuleInitiale: abonnement.formule.idFormule });
   }
 
   // 9.4 : réabonner depuis l'onglet Abonnements de la fiche 360° — même
   // parcours que le réabonnement en un clic du tableau de bord (4.4, 7.2)
-  function reabonnerDepuisFiche(abonne: Abonne, idFamille: number) {
-    setVue({ nom: "caisse", abonneInitial: abonne, idFamilleInitiale: idFamille });
+  function reabonnerDepuisFiche(abonne: Abonne, idFamille: number, idFormule: number) {
+    setVue({ nom: "caisse", abonneInitial: abonne, idFamilleInitiale: idFamille, idFormuleInitiale: idFormule });
   }
 
   // 9.3 : "Liste des alertes de stock, avec accès direct à la commande
@@ -126,6 +126,7 @@ function Contenu() {
         onOuvrirCatalogueAdministration={() => setVue({ nom: "administration", ongletInitial: "catalogue" })}
         abonneInitial={vue.abonneInitial}
         idFamilleInitiale={vue.idFamilleInitiale}
+        idFormuleInitiale={vue.idFormuleInitiale}
       />
     );
   }

@@ -58,7 +58,7 @@ interface Props {
   onNaviguer: (vue: Vue) => void;
   // 7.2 : le réabonnement réutilise le même parcours que le tableau de bord
   // (bascule vers la caisse, abonné et famille pré-sélectionnés)
-  onReabonnerDepuisFiche: (abonne: Abonne, idFamille: number) => void;
+  onReabonnerDepuisFiche: (abonne: Abonne, idFamille: number, idFormule: number) => void;
 }
 
 const formateurFcfa = new Intl.NumberFormat("fr-FR");
@@ -418,7 +418,7 @@ export function ClientsPage({ onNaviguer, onReabonnerDepuisFiche }: Props) {
                                   variant="outline"
                                   size="sm"
                                   className="cursor-pointer gap-1"
-                                  onClick={() => onReabonnerDepuisFiche(fiche.abonne, a.idFamille)}
+                                  onClick={() => onReabonnerDepuisFiche(fiche.abonne, a.idFamille, a.idFormule)}
                                 >
                                   <RefreshCw className="size-3.5" />
                                   Réabonner

@@ -53,6 +53,8 @@ interface Props {
   // pré-sélection venant du tableau de bord (réabonnement en un clic depuis une alerte, 4.4/9.3)
   abonneInitial?: Abonne;
   idFamilleInitiale?: number;
+  // réabonnement : la formule que le client a déjà, proposée d'office (un réabonnement se fait presque toujours à l'identique)
+  idFormuleInitiale?: number;
 }
 
 const formateurFcfa = new Intl.NumberFormat("fr-FR");
@@ -63,7 +65,7 @@ function famillesVendables(familles: CatalogueFamille[]): CatalogueFamille[] {
   return familles.filter((f) => f.formules.length > 0 || f.kits.length > 0);
 }
 
-export function CaissePage({ onNaviguer, onOuvrirCatalogueAdministration, abonneInitial, idFamilleInitiale }: Props) {
+export function CaissePage({ onNaviguer, onOuvrirCatalogueAdministration, abonneInitial, idFamilleInitiale, idFormuleInitiale }: Props) {
   const { session, deconnecter } = useAuth();
   const token = session!.token;
   const utilisateur = session!.utilisateur;
@@ -157,6 +159,12 @@ export function CaissePage({ onNaviguer, onOuvrirCatalogueAdministration, abonne
         setFamilles(vendables);
         setFamillesChargees(true);
         setFamilleSelectionneeId((id) => id ?? vendables[0]?.idFamille ?? null);
+        // une formule retirée de la vente n'est plus proposée : le caissier la choisit alors lui-même, comme avant
+        const formuleDuClient = idFormuleInitiale !== undefined ? vendables.flatMap((f) => f.formules).find((fo) => fo.idFormule === idFormuleInitiale) : undefined;
+        if (formuleDuClient) {
+          setFamilleSelectionneeId(formuleDuClient.idFamille);
+          setFormuleSelectionnee(formuleDuClient);
+        }
       })
       .catch((e) => gererErreur(e, "Impossible de charger le catalogue."));
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -1,4 +1,4 @@
-import { and, asc, eq, gte, lt, sql } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, lt, sql } from "drizzle-orm";
 import { bornesJourDouala, construireCsv, heureDouala, jourDouala } from "@mboapilot/shared";
 import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
@@ -101,8 +101,27 @@ export function exporterJournalVentesCsv(db: Db, siteId: number, periode: Period
       .map((p) => [p.idFacture, p.total]),
   );
 
+  // avoirs de ces ventes, émis à n'importe quelle date : comme les encaissements, le reste à payer est celui d'aujourd'hui
+  const avoirsParVente = new Map(
+    db
+      .select({ idOrigine: schema.facture.factureOrigineId, total: sql<number>`sum(${schema.facture.montantTotal})` })
+      .from(schema.facture)
+      .where(
+        and(
+          eq(schema.facture.type, "AVOIR"),
+          inArray(schema.facture.factureOrigineId, db.select({ id: schema.facture.idFacture }).from(schema.facture).where(filtre)),
+        ),
+      )
+      .groupBy(schema.facture.factureOrigineId)
+      .all()
+      .map((a) => [a.idOrigine, a.total]),
+  );
+
   const lignes = factures.map(({ facture: f, prenom, nom }) => {
     const paye = encaisse.get(f.idFacture) ?? 0;
+    // même règle que l'application (solde = total + avoirs − encaissé) : une vente remboursée par avoir n'est pas une dette ; un avoir
+    // non remboursé est un crédit du client (négatif). L'avoir lui-même est déjà déduit de sa vente : jamais une dette.
+    const reste = f.type === "AVOIR" ? 0 : f.montantTotal + (avoirsParVente.get(f.idFacture) ?? 0) - paye;
     return [
       dateFr(f.dateCreation),
       f.idFacture,
@@ -115,7 +134,7 @@ export function exporterJournalVentesCsv(db: Db, siteId: number, periode: Period
       f.montantTaxe,
       f.montantTotal - f.montantTaxe,
       paye,
-      f.montantTotal - paye,
+      reste,
     ];
   });
 

@@ -1,10 +1,8 @@
-import { eq, sql } from "drizzle-orm";
-import { extraireTaxeDuTTC } from "@mboapilot/shared";
+import { and, eq, sql } from "drizzle-orm";
 import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
 import { enregistrerMouvement } from "../stock/stock.repository.js";
 import { restituerComposantsKit } from "../stock/stock.service.js";
-import { trouverTauxTvaParSite } from "../entreprise/entreprise.repository.js";
 import { verifierEntier } from "../../lib/validation.js";
 import { creerPaiement } from "./paiement.repository.js";
 
@@ -104,9 +102,17 @@ function creerAvoirSansTransaction(db: Db, params: CreerAvoirParams): AvoirResul
   });
 
   const montantTotal = lignesAvoir.reduce((somme, l) => somme + l.prixApplique, 0);
-  // 3.2.3, 6.1, 8.8 : "porte le total, la TVA/taxes le cas échéant" — négatif,
-  // proportionnel au montant crédité, figé au taux en vigueur à cet instant
-  const montantTaxe = extraireTaxeDuTTC(montantTotal, trouverTauxTvaParSite(db, origine.siteId));
+  // 3.2.3, 6.1, 8.8 : "porte le total, la TVA/taxes le cas échéant" — négatif, proportionnel au montant crédité ET repris de la
+  // facture corrigée : un avoir annule la TVA qui a été facturée, pas celle d'un taux en vigueur le jour du retour (changé depuis, ou
+  // configuré après une vente qui n'en portait pas). Calculé sur le cumul des avoirs de cette facture : le dernier solde l'arrondi,
+  // et un avoir total annule exactement la TVA de la vente.
+  const dejaCredite = db
+    .select({ total: sql<number>`coalesce(sum(${schema.facture.montantTotal}), 0)`, taxe: sql<number>`coalesce(sum(${schema.facture.montantTaxe}), 0)` })
+    .from(schema.facture)
+    .where(and(eq(schema.facture.factureOrigineId, origine.idFacture), eq(schema.facture.type, "AVOIR")))
+    .get()!;
+  const taxeCumulee = origine.montantTotal > 0 ? Math.round(((dejaCredite.total + montantTotal) * origine.montantTaxe) / origine.montantTotal) : 0;
+  const montantTaxe = taxeCumulee - dejaCredite.taxe;
 
   const factureAvoir = db
     .insert(schema.facture)

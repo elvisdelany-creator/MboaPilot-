@@ -105,15 +105,49 @@ describe("exporterJournalVentesCsv", () => {
     expect(exporterJournalVentesCsv(db, siteId, { du: "2026-11-30", au: "2026-11-30" }).nombre).toBe(1);
   });
 
-  it("montre un avoir en négatif, avec la facture qu'il corrige", () => {
+  // le remboursement d'un avoir s'enregistre sur la facture d'ORIGINE (constaté en test grandeur nature) : c'est elle qui l'a encaissée
+  it("montre un avoir en négatif, avec la facture qu'il corrige ; il n'est jamais une dette", () => {
     const origine = facture();
+    paiement(origine.idFacture, { montant: 11900 });
     const avoir = facture({ type: "AVOIR", factureOrigineId: origine.idFacture, montantTotal: -2500, montantTaxe: -399, dateCreation: "2026-11-05 10:00:00" });
-    paiement(avoir.idFacture, { montant: -2500, datePaiement: "2026-11-05 10:01:00" });
+    paiement(origine.idFacture, { montant: -2500, datePaiement: "2026-11-05 10:01:00" });
 
     const ligne = lignes(exporterJournalVentesCsv(db, siteId, PERIODE).csv).find((l) => l[1] === String(avoir.idFacture))!;
 
     expect(ligne.slice(2, 4)).toEqual(["Avoir", String(origine.idFacture)]);
-    expect(ligne.slice(7)).toEqual(["-2500", "-399", "-2101", "-2500", "0"]);
+    expect(ligne.slice(7)).toEqual(["-2500", "-399", "-2101", "0", "0"]);
+  });
+
+  // « Reste à payer » suit la règle de l'application (solde = total + avoirs − encaissé) : une vente remboursée par avoir ne montre pas
+  // une dette que personne ne doit — constaté en test grandeur nature (vente de 10 000 payée puis intégralement remboursée : « reste 10 000 »)
+  it("une vente créditée par un avoir et remboursée n'est pas en reste", () => {
+    const origine = facture();
+    paiement(origine.idFacture, { montant: 11900 });
+    facture({ type: "AVOIR", factureOrigineId: origine.idFacture, montantTotal: -2500, montantTaxe: -399, dateCreation: "2026-11-05 10:00:00" });
+    paiement(origine.idFacture, { montant: -2500, datePaiement: "2026-11-05 10:01:00" });
+
+    const ligne = lignes(exporterJournalVentesCsv(db, siteId, PERIODE).csv).find((l) => l[1] === String(origine.idFacture))!;
+
+    expect(ligne.slice(7)).toEqual(["11900", "1900", "10000", "9400", "0"]);
+  });
+
+  it("un avoir émis le mois suivant corrige quand même le reste à payer de la vente exportée", () => {
+    const origine = facture();
+    facture({ type: "AVOIR", factureOrigineId: origine.idFacture, montantTotal: -11900, montantTaxe: -1900, dateCreation: "2026-12-04 10:00:00" });
+
+    const ligne = lignes(exporterJournalVentesCsv(db, siteId, PERIODE).csv).find((l) => l[1] === String(origine.idFacture))!;
+
+    expect(ligne[11]).toBe("0");
+  });
+
+  it("un avoir non remboursé laisse un crédit client : le reste à payer de la vente est négatif", () => {
+    const origine = facture();
+    paiement(origine.idFacture, { montant: 11900 });
+    facture({ type: "AVOIR", factureOrigineId: origine.idFacture, montantTotal: -2500, montantTaxe: -399, dateCreation: "2026-11-05 10:00:00" });
+
+    const ligne = lignes(exporterJournalVentesCsv(db, siteId, PERIODE).csv).find((l) => l[1] === String(origine.idFacture))!;
+
+    expect(ligne[11]).toBe("-2500");
   });
 
   it("neutralise un nom de client qui commencerait comme une formule de tableur", () => {

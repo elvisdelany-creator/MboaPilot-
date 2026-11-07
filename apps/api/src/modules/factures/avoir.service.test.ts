@@ -197,7 +197,8 @@ describe("creerAvoir (6.4)", () => {
   // 3.2.3, 6.1, 8.8 : "porte le total, la TVA/taxes le cas échéant" — le
   // montant de taxe crédité est négatif, comme le montant total de l'avoir
   it("persiste un montant de taxe négatif, proportionnel au montant crédité", () => {
-    db.update(schema.entreprise).set({ tauxTva: 2000 }).run(); // 20 %
+    // la vente de départ (12 500 TTC) a été facturée à 20 % : 2 083 de TVA, figés sur la facture
+    db.update(schema.facture).set({ montantTaxe: 2083 }).where(eq(schema.facture.idFacture, idFactureValidee)).run();
 
     const resultat = creerAvoir(db, {
       idFactureOrigine: idFactureValidee,
@@ -208,6 +209,43 @@ describe("creerAvoir (6.4)", () => {
 
     const factureAvoir = db.select().from(schema.facture).where(eq(schema.facture.idFacture, resultat.idFactureAvoir)).get();
     expect(factureAvoir?.montantTaxe).toBe(-1250); // -7500 TTC -> HT -6250, taxe -1250
+  });
+
+  // Un avoir corrige une facture : il reprend la TVA de CETTE facture. Au taux en vigueur le jour de l'avoir, un changement de taux
+  // entre la vente et le retour faisait créditer une autre TVA que celle facturée — et une vente faite sans TVA (taux alors non
+  // configuré) en recevait une à l'avoir, une TVA jamais collectée.
+  describe("TVA d'un avoir (3.2.3, 6.1)", () => {
+    const creditTout = () =>
+      creerAvoir(db, {
+        idFactureOrigine: idFactureValidee,
+        lignes: [{ idLigneOrigine: idLigneProduitSuivi, quantite: 3 }, { idLigneOrigine: idLigneSansStock, quantite: 1 }],
+        restituerStock: false,
+        userId,
+      });
+    const taxeAvoir = (id: number) => db.select().from(schema.facture).where(eq(schema.facture.idFacture, id)).get()!.montantTaxe;
+
+    it("un avoir total annule exactement la TVA de la vente, même si le taux a changé depuis", () => {
+      db.update(schema.facture).set({ montantTaxe: 2083 }).where(eq(schema.facture.idFacture, idFactureValidee)).run(); // facturée à 20 %
+      db.update(schema.entreprise).set({ tauxTva: 1000 }).run(); // le taux passe ensuite à 10 %
+
+      expect(taxeAvoir(creditTout().idFactureAvoir)).toBe(-2083);
+    });
+
+    it("ne crédite aucune TVA si la vente n'en portait pas, même si un taux est configuré depuis", () => {
+      db.update(schema.entreprise).set({ tauxTva: 2000 }).run(); // configuré APRÈS la vente (qui a 0 de TVA)
+
+      expect(taxeAvoir(creditTout().idFactureAvoir)).toBe(0);
+    });
+
+    it("des avoirs partiels successifs créditent au total exactement la TVA de la vente, sans écart d'arrondi", () => {
+      db.update(schema.facture).set({ montantTaxe: 2083 }).where(eq(schema.facture.idFacture, idFactureValidee)).run();
+      const unParUn = [idLigneProduitSuivi, idLigneProduitSuivi, idLigneProduitSuivi, idLigneSansStock].map((idLigneOrigine) =>
+        taxeAvoir(creerAvoir(db, { idFactureOrigine: idFactureValidee, lignes: [{ idLigneOrigine, quantite: 1 }], restituerStock: false, userId }).idFactureAvoir)
+      );
+
+      expect(unParUn.every((t) => t <= 0)).toBe(true);
+      expect(unParUn.reduce((a, b) => a + b, 0)).toBe(-2083);
+    });
   });
 });
 

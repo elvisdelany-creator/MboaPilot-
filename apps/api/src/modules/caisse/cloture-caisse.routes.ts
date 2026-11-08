@@ -6,6 +6,7 @@ import { siteAutorise } from "../auth/auth.plugin.js";
 import * as schema from "../../db/schema.js";
 import { fermerCaisse, listerClotures, obtenirClotureOuverte, obtenirComptagesCloture, ouvrirCaisse, type ComptageInput } from "./cloture-caisse.service.js";
 import { envoyerErreur } from "../../lib/erreurs-api.js";
+import { sauvegarderApresCloture } from "../sauvegarde/sauvegarde.service.js";
 
 const ERREUR_SITE_CLOTURE = { erreur: "Cette session de caisse n'appartient pas à votre site" };
 
@@ -13,7 +14,7 @@ const ERREUR_SITE_CLOTURE = { erreur: "Cette session de caisse n'appartient pas 
 // accessible aux rôles de vente qui démarrent un service ; la fermeture
 // (comptage et validation de l'écart théorique/réel) est réservée à
 // l'encadrement, comme les autres contrôles financiers (avoirs, stock).
-export function registerClotureCaisseRoutes(app: FastifyInstance, db: Db, guards: { authRequis: Guard; ventes: Guard; validationCloture: Guard }) {
+export function registerClotureCaisseRoutes(app: FastifyInstance, db: Db, guards: { authRequis: Guard; ventes: Guard; validationCloture: Guard }, options: { dossierSauvegardes?: string } = {}) {
   app.get(
     "/api/v1/cloture-caisse/ouverte",
     { preHandler: [guards.authRequis, guards.ventes] },
@@ -73,6 +74,15 @@ export function registerClotureCaisseRoutes(app: FastifyInstance, db: Db, guards
           userId: request.body.userId,
           comptages: request.body.comptages,
         });
+        // fin de journée : la sauvegarde du matin ne contient rien de la journée (2.6). Jamais bloquante : un disque plein ou une clé USB
+        // retirée ne doit pas empêcher de clôturer la caisse, l'erreur est journalisée et la sauvegarde quotidienne suivante reprend.
+        if (options.dossierSauvegardes) {
+          try {
+            sauvegarderApresCloture(db, options.dossierSauvegardes);
+          } catch (erreur) {
+            console.error("Sauvegarde de fin de journée en échec — la clôture est enregistrée :", erreur);
+          }
+        }
         reply.code(200).send(resultat);
       } catch (erreur) {
         envoyerErreur(reply, erreur);

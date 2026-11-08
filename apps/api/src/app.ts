@@ -188,7 +188,8 @@ export function buildApp(db: Db, options: BuildAppOptions) {
   // 10.4 : état de la licence éditeur, consultable par tout utilisateur connecté
   registerLicenceRoutes(app, db, { authRequis, admin });
   // 13.1 : clôture de caisse quotidienne (fond d'ouverture, comptage, écart théorique/réel)
-  registerClotureCaisseRoutes(app, db, { authRequis, ventes, validationCloture });
+  // la sauvegarde de fin de journée n'a lieu que si le dossier est fourni (le serveur le fait) : un test qui ne le donne pas n'écrit jamais dans les vraies données
+  registerClotureCaisseRoutes(app, db, { authRequis, ventes, validationCloture }, { dossierSauvegardes: options.dossierSauvegardes });
   // 11.4, 6.7 : impression ESC/POS du ticket sur l'imprimante réseau du site, si configurée
   registerImpressionRoutes(app, db, fournisseurImpression, { authRequis, ventes });
   // 13.1 : fiche de vérification publique d'une facture (QR code) — sans authentification

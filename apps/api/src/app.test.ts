@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import type { FastifyInstance } from "fastify";
 import { eq } from "drizzle-orm";
-import { mkdtempSync, readdirSync, rmSync } from "node:fs";
+import { mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import Database from "better-sqlite3";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { jourDouala } from "@mboapilot/shared";
@@ -4780,6 +4781,58 @@ describe("Clôture de caisse quotidienne (13.1)", () => {
     expect(corps.cloture.ecartTotal).toBe(0); // 20000 (fond) + 13000 (vente) = 33000 compté
     const cash = corps.comptages.find((c: { mode: string }) => c.mode === "CASH");
     expect(cash.montantTheorique).toBe(33000);
+  });
+
+  // Constaté en test grandeur nature : l'unique sauvegarde automatique du jour est faite au démarrage du serveur ; après une journée de
+  // ventes elle ne contenait rien de la journée. La clôture, fin de journée naturelle, déclenche donc une sauvegarde.
+  describe("sauvegarde de fin de journée", () => {
+    let dossierSauvegardes: string;
+    beforeEach(() => {
+      dossierSauvegardes = mkdtempSync(join(tmpdir(), "mboapilot-test-cloture-sauvegarde-"));
+    });
+    afterEach(() => {
+      rmSync(dossierSauvegardes, { recursive: true, force: true });
+    });
+
+    async function ouvrirVendreCloturer(dossier: string) {
+      const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST, dossierSauvegardes: dossier });
+      const tokenCaissier = await connecter(app);
+      creerUtilisateur(db, { siteId, nom: "Ger", prenom: "F", identifiant: "gerant1", motDePasse: "motdepasse-secret", role: "GERANT" });
+      const tokenGerant = await connecter(app, "gerant1");
+      const { idCloture } = (await app.inject({ method: "POST", url: "/api/v1/cloture-caisse/ouvrir", headers: authHeader(tokenCaissier), payload: { siteId, userId, fondOuverture: 20000 } })).json();
+      await app.inject({
+        method: "POST",
+        url: "/api/v1/recrutements",
+        headers: authHeader(tokenCaissier),
+        payload: { siteId, userId, aujourdHui: "2025-11-16", abonne: { nom: "Nga", prenom: "Paul", telephone: "690000000" }, idFormule, montantEncaisse: 13000 },
+      });
+      return app.inject({ method: "POST", url: `/api/v1/cloture-caisse/${idCloture}/fermer`, headers: authHeader(tokenGerant), payload: { userId, comptages: [{ mode: "CASH", montantCompte: 33000 }] } });
+    }
+
+    it("clôturer la caisse sauvegarde les données de la journée, y compris la clôture elle-même", async () => {
+      const fermeture = await ouvrirVendreCloturer(dossierSauvegardes);
+
+      expect(fermeture.statusCode).toBe(200);
+      const fichiers = readdirSync(dossierSauvegardes);
+      expect(fichiers).toHaveLength(1);
+      const copie = new Database(join(dossierSauvegardes, fichiers[0]), { readonly: true });
+      try {
+        expect((copie.prepare("select count(*) n from paiement").get() as { n: number }).n).toBe(1);
+        expect((copie.prepare("select statut from cloture_caisse").get() as { statut: string }).statut).toBe("FERMEE");
+      } finally {
+        copie.close();
+      }
+    });
+
+    it("une sauvegarde impossible (dossier inaccessible) ne fait jamais échouer la clôture", async () => {
+      const fichierBloquant = join(dossierSauvegardes, "pas-un-dossier");
+      writeFileSync(fichierBloquant, "x");
+
+      const fermeture = await ouvrirVendreCloturer(join(fichierBloquant, "sous-dossier"));
+
+      expect(fermeture.statusCode).toBe(200);
+      expect(fermeture.json().cloture.statut).toBe("FERMEE");
+    });
   });
 
   it("un caissier ne peut pas clôturer la caisse (403) — validation réservée à l'encadrement", async () => {

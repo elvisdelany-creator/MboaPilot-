@@ -585,7 +585,7 @@ export function ClientsPage({ onNaviguer, onReabonnerDepuisFiche }: Props) {
                                       {peutGererRapprochement && p.statutRapprochement === "EN_ATTENTE" && (
                                         <button
                                           type="button"
-                                          className="no-print cursor-pointer text-xs text-muted-foreground underline-offset-2 hover:text-card-foreground hover:underline"
+                                          className="no-print inline-flex h-8 cursor-pointer items-center px-2 text-xs text-muted-foreground underline-offset-2 hover:text-card-foreground hover:underline"
                                           onClick={() => setRapprochementCible(p)}
                                         >
                                           Confirmer le rapprochement
@@ -594,7 +594,7 @@ export function ClientsPage({ onNaviguer, onReabonnerDepuisFiche }: Props) {
                                       {peutEmettreAvoir && (
                                         <button
                                           type="button"
-                                          className="no-print cursor-pointer text-xs text-muted-foreground underline-offset-2 hover:text-destructive hover:underline"
+                                          className="no-print inline-flex h-8 cursor-pointer items-center px-2 text-xs text-muted-foreground underline-offset-2 hover:text-destructive hover:underline"
                                           onClick={() => setPaiementCible(p)}
                                         >
                                           Annuler
@@ -612,7 +612,7 @@ export function ClientsPage({ onNaviguer, onReabonnerDepuisFiche }: Props) {
                                       <Button
                                         variant="link"
                                         size="sm"
-                                        className="no-print h-auto w-fit cursor-pointer gap-1 p-0 text-xs"
+                                        className="no-print h-8 w-fit cursor-pointer gap-1 px-2 text-xs"
                                         onClick={() => setSoldeCible(f)}
                                       >
                                         <Wallet className="size-3" />
@@ -637,7 +637,7 @@ export function ClientsPage({ onNaviguer, onReabonnerDepuisFiche }: Props) {
                                   <Button
                                     variant="link"
                                     size="sm"
-                                    className="no-print h-auto w-fit cursor-pointer gap-1 self-start p-0 text-xs text-muted-foreground"
+                                    className="no-print h-8 w-fit cursor-pointer gap-1 self-start px-2 text-xs text-muted-foreground"
                                     onClick={() => setAvoirCible(f)}
                                   >
                                     <ReceiptText className="size-3" />

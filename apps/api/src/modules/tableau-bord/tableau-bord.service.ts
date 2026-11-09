@@ -65,6 +65,8 @@ export function calculerIndicateursJour(db: Db, siteId: number, aujourdHui: stri
   return {
     chiffreAffairesJour,
     margeEstimeeJour,
+    // le nom date des jalons par défaut (7 jours) : le compteur est celui de la liste « Abonnements à échéance », donc il suit le
+    // jalon anticipé réglé en Paramètres ; l'écran l'intitule « Échéances à traiter », pas « < 7 j »
     nombreEcheances7j: listerAlertesEcheance(db, siteId, aujourdHui).length,
     nombreAlertesStock: listerAlertesStock(db, siteId).length,
   };

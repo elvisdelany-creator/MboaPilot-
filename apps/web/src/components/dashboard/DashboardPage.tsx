@@ -233,7 +233,7 @@ export function DashboardPage({ onNaviguer, onReabonnerDepuisAlerte, onReabonner
                 <p className="text-xl font-semibold tabular-nums text-card-foreground">{formateurFcfa.format(indicateurs.margeEstimeeJour)}</p>
               </Card>
               <Card className="gap-1 p-4">
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Échéances &lt; 7 j</p>
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Échéances à traiter</p>
                 <p className="text-xl font-semibold tabular-nums text-card-foreground">{indicateurs.nombreEcheances7j}</p>
               </Card>
               <Card className="gap-1 p-4">

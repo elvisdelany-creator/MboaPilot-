@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { messageRelanceEcheance } from "./message-relance.js";
+import { delaiEcheance, messageRelanceEcheance } from "./message-relance.js";
 
 const base = { entreprise: "Boutique Akwa", libelleAbonnement: "CANAL+ EVASION", numeroAbonnement: 12, dateFin: "30/10/2026" };
 
@@ -44,5 +44,21 @@ describe("messageRelanceEcheance", () => {
     for (const [jours, rang] of [[7, 3], [3, 2], [1, 1], [0, 1]] as const) {
       expect(messageRelanceEcheance({ ...base, joursRestants: jours, rang }).length).toBeLessThanOrEqual(160);
     }
+  });
+});
+
+// le tableau de bord disait « dans 3 jours » pour un abonnement qui finit demain-après-demain : le palier d'alerte (J-7/J-3/J-1)
+// n'est pas le nombre de jours restants, et c'est ce dernier que le gérant répète au client au téléphone
+describe("delaiEcheance", () => {
+  it("dit le délai réel, en clair", () => {
+    expect(delaiEcheance(0)).toBe("aujourd'hui");
+    expect(delaiEcheance(1)).toBe("demain");
+    expect(delaiEcheance(2)).toBe("dans 2 jours");
+    expect(delaiEcheance(5)).toBe("dans 5 jours");
+    expect(delaiEcheance(7)).toBe("dans 7 jours");
+  });
+
+  it("une échéance déjà dépassée n'est jamais présentée comme à venir", () => {
+    expect(delaiEcheance(-1)).toBe("aujourd'hui");
   });
 });

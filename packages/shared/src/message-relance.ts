@@ -7,7 +7,9 @@ export interface DonneesRelanceEcheance {
   rang: 1 | 2 | 3; // jalon atteint : 1 = le plus urgent
 }
 
-function quand(joursRestants: number): string {
+// le délai réel avant l'échéance, tel qu'on le dit à un client : « aujourd'hui », « demain », « dans 5 jours ». Sert au SMS comme au
+// tableau de bord (le palier d'alerte J-7/J-3/J-1 n'est pas le nombre de jours restants : à 5 jours de l'échéance, le palier est 7)
+export function delaiEcheance(joursRestants: number): string {
   if (joursRestants <= 0) return "aujourd'hui";
   if (joursRestants === 1) return "demain";
   return `dans ${joursRestants} jours`;
@@ -25,7 +27,7 @@ const TON: Record<1 | 2 | 3, { introduction: string; invitation: string }> = {
 export function messageRelanceEcheance(donnees: DonneesRelanceEcheance): string {
   const { introduction, invitation } = TON[donnees.rang];
   const boutique = donnees.entreprise.trim();
-  const phrase = `${introduction}votre abonnement ${donnees.libelleAbonnement} n°${donnees.numeroAbonnement} arrive à échéance ${quand(donnees.joursRestants)} (${donnees.dateFin}).`;
+  const phrase = `${introduction}votre abonnement ${donnees.libelleAbonnement} n°${donnees.numeroAbonnement} arrive à échéance ${delaiEcheance(donnees.joursRestants)} (${donnees.dateFin}).`;
   const texte = boutique ? `${boutique} : ${phrase}` : phrase.charAt(0).toUpperCase() + phrase.slice(1);
   return `${texte} ${invitation}`;
 }

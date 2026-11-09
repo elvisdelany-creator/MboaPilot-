@@ -31,7 +31,7 @@ export { AIDE_IDENTIFIANT_CONNEXION, erreurIdentifiantConnexion, normaliserIdent
 export { soldeFacture, soldeTotalDu, type FactureSolde, type PaiementSolde } from "./solde-facture.js";
 export { plafondRemiseCaissier } from "./plafond-remise.js";
 export { ligneAvecRemise, type LigneMontant } from "./lignes-remise.js";
-export { messageRelanceEcheance, type DonneesRelanceEcheance } from "./message-relance.js";
+export { delaiEcheance, messageRelanceEcheance, type DonneesRelanceEcheance } from "./message-relance.js";
 export { creerVerrouSoumission } from "./verrou-soumission.js";
 export { messageStockInsuffisant, peutAjouterAuPanier } from "./stock-vendable.js";
 export { causeModeDegrade, DELAI_GRACE_LICENCE_JOURS, messageModeDegrade, type CauseModeDegrade } from "./message-licence.js";

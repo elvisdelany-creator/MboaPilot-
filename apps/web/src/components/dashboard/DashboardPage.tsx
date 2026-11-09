@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { peutAccederVue, type RoleUtilisateur, jourDouala, lireDateServeur } from "@mboapilot/shared";
+import { delaiEcheance, peutAccederVue, type RoleUtilisateur, jourDouala, lireDateServeur } from "@mboapilot/shared";
 import { AlertTriangle, History, PackageX, RotateCw, TrendingDown, Users } from "lucide-react";
 import {
   chargerAbonnementsExpires,
@@ -66,8 +66,9 @@ const STYLE_JALON: Record<1 | 2 | 3, string> = {
   3: "bg-alert-j7-bg text-alert-j7-fg",
 };
 
-function libelleJalon(jours: number): string {
-  return jours === 1 ? "Échéance demain" : `Échéance dans ${jours} jours`;
+// le palier (J-7, J-3, J-1) classe l'urgence ; le délai affiché est le délai réel, celui que le gérant répète au client au téléphone
+function libelleEcheance(joursRestants: number): string {
+  return `Échéance ${delaiEcheance(joursRestants)}`;
 }
 
 const LIBELLE_MODE_PAIEMENT: Record<ModePaiement, string> = {
@@ -517,7 +518,7 @@ export function DashboardPage({ onNaviguer, onReabonnerDepuisAlerte, onReabonner
                         {alerte.abonne.prenom} {alerte.abonne.nom}
                       </p>
                       <p className="text-sm text-muted-foreground">
-                        {libelleJalon(alerte.jalon)} · {alerte.formule.libelle} · {alerte.abonne.telephone}
+                        {libelleEcheance(alerte.joursRestants)} · {alerte.formule.libelle} · {alerte.abonne.telephone}
                       </p>
                     </div>
                   </div>

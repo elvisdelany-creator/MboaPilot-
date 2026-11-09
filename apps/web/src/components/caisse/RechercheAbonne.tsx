@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { LIMITE_RESULTATS_RECHERCHE_ABONNES, MESSAGE_FORME_TELEPHONE, memeTelephone, telephoneValide } from "@mboapilot/shared";
 import { Search, UserPlus, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -31,6 +31,8 @@ export function RechercheAbonne({ siteId, abonneSelectionne, onSelectionner }: P
   const [verificationEnCours, setVerificationEnCours] = useState(false);
   const [idApporteur, setIdApporteur] = useState(AUCUN_APPORTEUR);
   const [apporteurs, setApporteurs] = useState<Apporteur[]>([]);
+  const champRecherche = useRef<HTMLInputElement>(null);
+  const boutonsResultats = useRef<(HTMLButtonElement | null)[]>([]);
 
   // recherche unifiée (4.5) — débounce simple pour ne pas spammer l'API à chaque frappe
   useEffect(() => {
@@ -53,6 +55,12 @@ export function RechercheAbonne({ siteId, abonneSelectionne, onSelectionner }: P
       .then(setApporteurs)
       .catch(() => setApporteurs([]));
   }, [formulaireOuvert, session]);
+
+  function choisirAbonne(abonne: Abonne) {
+    onSelectionner(abonne);
+    setTerme("");
+    setResultats([]);
+  }
 
   function fermerFormulaire() {
     setFormulaireOuvert(false);
@@ -118,8 +126,21 @@ export function RechercheAbonne({ siteId, abonneSelectionne, onSelectionner }: P
         <div className="relative flex-1">
           <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
+            ref={champRecherche}
             value={terme}
             onChange={(e) => setTerme(e.target.value)}
+            // au clavier, Tab arrivait sur « Nouveau client » (qui précède la liste dans la page) : Tab puis Entrée ouvrait la création
+            // d'un client au lieu de choisir celui qu'on venait de trouver. Flèche bas descend dans la liste ; Entrée choisit le résultat
+            // quand il n'y en a qu'un (un numéro de téléphone tapé en entier, le cas courant).
+            onKeyDown={(e) => {
+              if (e.key === "ArrowDown" && resultats.length > 0) {
+                e.preventDefault();
+                boutonsResultats.current[0]?.focus();
+              } else if (e.key === "Enter" && resultats.length === 1) {
+                e.preventDefault();
+                choisirAbonne(resultats[0]);
+              }
+            }}
             placeholder="Rechercher un abonné (nom, téléphone, n° abonné)…"
             className="h-11 pl-9 text-base"
             aria-label="Rechercher un abonné"
@@ -138,15 +159,24 @@ export function RechercheAbonne({ siteId, abonneSelectionne, onSelectionner }: P
 
       {resultats.length > 0 && (
         <ul className="absolute z-20 mt-1 w-full overflow-hidden rounded-lg border border-border bg-popover shadow-lg">
-          {resultats.map((abonne) => (
+          {resultats.map((abonne, index) => (
             <li key={abonne.idAbonne}>
               <button
                 type="button"
+                ref={(el) => {
+                  boutonsResultats.current[index] = el;
+                }}
                 className="flex w-full cursor-pointer flex-col items-start px-4 py-2.5 text-left hover:bg-muted"
-                onClick={() => {
-                  onSelectionner(abonne);
-                  setTerme("");
-                  setResultats([]);
+                onClick={() => choisirAbonne(abonne)}
+                onKeyDown={(e) => {
+                  // flèches entre les résultats ; Échap ou Flèche haut depuis le premier revient au champ
+                  if (e.key === "ArrowDown") {
+                    e.preventDefault();
+                    boutonsResultats.current[index + 1]?.focus();
+                  } else if (e.key === "ArrowUp" || e.key === "Escape") {
+                    e.preventDefault();
+                    (index === 0 || e.key === "Escape" ? champRecherche.current : boutonsResultats.current[index - 1])?.focus();
+                  }
                 }}
               >
                 <span className="font-medium text-popover-foreground">

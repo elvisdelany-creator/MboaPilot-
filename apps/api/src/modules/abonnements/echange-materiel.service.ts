@@ -8,6 +8,7 @@ import { creerPaiement } from "../factures/paiement.repository.js";
 import { verifierBooleen, verifierEncaissementSaisi } from "../../lib/validation.js";
 import { texteFacultatif, texteObligatoire } from "../../lib/champs-texte.js";
 import { dernierIdHistorique, enregistrerOperationEnAttente, etatAbonnement } from "./operation-en-attente.repository.js";
+import { exigerNumeroSerieLibre } from "./numero-serie.js";
 
 export interface EchangerMaterielParams {
   siteId: number;
@@ -68,6 +69,8 @@ function echangerMaterielSansTransaction(db: Db, params: EchangerMaterielParams)
   if (!produit) throw new Error(`Produit ${params.idProduit} introuvable`);
   // 2.5.2 : le matériel de remplacement sort du stock de CE site — le produit d'une autre boutique est refusé
   if (produit.siteId !== params.siteId) throw new Error("Ce produit n'appartient pas à ce site");
+  // un décodeur ne peut pas être chez deux clients : la série du remplacement ne doit être active sur aucun autre abonnement
+  exigerNumeroSerieLibre(db, params.numeroSerie, params.numeroAbonnement);
 
   const ancienMateriel = db
     .select()

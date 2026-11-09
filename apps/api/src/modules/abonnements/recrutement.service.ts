@@ -10,6 +10,7 @@ import { exigerRemiseAutorisee, trouverTauxCommissionVendeurParSite, trouverTaux
 import { decrementerComposantsKit } from "../stock/stock.service.js";
 import { creerPaiement } from "../factures/paiement.repository.js";
 import { creerSuiviCommissionCanalplus } from "./suivi-commission-canalplus.repository.js";
+import { exigerNumeroSerieLibre, normaliserNumeroSerie } from "./numero-serie.js";
 import { verifierEncaissementSaisi, verifierTotalAttendu } from "../../lib/validation.js";
 
 export interface RecruterAbonneParams {
@@ -184,8 +185,10 @@ function recruterAbonneSansTransaction(db: Db, params: RecruterAbonneParams): Re
     // 3.2.2, 7.1 : matériel effectivement installé (décodeur/carte d'accès)
     // — capturé dès le premier équipement, pas seulement lors d'un échange
     // ultérieur (7.3, echange-materiel.service.ts)
+    const numeroSerie = normaliserNumeroSerie(params.numeroSerie);
+    exigerNumeroSerieLibre(db, numeroSerie, abonnement.numeroAbonnement);
     db.insert(schema.materielAbonne)
-      .values({ numeroAbonnement: abonnement.numeroAbonnement, typeMateriel: params.typeMateriel ?? "DECODEUR", numeroSerie: params.numeroSerie })
+      .values({ numeroAbonnement: abonnement.numeroAbonnement, typeMateriel: params.typeMateriel ?? "DECODEUR", numeroSerie })
       .run();
   }
 

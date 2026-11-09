@@ -3,6 +3,7 @@ import { evaluerExpiration } from "@mboapilot/shared";
 import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
 import { creerAbonne, type AbonneInput } from "../abonnes/abonne.repository.js";
+import { exigerNumeroSerieLibre, normaliserNumeroSerie } from "./numero-serie.js";
 import { exigerComptePartageDisponible } from "../comptes-partages/compte-partage.repository.js";
 import { exigerApporteurActif } from "../apporteurs/apporteur.repository.js";
 
@@ -90,9 +91,11 @@ export function reprendreAbonneExistant(db: Db, params: ReprendreAbonneParams): 
       .returning()
       .get();
 
-    if (params.numeroSerie !== undefined && params.numeroSerie.trim() !== "") {
+    const numeroSerie = normaliserNumeroSerie(params.numeroSerie);
+    if (numeroSerie) {
+      exigerNumeroSerieLibre(db, numeroSerie, abonnement.numeroAbonnement);
       db.insert(schema.materielAbonne)
-        .values({ numeroAbonnement: abonnement.numeroAbonnement, typeMateriel: params.typeMateriel ?? "DECODEUR", numeroSerie: params.numeroSerie.trim() })
+        .values({ numeroAbonnement: abonnement.numeroAbonnement, typeMateriel: params.typeMateriel ?? "DECODEUR", numeroSerie })
         .run();
     }
 

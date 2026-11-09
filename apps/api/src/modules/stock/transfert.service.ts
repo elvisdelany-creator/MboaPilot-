@@ -40,6 +40,8 @@ function transfererStockSansTransaction(db: Db, params: TransfererStockParams): 
   if (!siteDestination) throw new Error(`Site ${params.siteDestinationId} introuvable`);
 
   if (source.siteId === params.siteDestinationId) throw new Error("Le site de destination doit être différent du site source");
+  // l'écran ne propose que les sites actifs : le serveur l'impose aussi (un article ne se crée pas dans une boutique fermée)
+  if (siteDestination.actif !== 1) throw new Error(`Le site « ${siteDestination.nom} » est désactivé : il ne peut pas recevoir de stock`);
 
   // 8.2 : même repère qu'à l'import CSV — un article retapé sans accent au
   // site destination ne doit pas créer un doublon (comparaison en JS, la

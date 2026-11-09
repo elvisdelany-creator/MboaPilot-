@@ -199,4 +199,16 @@ describe("transfererStock (5.2, 8.2)", () => {
   it("rejette un site destination inconnu", () => {
     expect(() => transfererStock(db, { idProduitSource, siteDestinationId: 999999, quantite: 1, userId })).toThrow(/introuvable/i);
   });
+
+  // constaté en test grandeur nature : l'écran ne propose que les sites actifs, mais l'API acceptait un transfert vers un site désactivé
+  // (201) — un article était créé, et du stock envoyé, dans une boutique fermée
+  it("rejette un transfert vers un site désactivé, sans rien écrire", () => {
+    db.update(schema.site).set({ actif: 0 }).where(eq(schema.site.idSite, siteDestination)).run();
+
+    expect(() => transfererStock(db, { idProduitSource, siteDestinationId: siteDestination, quantite: 2, userId })).toThrow(/désactivé/i);
+
+    expect(db.select().from(schema.produit).where(eq(schema.produit.siteId, siteDestination)).all()).toHaveLength(0);
+    expect(db.select().from(schema.stockMouvement).all()).toHaveLength(0);
+    expect(db.select().from(schema.produit).where(eq(schema.produit.idProduit, idProduitSource)).get()!.quantiteStock).toBe(10);
+  });
 });

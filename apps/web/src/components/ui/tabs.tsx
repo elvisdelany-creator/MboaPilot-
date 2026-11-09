@@ -24,8 +24,10 @@ function TabsList({
     <TabsPrimitive.List
       data-slot="tabs-list"
       className={cn(
-        // max-w-full + overflow-x-auto : sur petit écran la rangée d'onglets défile dans son cadre au lieu de déborder de la page
-        "inline-flex h-9 w-fit max-w-full items-center justify-start overflow-x-auto rounded-lg bg-muted p-1 text-muted-foreground",
+        // max-w-full + overflow-x-auto : sur petit écran la rangée d'onglets défile dans son cadre au lieu de déborder de la page.
+        // min-h-9 et non h-9 : avec une hauteur fixe, la barre de défilement (15 px dans un navigateur de bureau) rognait la hauteur utile
+        // et coupait les onglets ; la hauteur libre la laisse s'ajouter sous eux.
+        "inline-flex min-h-9 w-fit max-w-full items-center justify-start overflow-x-auto rounded-lg bg-muted p-1 text-muted-foreground",
         className
       )}
       {...props}

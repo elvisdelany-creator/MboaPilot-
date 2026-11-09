@@ -28,7 +28,7 @@ import {
   soldeTotalDu,
   LIMITE_RESULTATS_RECHERCHE_ABONNES,
 } from "@mboapilot/shared";
-import { chargerCatalogue, chargerDossierSav, chargerFiche360, rechercherAbonnes, ErreurAuthentification } from "@/lib/api";
+import { chargerCatalogue, chargerDossierSav, chargerFiche360, chargerInfosEntreprise, chargerRecuFacture, chargerUrlLogoEntreprise, rechercherAbonnes, ErreurAuthentification } from "@/lib/api";
 import { useDefilerVersDetail } from "@/lib/defiler-vers-detail";
 import { useAuth } from "@/lib/auth-context";
 import { AppHeader, type Vue } from "@/components/layout/AppHeader";
@@ -40,6 +40,7 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { EchangeMaterielDialog } from "@/components/caisse/EchangeMaterielDialog";
 import { ChangerFormuleDialog } from "@/components/caisse/ChangerFormuleDialog";
+import { RecuVentePrintable, type RecuVente } from "@/components/caisse/RecuVentePrintable";
 import { ChangerStatutDialog } from "@/components/sav/ChangerStatutDialog";
 import { AjouterPieceDialog } from "@/components/sav/AjouterPieceDialog";
 import { ModifierAbonneDialog } from "./ModifierAbonneDialog";
@@ -51,7 +52,7 @@ import { AnnulerPaiementDialog } from "./AnnulerPaiementDialog";
 import { ResilierAbonnementDialog } from "./ResilierAbonnementDialog";
 import { ReprendreAbonneDialog } from "./ReprendreAbonneDialog";
 import { ConfirmerRapprochementDialog } from "./ConfirmerRapprochementDialog";
-import type { Abonne, AbonnementAvecFormule, CatalogueFamille, DossierSavDetaille, Facture, Fiche360, Paiement } from "@/lib/types";
+import type { Abonne, AbonnementAvecFormule, CatalogueFamille, DossierSavDetaille, Facture, Fiche360, InfosEntreprise, Paiement } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 interface Props {
@@ -222,6 +223,47 @@ export function ClientsPage({ onNaviguer, onReabonnerDepuisFiche }: Props) {
   // 2.5.1 : "Comptable (lecture financière)" — aucune action de vente/encaissement
   const lectureSeule = utilisateur.role === "COMPTABLE";
 
+  // 6.7 : réimpression (DUPLICATA) du reçu d'une facture encaissée — un client qui a perdu son ticket. Le reçu, l'entreprise et le logo sont
+  // chargés à la demande : la fiche d'un client n'en a pas besoin tant que personne ne réimprime.
+  const [duplicata, setDuplicata] = useState<{ recu: RecuVente; infosEntreprise: InfosEntreprise | null; logoUrl: string | null; reimprimeLe: string } | null>(null);
+  const [reimpressionEnCours, setReimpressionEnCours] = useState<number | null>(null);
+  // onglet de la fiche mémorisé ici : le duplicata remplace la page, et « Fermer » doit ramener le caissier là où il était (Facturation)
+  const [ongletFiche, setOngletFiche] = useState("abonnements");
+
+  async function reimprimerRecu(idFacture: number) {
+    setReimpressionEnCours(idFacture);
+    try {
+      const [recuServeur, infosEntreprise, logoUrl] = await Promise.all([
+        chargerRecuFacture(token, idFacture),
+        chargerInfosEntreprise(token).catch(() => null),
+        chargerUrlLogoEntreprise(token).catch(() => null),
+      ]);
+      setDuplicata({
+        recu: {
+          operation: "Vente",
+          numeroAbonnement: recuServeur.numeroAbonnement,
+          lignes: recuServeur.lignes,
+          total: recuServeur.total,
+          montantTaxe: recuServeur.montantTaxe,
+          modePaiement: recuServeur.paiements[0]?.mode ?? "CASH",
+          montantEncaisse: recuServeur.paiements.reduce((somme, p) => somme + p.montant, 0),
+          dateHeure: recuServeur.dateHeure,
+          idFacture: recuServeur.idFacture,
+          jetonVerification: recuServeur.jetonVerification,
+          statutFacture: "VALIDEE",
+          paiements: recuServeur.paiements,
+        },
+        infosEntreprise,
+        logoUrl,
+        reimprimeLe: new Date().toISOString(),
+      });
+    } catch (erreur) {
+      gererErreur(erreur, "Impossible de réimprimer ce reçu.");
+    } finally {
+      setReimpressionEnCours(null);
+    }
+  }
+
   function trouverFormule(idFamille: number, idFormule: number) {
     return catalogue.find((f) => f.idFamille === idFamille)?.formules.find((fo) => fo.idFormule === idFormule) ?? null;
   }
@@ -244,6 +286,19 @@ export function ClientsPage({ onNaviguer, onReabonnerDepuisFiche }: Props) {
   // l'avoir a précisément pour but d'annuler.
   function soldeFacture(f: Facture) {
     return calculerSoldeFacture(f, fiche?.factures ?? [], fiche?.paiements ?? []);
+  }
+
+  // le reçu remplace la page, comme à la caisse : seul le ticket sort sur l'imprimante
+  if (duplicata) {
+    return (
+      <RecuVentePrintable
+        infosEntreprise={duplicata.infosEntreprise}
+        logoUrl={duplicata.logoUrl}
+        recu={duplicata.recu}
+        duplicata={{ reimprimeLe: duplicata.reimprimeLe }}
+        onNouvelleVente={() => setDuplicata(null)}
+      />
+    );
   }
 
   return (
@@ -374,7 +429,7 @@ export function ClientsPage({ onNaviguer, onReabonnerDepuisFiche }: Props) {
 
               <Separator />
 
-              <Tabs defaultValue="abonnements">
+              <Tabs value={ongletFiche} onValueChange={setOngletFiche}>
                 <TabsList className="no-print">
                   <TabsTrigger value="abonnements">Abonnements</TabsTrigger>
                   <TabsTrigger value="facturation">Facturation</TabsTrigger>
@@ -565,6 +620,18 @@ export function ClientsPage({ onNaviguer, onReabonnerDepuisFiche }: Props) {
                                       </Button>
                                     )}
                                   </div>
+                                )}
+                                {f.type === "VENTE" && f.statut === "VALIDEE" && !lectureSeule && (
+                                  <Button
+                                    variant="link"
+                                    size="sm"
+                                    className="no-print h-auto w-fit cursor-pointer gap-1 self-start p-0 text-xs text-muted-foreground"
+                                    disabled={reimpressionEnCours === f.idFacture}
+                                    onClick={() => reimprimerRecu(f.idFacture)}
+                                  >
+                                    <Printer className="size-3" />
+                                    {reimpressionEnCours === f.idFacture ? "Chargement…" : "Réimprimer le reçu"}
+                                  </Button>
                                 )}
                                 {peutEmettreAvoir && f.type === "VENTE" && f.statut === "VALIDEE" && (
                                   <Button

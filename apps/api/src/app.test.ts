@@ -6577,3 +6577,58 @@ describe("POST /api/v1/auth/renouveler : session glissante (11.2)", () => {
     expect((app.jwt.decode(reponse.json().token) as { idUser: number }).idUser).toBe(userId);
   });
 });
+
+// un client qui a perdu son ticket : le caissier réimprime le reçu d'une facture encaissée, avec la mention DUPLICATA côté écran
+describe("GET /api/v1/factures/:idFacture/recu (réimpression d'un reçu)", () => {
+  async function venteEncaissee() {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const token = await connecter(app);
+    const produit = db.insert(schema.produit).values({ siteId, type: "BIEN", libelle: "Câble HDMI", prixVente: 2500, coutRevient: 1000 }).returning().get();
+    const vente = await app.inject({ method: "POST", url: "/api/v1/ventes", headers: authHeader(token), payload: { lignes: [{ idProduit: produit.idProduit, quantite: 2 }], montantEncaisse: 5000 } });
+    expect(vente.statusCode).toBe(201);
+    return { app, token, idFacture: vente.json().idFacture as number };
+  }
+
+  it("un caissier obtient le reçu : lignes, total, paiements et jeton de vérification", async () => {
+    const { app, token, idFacture } = await venteEncaissee();
+
+    const reponse = await app.inject({ method: "GET", url: `/api/v1/factures/${idFacture}/recu`, headers: authHeader(token) });
+
+    expect(reponse.statusCode).toBe(200);
+    expect(reponse.json()).toMatchObject({ idFacture, total: 5000, lignes: [{ libelle: "Câble HDMI × 2", montant: 5000 }], paiements: [{ mode: "CASH", montant: 5000 }] });
+    expect(reponse.json().jetonVerification).toEqual(expect.any(String));
+  });
+
+  it("un comptable ne réimprime pas : lecture seule (403)", async () => {
+    const { app, idFacture } = await venteEncaissee();
+    creerUtilisateur(db, { siteId, nom: "Comptable", prenom: "C", identifiant: "compta1", motDePasse: "motdepasse-secret", role: "COMPTABLE" });
+    const tokenComptable = await connecter(app, "compta1");
+
+    const reponse = await app.inject({ method: "GET", url: `/api/v1/factures/${idFacture}/recu`, headers: authHeader(tokenComptable) });
+
+    expect(reponse.statusCode).toBe(403);
+  });
+
+  it("refuse la facture d'une autre boutique (403)", async () => {
+    const { app, token } = await venteEncaissee();
+    const idEntreprise = db.select().from(schema.site).where(eq(schema.site.idSite, siteId)).get()!.idEntreprise;
+    const autreSite = db.insert(schema.site).values({ idEntreprise, nom: "Site B" }).returning().get().idSite;
+    const autreFacture = db.insert(schema.facture).values({ siteId: autreSite, statut: "VALIDEE", montantTotal: 1000, creePar: userId }).returning().get().idFacture;
+
+    const reponse = await app.inject({ method: "GET", url: `/api/v1/factures/${autreFacture}/recu`, headers: authHeader(token) });
+
+    expect(reponse.statusCode).toBe(403);
+  });
+
+  it("une facture inconnue donne 404, une facture sans encaissement 400 : jamais un 500", async () => {
+    const { app, token } = await venteEncaissee();
+    const brouillon = db.insert(schema.facture).values({ siteId, statut: "BROUILLON", montantTotal: 1000, creePar: userId }).returning().get().idFacture;
+
+    const inconnue = await app.inject({ method: "GET", url: `/api/v1/factures/999999/recu`, headers: authHeader(token) });
+    const sansEncaissement = await app.inject({ method: "GET", url: `/api/v1/factures/${brouillon}/recu`, headers: authHeader(token) });
+
+    expect(inconnue.statusCode).toBe(404);
+    expect(sansEncaissement.statusCode).toBe(400);
+    expect(sansEncaissement.json().erreur).toMatch(/sans encaissement/);
+  });
+});

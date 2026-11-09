@@ -135,6 +135,23 @@ export async function chargerFiche360(token: string, idAbonne: number): Promise<
   return lireJson<Fiche360>(reponse);
 }
 
+// 6.7 : reçu d'une facture déjà encaissée, reconstitué par le serveur pour être réimprimé (DUPLICATA)
+export interface RecuFactureServeur {
+  idFacture: number;
+  dateHeure: string;
+  numeroAbonnement: number | null;
+  lignes: { libelle: string; montant: number }[];
+  total: number;
+  montantTaxe: number;
+  jetonVerification: string;
+  paiements: { mode: "CASH" | "CHEQUE" | "VIREMENT" | "MOBILE_MONEY"; montant: number; dateHeure: string }[];
+}
+
+export async function chargerRecuFacture(token: string, idFacture: number): Promise<RecuFactureServeur> {
+  const reponse = await appelerServeur(`${BASE}/factures/${idFacture}/recu`, { headers: headersAuth(token) });
+  return lireJson<RecuFactureServeur>(reponse);
+}
+
 // 6.4 : lignes d'une facture, pour choisir quoi créditer lors d'un avoir
 export interface LigneFacture {
   idLigne: number;

@@ -5,6 +5,7 @@ import type { RouteGuards, Guard } from "../auth/auth.plugin.js";
 import { siteAutorise } from "../auth/auth.plugin.js";
 import * as schema from "../../db/schema.js";
 import { creerAvoir, listerLignesFacture, type LigneAvoirInput, type RemboursementAvoirInput } from "./avoir.service.js";
+import { construireRecuFacture } from "./recu.service.js";
 import { encaisserSoldeFacture, type EncaisserSoldeParams } from "./paiement-complementaire.service.js";
 import { annulerPaiement } from "./annulation-paiement.service.js";
 import { annulerFactureEnAttente, listerVentesEnAttente } from "./annulation-facture.service.js";
@@ -29,6 +30,26 @@ export function registerAvoirRoutes(app: FastifyInstance, db: Db, guards: RouteG
         return;
       }
       reply.code(200).send(listerLignesFacture(db, idFacture));
+    }
+  );
+
+  // 6.7 : réimpression (DUPLICATA) du reçu d'une facture déjà encaissée — mêmes rôles que la caisse qui l'a émis ; le Comptable,
+  // en lecture seule, ne réimprime pas
+  app.get<{ Params: { idFacture: string } }>(
+    "/api/v1/factures/:idFacture/recu",
+    { preHandler: [guards.authRequis, guards.ventes] },
+    async (request, reply) => {
+      const idFacture = Number(request.params.idFacture);
+      const facture = db.select().from(schema.facture).where(eq(schema.facture.idFacture, idFacture)).get();
+      if (facture && !siteAutorise(request.user, facture.siteId)) {
+        reply.code(403).send(ERREUR_SITE_FACTURE);
+        return;
+      }
+      try {
+        reply.code(200).send(construireRecuFacture(db, idFacture));
+      } catch (erreur) {
+        envoyerErreur(reply, erreur);
+      }
     }
   );
 

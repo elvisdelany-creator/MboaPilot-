@@ -1,4 +1,4 @@
-import { Printer, RotateCcw } from "lucide-react";
+import { Printer, RotateCcw, X } from "lucide-react";
 import { construireUrlVerification, lireDateServeur } from "@mboapilot/shared";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -28,6 +28,8 @@ export interface RecuVente {
   jetonVerification: string;
   // 6.4 (règle 2) : une facture BROUILLON (aucun encaissement) ne s'imprime ni ne se transmet jamais
   statutFacture: "BROUILLON" | "VALIDEE";
+  // réimpression : chaque paiement de la facture (acompte puis solde) ; absent à la caisse, où le reçu n'a qu'un paiement
+  paiements?: { mode: "CASH" | "CHEQUE" | "VIREMENT" | "MOBILE_MONEY"; montant: number; dateHeure: string }[];
 }
 
 interface Props {
@@ -36,11 +38,15 @@ interface Props {
   // l'appelant — l'endpoint qui le sert exige une authentification Bearer
   logoUrl: string | null;
   recu: RecuVente;
+  // appelé par le premier bouton : « Nouvelle vente » à la caisse, « Fermer » pour un duplicata
   onNouvelleVente: () => void;
+  // réimpression d'un reçu passé : mention DUPLICATA (date de réimpression) pour qu'une copie ne passe pas pour l'original
+  duplicata?: { reimprimeLe: string };
 }
 
 const formateurFcfa = new Intl.NumberFormat("fr-FR");
 const formateurDateHeure = new Intl.DateTimeFormat("fr-FR", { dateStyle: "short", timeStyle: "short" });
+const formateurDateCourte = new Intl.DateTimeFormat("fr-FR", { dateStyle: "short" });
 const LIBELLE_MODE_PAIEMENT: Record<"CASH" | "CHEQUE" | "VIREMENT" | "MOBILE_MONEY", string> = {
   CASH: "Comptant",
   CHEQUE: "Chèque",
@@ -52,8 +58,9 @@ const LIBELLE_MODE_PAIEMENT: Record<"CASH" | "CHEQUE" | "VIREMENT" | "MOBILE_MON
 // encaissement. Mise en page pensée pour une imprimante thermique 80mm
 // (window.print(), comme l'export PDF de la fiche 360°, 8.1) mais lisible à
 // l'écran en attendant l'intégration matérielle.
-export function RecuVentePrintable({ infosEntreprise, logoUrl, recu, onNouvelleVente }: Props) {
-  const monnaieRendue = recu.modePaiement === "CASH" ? Math.max(0, recu.montantEncaisse - recu.total) : 0;
+export function RecuVentePrintable({ infosEntreprise, logoUrl, recu, onNouvelleVente, duplicata }: Props) {
+  // un duplicata ne connaît pas la monnaie rendue (le paiement enregistré ne la dit pas) : il ne l'invente pas
+  const monnaieRendue = !duplicata && recu.modePaiement === "CASH" ? Math.max(0, recu.montantEncaisse - recu.total) : 0;
   const soldeDu = Math.max(0, recu.total - recu.montantEncaisse);
 
   // 3.2.3, 6.1, 8.8 : "porte le total, la TVA/taxes le cas échéant" — montant
@@ -98,7 +105,14 @@ export function RecuVentePrintable({ infosEntreprise, logoUrl, recu, onNouvelleV
 
         <Separator />
 
-        <p className="text-xs">{formateurDateHeure.format(lireDateServeur(recu.dateHeure))}</p>
+        {duplicata && (
+          <div role="note" className="border-2 border-foreground py-1 text-center">
+            <p className="text-sm font-bold tracking-widest">DUPLICATA</p>
+            <p className="text-[10px]">Réimprimé le {formateurDateHeure.format(lireDateServeur(duplicata.reimprimeLe))} — ne remplace pas l'original</p>
+          </div>
+        )}
+
+        <p className="text-xs">{duplicata ? "Vente du " : ""}{formateurDateHeure.format(lireDateServeur(recu.dateHeure))}</p>
         <p className="text-xs">{recu.numeroAbonnement !== null ? `${recu.operation} — abonnement n° ${recu.numeroAbonnement}` : recu.operation}</p>
 
         <Separator />
@@ -130,10 +144,22 @@ export function RecuVentePrintable({ infosEntreprise, logoUrl, recu, onNouvelleV
           <span>TOTAL{taxeApplicable ? " TTC" : ""}</span>
           <span className="tabular-nums">{formateurFcfa.format(recu.total)} {infosEntreprise?.entreprise.devise ?? "FCFA"}</span>
         </div>
-        <div className="flex items-center justify-between text-xs">
-          <span>{LIBELLE_MODE_PAIEMENT[recu.modePaiement]}</span>
-          <span className="tabular-nums">{formateurFcfa.format(recu.montantEncaisse)}</span>
-        </div>
+        {recu.paiements && recu.paiements.length > 0 ? (
+          recu.paiements.map((p, i) => (
+            <div key={i} className="flex items-center justify-between text-xs">
+              <span>
+                {LIBELLE_MODE_PAIEMENT[p.mode]}
+                {recu.paiements!.length > 1 ? ` — ${formateurDateCourte.format(lireDateServeur(p.dateHeure))}` : ""}
+              </span>
+              <span className="tabular-nums">{formateurFcfa.format(p.montant)}</span>
+            </div>
+          ))
+        ) : (
+          <div className="flex items-center justify-between text-xs">
+            <span>{LIBELLE_MODE_PAIEMENT[recu.modePaiement]}</span>
+            <span className="tabular-nums">{formateurFcfa.format(recu.montantEncaisse)}</span>
+          </div>
+        )}
         {monnaieRendue > 0 && (
           <div className="flex items-center justify-between text-xs">
             <span>Monnaie rendue</span>
@@ -168,12 +194,12 @@ export function RecuVentePrintable({ infosEntreprise, logoUrl, recu, onNouvelleV
       <div className="no-print mt-6 flex gap-2">
         {/* le focus arrive ici une fois la vente encaissée (au clavier : Entrée pour la suivante, au lieu de refaire le tour de la page) */}
         <Button autoFocus variant="outline" className="cursor-pointer gap-2" onClick={onNouvelleVente}>
-          <RotateCcw className="size-4" />
-          Nouvelle vente
+          {duplicata ? <X className="size-4" /> : <RotateCcw className="size-4" />}
+          {duplicata ? "Fermer" : "Nouvelle vente"}
         </Button>
         <Button className="cursor-pointer gap-2" onClick={() => window.print()}>
           <Printer className="size-4" />
-          Imprimer le ticket
+          {duplicata ? "Imprimer le duplicata" : "Imprimer le ticket"}
         </Button>
       </div>
     </div>

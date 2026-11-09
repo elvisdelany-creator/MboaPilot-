@@ -72,10 +72,21 @@ describe("numéro de série d'un matériel installé", () => {
     ).toThrow(/déjà installé/);
   });
 
-  it("accepte la série que l'abonnement porte déjà (son propre matériel n'est pas un doublon)", () => {
+  // décision du gérant : un échange vers la série que l'abonné porte déjà ne change rien au matériel mais serait facturé plein tarif —
+  // c'est une faute de saisie, refusée avant toute écriture
+  it("refuse un échange vers la série que l'abonnement porte déjà, sans rien facturer", () => {
     const a = recruter("Alpha", "677200001", "SN-0001");
 
-    expect(() => echanger(a.numeroAbonnement, "SN-0001")).not.toThrow();
+    expect(() => echanger(a.numeroAbonnement, " sn-0001 ")).toThrow(/déjà celui du matériel installé/);
+    expect(materiels(a.numeroAbonnement).map((m) => [m.numeroSerie, m.statut])).toEqual([["SN-0001", "ACTIF"]]);
+    expect(db.select().from(schema.facture).all()).toHaveLength(1); // seule la facture du recrutement
+  });
+
+  it("accepte un échange vers une nouvelle série, l'ancienne passant à REMPLACE", () => {
+    const a = recruter("Alpha", "677200001", "SN-0001");
+
+    expect(() => echanger(a.numeroAbonnement, "SN-0003")).not.toThrow();
+    expect(materiels(a.numeroAbonnement).map((m) => [m.numeroSerie, m.statut])).toEqual([["SN-0001", "REMPLACE"], ["SN-0003", "ACTIF"]]);
   });
 
   it("accepte une série libérée par un échange : l'ancien matériel (REMPLACE) ne bloque personne", () => {

@@ -79,6 +79,12 @@ function echangerMaterielSansTransaction(db: Db, params: EchangerMaterielParams)
     .all()
     .filter((m) => m.statut === "ACTIF");
 
+  // un échange vers la série déjà installée ne change rien au matériel mais serait facturé : faute de saisie, refusée avant toute écriture
+  const serieSaisie = params.numeroSerie?.toUpperCase();
+  if (serieSaisie && ancienMateriel.some((m) => m.numeroSerie?.trim().toUpperCase() === serieSaisie)) {
+    throw new Error(`Le numéro de série « ${params.numeroSerie} » est déjà celui du matériel installé : un échange doit porter un nouveau numéro de série`);
+  }
+
   // de quoi défaire l'échange s'il n'est jamais payé (annulation-facture.service.ts)
   const etatAvant = etatAbonnement(db, params.numeroAbonnement);
   const reperHistorique = dernierIdHistorique(db);

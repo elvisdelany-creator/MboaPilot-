@@ -623,13 +623,13 @@ export function ClientsPage({ onNaviguer, onReabonnerDepuisFiche }: Props) {
                                 )}
                                 {f.type === "VENTE" && f.statut === "VALIDEE" && !lectureSeule && (
                                   <Button
-                                    variant="link"
+                                    variant="outline"
                                     size="sm"
-                                    className="no-print h-auto w-fit cursor-pointer gap-1 self-start p-0 text-xs text-muted-foreground"
+                                    className="no-print mt-1 w-fit cursor-pointer gap-1.5 self-start text-xs"
                                     disabled={reimpressionEnCours === f.idFacture}
                                     onClick={() => reimprimerRecu(f.idFacture)}
                                   >
-                                    <Printer className="size-3" />
+                                    <Printer className="size-3.5" />
                                     {reimpressionEnCours === f.idFacture ? "Chargement…" : "Réimprimer le reçu"}
                                   </Button>
                                 )}

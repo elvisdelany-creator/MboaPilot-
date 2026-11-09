@@ -3550,7 +3550,7 @@ describe("Tableau de bord de pilotage (8.6, 9.3)", () => {
     });
 
     expect(reponse.statusCode).toBe(200);
-    expect(reponse.json()).toContainEqual({ idProduit: produit.idProduit, libelle: "Câble HDMI", quantiteVendue: 3, margeEstimee: 1500 });
+    expect(reponse.json()).toContainEqual({ idProduit: produit.idProduit, libelle: "Câble HDMI", quantiteVendue: 3, margeEstimee: 3000 });
   });
 
   // 9.3 : courbe d'évolution du CA "filtrable... par famille d'activité"

@@ -78,6 +78,44 @@ describe("calculerIndicateursJour (9.3 : cartons KPI)", () => {
   });
 });
 
+// décision du gérant : la marge du jour = prix réellement facturé − coût de revient à jour (coût moyen pondéré), et non la marge saisie
+// sur la fiche, qui ne suit pas les achats ni les transferts (constaté : coût 1 083, prix 2 500, marge affichée 1 500 au lieu de 1 417)
+describe("marge estimée : prix facturé − coût réel", () => {
+  it("suit le coût moyen pondéré après un nouvel achat à un autre prix", () => {
+    const produit = creerProduit(db, { siteId, type: "BIEN", libelle: "Câble HDMI", prixVente: 2500, coutRevient: 1000, margeType: "VALEUR", margeValeur: 1500, suiviStock: true });
+    receptionnerAchat(db, { idProduit: produit.idProduit, siteId, quantite: 10, coutUnitaire: 1000, userId });
+    receptionnerAchat(db, { idProduit: produit.idProduit, siteId, quantite: 10, coutUnitaire: 1200, userId }); // coût moyen : 1 100
+    creerVenteProduits(db, { siteId, userId, lignes: [{ idProduit: produit.idProduit, quantite: 2 }], montantEncaisse: 5000 });
+
+    expect(calculerIndicateursJour(db, siteId, AUJOURDHUI).margeEstimeeJour).toBe(2800); // 2 × (2 500 − 1 100), pas 2 × 1 500
+    expect(calculerMargeParArticleJour(db, siteId, AUJOURDHUI)[0].margeEstimee).toBe(2800);
+  });
+
+  it("déduit la remise accordée : c'est le prix réellement facturé qui compte", () => {
+    const produit = creerProduit(db, { siteId, type: "BIEN", libelle: "Câble HDMI", prixVente: 2500, coutRevient: 1000, margeType: "VALEUR", margeValeur: 1500 });
+    creerVenteProduits(db, { siteId, userId, lignes: [{ idProduit: produit.idProduit, quantite: 2, remise: 500 }], montantEncaisse: 4500 });
+
+    expect(calculerIndicateursJour(db, siteId, AUJOURDHUI).margeEstimeeJour).toBe(2500); // 4 500 − 2 × 1 000
+  });
+
+  it("un avoir retranche la marge réelle de la quantité reprise", () => {
+    const produit = creerProduit(db, { siteId, type: "BIEN", libelle: "Câble HDMI", prixVente: 2500, coutRevient: 1000, margeType: "VALEUR", margeValeur: 1500 });
+    const vente = creerVenteProduits(db, { siteId, userId, lignes: [{ idProduit: produit.idProduit, quantite: 3 }], montantEncaisse: 7500 });
+    const ligne = db.select().from(schema.ligneVente).where(eq(schema.ligneVente.idFacture, vente.idFacture)).get()!;
+    creerAvoir(db, { idFactureOrigine: vente.idFacture, lignes: [{ idLigneOrigine: ligne.idLigne, quantite: 1 }], restituerStock: false, userId });
+
+    expect(calculerIndicateursJour(db, siteId, AUJOURDHUI).margeEstimeeJour).toBe(3000); // 2 unités nettes × 1 500
+  });
+
+  it("garde la marge saisie quand le coût de revient n'est pas renseigné (0) : sinon tout le prix compterait comme marge", () => {
+    const produit = creerProduit(db, { siteId, type: "SERVICE", libelle: "Configuration décodeur", prixVente: 3000, margeType: "VALEUR", margeValeur: 2000 });
+    creerVenteProduits(db, { siteId, userId, lignes: [{ idProduit: produit.idProduit, quantite: 2 }], montantEncaisse: 6000 });
+
+    expect(calculerIndicateursJour(db, siteId, AUJOURDHUI).margeEstimeeJour).toBe(4000); // 2 × 2 000, pas 2 × 3 000
+    expect(calculerMargeParArticleJour(db, siteId, AUJOURDHUI)[0].margeEstimee).toBe(4000);
+  });
+});
+
 describe("calculerEvolutionCA (9.3 : courbe d'évolution du CA)", () => {
   it("ventile le CA validé par jour sur la période demandée", () => {
     const [avantHier] = genererPlageJours(AUJOURDHUI, 3);
@@ -279,8 +317,8 @@ describe("calculerMargeParArticleJour (8.6)", () => {
     const marges = calculerMargeParArticleJour(db, siteId, AUJOURDHUI);
 
     expect(marges).toEqual([
-      { idProduit: cable.idProduit, libelle: "Câble HDMI", quantiteVendue: 3, margeEstimee: 1500 }, // 500 × 3
-      { idProduit: decodeur.idProduit, libelle: "Décodeur", quantiteVendue: 2, margeEstimee: 400 }, // 200 × 2
+      { idProduit: cable.idProduit, libelle: "Câble HDMI", quantiteVendue: 3, margeEstimee: 3000 }, // (2 000 − 1 000) × 3 : prix facturé − coût réel
+      { idProduit: decodeur.idProduit, libelle: "Décodeur", quantiteVendue: 2, margeEstimee: 400 }, // (1 200 − 1 000) × 2
     ]);
   });
 
@@ -292,7 +330,7 @@ describe("calculerMargeParArticleJour (8.6)", () => {
     creerAvoir(db, { idFactureOrigine: vente.idFacture, lignes: [{ idLigneOrigine: ligne.idLigne, quantite: 1 }], restituerStock: false, userId });
 
     expect(calculerMargeParArticleJour(db, siteId, AUJOURDHUI)).toEqual([
-      { idProduit: cable.idProduit, libelle: "Câble HDMI", quantiteVendue: 2, margeEstimee: 1000 }, // (3 - 1) × 500
+      { idProduit: cable.idProduit, libelle: "Câble HDMI", quantiteVendue: 2, margeEstimee: 2000 }, // (3 - 1) × 1 000
     ]);
   });
 

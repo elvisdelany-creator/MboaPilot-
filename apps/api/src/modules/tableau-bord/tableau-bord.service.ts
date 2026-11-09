@@ -38,9 +38,17 @@ function facturesValideesDuJour(db: Db, siteId: number, jour: string) {
     .all();
 }
 
-// 9.3 : cartons KPI en tête de tableau de bord. La marge est "estimée" (et
-// non recalculée historiquement) : elle s'appuie sur la marge courante de
-// l'article (6.1), pas sur un instantané au moment de la vente. Les lignes
+// marge estimée d'une ligne de produit vendue (ou reprise par avoir : prix_applique est alors négatif, le signe vient de la facture) :
+// prix réellement facturé (remise déduite) − coût de revient à jour de l'article (coût moyen pondéré, qui suit achats et transferts).
+// Choix du gérant : la marge saisie sur la fiche (6.1) ne suit pas le coût moyen — coût 1 083, prix 2 500, marge affichée 1 500
+// au lieu de 1 417. Estimée et non historique : le coût est celui d'aujourd'hui, pas un instantané pris à la vente. Sans coût de
+// revient renseigné (0), tout le prix compterait comme marge : la marge saisie sur la fiche reste alors la référence.
+function margeEstimeeDeLigne(produit: { coutRevient: number; margeValeur: number | null }, ligne: { prixApplique: number; quantite: number }): number {
+  if (produit.coutRevient > 0) return Math.abs(ligne.prixApplique) - produit.coutRevient * ligne.quantite;
+  return (produit.margeValeur ?? 0) * ligne.quantite;
+}
+
+// 9.3 : cartons KPI en tête de tableau de bord. La marge est "estimée" (voir margeEstimeeDeLigne). Les lignes
 // d'abonnement/kit ne portent pas de marge dans le modèle actuel (5.1.1 ne
 // prévoit pas de coût de revient pour les formules — non tranché ici).
 export function calculerIndicateursJour(db: Db, siteId: number, aujourdHui: string): IndicateursJour {
@@ -59,7 +67,7 @@ export function calculerIndicateursJour(db: Db, siteId: number, aujourdHui: stri
   const margeEstimeeJour = lignes.reduce((total, l) => {
     if (l.idProduit === null) return total;
     const produit = produitParId.get(l.idProduit);
-    return total + (produit ? (produit.margeValeur ?? 0) * l.quantite * signeParFacture.get(l.idFacture)! : 0);
+    return total + (produit ? margeEstimeeDeLigne(produit, l) * signeParFacture.get(l.idFacture)! : 0);
   }, 0);
 
   return {
@@ -257,7 +265,7 @@ export function calculerMargeParArticleJour(db: Db, siteId: number, aujourdHui: 
     const entree = margeParProduit.get(produit.idProduit) ?? { idProduit: produit.idProduit, libelle: produit.libelle, quantiteVendue: 0, margeEstimee: 0 };
     const signe = signeParFacture.get(ligne.idFacture)!;
     entree.quantiteVendue += ligne.quantite * signe;
-    entree.margeEstimee += (produit.margeValeur ?? 0) * ligne.quantite * signe;
+    entree.margeEstimee += margeEstimeeDeLigne(produit, ligne) * signe;
     margeParProduit.set(produit.idProduit, entree);
   }
 

@@ -1,0 +1,11 @@
+# Déploiement de la démo publique sur Render (offre gratuite) : voir docs/demo-publique.md.
+# Aucun secret à fournir : en démo, les secrets de session et de chiffrement sont regénérés à chaque démarrage, avec les données.
+# (Ne pas demander à Render de « générer » MBOAPILOT_ENCRYPTION_KEY : cette clé doit faire exactement 64 caractères hexadécimaux.)
+services:
+  - type: web
+    name: mboapilot-demo
+    runtime: docker
+    plan: free
+    region: frankfurt
+    healthCheckPath: /api/v1/demo
+    autoDeploy: true

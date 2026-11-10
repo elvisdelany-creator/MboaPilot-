@@ -1,0 +1,10 @@
+# ne jamais embarquer de vraies données, de secrets ni de dépendances de ce poste
+**/node_modules
+**/dist
+**/*.log
+**/.env
+**/.env.*
+apps/api/data
+.git
+.claude
+docs/*.pdf

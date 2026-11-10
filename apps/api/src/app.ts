@@ -33,6 +33,10 @@ import { registerVerificationRoutes } from "./modules/verification/verification.
 import { ImprimanteReseauTcp } from "./modules/impression/imprimante-reseau-tcp.js";
 import type { FournisseurImpression } from "./modules/impression/fournisseur.js";
 import { dossierLogos, dossierPhotosSav, dossierSauvegardes } from "./config/chemins.js";
+import { ecritureBloqueeEnDemo, estTeleversement, MESSAGE_FONCTION_DESACTIVEE_EN_DEMO } from "./demo/mode-demo.js";
+import { creerLimiteurDebit, type ConfigurationLimite } from "./demo/limiteur-debit.js";
+import { registerDemoRoutes } from "./demo/demo.routes.js";
+import { adresseDuVisiteur, protocoleAnnonce } from "./demo/adresse-visiteur.js";
 
 export interface BuildAppOptions {
   jwtSecret: string;
@@ -52,7 +56,26 @@ export interface BuildAppOptions {
   fournisseurImpression?: FournisseurImpression;
   // dossier de l'interface web construite (apps/web/dist) : si présent, l'API la sert elle-même, sur la même adresse
   dossierInterfaceWeb?: string;
+  // démo publique : refuse les écritures sensibles (comptes, mots de passe, licence, sauvegardes…), ne verrouille jamais un compte partagé et
+  // plafonne le débit par adresse. Jamais sur la vraie base d'une boutique (voir demo/mode-demo.ts).
+  modeDemo?: boolean;
+  // derrière un proxy HTTPS de confiance (hébergeur) : nombre de proxys successifs dont on croit l'en-tête X-Forwarded-For (true = 1). Chacun
+  // AJOUTE l'adresse qu'il voit à droite de l'en-tête, sans retirer ce que le visiteur y a mis : seules les adresses de droite sont fiables,
+  // et on ne remonte que de ce nombre de proxys (jamais « tous », qui retiendrait l'adresse inventée par le visiteur et contournerait le
+  // plafond de débit). Sans proxy, l'en-tête est ignoré.
+  faireConfianceAuProxy?: boolean | number;
+  // plafonds de requêtes par adresse sur /api/ : général, et connexions (plus sévère). Par défaut, ceux de la démo ; absents hors démo.
+  limiteDebit?: { generale: ConfigurationLimite; connexion: ConfigurationLimite; televersement: ConfigurationLimite };
 }
+
+// démo publique : un caissier qui travaille fait quelques dizaines d'appels par minute ; ces plafonds laissent de la marge à un visiteur
+// qui explore, mais arrêtent un script
+// (les envois de fichiers écrivent sur le disque, souvent petit et éphémère, d'un hébergement gratuit : plafond bien plus bas)
+const LIMITES_DEMO_PAR_DEFAUT = {
+  generale: { fenetreMs: 60_000, maximum: 600 },
+  connexion: { fenetreMs: 60_000, maximum: 20 },
+  televersement: { fenetreMs: 60_000, maximum: 8 },
+};
 
 // 10.4 : préfixes toujours autorisés en écriture même en mode dégradé —
 // authentification (pour pouvoir se connecter et consulter), licence
@@ -73,7 +96,38 @@ const POLITIQUE_CONTENU =
   "connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'";
 
 export function buildApp(db: Db, options: BuildAppOptions) {
+  // nombre de proxys d'hébergeur dont on lit l'en-tête X-Forwarded-For (voir demo/adresse-visiteur.ts) ; la confiance de Fastify reste désactivée
+  const sautsProxy = options.faireConfianceAuProxy === true ? 1 : typeof options.faireConfianceAuProxy === "number" && options.faireConfianceAuProxy > 0 ? Math.floor(options.faireConfianceAuProxy) : 0;
   const app = Fastify();
+
+  // démo publique : le plafond de débit passe en premier (le moins coûteux), puis le refus des écritures sensibles
+  const limites = options.limiteDebit ?? (options.modeDemo ? LIMITES_DEMO_PAR_DEFAUT : undefined);
+  if (limites) {
+    const limiteurGeneral = creerLimiteurDebit(limites.generale);
+    const limiteurConnexion = creerLimiteurDebit(limites.connexion);
+    const limiteurTeleversement = creerLimiteurDebit(limites.televersement);
+    app.addHook("onRequest", async (request, reply) => {
+      if (!request.url.startsWith("/api/")) return;
+      const estConnexion = request.method === "POST" && request.url.split("?")[0] === "/api/v1/auth/login";
+      // un envoi de fichier compte aussi dans le plafond général : il est limité deux fois, jamais une seule
+      const adresse = adresseDuVisiteur(request.headers, request.ip, sautsProxy);
+      const verdictGeneral = limiteurGeneral.verifier(adresse);
+      const verdictSpecifique = estConnexion ? limiteurConnexion.verifier(adresse) : estTeleversement(request.method, request.url) ? limiteurTeleversement.verifier(adresse) : null;
+      const verdict = !verdictGeneral.autorise ? verdictGeneral : (verdictSpecifique ?? verdictGeneral);
+      if (verdict.autorise) return;
+      reply.header("Retry-After", String(verdict.reessayerDansSecondes));
+      reply.code(429).send({ erreur: `Trop de requêtes : réessayez dans ${verdict.reessayerDansSecondes} s.` });
+      return reply;
+    });
+  }
+  if (options.modeDemo) {
+    app.addHook("onRequest", async (request, reply) => {
+      if (!ecritureBloqueeEnDemo(request.method, request.url)) return;
+      reply.code(403).send({ erreur: MESSAGE_FONCTION_DESACTIVEE_EN_DEMO });
+      return reply;
+    });
+  }
+  registerDemoRoutes(app, options.modeDemo === true);
 
   // en-têtes de sécurité de TOUTES les réponses (11.2) : pas d'affichage dans un cadre (clickjacking), pas d'adresse
   // transmise en Referer (le jeton de vérification est dans l'URL), pas de type de contenu deviné ; l'API ne se met
@@ -83,6 +137,9 @@ export function buildApp(db: Db, options: BuildAppOptions) {
     reply.header("X-Frame-Options", "DENY");
     reply.header("Referrer-Policy", "no-referrer");
     if (request.url.startsWith("/api/")) reply.header("Cache-Control", "no-store");
+    // démo publique, servie en HTTPS par le proxy de l'hébergeur : le navigateur n'utilisera plus que HTTPS pour ce domaine. Jamais sur un
+    // poste de caisse local (HTTP) : le protocole n'est lu que derrière un proxy déclaré, qui l'annonce.
+    if (options.modeDemo && protocoleAnnonce(request.headers, sautsProxy) === "https") reply.header("Strict-Transport-Security", "max-age=31536000");
     if (String(reply.getHeader("Content-Type") ?? "").startsWith("text/html")) reply.header("Content-Security-Policy", POLITIQUE_CONTENU);
     return payload;
   });
@@ -92,7 +149,7 @@ export function buildApp(db: Db, options: BuildAppOptions) {
   const authRequis = creerAuthRequis(db);
   // 5.10 : téléversement des photos optionnelles du dossier SAV (multipart/form-data)
   app.register(multipart);
-  registerAuthRoutes(app, db, authRequis);
+  registerAuthRoutes(app, db, authRequis, { sansVerrouillage: options.modeDemo === true });
   registerInstallationRoutes(app, db);
   const fournisseurPaiementMobile = options.fournisseurPaiementMobile ?? new SimulateurOrangeMoney();
   const fournisseurImpression = options.fournisseurImpression ?? new ImprimanteReseauTcp();

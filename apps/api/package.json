@@ -10,6 +10,7 @@
     "db:restaurer": "tsx src/db/restaurer-sauvegarde.ts",
     "dev": "tsx watch src/server.ts",
     "start": "tsx src/server.ts",
+    "start:demo": "tsx src/server-demo.ts",
     "test": "vitest run"
   },
   "dependencies": {

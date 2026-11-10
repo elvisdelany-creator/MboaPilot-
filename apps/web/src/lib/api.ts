@@ -1651,6 +1651,24 @@ export async function fermerCaisseRequete(
   return lireJson<FermerCaisseResultat>(reponse);
 }
 
+// démo publique : l'écran de connexion demande, avant toute session, si la boutique est une démo et quels comptes partagés proposer
+export interface CompteDemo {
+  role: string;
+  libelle: string;
+  identifiant: string;
+  motDePasse: string;
+}
+
+export interface EtatDemo {
+  actif: boolean;
+  comptes?: CompteDemo[];
+}
+
+export async function chargerEtatDemo(): Promise<EtatDemo> {
+  const reponse = await appelerServeur(`${BASE}/demo`);
+  return lireJson<EtatDemo>(reponse);
+}
+
 // 13.1 : fiche de vérification publique d'une facture (QR code) — aucune
 // authentification, appelée depuis VerificationFacturePage
 export async function chargerVerificationFacture(idFacture: number, jeton: string): Promise<VerificationFacture> {

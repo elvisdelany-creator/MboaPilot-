@@ -9,6 +9,7 @@ import { planifierSauvegardeQuotidienne } from "./jobs/planificateur-sauvegarde.
 import { revaliderLicence } from "./modules/licence/licence.service.js";
 import { dossierSauvegardes as dossierSauvegardesConfigure } from "./config/chemins.js";
 import { resoudreDossierInterfaceWeb } from "./lib/interface-web.js";
+import { estModeDemo } from "./demo/mode-demo.js";
 
 // 2.6 : base restaurée ou application mise à jour — mise à niveau avant toute requête
 appliquerMigrations(db);
@@ -26,14 +27,19 @@ try {
 
 const dossierSauvegardes = dossierSauvegardesConfigure();
 const dossierInterfaceWeb = resoudreDossierInterfaceWeb();
-const app = buildApp(db, { jwtSecret: obtenirSecretJwt(), dossierSauvegardes, dossierInterfaceWeb });
+// démo publique (voir demo/mode-demo.ts) ; MBOAPILOT_PROXY=N : derrière N proxys d'hébergeur (1 en général), dont on lit l'adresse du visiteur
+const sautsProxy = Number(process.env.MBOAPILOT_PROXY ?? 0);
+const app = buildApp(db, { jwtSecret: obtenirSecretJwt(), dossierSauvegardes, dossierInterfaceWeb, modeDemo: estModeDemo(), faireConfianceAuProxy: Number.isFinite(sautsProxy) ? sautsProxy : 0 });
 const port = Number(process.env.PORT ?? 3001);
+// 2.2 : le poste de caisse n'écoute que sur lui-même. Seul un hébergement (démo publique) fixe MBOAPILOT_HOTE=0.0.0.0 pour recevoir le proxy de
+// l'hébergeur. Variable propre à MboaPilot, pas « HOST » : un nom aussi courant pourrait exister par hasard sur un poste de caisse et l'exposer au réseau.
+const hote = process.env.MBOAPILOT_HOTE ?? "127.0.0.1";
 
 app
-  .listen({ port, host: "127.0.0.1" }) // 2.2 : serveur applicatif embarqué en local, port 127.0.0.1
+  .listen({ port, host: hote })
   .then(() => {
-    console.log(`MboaPilot API en écoute sur http://127.0.0.1:${port}`);
-    console.log(dossierInterfaceWeb ? `Interface web servie depuis ${dossierInterfaceWeb} : ouvrez http://127.0.0.1:${port}` : "Interface web non construite (apps/web/dist absent) : lancez `npm run build` dans apps/web, ou le serveur de développement.");
+    console.log(`MboaPilot API en écoute sur http://${hote}:${port}`);
+    console.log(dossierInterfaceWeb ? `Interface web servie depuis ${dossierInterfaceWeb} : ouvrez http://${hote === "0.0.0.0" ? "127.0.0.1" : hote}:${port}` : "Interface web non construite (apps/web/dist absent) : lancez `npm run build` dans apps/web, ou le serveur de développement.");
     // 10.4 étape 2 : tentative de revalidation "au démarrage" — simulée en
     // l'absence de serveur de licence éditeur réel, réussit systématiquement
     // et repousse d'autant le délai de grâce hors ligne (21 j).

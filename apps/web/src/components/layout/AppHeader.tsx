@@ -3,6 +3,7 @@ import { KeyRound, LogOut } from "lucide-react";
 import { peutAccederVue, type RoleUtilisateur, type VueApplication } from "@mboapilot/shared";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth-context";
+import { useEtatDemo } from "@/lib/demo";
 import { ChangerMotDePasseDialog } from "./ChangerMotDePasseDialog";
 
 const LIBELLES_ROLES: Record<string, string> = {
@@ -38,8 +39,15 @@ export function AppHeader({ vueActive, onNaviguer, children }: Props) {
   const { session, deconnecter } = useAuth();
   const utilisateur = session!.utilisateur;
   const [motDePasseOuvert, setMotDePasseOuvert] = useState(false);
+  const demo = useEtatDemo();
 
   return (
+    <>
+    {demo?.actif && (
+      <p role="note" className="shrink-0 bg-alert-j3-bg px-4 py-1.5 text-center text-xs font-medium text-alert-j3-fg">
+        Démo publique : boutique fictive, aucune donnée réelle, remise à zéro régulièrement.
+      </p>
+    )}
     <header className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-2 border-b border-border bg-card px-4 py-3">
       <nav aria-label="Navigation principale" className="flex flex-wrap items-center gap-1">
         {ONGLETS.filter(({ vue }) => peutAccederVue(utilisateur.role as RoleUtilisateur, vue)).map(({ vue, libelle }) => (
@@ -61,14 +69,18 @@ export function AppHeader({ vueActive, onNaviguer, children }: Props) {
         <span>
           {utilisateur.prenom} {utilisateur.nom} · {LIBELLES_ROLES[utilisateur.role] ?? utilisateur.role}
         </span>
-        <Button variant="ghost" size="icon" className="size-9 cursor-pointer" aria-label="Changer mon mot de passe" onClick={() => setMotDePasseOuvert(true)}>
-          <KeyRound className="size-4" />
-        </Button>
+        {/* en démo, les comptes sont partagés : le serveur refuse le changement de mot de passe, le bouton n'est donc pas proposé */}
+        {!demo?.actif && (
+          <Button variant="ghost" size="icon" className="size-9 cursor-pointer" aria-label="Changer mon mot de passe" onClick={() => setMotDePasseOuvert(true)}>
+            <KeyRound className="size-4" />
+          </Button>
+        )}
         <Button variant="ghost" size="icon" className="size-9 cursor-pointer" aria-label="Se déconnecter" onClick={deconnecter}>
           <LogOut className="size-4" />
         </Button>
       </div>
       <ChangerMotDePasseDialog ouvert={motDePasseOuvert} onFerme={() => setMotDePasseOuvert(false)} />
     </header>
+    </>
   );
 }

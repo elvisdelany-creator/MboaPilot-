@@ -30,7 +30,13 @@ export interface UtilisateurAuthentifie {
 // 2.5.1, 11.2 : authentification individuelle, message générique pour ne pas
 // permettre l'énumération des identifiants existants. Verrouillage temporaire
 // après plusieurs échecs consécutifs (11.2), horloge injectée pour testabilité.
-export function authentifier(db: Db, identifiant: string, motDePasse: string, maintenant = new Date().toISOString()): UtilisateurAuthentifie {
+// sansVerrouillage : démo publique, où les comptes sont partagés — un visiteur qui se trompe ne doit ni bloquer les suivants ni leur faire voir
+// « compte verrouillé » (le plafond de connexions par adresse remplace le verrouillage, voir demo/limiteur-debit.ts)
+export interface OptionsAuthentification {
+  sansVerrouillage?: boolean;
+}
+
+export function authentifier(db: Db, identifiant: string, motDePasse: string, maintenant = new Date().toISOString(), options: OptionsAuthentification = {}): UtilisateurAuthentifie {
   // un identifiant ou un mot de passe qui n'est pas un texte (objet, nombre, tableau,
   // absent) ne peut correspondre à aucun compte : même message générique, sans
   // laisser remonter l'erreur interne de bcrypt ou de SQLite, et sans compter d'échec
@@ -38,14 +44,14 @@ export function authentifier(db: Db, identifiant: string, motDePasse: string, ma
 
   const utilisateur = trouverUtilisateurParIdentifiant(db, identifiant);
 
-  if (utilisateur && utilisateur.verrouilleJusqua !== null && utilisateur.verrouilleJusqua > maintenant) {
+  if (!options.sansVerrouillage && utilisateur && utilisateur.verrouilleJusqua !== null && utilisateur.verrouilleJusqua > maintenant) {
     throw new Error(MESSAGE_VERROUILLE);
   }
 
   const motDePasseValide = bcrypt.compareSync(motDePasse, utilisateur?.motDePasseHash ?? HASH_FACTICE);
 
   if (!utilisateur || utilisateur.actif !== 1 || !motDePasseValide) {
-    if (utilisateur) enregistrerEchecConnexion(db, utilisateur, maintenant);
+    if (utilisateur && !options.sansVerrouillage) enregistrerEchecConnexion(db, utilisateur, maintenant);
     throw new Error(MESSAGE_ERREUR);
   }
 

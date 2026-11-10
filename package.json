@@ -10,6 +10,7 @@
     "db:migrate": "npm run db:migrate --workspace=apps/api",
     "build": "npm run build --workspace=apps/web",
     "start": "npm run start --workspace=apps/api",
+    "start:demo": "npm run start:demo --workspace=apps/api",
     "test": "npm run test --workspaces --if-present"
   }
 }

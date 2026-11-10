@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { lireDateServeur } from "@mboapilot/shared";
-import { CheckCircle2, XCircle } from "lucide-react";
+import { AlertTriangle, CheckCircle2, XCircle } from "lucide-react";
 import { chargerVerificationFacture } from "@/lib/api";
 import { Card } from "@/components/ui/card";
 import type { VerificationFacture } from "@/lib/types";
@@ -57,12 +57,23 @@ export function VerificationFacturePage() {
 
         {!chargement && resultat && (
           <>
+            {/* une facture revenue en brouillon (dernier paiement annulé, après l'impression du ticket) ne doit pas s'afficher avec la
+                coche verte d'un reçu valable : le document existe bien, mais il n'atteste plus d'aucun paiement */}
             <div className="flex flex-col items-center gap-2 text-center">
-              <CheckCircle2 className="size-10 text-primary-texte" aria-hidden="true" />
-              <p className="font-heading text-lg font-semibold text-foreground">Document authentique</p>
+              {resultat.facture.statut === "VALIDEE" ? (
+                <CheckCircle2 className="size-10 text-primary-texte" aria-hidden="true" />
+              ) : (
+                <AlertTriangle className="size-10 text-alert-j3-fg" aria-hidden="true" />
+              )}
+              <p className="font-heading text-lg font-semibold text-foreground">
+                {resultat.facture.statut === "VALIDEE" ? "Document authentique" : "Facture non encaissée"}
+              </p>
               <p className="text-sm text-muted-foreground">
                 {resultat.facture.type === "AVOIR" ? "Avoir" : "Facture"} n° {resultat.facture.idFacture} — {resultat.entreprise.nom}
               </p>
+              {resultat.facture.statut !== "VALIDEE" && (
+                <p className="text-sm font-medium text-card-foreground">Ce document n'atteste d'aucun paiement : aucun encaissement n'est enregistré pour cette facture.</p>
+              )}
             </div>
 
             <div className="space-y-2 rounded-lg border border-border p-4 text-sm">
@@ -82,7 +93,7 @@ export function VerificationFacturePage() {
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-muted-foreground">Statut</span>
-                <span className="font-medium text-card-foreground">{resultat.facture.statut === "VALIDEE" ? "Validée" : "Brouillon"}</span>
+                <span className="font-medium text-card-foreground">{resultat.facture.statut === "VALIDEE" ? "Validée" : "Non encaissée"}</span>
               </div>
             </div>
 

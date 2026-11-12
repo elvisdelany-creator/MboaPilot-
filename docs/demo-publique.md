@@ -79,11 +79,14 @@ le certificat HTTPS sont inclus.
 
 ### Après la mise en ligne
 
-- **Réglage du proxy** (`MBOAPILOT_PROXY`, 1 par défaut dans l'image) : le plafond de débit compte chaque visiteur selon son
+- **Réglage du proxy** (`MBOAPILOT_PROXY`, **3** dans l'image) : le plafond de débit compte chaque visiteur selon son
   adresse, lue dans `X-Forwarded-For` **en comptant depuis la droite**, car chaque proxy de l'hébergeur y ajoute l'adresse
-  qu'il voit sans retirer ce que le visiteur a écrit. Commencez à 1. Si des visiteurs différents se font refuser
-  ensemble (429 pour tout le monde), l'hébergeur met plusieurs proxys : essayez 2. N'ajoutez pas de crans « au cas où » :
-  un réglage trop haut ferait retenir une adresse inventée par le visiteur, ce qui contournerait le plafond.
+  qu'il voit sans retirer ce que le visiteur a écrit. Sur Render, l'en-tête arrive sous la forme « visiteur, serveur
+  Cloudflare, serveur interne Render » : le visiteur est la **troisième** adresse depuis la droite (mesuré sur le service
+  déployé, en novembre 2026). Avec un chiffre trop bas, on compte l'adresse interne, qui change à chaque requête : le
+  plafond ne se déclenche jamais (c'est ce qui s'est produit avec 1). Avec un chiffre trop haut, une adresse inventée par le
+  visiteur serait retenue. **Sur un autre hébergeur, ce chiffre est à remesurer** : envoyer deux requêtes, comparer les
+  adresses de l'en-tête, et vérifier qu'au bout de 20 connexions ratées par minute le serveur répond 429.
 
 - **Mise à jour** : chaque `git push` sur `master` redéploie la démo (`autoDeploy: true`).
 - **Mettre l'adresse sur votre site** : ajoutez sur `nextservicescameroon.com` un lien « Essayer la démo » vers

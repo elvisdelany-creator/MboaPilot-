@@ -228,27 +228,3 @@ describe("HSTS en démo", () => {
     expect(reponse.headers["strict-transport-security"]).toBeUndefined();
   });
 });
-
-// DIAGNOSTIC TEMPORAIRE (à retirer une fois le réglage du proxy de l'hébergeur fixé) : montre à quoi ressemblent les en-têtes d'adresse tels que
-// le serveur les reçoit derrière le proxy de l'hébergeur, pour choisir le bon réglage sur des faits plutôt que sur des suppositions
-describe("GET /api/v1/demo/diagnostic-proxy (temporaire)", () => {
-  it("renvoie les en-têtes d'adresse reçus et l'adresse de la connexion, sans session", async () => {
-    const reponse = await demo().inject({
-      method: "GET",
-      url: "/api/v1/demo/diagnostic-proxy",
-      headers: { "x-forwarded-for": "1.1.1.1, 2.2.2.2", "cf-connecting-ip": "3.3.3.3", "true-client-ip": "4.4.4.4", "x-real-ip": "5.5.5.5", "x-forwarded-proto": "https", authorization: "Bearer secret-a-ne-jamais-renvoyer" },
-    });
-
-    expect(reponse.statusCode).toBe(200);
-    expect(reponse.json()).toMatchObject({ xForwardedFor: "1.1.1.1, 2.2.2.2", cfConnectingIp: "3.3.3.3", trueClientIp: "4.4.4.4", xRealIp: "5.5.5.5", xForwardedProto: "https" });
-    expect(reponse.json().adresseConnexion).toEqual(expect.any(String));
-    // jamais l'en-tête d'autorisation ni un cookie
-    expect(JSON.stringify(reponse.json())).not.toContain("secret-a-ne-jamais-renvoyer");
-  });
-
-  it("n'existe pas hors démo", async () => {
-    const reponse = await buildApp(db, { jwtSecret: JWT_SECRET_TEST }).inject({ method: "GET", url: "/api/v1/demo/diagnostic-proxy" });
-
-    expect(reponse.statusCode).toBe(404);
-  });
-});

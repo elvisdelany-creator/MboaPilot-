@@ -31,4 +31,16 @@ describe("adresseDuVisiteur", () => {
   it("accepte l'en-tête répété (plusieurs lignes) et les espaces", () => {
     expect(adresseDuVisiteur({ "x-forwarded-for": ["1.1.1.1", " 203.0.113.50 "] }, "10.1.1.1", 1)).toBe("203.0.113.50");
   });
+
+  // chaîne réellement observée sur Render (novembre 2026) : le visiteur, puis un serveur Cloudflare, puis un serveur interne de Render dont
+  // l'adresse change à chaque requête. L'adresse fiable est la troisième depuis la droite ; la dernière (10.x) change sans cesse, ce qui
+  // donnait un seau de comptage différent à chaque requête et rendait le plafond de débit inopérant.
+  it("lit le visiteur à la troisième place depuis la droite sur Render, avec ou sans adresse inventée à gauche", () => {
+    expect(adresseDuVisiteur({ "x-forwarded-for": "143.105.152.9, 162.158.95.53, 10.24.59.156" }, "127.0.0.1", 3)).toBe("143.105.152.9");
+    expect(adresseDuVisiteur({ "x-forwarded-for": "9.9.9.9,143.105.152.9, 172.70.243.244, 10.24.59.156" }, "127.0.0.1", 3)).toBe("143.105.152.9");
+    // le même visiteur reste dans le même seau quelle que soit l'adresse des serveurs intermédiaires
+    expect(adresseDuVisiteur({ "x-forwarded-for": "143.105.152.9, 104.22.76.133, 10.31.9.133" }, "127.0.0.1", 3)).toBe("143.105.152.9");
+    // avec le réglage de 1 proxy (ancien défaut), on retenait l'adresse interne qui change : à éviter sur Render
+    expect(adresseDuVisiteur({ "x-forwarded-for": "143.105.152.9, 104.22.76.133, 10.31.9.133" }, "127.0.0.1", 1)).not.toBe("143.105.152.9");
+  });
 });

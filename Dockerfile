@@ -18,8 +18,11 @@ RUN npm ci
 COPY . .
 RUN npm run build
 
-# derrière le proxy HTTPS de l'hébergeur ; données jetables dans /tmp ; remise à zéro forcée après 24 h de fonctionnement continu
-ENV MBOAPILOT_PROXY=1 \
+# derrière les proxys de l'hébergeur ; données jetables dans /tmp ; remise à zéro forcée après 24 h de fonctionnement continu.
+# MBOAPILOT_PROXY=3 : sur Render, X-Forwarded-For arrive sous la forme « visiteur, Cloudflare, serveur interne » (mesuré en novembre 2026) :
+# le visiteur est la 3e adresse depuis la droite. Trop bas, on compterait l'adresse interne, qui change à chaque requête (plafond de débit
+# inopérant) ; trop haut, une adresse inventée par le visiteur serait retenue. Autre hébergeur : à remesurer (docs/demo-publique.md).
+ENV MBOAPILOT_PROXY=3 \
     MBOAPILOT_DEMO_DIR=/tmp/mboapilot-demo \
     MBOAPILOT_DEMO_REDEMARRAGE_HEURES=24
 

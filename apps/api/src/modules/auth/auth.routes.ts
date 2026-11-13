@@ -3,7 +3,7 @@ import type { FastifyInstance } from "fastify";
 import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
 import { signerSession, type Guard } from "./auth.plugin.js";
-import { authentifier, changerSonMotDePasse, type OptionsAuthentification } from "./auth.service.js";
+import { authentifierAsync, changerSonMotDePasse, type OptionsAuthentification } from "./auth.service.js";
 import { messageClient } from "../../lib/erreurs-api.js";
 
 export function registerAuthRoutes(app: FastifyInstance, db: Db, authRequis: Guard, optionsAuthentification: OptionsAuthentification = {}) {
@@ -40,7 +40,7 @@ export function registerAuthRoutes(app: FastifyInstance, db: Db, authRequis: Gua
     try {
       // corps absent, null ou tableau : traité comme des identifiants manquants (401 générique)
       const { identifiant, motDePasse } = (request.body ?? {}) as { identifiant?: string; motDePasse?: string };
-      const utilisateur = authentifier(db, identifiant as string, motDePasse as string, undefined, optionsAuthentification);
+      const utilisateur = await authentifierAsync(db, identifiant as string, motDePasse as string, undefined, optionsAuthentification);
       const token = signerSession(app, db, utilisateur.idUser);
       reply.code(200).send({ token, utilisateur });
     } catch (erreur) {

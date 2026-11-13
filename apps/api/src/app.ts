@@ -73,7 +73,7 @@ export interface BuildAppOptions {
 // (les envois de fichiers écrivent sur le disque, souvent petit et éphémère, d'un hébergement gratuit : plafond bien plus bas)
 const LIMITES_DEMO_PAR_DEFAUT = {
   generale: { fenetreMs: 60_000, maximum: 600 },
-  connexion: { fenetreMs: 60_000, maximum: 20 },
+  connexion: { fenetreMs: 60_000, maximum: 10 },
   televersement: { fenetreMs: 60_000, maximum: 8 },
 };
 

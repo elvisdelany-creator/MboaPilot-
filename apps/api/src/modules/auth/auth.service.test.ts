@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { eq } from "drizzle-orm";
 import { creerDbTest, type Db } from "../../test-utils/db.js";
 import { creerUtilisateur } from "../utilisateurs/utilisateur.repository.js";
-import { authentifier, changerSonMotDePasse } from "./auth.service.js";
+import { authentifier, authentifierAsync, changerSonMotDePasse } from "./auth.service.js";
 import * as schema from "../../db/schema.js";
 
 let db: Db;
@@ -161,3 +161,66 @@ describe("changerSonMotDePasse (2.5.1, 11.2)", () => {
   });
 });
 
+
+// La vérification bcrypt coûte environ 2 s sur le petit serveur de la démo : en synchrone, quelques connexions simultanées figent tout le
+// serveur, sonde de santé comprise, et l'hébergeur le redémarre. La version asynchrone rend la main entre deux morceaux de calcul.
+describe("authentifierAsync : même contrat que authentifier, sans bloquer le serveur", () => {
+  it("authentifie avec le bon identifiant et mot de passe, sans exposer le hash", async () => {
+    const utilisateur = await authentifierAsync(db, "vnga", "motdepasse-secret");
+
+    expect(utilisateur.identifiant).toBe("vnga");
+    expect(utilisateur).not.toHaveProperty("motDePasseHash");
+  });
+
+  it("refuse un mot de passe erroné et un identifiant inconnu avec le même message générique", async () => {
+    await expect(authentifierAsync(db, "vnga", "mauvais-mot-de-passe")).rejects.toThrow(/^Identifiants invalides$/);
+    await expect(authentifierAsync(db, "inconnu", "peu importe")).rejects.toThrow(/^Identifiants invalides$/);
+  });
+
+  it.each([
+    [{ x: 1 }, "motdepasse-secret"],
+    [null, "motdepasse-secret"],
+    ["vnga", 123],
+    ["vnga", undefined],
+    ["vnga", ["motdepasse-secret"]],
+  ])("refuse (%j, %j) sans compter d'échec", async (identifiant, motDePasse) => {
+    await expect(authentifierAsync(db, identifiant as never, motDePasse as never)).rejects.toThrow(/^Identifiants invalides$/);
+    expect(db.select().from(schema.utilisateur).where(eq(schema.utilisateur.identifiant, "vnga")).get()?.tentativesEchouees).toBe(0);
+  });
+
+  it("verrouille le compte après 5 échecs consécutifs, puis refuse même le bon mot de passe", async () => {
+    for (let i = 0; i < 5; i++) await expect(authentifierAsync(db, "vnga", "mauvais-mot-de-passe")).rejects.toThrow(/identifiants/i);
+
+    await expect(authentifierAsync(db, "vnga", "motdepasse-secret")).rejects.toThrow(/verrouill/i);
+  });
+
+  it("verrouille aussi quand les 5 échecs arrivent en même temps : aucun échec n'est perdu", async () => {
+    await Promise.allSettled(Array.from({ length: 5 }, () => authentifierAsync(db, "vnga", "mauvais-mot-de-passe")));
+
+    await expect(authentifierAsync(db, "vnga", "motdepasse-secret")).rejects.toThrow(/verrouill/i);
+  });
+
+  it("une connexion réussie remet le compteur d'échecs à zéro", async () => {
+    await expect(authentifierAsync(db, "vnga", "mauvais-mot-de-passe")).rejects.toThrow();
+    await authentifierAsync(db, "vnga", "motdepasse-secret");
+
+    expect(db.select().from(schema.utilisateur).where(eq(schema.utilisateur.identifiant, "vnga")).get()?.tentativesEchouees).toBe(0);
+  });
+
+  it("sansVerrouillage (démo) : les échecs ne verrouillent jamais le compte", async () => {
+    for (let i = 0; i < 6; i++) await expect(authentifierAsync(db, "vnga", "mauvais-mot-de-passe", undefined, { sansVerrouillage: true })).rejects.toThrow(/identifiants/i);
+
+    expect((await authentifierAsync(db, "vnga", "motdepasse-secret", undefined, { sansVerrouillage: true })).identifiant).toBe("vnga");
+  });
+
+  it("laisse la boucle d'événements respirer pendant la vérification du mot de passe", async () => {
+    let battements = 0;
+    const minuteur = setInterval(() => battements++, 5);
+
+    await expect(authentifierAsync(db, "vnga", "mauvais-mot-de-passe")).rejects.toThrow();
+    clearInterval(minuteur);
+
+    // en synchrone, rien d'autre ne s'exécute pendant le calcul : 0 battement
+    expect(battements).toBeGreaterThan(1);
+  });
+});

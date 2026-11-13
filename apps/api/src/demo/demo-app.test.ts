@@ -1,4 +1,5 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import bcrypt from "bcryptjs";
 import type { FastifyInstance } from "fastify";
 import { creerDbTest, type Db } from "../test-utils/db.js";
 import { buildApp } from "../app.js";
@@ -145,6 +146,14 @@ describe("limitation de débit par adresse", () => {
     expect((await app.inject({ method: "GET", url: "/api/v1/demo" })).statusCode).toBe(200);
   });
 
+  // chaque tentative coûte ~2 s de calcul sur le petit serveur de la démo : 20 par minute le saturaient (observé sur Render)
+  it("par défaut, accepte 10 tentatives de connexion par minute et par adresse, puis refuse", async () => {
+    const app = demo();
+    for (let i = 0; i < 10; i++) expect((await app.inject({ method: "POST", url: "/api/v1/auth/login", payload: { identifiant: "x", motDePasse: "y" } })).statusCode).toBe(401);
+
+    expect((await app.inject({ method: "POST", url: "/api/v1/auth/login", payload: { identifiant: "x", motDePasse: "y" } })).statusCode).toBe(429);
+  });
+
   it("plafonne les envois de fichiers bien plus bas que le reste : ils écrivent sur le disque du serveur", async () => {
     const app = demo({ limiteDebit: { ...limites, generale: { fenetreMs: 60_000, maximum: 100 } } });
     const entetes = await connecter(app);
@@ -226,5 +235,26 @@ describe("HSTS en démo", () => {
     const reponse = await buildApp(db, { jwtSecret: JWT_SECRET_TEST, faireConfianceAuProxy: true }).inject({ method: "GET", url: "/api/v1/demo", headers: { "x-forwarded-proto": "https" } });
 
     expect(reponse.headers["strict-transport-security"]).toBeUndefined();
+  });
+});
+
+// Sur le petit serveur de la démo, la vérification d'un mot de passe prend ~2 s : si elle figeait le serveur, une salve de connexions ratées
+// l'empêcherait de répondre à la sonde de santé de l'hébergeur, qui le redémarrerait (observé sur Render). Un chronomètre serait fragile
+// (il dépend de la machine) : on vérifie plutôt que la route n'emploie jamais la comparaison synchrone, qui est ce qui fige le serveur.
+describe("la connexion ne fige pas le serveur", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it("vérifie le mot de passe avec la comparaison asynchrone, jamais la synchrone", async () => {
+    const synchrone = vi.spyOn(bcrypt, "compareSync");
+    const asynchrone = vi.spyOn(bcrypt, "compare");
+    const app = demo();
+
+    const bon = await app.inject({ method: "POST", url: "/api/v1/auth/login", payload: { identifiant: "gerant.demo", motDePasse: "motdepasse-secret" } });
+    const mauvais = await app.inject({ method: "POST", url: "/api/v1/auth/login", payload: { identifiant: "gerant.demo", motDePasse: "mauvais" } });
+    const inconnu = await app.inject({ method: "POST", url: "/api/v1/auth/login", payload: { identifiant: "inconnu", motDePasse: "mauvais" } });
+
+    expect([bon.statusCode, mauvais.statusCode, inconnu.statusCode]).toEqual([200, 401, 401]);
+    expect(asynchrone).toHaveBeenCalledTimes(3);
+    expect(synchrone).not.toHaveBeenCalled();
   });
 });

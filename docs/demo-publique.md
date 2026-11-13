@@ -26,7 +26,8 @@ tests automatiques** :
 | Un visiteur crée, désactive ou modifie des comptes, des sites, la licence, les réglages de l'entreprise | Refusé par le serveur (403) |
 | Sauvegardes téléchargées, assistant d'installation | Refusés (403) |
 | Un visiteur se trompe 5 fois et verrouille un compte partagé | Le verrouillage est désactivé en démo ; le plafond ci-dessous le remplace |
-| Script qui sature le serveur ou essaie des mots de passe | Plafonds **par adresse** : 600 requêtes/min, 20 connexions/min, 8 envois de fichiers/min (429 au-delà) |
+| Script qui sature le serveur ou essaie des mots de passe | Plafonds **par adresse** : 600 requêtes/min, 10 connexions/min, 8 envois de fichiers/min (429 au-delà) |
+| Des connexions simultanées figent le petit serveur (chaque vérification de mot de passe coûte ~2 s) et l'hébergeur le redémarre | La vérification est **asynchrone** : le serveur répond aux autres requêtes, sonde de santé comprise, pendant le calcul |
 | Remplir le disque avec des photos ou des imports | Les envois de fichiers sont plafonnés (ci-dessus) et limités à 1 Mo chacun |
 | Navigateur qui retombe en HTTP | En-tête HSTS ajouté quand la requête arrive en HTTPS |
 | Licence qui passe en lecture seule après 21 jours | Revalidée automatiquement toutes les 12 h |
@@ -86,7 +87,7 @@ le certificat HTTPS sont inclus.
   déployé, en novembre 2026). Avec un chiffre trop bas, on compte l'adresse interne, qui change à chaque requête : le
   plafond ne se déclenche jamais (c'est ce qui s'est produit avec 1). Avec un chiffre trop haut, une adresse inventée par le
   visiteur serait retenue. **Sur un autre hébergeur, ce chiffre est à remesurer** : envoyer deux requêtes, comparer les
-  adresses de l'en-tête, et vérifier qu'au bout de 20 connexions ratées par minute le serveur répond 429.
+  adresses de l'en-tête, et vérifier qu'au bout de 10 connexions ratées par minute le serveur répond 429.
 
 - **Mise à jour** : chaque `git push` sur `master` redéploie la démo (`autoDeploy: true`).
 - **Mettre l'adresse sur votre site** : ajoutez sur `nextservicescameroon.com` un lien « Essayer la démo » vers

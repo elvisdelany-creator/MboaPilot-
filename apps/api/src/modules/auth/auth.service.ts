@@ -36,7 +36,10 @@ export interface OptionsAuthentification {
   sansVerrouillage?: boolean;
 }
 
-export function authentifier(db: Db, identifiant: string, motDePasse: string, maintenant = new Date().toISOString(), options: OptionsAuthentification = {}): UtilisateurAuthentifie {
+type CompteTrouve = ReturnType<typeof trouverUtilisateurParIdentifiant>;
+
+// phase 1 (avant le calcul bcrypt) : entrées valides, compte trouvé, verrouillage. Renvoie le hash à comparer.
+function preparerAuthentification(db: Db, identifiant: string, motDePasse: string, maintenant: string, options: OptionsAuthentification) {
   // un identifiant ou un mot de passe qui n'est pas un texte (objet, nombre, tableau,
   // absent) ne peut correspondre à aucun compte : même message générique, sans
   // laisser remonter l'erreur interne de bcrypt ou de SQLite, et sans compter d'échec
@@ -48,10 +51,13 @@ export function authentifier(db: Db, identifiant: string, motDePasse: string, ma
     throw new Error(MESSAGE_VERROUILLE);
   }
 
-  const motDePasseValide = bcrypt.compareSync(motDePasse, utilisateur?.motDePasseHash ?? HASH_FACTICE);
+  return { utilisateur, hash: utilisateur?.motDePasseHash ?? HASH_FACTICE };
+}
 
-  if (!utilisateur || utilisateur.actif !== 1 || !motDePasseValide) {
-    if (utilisateur && !options.sansVerrouillage) enregistrerEchecConnexion(db, utilisateur, maintenant);
+// phase 2 (après le calcul bcrypt) : compte actif et mot de passe valide, sinon échec compté ; remise à zéro du compteur sinon.
+function conclureAuthentification(db: Db, compte: CompteTrouve, motDePasseValide: boolean, maintenant: string, options: OptionsAuthentification): UtilisateurAuthentifie {
+  if (!compte || compte.actif !== 1 || !motDePasseValide) {
+    if (compte && !options.sansVerrouillage) enregistrerEchecConnexion(db, compte.idUser, maintenant);
     throw new Error(MESSAGE_ERREUR);
   }
 
@@ -59,10 +65,10 @@ export function authentifier(db: Db, identifiant: string, motDePasse: string, ma
   // même où le verrouillage se déclenche (voir plus bas) : une connexion
   // réussie après expiration du délai doit donc aussi effacer verrouilleJusqua,
   // pas seulement se fier à "tentativesEchouees > 0" pour le faire.
-  if (utilisateur.tentativesEchouees > 0 || utilisateur.verrouilleJusqua !== null) {
+  if (compte.tentativesEchouees > 0 || compte.verrouilleJusqua !== null) {
     db.update(schema.utilisateur)
       .set({ tentativesEchouees: 0, verrouilleJusqua: null })
-      .where(eq(schema.utilisateur.idUser, utilisateur.idUser))
+      .where(eq(schema.utilisateur.idUser, compte.idUser))
       .run();
   }
 
@@ -73,19 +79,35 @@ export function authentifier(db: Db, identifiant: string, motDePasse: string, ma
     tentativesEchouees: _tentativesEchouees,
     verrouilleJusqua: _verrouilleJusqua,
     ...utilisateurSansHash
-  } = utilisateur;
+  } = compte;
   return utilisateurSansHash;
 }
 
-function enregistrerEchecConnexion(db: Db, utilisateur: { idUser: number; tentativesEchouees: number }, maintenant: string) {
-  const tentatives = utilisateur.tentativesEchouees + 1;
+export function authentifier(db: Db, identifiant: string, motDePasse: string, maintenant = new Date().toISOString(), options: OptionsAuthentification = {}): UtilisateurAuthentifie {
+  const { utilisateur, hash } = preparerAuthentification(db, identifiant, motDePasse, maintenant, options);
+  return conclureAuthentification(db, utilisateur, bcrypt.compareSync(motDePasse, hash), maintenant, options);
+}
+
+// Même contrat que `authentifier`, mais la comparaison bcrypt rend la main au serveur entre deux morceaux de calcul : sur un petit serveur
+// (la démo publique), une version synchrone fige tout, sonde de santé comprise, pendant ~2 s par tentative. Utilisée par la route de connexion.
+export async function authentifierAsync(db: Db, identifiant: string, motDePasse: string, maintenant = new Date().toISOString(), options: OptionsAuthentification = {}): Promise<UtilisateurAuthentifie> {
+  const { utilisateur, hash } = preparerAuthentification(db, identifiant, motDePasse, maintenant, options);
+  const motDePasseValide = await bcrypt.compare(motDePasse, hash);
+  return conclureAuthentification(db, utilisateur, motDePasseValide, maintenant, options);
+}
+
+// le compteur est relu ici, pas pris dans le compte lu avant le calcul : avec la vérification asynchrone, plusieurs tentatives simultanées
+// liraient toutes 0 et n'en compteraient qu'une, ce qui affaiblirait le verrouillage.
+function enregistrerEchecConnexion(db: Db, idUser: number, maintenant: string) {
+  const courant = db.select({ tentativesEchouees: schema.utilisateur.tentativesEchouees }).from(schema.utilisateur).where(eq(schema.utilisateur.idUser, idUser)).get();
+  const tentatives = (courant?.tentativesEchouees ?? 0) + 1;
   const verrouille = tentatives >= MAX_TENTATIVES;
   db.update(schema.utilisateur)
     .set({
       tentativesEchouees: verrouille ? 0 : tentatives,
       verrouilleJusqua: verrouille ? new Date(new Date(maintenant).getTime() + DUREE_VERROUILLAGE_MINUTES * 60_000).toISOString() : null,
     })
-    .where(eq(schema.utilisateur.idUser, utilisateur.idUser))
+    .where(eq(schema.utilisateur.idUser, idUser))
     .run();
 }
 

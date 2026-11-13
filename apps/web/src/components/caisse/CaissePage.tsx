@@ -749,6 +749,14 @@ export function CaissePage({ onNaviguer, onOuvrirCatalogueAdministration, abonne
         </AppHeader>
       </div>
 
+      {/* rappel permanent tant que la facture du paiement non abouti n'est pas encaissée (le message de fermeture, lui, disparaît) */}
+      {venteAReprendre && !paiementMobile && !recu && !proFormaVisible && (
+        <div role="status" className="no-print bg-alert-j3-bg px-4 py-2 text-center text-sm font-medium text-alert-j3-fg">
+          Paiement Mobile Money non abouti : la facture n° {venteAReprendre.idFacture} ({formateurFcfa.format(venteAReprendre.recuBase.total)} FCFA) est
+          enregistrée, en attente d'encaissement. Choisissez un autre mode de paiement et validez pour l'encaisser.
+        </div>
+      )}
+
       {recu ? (
         <RecuVentePrintable infosEntreprise={infosEntreprise} logoUrl={logoUrl} recu={recu} onNouvelleVente={() => setRecu(null)} />
       ) : proFormaVisible ? (
@@ -863,7 +871,16 @@ export function CaissePage({ onNaviguer, onOuvrirCatalogueAdministration, abonne
         montant={paiementMobile?.montant ?? 0}
         numeroTelephone={paiementMobile?.numeroTelephone ?? ""}
         parcours={paiementMobile?.parcours ?? "USSD_CLIENT"}
-        onFerme={() => setPaiementMobile(null)}
+        onFerme={() => {
+          // la facture existe déjà (brouillon, stock sorti) : le caissier doit savoir qu'elle reste à encaisser
+          if (paiementMobile) {
+            toast.warning(
+              `Paiement Mobile Money non abouti : la facture n° ${paiementMobile.idFacture} (${formateurFcfa.format(paiementMobile.recuBase.total)} FCFA) est enregistrée mais pas encaissée. Choisissez un autre mode de paiement pour la régler.`,
+              { duration: 12000 },
+            );
+          }
+          setPaiementMobile(null);
+        }}
         onSucces={() => {
           toast.success("Paiement Mobile Money confirmé — facture encaissée.");
           setVenteAReprendre(null);

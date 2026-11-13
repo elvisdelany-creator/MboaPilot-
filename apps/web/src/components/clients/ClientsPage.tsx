@@ -252,6 +252,8 @@ export function ClientsPage({ onNaviguer, onReabonnerDepuisFiche }: Props) {
           jetonVerification: recuServeur.jetonVerification,
           statutFacture: "VALIDEE",
           paiements: recuServeur.paiements,
+          // la facture réimprimée est toujours celle de la fiche affichée
+          nomClient: fiche ? `${fiche.abonne.prenom} ${fiche.abonne.nom}` : undefined,
         },
         infosEntreprise,
         logoUrl,

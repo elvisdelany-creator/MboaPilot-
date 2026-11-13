@@ -29,6 +29,8 @@ export interface RecuVente {
   // et jeton de la facture réellement créée, pour construire l'URL publique
   idFacture: number;
   jetonVerification: string;
+  // client rattaché à la vente (imprimé sur la facture) ; absent pour une vente comptoir sans client
+  nomClient?: string;
   // 6.4 (règle 2) : une facture BROUILLON (aucun encaissement) ne s'imprime ni ne se transmet jamais
   statutFacture: "BROUILLON" | "VALIDEE";
   // réimpression : chaque paiement de la facture (acompte puis solde) ; absent à la caisse, où le reçu n'a qu'un paiement
@@ -101,6 +103,7 @@ export function RecuVentePrintable({ infosEntreprise, logoUrl, recu, onNouvelleV
     titre: "Facture",
     numero: `N° ${recu.idFacture}`,
     date: `${duplicata ? "Vente du " : ""}${formateurDateHeure.format(lireDateServeur(recu.dateHeure))}`,
+    client: recu.nomClient,
     operation: recu.numeroAbonnement !== null ? `${recu.operation} — abonnement n° ${recu.numeroAbonnement}` : recu.operation,
     bandeau: duplicata
       ? { titre: "DUPLICATA", detail: `Réimprimé le ${formateurDateHeure.format(lireDateServeur(duplicata.reimprimeLe))} — ne remplace pas l'original` }
@@ -160,6 +163,7 @@ export function RecuVentePrintable({ infosEntreprise, logoUrl, recu, onNouvelleV
         )}
 
         <p className="text-xs">{duplicata ? "Vente du " : ""}{formateurDateHeure.format(lireDateServeur(recu.dateHeure))}</p>
+        {recu.nomClient && <p className="text-xs">Client : {recu.nomClient}</p>}
         <p className="text-xs">{recu.numeroAbonnement !== null ? `${recu.operation} — abonnement n° ${recu.numeroAbonnement}` : recu.operation}</p>
 
         <Separator />

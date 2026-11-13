@@ -583,6 +583,7 @@ export function CaissePage({ onNaviguer, onOuvrirCatalogueAdministration, abonne
             dateHeure: new Date().toISOString(),
             idFacture: resultat.idFacture,
             jetonVerification: resultat.jetonVerification,
+            nomClient: nomClientTicket || undefined,
           },
         });
         return;
@@ -607,6 +608,7 @@ export function CaissePage({ onNaviguer, onOuvrirCatalogueAdministration, abonne
         dateHeure: new Date().toISOString(),
         idFacture: resultat.idFacture,
         jetonVerification: resultat.jetonVerification,
+        nomClient: nomClientTicket || undefined,
         statutFacture: resultat.statutFacture,
       });
       reinitialiserTicketProduits();
@@ -697,6 +699,7 @@ export function CaissePage({ onNaviguer, onOuvrirCatalogueAdministration, abonne
             dateHeure: new Date().toISOString(),
             idFacture: resultat.idFacture,
             jetonVerification: resultat.jetonVerification,
+            nomClient: nomClientTicket || undefined,
           },
         });
         return;
@@ -722,6 +725,7 @@ export function CaissePage({ onNaviguer, onOuvrirCatalogueAdministration, abonne
         dateHeure: new Date().toISOString(),
         idFacture: resultat.idFacture,
         jetonVerification: resultat.jetonVerification,
+        nomClient: nomClientTicket || undefined,
         statutFacture: resultat.statutFacture,
       });
       reinitialiserTicket();

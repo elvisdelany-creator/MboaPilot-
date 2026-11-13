@@ -880,6 +880,10 @@ export function CaissePage({ onNaviguer, onOuvrirCatalogueAdministration, abonne
             );
           }
           setPaiementMobile(null);
+          // le stock est déjà sorti côté serveur dès la création de la facture : les quantités affichées doivent le refléter
+          chargerProduits(token, utilisateur.siteId)
+            .then((data) => setProduits(data.filter((p) => p.type === "BIEN" || p.type === "SERVICE")))
+            .catch(() => {});
         }}
         onSucces={() => {
           toast.success("Paiement Mobile Money confirmé — facture encaissée.");

@@ -1,8 +1,11 @@
 import { ArrowLeft, Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import { cn } from "@/lib/utils";
 import type { InfosEntreprise } from "@/lib/types";
 import type { LigneRecu } from "./RecuVentePrintable";
+import { useFormatImpression } from "./format-impression";
+import { FeuilleA5x2, SelecteurFormatImpression, type DocumentA5 } from "./impression-a5x2";
 
 interface Props {
   infosEntreprise: InfosEntreprise | null;
@@ -28,11 +31,44 @@ export function FactureProFormaPrintable({ infosEntreprise, logoUrl, nomClient, 
   const montantHT = tauxTva !== null ? Math.round((total * 10000) / (10000 + tauxTva)) : total;
   const montantTaxe = total - montantHT;
 
+  const [format, changerFormat] = useFormatImpression();
+  const a5 = format === "A5X2";
+  const devise = infosEntreprise?.entreprise.devise ?? "FCFA";
+  const AVERTISSEMENT =
+    "Ce document est une estimation et ne constitue ni une facture, ni une preuve de paiement. Il n'engage l'entreprise que jusqu'à la date d'émission indiquée ci-dessus.";
+  const documentA5: DocumentA5 = {
+    titre: "Pro-forma",
+    date: formateurDateHeure.format(new Date()),
+    client: nomClient || undefined,
+    bandeau: { titre: "PRO-FORMA", detail: "Document sans valeur comptable" },
+    lignes,
+    detailsTotal:
+      tauxTva !== null
+        ? [
+            { libelle: "Total HT", montant: montantHT },
+            { libelle: `dont TVA ${(tauxTva / 100).toString().replace(".", ",")} %`, montant: montantTaxe },
+          ]
+        : undefined,
+    libelleTotal: `Total estimé${tauxTva !== null ? " TTC" : ""}`,
+    total,
+    devise,
+    note: AVERTISSEMENT,
+    mentions: infosEntreprise?.entreprise.mentionsLegales ?? undefined,
+  };
+
   return (
-    <div className="flex h-dvh flex-col items-center overflow-y-auto bg-background p-6">
+    <div
+      className={cn(
+        "flex h-dvh flex-col items-center overflow-y-auto bg-background p-6",
+        // en A5 × 2, la feuille occupe toute la page imprimée : plus de hauteur d'écran ni de marge autour
+        a5 && "print:block print:h-auto print:overflow-visible print:bg-white print:p-0",
+      )}
+    >
       <style>{`@media print { .no-print { display: none !important; } body { background: white; } }`}</style>
 
-      <div className="w-full max-w-sm space-y-3 border border-border bg-card p-5 text-sm text-card-foreground print:border-none">
+      {a5 && <FeuilleA5x2 infosEntreprise={infosEntreprise} logoUrl={logoUrl} document={documentA5} />}
+
+      <div className={cn("w-full max-w-sm space-y-3 border border-border bg-card p-5 text-sm text-card-foreground print:border-none", a5 && "hidden")}>
         <div className="rounded-md border border-alert-j3-fg/40 bg-alert-j3-bg/25 px-3 py-1.5 text-center text-xs font-semibold uppercase tracking-wide text-alert-j3-fg">
           Pro-forma — document sans valeur comptable
         </div>
@@ -89,11 +125,12 @@ export function FactureProFormaPrintable({ infosEntreprise, logoUrl, nomClient, 
         )}
       </div>
 
-      <div className="no-print mt-6 flex gap-2">
+      <div className="no-print mt-6 flex flex-wrap items-center justify-center gap-2">
         <Button variant="outline" className="cursor-pointer gap-2" onClick={onRetour}>
           <ArrowLeft className="size-4" />
           Retour à la vente
         </Button>
+        <SelecteurFormatImpression format={format} onChange={changerFormat} />
         <Button className="cursor-pointer gap-2" onClick={() => window.print()}>
           <Printer className="size-4" />
           Imprimer le pro-forma

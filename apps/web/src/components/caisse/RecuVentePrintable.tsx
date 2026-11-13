@@ -3,6 +3,9 @@ import { construireUrlVerification, lireDateServeur } from "@mboapilot/shared";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { QrCode } from "@/components/ui/qr-code";
+import { cn } from "@/lib/utils";
+import { useFormatImpression } from "./format-impression";
+import { FeuilleA5x2, SelecteurFormatImpression, type DocumentA5 } from "./impression-a5x2";
 import type { InfosEntreprise } from "@/lib/types";
 
 export interface LigneRecu {
@@ -59,6 +62,7 @@ const LIBELLE_MODE_PAIEMENT: Record<"CASH" | "CHEQUE" | "VIREMENT" | "MOBILE_MON
 // (window.print(), comme l'export PDF de la fiche 360°, 8.1) mais lisible à
 // l'écran en attendant l'intégration matérielle.
 export function RecuVentePrintable({ infosEntreprise, logoUrl, recu, onNouvelleVente, duplicata }: Props) {
+  const [format, changerFormat] = useFormatImpression();
   // un duplicata ne connaît pas la monnaie rendue (le paiement enregistré ne la dit pas) : il ne l'invente pas
   const monnaieRendue = !duplicata && recu.modePaiement === "CASH" ? Math.max(0, recu.montantEncaisse - recu.total) : 0;
   const soldeDu = Math.max(0, recu.total - recu.montantEncaisse);
@@ -91,11 +95,54 @@ export function RecuVentePrintable({ infosEntreprise, logoUrl, recu, onNouvelleV
     );
   }
 
+  const a5 = format === "A5X2";
+  const devise = infosEntreprise?.entreprise.devise ?? "FCFA";
+  const documentA5: DocumentA5 = {
+    titre: "Facture",
+    numero: `N° ${recu.idFacture}`,
+    date: `${duplicata ? "Vente du " : ""}${formateurDateHeure.format(lireDateServeur(recu.dateHeure))}`,
+    operation: recu.numeroAbonnement !== null ? `${recu.operation} — abonnement n° ${recu.numeroAbonnement}` : recu.operation,
+    bandeau: duplicata
+      ? { titre: "DUPLICATA", detail: `Réimprimé le ${formateurDateHeure.format(lireDateServeur(duplicata.reimprimeLe))} — ne remplace pas l'original` }
+      : undefined,
+    lignes: recu.lignes,
+    detailsTotal: taxeApplicable
+      ? [
+          { libelle: "Total HT", montant: montantHT },
+          { libelle: "dont TVA", montant: montantTaxe },
+        ]
+      : undefined,
+    libelleTotal: `Total${taxeApplicable ? " TTC" : ""}`,
+    total: recu.total,
+    devise,
+    reglements:
+      recu.paiements && recu.paiements.length > 0
+        ? recu.paiements.map((p) => ({
+            libelle: `${LIBELLE_MODE_PAIEMENT[p.mode]}${recu.paiements!.length > 1 ? ` — ${formateurDateCourte.format(lireDateServeur(p.dateHeure))}` : ""}`,
+            montant: p.montant,
+          }))
+        : [{ libelle: LIBELLE_MODE_PAIEMENT[recu.modePaiement], montant: recu.montantEncaisse }],
+    soldes: [
+      ...(monnaieRendue > 0 ? [{ libelle: "Monnaie rendue", montant: monnaieRendue }] : []),
+      ...(soldeDu > 0 ? [{ libelle: "Solde restant dû", montant: soldeDu, gras: true }] : []),
+    ],
+    qr: adressePublique ? construireUrlVerification(adressePublique, recu.idFacture, recu.jetonVerification) : undefined,
+    mentions: infosEntreprise?.entreprise.mentionsLegales || "Merci de votre confiance.",
+  };
+
   return (
-    <div className="flex h-dvh flex-col items-center overflow-y-auto bg-background p-6">
+    <div
+      className={cn(
+        "flex h-dvh flex-col items-center overflow-y-auto bg-background p-6",
+        // en A5 × 2, la feuille occupe toute la page imprimée : plus de hauteur d'écran ni de marge autour
+        a5 && "print:block print:h-auto print:overflow-visible print:bg-white print:p-0",
+      )}
+    >
       <style>{`@media print { .no-print { display: none !important; } body { background: white; } }`}</style>
 
-      <div className="w-full max-w-xs space-y-3 border border-border bg-card p-4 font-mono text-sm text-card-foreground print:border-none">
+      {a5 && <FeuilleA5x2 infosEntreprise={infosEntreprise} logoUrl={logoUrl} document={documentA5} />}
+
+      <div className={cn("w-full max-w-xs space-y-3 border border-border bg-card p-4 font-mono text-sm text-card-foreground print:border-none", a5 && "hidden")}>
         <div className="text-center">
           {logoUrl && <img src={logoUrl} alt="" className="mx-auto mb-1 max-h-12 object-contain" />}
           <p className="font-semibold">{infosEntreprise?.entreprise.nom ?? "—"}</p>
@@ -191,15 +238,16 @@ export function RecuVentePrintable({ infosEntreprise, logoUrl, recu, onNouvelleV
         <p className="text-center text-xs text-muted-foreground">{infosEntreprise?.entreprise.mentionsLegales || "Merci de votre confiance."}</p>
       </div>
 
-      <div className="no-print mt-6 flex gap-2">
+      <div className="no-print mt-6 flex flex-wrap items-center justify-center gap-2">
         {/* le focus arrive ici une fois la vente encaissée (au clavier : Entrée pour la suivante, au lieu de refaire le tour de la page) */}
         <Button autoFocus variant="outline" className="cursor-pointer gap-2" onClick={onNouvelleVente}>
           {duplicata ? <X className="size-4" /> : <RotateCcw className="size-4" />}
           {duplicata ? "Fermer" : "Nouvelle vente"}
         </Button>
+        <SelecteurFormatImpression format={format} onChange={changerFormat} />
         <Button className="cursor-pointer gap-2" onClick={() => window.print()}>
           <Printer className="size-4" />
-          {duplicata ? "Imprimer le duplicata" : "Imprimer le ticket"}
+          {duplicata ? "Imprimer le duplicata" : a5 ? "Imprimer la facture" : "Imprimer le ticket"}
         </Button>
       </div>
     </div>

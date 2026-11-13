@@ -152,7 +152,8 @@ describe("limitation de débit par adresse", () => {
     for (let i = 0; i < 10; i++) expect((await app.inject({ method: "POST", url: "/api/v1/auth/login", payload: { identifiant: "x", motDePasse: "y" } })).statusCode).toBe(401);
 
     expect((await app.inject({ method: "POST", url: "/api/v1/auth/login", payload: { identifiant: "x", motDePasse: "y" } })).statusCode).toBe(429);
-  });
+    // 11 vraies vérifications de mot de passe (~0,5 s chacune, bien plus quand la suite complète occupe la machine) : le délai par défaut de 5 s ne suffit pas
+  }, 60_000);
 
   it("plafonne les envois de fichiers bien plus bas que le reste : ils écrivent sur le disque du serveur", async () => {
     const app = demo({ limiteDebit: { ...limites, generale: { fenetreMs: 60_000, maximum: 100 } } });

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { delaiEcheance, lienWhatsApp, messageAbonnementExpire, messageRelanceEcheance, peutAccederVue, type RoleUtilisateur, jourDouala, lireDateServeur } from "@mboapilot/shared";
-import { AlertTriangle, History, MessageCircle, PackageX, RotateCw, TrendingDown, Users } from "lucide-react";
+import { AlertTriangle, History, PackageX, RotateCw, TrendingDown, Users } from "lucide-react";
 import {
   chargerAbonnementsExpires,
   chargerAlertesEcheance,
@@ -37,6 +37,7 @@ import { EvolutionCaChart } from "./EvolutionCaChart";
 import { AnnulerVenteEnAttenteDialog, LIBELLE_ANNULATION } from "./AnnulerVenteEnAttenteDialog";
 import { ConfirmerRapprochementDialog } from "@/components/clients/ConfirmerRapprochementDialog";
 import { ExportComptableCard } from "./ExportComptableCard";
+import { BoutonRelanceWhatsApp } from "@/components/relance/BoutonRelanceWhatsApp";
 import type {
   AbonnementExpire,
   AlerteEcheance,
@@ -87,32 +88,6 @@ const formateurDateHeure = new Intl.DateTimeFormat("fr-FR", { dateStyle: "short"
 
 // « 2026-09-23 » devient « 23/09/2026 » : le message est lu par le client
 const dateFrancaise = (dateIso: string) => dateIso.split("-").reverse().join("/");
-
-// Relance d'un client par WhatsApp : ouvre la conversation avec le message déjà écrit (la personne de la boutique appuie sur « envoyer » depuis son
-// propre WhatsApp). Grisé quand le numéro du client ne permet pas de savoir à quel pays l'écrire.
-function BoutonRelanceWhatsApp({ lien, nomClient, onOuvert }: { lien: string | null; nomClient: string; onOuvert: () => void }) {
-  if (!lien) {
-    return (
-      <Button
-        variant="outline"
-        disabled
-        className="min-h-11 shrink-0 gap-2 sm:min-h-9"
-        title="Le numéro de ce client n'est pas utilisable pour WhatsApp : 9 chiffres (Cameroun) ou un indicatif commençant par + ou 00."
-      >
-        <MessageCircle className="size-4" aria-hidden="true" />
-        Relancer sur WhatsApp
-      </Button>
-    );
-  }
-  return (
-    <Button asChild variant="outline" className="min-h-11 shrink-0 cursor-pointer gap-2 sm:min-h-9">
-      <a href={lien} target="_blank" rel="noopener noreferrer" onClick={onOuvert} aria-label={`Relancer ${nomClient} sur WhatsApp (ouvre WhatsApp dans un nouvel onglet)`}>
-        <MessageCircle className="size-4" aria-hidden="true" />
-        Relancer sur WhatsApp
-      </a>
-    </Button>
-  );
-}
 
 // 9.3 : tableau de bord — liste priorisée des abonnements à échéance, triée
 // par urgence (J-1 en premier), avec accès direct au réabonnement en un clic.

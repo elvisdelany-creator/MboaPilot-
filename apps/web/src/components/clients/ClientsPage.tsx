@@ -28,8 +28,11 @@ import {
   soldeFacture as calculerSoldeFacture,
   soldeTotalDu,
   LIMITE_RESULTATS_RECHERCHE_ABONNES,
+  jourDouala,
+  lienWhatsApp,
+  relanceAbonnement,
 } from "@mboapilot/shared";
-import { chargerCatalogue, chargerDossierSav, chargerFiche360, chargerInfosEntreprise, chargerRecuFacture, chargerUrlLogoEntreprise, rechercherAbonnes, ErreurAuthentification } from "@/lib/api";
+import { chargerCatalogue, chargerDossierSav, chargerFiche360, chargerInfosEntreprise, chargerRecuFacture, chargerUrlLogoEntreprise, enregistrerRelanceWhatsAppRequete, rechercherAbonnes, ErreurAuthentification } from "@/lib/api";
 import { useDefilerVersDetail } from "@/lib/defiler-vers-detail";
 import { useAuth } from "@/lib/auth-context";
 import { AppHeader, type Vue } from "@/components/layout/AppHeader";
@@ -39,6 +42,7 @@ import { Card } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { BoutonRelanceWhatsApp } from "@/components/relance/BoutonRelanceWhatsApp";
 import { EchangeMaterielDialog } from "@/components/caisse/EchangeMaterielDialog";
 import { ChangerFormuleDialog } from "@/components/caisse/ChangerFormuleDialog";
 import { RecuVentePrintable, type RecuVente } from "@/components/caisse/RecuVentePrintable";
@@ -177,6 +181,28 @@ export function ClientsPage({ onNaviguer, onReabonnerDepuisFiche }: Props) {
     return () => clearTimeout(identifiant);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [terme, token, utilisateur.siteId]);
+
+  // nom de la boutique : en tête des messages de relance
+  const [nomBoutique, setNomBoutique] = useState("");
+  useEffect(() => {
+    chargerInfosEntreprise(token)
+      .then((infos) => setNomBoutique(infos.entreprise.nom))
+      .catch(() => setNomBoutique(""));
+  }, [token]);
+
+  // dernière relance WhatsApp d'un abonnement : lue dans le journal du client (les notifications), donc la même que celle du tableau de bord
+  function derniereRelanceWhatsApp(f: Fiche360, numeroAbonnement: number): string | null {
+    const dates = f.notifications.filter((n) => n.canal === "WHATSAPP" && n.numeroAbonnement === numeroAbonnement).map((n) => n.dateEnvoi);
+    return dates.length ? dates.reduce((a, b) => (a > b ? a : b)) : null;
+  }
+
+  // le clic ouvre WhatsApp (lien normal) ; la trace part en parallèle, puis la fiche se recharge pour afficher « Relancé… » et l'onglet Notifications.
+  // Un échec de trace ne gêne jamais la relance.
+  function noterRelance(idAbonne: number, numeroAbonnement: number, evenement: "ALERTE_ECHEANCE" | "ABONNEMENT_EXPIRE", message: string) {
+    enregistrerRelanceWhatsAppRequete(token, idAbonne, { evenement, message, numeroAbonnement })
+      .then(() => rechargerFiche(idAbonne))
+      .catch(() => toast.warning("La relance s'ouvre dans WhatsApp, mais elle n'a pas pu être notée dans la fiche du client."));
+  }
 
   function rechargerFiche(idAbonne: number) {
     chargerFiche360(token, idAbonne)
@@ -450,6 +476,16 @@ export function ClientsPage({ onNaviguer, onReabonnerDepuisFiche }: Props) {
                     {fiche.abonnements.map((a) => {
                       const materielActif = fiche.materiels.find((m) => m.numeroAbonnement === a.numeroAbonnement && m.statut === "ACTIF");
                       const formuleActuelle = trouverFormule(a.idFamille, a.idFormule);
+                      const derniereRelance = derniereRelanceWhatsApp(fiche, a.numeroAbonnement);
+                      // le texte suit l'état réel de l'abonnement ce jour-là ; null pour un abonnement résilié
+                      const relance = relanceAbonnement({
+                        statut: a.statut,
+                        dateFin: a.dateFin,
+                        aujourdHui: jourDouala(),
+                        entreprise: nomBoutique,
+                        libelleAbonnement: `${a.familleLibelle} ${a.formuleLibelle}`,
+                        numeroAbonnement: a.numeroAbonnement,
+                      });
                       const peutMigrer =
                         a.statut === "ACTIF" &&
                         formuleActuelle !== null &&
@@ -466,6 +502,9 @@ export function ClientsPage({ onNaviguer, onReabonnerDepuisFiche }: Props) {
                                   n° {a.numeroAbonnement} · {formateurDate.format(lireDateServeur(a.dateDebut))} → {formateurDate.format(lireDateServeur(a.dateFin))}
                                   {materielActif ? ` · ${materielActif.typeMateriel}${materielActif.numeroSerie ? ` (S/N ${materielActif.numeroSerie})` : ""}` : ""}
                                 </p>
+                                {derniereRelance && (
+                                  <p className="text-xs text-muted-foreground">Relancé sur WhatsApp le {formateurDateHeure.format(lireDateServeur(derniereRelance))}</p>
+                                )}
                               </div>
                               <Badge variant={VARIANTE_STATUT_ABONNEMENT[a.statut]}>{LIBELLE_STATUT_ABONNEMENT[a.statut]}</Badge>
                             </div>
@@ -481,6 +520,14 @@ export function ClientsPage({ onNaviguer, onReabonnerDepuisFiche }: Props) {
                                   <RefreshCw className="size-3.5" />
                                   Réabonner
                                 </Button>
+                                {relance && (
+                                  <BoutonRelanceWhatsApp
+                                    compact
+                                    nomClient={`${fiche.abonne.prenom} ${fiche.abonne.nom}`}
+                                    lien={lienWhatsApp(fiche.abonne.telephone, relance.message)}
+                                    onOuvert={() => noterRelance(fiche.abonne.idAbonne, a.numeroAbonnement, relance.evenement, relance.message)}
+                                  />
+                                )}
                                 {peutMigrer && (
                                   <Button variant="outline" size="sm" className="cursor-pointer gap-1" onClick={() => setChangerFormuleCible(a)}>
                                     <ArrowUpCircle className="size-3.5" />

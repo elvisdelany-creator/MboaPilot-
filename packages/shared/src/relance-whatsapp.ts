@@ -1,4 +1,5 @@
 import { messageRelanceEcheance, type DonneesRelanceEcheance } from "./message-relance.js";
+import { joursAvantEcheance } from "./alertes-echeance.js";
 import { telephoneValide } from "./telephone.js";
 
 // Relance d'un client par WhatsApp : un lien wa.me qui ouvre la conversation avec le message déjà écrit. C'est la personne de la boutique qui appuie sur
@@ -51,4 +52,28 @@ export function lienWhatsAppRelanceEcheance(donnees: Omit<DonneesRelanceEcheance
 export function lienWhatsAppAbonnementExpire(donnees: DonneesAbonnementExpire & { telephone: string }): string | null {
   const { telephone, ...message } = donnees;
   return lienWhatsApp(telephone, messageAbonnementExpire(message));
+}
+
+export interface DonneesRelanceAbonnement {
+  statut: "ACTIF" | "EXPIRE" | "RESILIE";
+  dateFin: string; // AAAA-MM-JJ
+  aujourdHui: string; // AAAA-MM-JJ, jour de Douala (jourDouala())
+  entreprise: string; // nom de la boutique, vide si inconnu
+  libelleAbonnement: string; // ex. « CANAL+ EVASION »
+  numeroAbonnement: number;
+}
+
+// Relance d'un abonnement précis, depuis la fiche du client. Le message suit l'état réel ce jour-là : le statut enregistré peut retarder
+// d'une nuit sur la date (le traitement quotidien n'est pas encore passé), et dire « arrive à échéance hier » à un client serait absurde.
+// Un abonnement résilié ne se relance pas : le client l'a arrêté.
+export function relanceAbonnement(donnees: DonneesRelanceAbonnement): { evenement: "ALERTE_ECHEANCE" | "ABONNEMENT_EXPIRE"; message: string } | null {
+  if (donnees.statut === "RESILIE") return null;
+  const dateFin = donnees.dateFin.split("-").reverse().join("/");
+  const joursRestants = joursAvantEcheance(donnees.dateFin, donnees.aujourdHui);
+  const commun = { entreprise: donnees.entreprise, libelleAbonnement: donnees.libelleAbonnement, numeroAbonnement: donnees.numeroAbonnement, dateFin };
+  if (donnees.statut === "EXPIRE" || joursRestants < 0) {
+    return { evenement: "ABONNEMENT_EXPIRE", message: messageAbonnementExpire(commun) };
+  }
+  const rang = joursRestants <= 1 ? 1 : joursRestants <= 3 ? 2 : 3;
+  return { evenement: "ALERTE_ECHEANCE", message: messageRelanceEcheance({ ...commun, joursRestants, rang }) };
 }

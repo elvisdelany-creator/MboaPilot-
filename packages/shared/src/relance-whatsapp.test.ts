@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { lienWhatsApp, lienWhatsAppAbonnementExpire, lienWhatsAppRelanceEcheance, messageAbonnementExpire, numeroWhatsApp } from "./relance-whatsapp.js";
+import { lienWhatsApp, lienWhatsAppAbonnementExpire, lienWhatsAppRelanceEcheance, messageAbonnementExpire, numeroWhatsApp, relanceAbonnement } from "./relance-whatsapp.js";
 import { messageRelanceEcheance } from "./message-relance.js";
 
 // wa.me veut le numéro au format international, chiffres seulement, sans « + » ni « 00 » : « 237677000000 »
@@ -67,5 +67,60 @@ describe("liens de relance prêts à ouvrir", () => {
 
   it("null quand le numéro du client n'est pas utilisable (le bouton est alors grisé)", () => {
     expect(lienWhatsAppRelanceEcheance({ entreprise: "B", libelleAbonnement: "X", numeroAbonnement: 1, dateFin: "01/01/2026", joursRestants: 1, rang: 1, telephone: "n/a" })).toBeNull();
+  });
+});
+
+// Depuis la fiche du client : le gérant relance un abonnement précis, sans passer par la liste du tableau de bord. Le texte et le type de relance
+// dépendent de l'état réel de l'abonnement ce jour-là, pas seulement de son statut enregistré (le traitement de nuit peut ne pas être passé).
+describe("relanceAbonnement", () => {
+  const base = { entreprise: "Next Services", libelleAbonnement: "CANAL+ EVASION", numeroAbonnement: 6, aujourdHui: "2026-11-16" };
+
+  it("un abonnement actif qui arrive à échéance : relance d'échéance, avec le délai dit en clair", () => {
+    const relance = relanceAbonnement({ ...base, statut: "ACTIF", dateFin: "2026-11-19" });
+    expect(relance?.evenement).toBe("ALERTE_ECHEANCE");
+    expect(relance?.message).toBe(
+      messageRelanceEcheance({ entreprise: "Next Services", libelleAbonnement: "CANAL+ EVASION", numeroAbonnement: 6, dateFin: "19/11/2026", joursRestants: 3, rang: 2 }),
+    );
+    expect(relance?.message).toContain("dans 3 jours");
+  });
+
+  it.each([
+    [0, 1], // aujourd'hui : dernier rappel
+    [1, 1],
+    [2, 2],
+    [3, 2],
+    [4, 3],
+    [30, 3], // loin de l'échéance : ton de courtoisie
+  ])("à %i jour(s) de l'échéance, le ton est celui du palier %i", (jours, rang) => {
+    const dateFin = new Date(Date.parse("2026-11-16T00:00:00Z") + jours * 86_400_000).toISOString().slice(0, 10);
+    const relance = relanceAbonnement({ ...base, statut: "ACTIF", dateFin });
+    expect(relance?.message).toBe(
+      messageRelanceEcheance({
+        entreprise: "Next Services",
+        libelleAbonnement: "CANAL+ EVASION",
+        numeroAbonnement: 6,
+        dateFin: dateFin.split("-").reverse().join("/"),
+        joursRestants: jours,
+        rang: rang as 1 | 2 | 3,
+      }),
+    );
+  });
+
+  it("un abonnement expiré : relance de reconquête, avec la date d'expiration", () => {
+    const relance = relanceAbonnement({ ...base, statut: "EXPIRE", dateFin: "2026-11-10" });
+    expect(relance).toEqual({
+      evenement: "ABONNEMENT_EXPIRE",
+      message: messageAbonnementExpire({ entreprise: "Next Services", libelleAbonnement: "CANAL+ EVASION", numeroAbonnement: 6, dateFin: "10/11/2026" }),
+    });
+  });
+
+  it("un abonnement encore « actif » mais dont la date est dépassée est relancé comme expiré, jamais comme « arrive à échéance hier »", () => {
+    const relance = relanceAbonnement({ ...base, statut: "ACTIF", dateFin: "2026-11-15" });
+    expect(relance?.evenement).toBe("ABONNEMENT_EXPIRE");
+    expect(relance?.message).toContain("a expiré le 15/11/2026");
+  });
+
+  it("un abonnement résilié ne se relance pas : le client l'a arrêté", () => {
+    expect(relanceAbonnement({ ...base, statut: "RESILIE", dateFin: "2026-12-31" })).toBeNull();
   });
 });

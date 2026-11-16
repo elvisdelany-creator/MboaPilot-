@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MboaPilot — Liste de contrôle de la journée</title>
+<style>
+  /* À imprimer sur une feuille A4 portrait (Ctrl+P, mise à l'échelle 100 %). Aucune ressource externe : fonctionne hors connexion. */
+  @page { size: A4 portrait; margin: 11mm 12mm; }
+  :root { --encre: #14202b; --trait: #8a98a6; --accent: #1f5f99; --fond: #ffffff; }
+  * { box-sizing: border-box; }
+  html { background: #e9edf1; }
+  body { margin: 0 auto; max-width: 186mm; padding: 8mm 0; color: var(--encre); background: var(--fond);
+         font: 10.6pt/1.36 "IBM Plex Sans", "Segoe UI", Arial, sans-serif; }
+  h1, h2 { font-family: "Poppins", "Segoe UI Semibold", "Segoe UI", Arial, sans-serif; margin: 0; }
+  header { display: flex; justify-content: space-between; align-items: flex-end; gap: 6mm; padding-bottom: 3mm; border-bottom: 2px solid var(--encre); }
+  h1 { font-size: 18pt; line-height: 1.1; letter-spacing: .01em; }
+  h1 small { display: block; margin-top: 1mm; font: 500 9pt "IBM Plex Sans", "Segoe UI", Arial, sans-serif; color: var(--accent); letter-spacing: .08em; text-transform: uppercase; }
+  .identite { display: grid; gap: 2mm; min-width: 78mm; font-size: 9pt; }
+  .identite span { display: flex; gap: 2mm; align-items: baseline; }
+  .identite i { flex: 1; border-bottom: 1px solid var(--trait); height: 1em; }
+  .grille { display: grid; grid-template-columns: 1fr 1fr; gap: 6mm 8mm; margin-top: 5mm; }
+  section { break-inside: avoid; }
+  h2 { font-size: 11.4pt; padding: 0 0 1.4mm 2.4mm; margin-bottom: 2mm; border-left: 3px solid var(--accent); border-bottom: 1px solid var(--trait); }
+  h2 em { font: 400 8.5pt "IBM Plex Sans", "Segoe UI", Arial, sans-serif; color: var(--accent); font-style: normal; margin-left: 1.5mm; }
+  ul { list-style: none; margin: 0; padding: 0; }
+  li { position: relative; padding: 0 0 2.2mm 6.8mm; }
+  li::before { content: ""; position: absolute; left: 0; top: .2em; width: 4.4mm; height: 4.4mm; border: 1.3px solid var(--encre); border-radius: .5mm; }
+  li b { font-weight: 600; }
+  .note { margin: 1.5mm 0 0; padding: 2.4mm 2.8mm; border: 1.2px solid var(--encre); font-size: 10pt; }
+  .large { grid-column: 1 / -1; }
+  .probleme { display: grid; grid-template-columns: 1fr 1fr; gap: 1.4mm 7mm; }
+  .probleme li::before { border-radius: 50%; border-style: dashed; }
+  footer { margin-top: 6mm; padding-top: 3mm; border-top: 1px solid var(--trait); display: flex; justify-content: space-between; gap: 6mm; font-size: 8.5pt; color: #3a4856; }
+  footer span { display: flex; gap: 2mm; align-items: baseline; flex: 1; }
+  footer i { flex: 1; border-bottom: 1px solid var(--trait); height: 1em; }
+  @media print {
+    html { background: none; }
+    body { max-width: none; padding: 0; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>Liste de contrôle de la journée<small>MboaPilot · à cocher chaque jour</small></h1>
+  <div class="identite">
+    <span>Boutique <i></i></span>
+    <span>Date <i></i></span>
+    <span>Responsable <i></i></span>
+  </div>
+</header>
+
+<div class="grille">
+  <section>
+    <h2>1. Ouverture <em>le matin</em></h2>
+    <ul>
+      <li>Ordinateur allumé, <b>MboaPilot lancé</b> (fenêtre noire réduite : <b>ne pas la fermer</b>).</li>
+      <li>La fenêtre noire affiche la bonne ligne « Dossier des donnees ».</li>
+      <li>Connexion avec <b>son propre compte</b>, jamais celui d'un collègue.</li>
+      <li><b>Ouvrir la caisse</b> : compter le fond de caisse du tiroir et saisir le montant.</li>
+      <li>Imprimante prête (papier) et format choisi : ticket 80 mm ou A5 × 2.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>2. Pendant la journée</h2>
+    <ul>
+      <li>Vente d'abonnement : <b>le client est rattaché</b> (recrutement ou réabonnement).</li>
+      <li><b>Encaisser avant de remettre</b> quoi que ce soit. Une facture non encaissée ne s'imprime pas.</li>
+      <li>Remise : jamais au-dessus du plafond affiché.</li>
+      <li>Ticket perdu : <i>Clients → fiche → Facturation → Réimprimer le reçu</i> (mention DUPLICATA).</li>
+      <li>Coup d'œil au <b>tableau de bord</b> : stocks bas, abonnements à relancer.</li>
+    </ul>
+    <p class="note"><b>Mobile Money :</b> vérifier le SMS de réception sur le téléphone de la boutique, puis encaisser en <b>Virement</b> (banque = l'opérateur, référence = identifiant de transaction du SMS).</p>
+  </section>
+
+  <section>
+    <h2>3. Clôture <em>le soir · gérant</em></h2>
+    <ul>
+      <li>Compter l'argent <b>par mode</b> : comptant, chèque, virement (Mobile Money : <b>0</b>).</li>
+      <li><b>Clôturer la caisse</b> et lire l'écart. Attendu : <b>0</b>. S'il y en a un, noter l'explication ci-dessous.</li>
+      <li>La fenêtre dit « Caisse clôturée ».</li>
+    </ul>
+    <p class="note">Écart du jour : ______________ FCFA<br><br>Explication : ______________________________</p>
+  </section>
+
+  <section>
+    <h2>4. Sauvegarde <em>le soir, tous les jours</em></h2>
+    <ul>
+      <li>Caisse non clôturée, ou vente faite après : <i>Administration → Paramètres → <b>Exporter mes données</b></i>.</li>
+      <li>Brancher la clé USB et double-cliquer sur <b>sauvegarde-externe.bat</b>.</li>
+      <li>Lire « <b>Copie terminee</b> » (pas d'erreur).</li>
+      <li>Fermer MboaPilot (fermer la fenêtre noire), puis éteindre.</li>
+      <li><b>Ranger la clé hors de la boutique</b>, pas à côté de l'ordinateur.</li>
+    </ul>
+  </section>
+
+  <section class="large">
+    <h2>En cas de problème</h2>
+    <ul class="probleme">
+      <li><b>L'assistant d'installation réapparaît</b> alors qu'on a déjà travaillé : ne <b>rien</b> installer, fermer, prévenir le gérant (mauvais dossier de données).</li>
+      <li><b>Coupure de courant</b> : relancer MboaPilot, vérifier la ligne « Dossier des donnees », puis vérifier la dernière vente.</li>
+      <li><b>Mot de passe oublié</b> : l'administrateur le change dans <i>Administration → Utilisateurs</i>.</li>
+      <li><b>Paiement Mobile Money</b> qui n'apparaît pas : ne rien encaisser avant d'avoir vu le SMS de l'opérateur.</li>
+    </ul>
+  </section>
+</div>
+
+<footer>
+  <span>Fait par <i></i></span>
+  <span>Contrôlé par <i></i></span>
+  <span>Heure <i></i></span>
+</footer>
+</body>
+</html>

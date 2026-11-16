@@ -24,6 +24,8 @@ describe("ecritureBloqueeEnDemo", () => {
     ["POST", "/api/v1/sauvegarde/export"],
     ["POST", "/api/v1/installation"],
     ["PATCH", "/api/v1/entreprise"],
+    ["PATCH", "/api/v1/site/coordonnees"], // coordonnées de la boutique : visibles de tous les visiteurs suivants
+    ["PATCH", "/api/v1/site/imprimante"], // hôte d'imprimante : le serveur s'y connecterait (adresse choisie par le visiteur)
     ["POST", "/api/v1/entreprise/logo"],
     ["DELETE", "/api/v1/utilisateurs/3"],
     ["post", "/api/v1/utilisateurs"], // la casse de la méthode ne contourne rien
@@ -56,6 +58,7 @@ describe("ecritureBloqueeEnDemo", () => {
   it("ne confond pas un préfixe voisin avec une route bloquée", () => {
     expect(ecritureBloqueeEnDemo("POST", "/api/v1/utilisateurs-autre")).toBe(false);
     expect(ecritureBloqueeEnDemo("POST", "/api/v1/sitesmaison")).toBe(false);
+    expect(ecritureBloqueeEnDemo("POST", "/api/v1/siteweb")).toBe(false);
   });
 });
 

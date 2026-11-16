@@ -23,7 +23,7 @@ tests automatiques** :
 | Risque | Protection |
 |---|---|
 | Un visiteur change le mot de passe d'un compte partagé | Refusé par le serveur (403) ; le bouton est masqué |
-| Un visiteur crée, désactive ou modifie des comptes, des sites, la licence, les réglages de l'entreprise | Refusé par le serveur (403) |
+| Un visiteur crée, désactive ou modifie des comptes, des sites, la licence, les réglages de l'entreprise, les coordonnées de la boutique, l'imprimante (dont l'hôte ferait ouvrir au serveur une connexion vers l'adresse du visiteur) | Refusé par le serveur (403) |
 | Sauvegardes téléchargées, assistant d'installation | Refusés (403) |
 | Un visiteur se trompe 5 fois et verrouille un compte partagé | Le verrouillage est désactivé en démo ; le plafond ci-dessous le remplace |
 | Script qui sature le serveur ou essaie des mots de passe | Plafonds **par adresse** : 600 requêtes/min, 10 connexions/min, 8 envois de fichiers/min (429 au-delà) |

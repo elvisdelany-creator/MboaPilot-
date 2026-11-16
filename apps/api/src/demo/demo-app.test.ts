@@ -259,3 +259,41 @@ describe("la connexion ne fige pas le serveur", () => {
     expect(synchrone).not.toHaveBeenCalled();
   });
 });
+
+// Le Gérant accède à Administration > Paramètres : les coordonnées de la boutique et l'hôte de l'imprimante y sont modifiables. En démo, tout est partagé entre
+// visiteurs (un texte laissé par l'un s'imprime chez les suivants), et un hôte d'imprimante choisi par un visiteur ferait ouvrir au serveur une connexion
+// vers l'adresse de son choix.
+describe("réglages de la boutique refusés en démo", () => {
+  it("refuse de modifier les coordonnées de la boutique, sans rien enregistrer", async () => {
+    const app = demo();
+    const entetes = await connecter(app);
+
+    const reponse = await app.inject({ method: "PATCH", url: "/api/v1/site/coordonnees", headers: entetes, payload: { telephone: "677 00 00 00", email: "pirate@exemple.cm" } });
+
+    expect(reponse.statusCode).toBe(403);
+    expect(reponse.json().erreur).toMatch(/démo/i);
+    const site = db.select().from(schema.site).get()!;
+    expect(site.telephone).toBeNull();
+    expect(site.email).toBeNull();
+  });
+
+  it("refuse de configurer l'imprimante : aucune connexion vers une adresse choisie par un visiteur", async () => {
+    const app = demo();
+    const entetes = await connecter(app);
+
+    const reponse = await app.inject({ method: "PATCH", url: "/api/v1/site/imprimante", headers: entetes, payload: { imprimanteHote: "10.0.0.5", imprimantePort: 9100 } });
+
+    expect(reponse.statusCode).toBe(403);
+    expect(db.select().from(schema.site).get()!.imprimanteHote).toBeNull();
+  });
+
+  it("hors démo, le gérant peut les modifier", async () => {
+    const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
+    const entetes = await connecter(app);
+
+    const reponse = await app.inject({ method: "PATCH", url: "/api/v1/site/coordonnees", headers: entetes, payload: { telephone: "677 00 00 00" } });
+
+    expect(reponse.statusCode).toBe(200);
+    expect(db.select().from(schema.site).get()!.telephone).toBe("677 00 00 00");
+  });
+});

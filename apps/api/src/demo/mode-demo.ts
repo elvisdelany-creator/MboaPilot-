@@ -31,6 +31,8 @@ const PREFIXES_BLOQUES_EN_DEMO = [
   "/api/v1/auth/mot-de-passe",
   "/api/v1/utilisateurs",
   "/api/v1/sites",
+  // « site » au singulier : coordonnées de la boutique (partagées entre visiteurs) et hôte de l'imprimante (le serveur s'y connecterait)
+  "/api/v1/site",
   "/api/v1/licence",
   "/api/v1/sauvegarde",
   "/api/v1/installation",

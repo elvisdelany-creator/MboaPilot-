@@ -61,17 +61,16 @@ le mode simulé en lançant MboaPilot avec la variable `MBOAPILOT_MOBILE_MONEY_S
 ## 5. La journée et la sauvegarde
 
 - **Matin** : ouvrir la caisse (fond de caisse). **Soir** : **clôturer la caisse** : l'écart est contrôlé. La
-  clôture crée une sauvegarde de la journée, **sauf si une sauvegarde date de moins d'une heure** : c'est le cas si
-  l'ordinateur a redémarré dans l'heure (MboaPilot en fait une à chaque démarrage, qui ne contient pas les ventes
-  faites depuis).
+  clôture crée une sauvegarde de la journée, même si l'ordinateur a redémarré entre-temps (elle n'est évitée que
+  si une sauvegarde date de moins de deux minutes).
 - **Chaque jour, copiez la sauvegarde hors de l'ordinateur** : branchez la clé USB et double-cliquez sur
   **`sauvegarde-externe.bat`** (il demande le dossier de destination, par exemple `E:\MboaPilot-copie`). Il copie les
   sauvegardes **et** la clé de chiffrement `.encryption-key`, les photos SAV et le logo. Rangez la clé ailleurs que
   près de l'ordinateur : un vol ou un incendie emporterait les deux.
-- **Juste avant la copie, faites toujours Administration → Paramètres → Exporter mes données** : cela crée à
-  l'instant une sauvegarde qui contient toutes les ventes du jour, quoi qu'il se soit passé dans la journée (coupure
-  de courant, redémarrage). Sans cela, la copie peut ne contenir que la sauvegarde du matin. Le script dit « aucune
-  sauvegarde trouvée » s'il n'y en a aucune.
+- **Si vous n'avez pas clôturé la caisse** (journée sans clôture, ou vente faite après la clôture), faites d'abord
+  **Administration → Paramètres → Exporter mes données** : cela crée à l'instant une sauvegarde qui contient toutes
+  les ventes, sinon la copie peut ne contenir que la sauvegarde du démarrage. Le script dit « aucune sauvegarde
+  trouvée » s'il n'y en a aucune.
 - **Ne copiez jamais le seul fichier `mboapilot.db`** pendant que MboaPilot tourne : il peut être vide ou périmé.
   Utilisez toujours le script ou « Exporter mes données ».
 

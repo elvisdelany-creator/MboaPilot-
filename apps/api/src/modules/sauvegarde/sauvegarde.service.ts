@@ -42,9 +42,11 @@ export function creerSauvegarde(db: Db, dossierSauvegardes: string, maintenant =
 
 // 2.6 : sauvegarde de fin de journée, déclenchée par la clôture de caisse. La sauvegarde quotidienne a lieu au démarrage du serveur puis
 // est bloquée pour la journée : elle ne contient jamais les ventes du jour (et le jour de l'installation, c'est celle d'une base vide).
-// La clôture est la fin de journée naturelle ; une sauvegarde de moins d'une heure (clôture rejouée, export manuel) n'est pas refaite.
+// La clôture est la fin de journée naturelle ; seule une sauvegarde de moins de deux minutes (clôture rejouée, double clic, export manuel juste avant) n'est pas
+// refaite. Le seuil n'est PAS d'une heure : après une coupure de courant, le serveur redémarre et fait une sauvegarde de démarrage, qui ne contient pas les ventes
+// faites ensuite ; un seuil d'une heure ferait ignorer la clôture du soir et laisserait la journée hors de toute sauvegarde.
 // La conservation de 30 jours s'applique à ces sauvegardes comme aux autres.
-const AGE_MIN_SAUVEGARDE_FIN_JOURNEE_MS = 60 * 60 * 1000;
+const AGE_MIN_SAUVEGARDE_FIN_JOURNEE_MS = 2 * 60 * 1000;
 
 export function sauvegarderApresCloture(db: Db, dossierSauvegardes: string, maintenant = new Date(), joursConservation = 30): Sauvegarde | null {
   const derniere = listerSauvegardes(dossierSauvegardes)[0];

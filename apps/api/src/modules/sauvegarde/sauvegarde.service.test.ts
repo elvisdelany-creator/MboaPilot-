@@ -123,15 +123,31 @@ describe("sauvegarderApresCloture (2.6)", () => {
     expect(listerSauvegardes(dossierSauvegardes)).toHaveLength(2);
   });
 
-  it("ne refait pas une sauvegarde de moins d'une heure : une clôture rejouée ou une sauvegarde manuelle vient d'avoir lieu", () => {
-    creerSauvegarde(db, dossierSauvegardes, new Date("2026-11-07T16:30:00.000Z"));
+  // une coupure de courant dans l'après-midi : le serveur redémarre, fait une sauvegarde de démarrage (sans les ventes faites ensuite), et la clôture
+  // du soir ne doit pas être ignorée sous prétexte qu'une sauvegarde date de moins d'une heure
+  it("sauvegarde les ventes faites après un redémarrage de l'après-midi, même si la sauvegarde de démarrage date de 30 minutes", () => {
+    db.$client.pragma("foreign_keys = OFF");
+    const demarrage = creerSauvegarde(db, dossierSauvegardes, new Date("2026-11-07T16:30:00.000Z"));
+    uneVente();
+    uneVente();
+    uneVente();
+
+    const soir = sauvegarderApresCloture(db, dossierSauvegardes, new Date("2026-11-07T17:00:00.000Z"));
+
+    expect(soir).not.toBeNull();
+    expect(contenu(demarrage.nomFichier)).toBe(0);
+    expect(contenu(soir!.nomFichier)).toBe(3);
+  });
+
+  it("ne refait pas une sauvegarde de moins de deux minutes : une clôture rejouée ou un export manuel vient d'avoir lieu", () => {
+    creerSauvegarde(db, dossierSauvegardes, new Date("2026-11-07T16:59:00.000Z"));
 
     expect(sauvegarderApresCloture(db, dossierSauvegardes, new Date("2026-11-07T17:00:00.000Z"))).toBeNull();
     expect(listerSauvegardes(dossierSauvegardes)).toHaveLength(1);
   });
 
-  it("sauvegarde dès que la dernière a plus d'une heure", () => {
-    creerSauvegarde(db, dossierSauvegardes, new Date("2026-11-07T15:59:00.000Z"));
+  it("sauvegarde dès que la dernière a plus de deux minutes", () => {
+    creerSauvegarde(db, dossierSauvegardes, new Date("2026-11-07T16:57:00.000Z"));
 
     expect(sauvegarderApresCloture(db, dossierSauvegardes, new Date("2026-11-07T17:00:00.000Z"))).not.toBeNull();
   });

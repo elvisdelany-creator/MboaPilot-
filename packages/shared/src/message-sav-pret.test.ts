@@ -31,3 +31,18 @@ describe("messageSavPret", () => {
     expect(messageSavPret({ entreprise: "Boutique Bonamoussadi", numeroDossier: 1234, montantDu: 125000 }).length).toBeLessThanOrEqual(160);
   });
 });
+
+describe("messageSavPret : contact de la boutique", () => {
+  it("ajoute le contact à la fin du message, pour que le client puisse répondre", () => {
+    const m = messageSavPret({ entreprise: "Boutique Akwa", numeroDossier: 7, montantDu: 5000, contact: "Contact WhatsApp : 699 11 22 33." });
+
+    expect(m.endsWith("Montant à régler : 5 000 FCFA. Contact WhatsApp : 699 11 22 33.")).toBe(true);
+  });
+
+  it("sans contact, le message est celui d'avant", () => {
+    const sans = messageSavPret({ entreprise: "Boutique Akwa", numeroDossier: 7, montantDu: 0 });
+
+    expect(messageSavPret({ entreprise: "Boutique Akwa", numeroDossier: 7, montantDu: 0, contact: "" })).toBe(sans);
+    expect(sans.endsWith("Aucun frais à régler.")).toBe(true);
+  });
+});

@@ -1,5 +1,5 @@
 import { Printer, RotateCcw, X } from "lucide-react";
-import { construireUrlVerification, lireDateServeur } from "@mboapilot/shared";
+import { construireUrlVerification, lignesContactBoutique, lireDateServeur } from "@mboapilot/shared";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { QrCode } from "@/components/ui/qr-code";
@@ -151,6 +151,9 @@ export function RecuVentePrintable({ infosEntreprise, logoUrl, recu, onNouvelleV
           <p className="font-semibold">{infosEntreprise?.entreprise.nom ?? "—"}</p>
           <p className="text-xs text-muted-foreground">{infosEntreprise?.site.nom}</p>
           {infosEntreprise?.site.adresse && <p className="text-xs text-muted-foreground">{infosEntreprise.site.adresse}</p>}
+          {lignesContactBoutique(infosEntreprise?.site ?? {}).map((ligne) => (
+            <p key={ligne} className="text-xs text-muted-foreground">{ligne}</p>
+          ))}
         </div>
 
         <Separator />

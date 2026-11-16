@@ -1490,6 +1490,24 @@ export async function configurerImprimanteRequete(token: string, payload: { impr
   return lireJson<InfosEntreprise["site"]>(reponse);
 }
 
+// coordonnées de la boutique de l'appelant : chaîne vide = effacer, champ absent = inchangé
+export interface CoordonneesSitePayload {
+  adresse?: string;
+  telephone?: string;
+  telephoneWhatsapp?: string;
+  email?: string;
+  siteWeb?: string;
+}
+
+export async function modifierCoordonneesSiteRequete(token: string, payload: CoordonneesSitePayload): Promise<InfosEntreprise["site"]> {
+  const reponse = await appelerServeur(`${BASE}/site/coordonnees`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...headersAuth(token) },
+    body: JSON.stringify(payload),
+  });
+  return lireJson<InfosEntreprise["site"]>(reponse);
+}
+
 // 11.4, 6.7 : déclenche l'impression ESC/POS du ticket — imprime:false si
 // aucune imprimante n'est configurée pour le site (repli sur window.print())
 export interface TicketImpressionPayload {

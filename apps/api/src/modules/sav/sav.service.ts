@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm";
-import { extraireTaxeDuTTC, messageSavPret, peutTransitionnerSav, type StatutSav } from "@mboapilot/shared";
+import { extraireTaxeDuTTC, messageSavPret, peutTransitionnerSav, texteContactMessage, type StatutSav } from "@mboapilot/shared";
 import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
 import { enregistrerMouvement } from "../stock/stock.repository.js";
@@ -183,6 +183,8 @@ export function changerStatutSav(
       entreprise: db.select().from(schema.entreprise).get()?.nom ?? "",
       numeroDossier: dossier.idDossierSav,
       montantDu: montantFacture,
+      // le client peut répondre : numéros de la boutique du dossier (vide si non renseignés)
+      contact: texteContactMessage(db.select().from(schema.site).where(eq(schema.site.idSite, dossier.siteId)).get() ?? {}),
     });
     if (dossier.idAbonne !== null) {
       envoyerNotificationAbonne(db, fournisseurNotification, {

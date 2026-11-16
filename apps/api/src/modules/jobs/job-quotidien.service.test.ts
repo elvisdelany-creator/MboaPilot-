@@ -389,3 +389,30 @@ describe("executerJobQuotidien — contenu des relances (4.4)", () => {
     expect(envoyes[0]).toContain("arrive à échéance demain (30/10/2025)");
   });
 });
+
+// Le client doit pouvoir répondre à la relance : le numéro de la boutique (appel et/ou WhatsApp) termine le SMS quand il est renseigné.
+describe("executerJobQuotidien — contact de la boutique dans la relance (4.4)", () => {
+  function messageDeRelance() {
+    const abonne = creerAbonne("690000001");
+    creerAbonnement(abonne.idAbonne, "2025-10-01", "2025-10-30");
+    const envoyes: string[] = [];
+    const fournisseur: FournisseurNotification = { envoyer: (_canal, params) => (envoyes.push(params.message), { reussi: true, simule: true }) };
+    executerJobQuotidien(db, "2025-10-29", fournisseur);
+    return envoyes[0];
+  }
+
+  it("termine le SMS par le téléphone et le WhatsApp de la boutique de l'abonnement", () => {
+    db.update(schema.site).set({ telephone: "677 00 00 00", telephoneWhatsapp: "699 11 22 33" }).where(eq(schema.site.idSite, siteId)).run();
+
+    expect(messageDeRelance().endsWith("Contact : 677 00 00 00 ou WhatsApp 699 11 22 33.")).toBe(true);
+  });
+
+  it("n'ajoute rien quand la boutique n'a renseigné aucun numéro (e-mail et site web ne vont pas dans un SMS)", () => {
+    db.update(schema.site).set({ email: "contact@boutique.cm", siteWeb: "www.boutique.cm" }).where(eq(schema.site.idSite, siteId)).run();
+
+    const message = messageDeRelance();
+
+    expect(message).not.toContain("Contact");
+    expect(message).not.toContain("boutique.cm");
+  });
+});

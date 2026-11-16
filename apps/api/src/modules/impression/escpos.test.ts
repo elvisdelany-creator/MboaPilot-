@@ -102,3 +102,23 @@ describe("construireTicketEscPos : encodage et commandes parasites", () => {
     expect(avecLibelle("Ligne A\nLigne B").toString("latin1")).toContain("Ligne A Ligne B");
   });
 });
+
+describe("construireTicketEscPos : coordonnées de la boutique", () => {
+  const texteDe = (site: object) => construireTicketEscPos({ ...TICKET_BASE, site: { ...TICKET_BASE.site, ...site } }).toString("latin1");
+
+  it("imprime sous l'adresse le téléphone, le WhatsApp, l'e-mail et le site web renseignés", () => {
+    const texte = texteDe({ telephone: "677 00 00 00", telephoneWhatsapp: "699 11 22 33", email: "contact@boutique.cm", siteWeb: "www.boutique.cm" });
+
+    expect(texte).toContain("Tél : 677 00 00 00 · WhatsApp : 699 11 22 33");
+    expect(texte).toContain("contact@boutique.cm");
+    expect(texte).toContain("www.boutique.cm");
+    expect(texte.indexOf("Akwa, Douala")).toBeLessThan(texte.indexOf("Tél : 677"));
+  });
+
+  it("n'imprime rien de plus quand aucune coordonnée n'est renseignée", () => {
+    const sans = construireTicketEscPos(TICKET_BASE);
+
+    expect(texteDe({ telephone: null, telephoneWhatsapp: null, email: null, siteWeb: null })).toBe(sans.toString("latin1"));
+    expect(sans.toString("latin1")).not.toContain("Tél");
+  });
+});

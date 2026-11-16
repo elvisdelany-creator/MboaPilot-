@@ -63,6 +63,15 @@ dossier tant que vous n'avez pas vérifié. Si vous préférez repartir de zéro
    tant que vous ne l'avez pas renseigné).
 2. **Articles et services** (décodeurs, câbles, installation…) : écran *Stock*, un par un ou par fichier CSV.
 3. **Paramètres** (Administration → Paramètres) : TVA si vous en appliquez une, mentions légales, logo.
+   **Coordonnées de la boutique** : tout en haut de la même page, section **« Coordonnées de la boutique »** :
+   **Adresse, Téléphone, Téléphone WhatsApp, E-mail, Site web** (tous facultatifs, chacun vérifié à la saisie), puis
+   **Enregistrer**. Ils s'impriment **sous le nom de la boutique** sur le ticket, la pro-forma, la facture A5 × 2 et le
+   ticket de l'imprimante thermique ; ce qui est vide n'apparaît pas. Les **numéros de téléphone et WhatsApp** sont
+   aussi ajoutés à la fin des messages de relance (voir la remarque ci-dessous). Le champ **« Mentions légales »** reste
+   pour les mentions obligatoires (numéro de registre du commerce, NIU…), imprimées **en bas** des documents.
+   > ⚠️ **Les relances ne partent pas encore** : l'envoi de SMS et de WhatsApp n'est pas branché à un opérateur (voir
+   > `exploitation.md` §7). Les messages sont préparés, avec votre numéro à la fin, et notés « Simulée : non envoyée »
+   > dans la fiche du client. Pour l'instant, appelez ou écrivez vous-même aux clients depuis le tableau de bord.
 4. **Utilisateurs** : un compte par personne (caissier, technicien SAV, comptable, apporteur…). Pas de compte
    partagé : chaque action est tracée au nom de celui qui la fait.
 5. **Format d'impression** : sur l'écran du reçu, choisissez **Ticket 80 mm** ou **A5 × 2** (une feuille A4
@@ -101,6 +110,10 @@ le mode simulé en lançant MboaPilot avec la variable `MBOAPILOT_MOBILE_MONEY_S
   trouvée » s'il n'y en a aucune.
 - **Ne copiez jamais le seul fichier `mboapilot.db`** pendant que MboaPilot tourne : il peut être vide ou périmé.
   Utilisez toujours le script ou « Exporter mes données ».
+
+**Liste de contrôle à imprimer** : `docs/liste-de-controle.html` (ouvrez-la dans le navigateur, Ctrl+P, une feuille
+A4) ou `docs/liste-de-controle.pdf`. Ouverture, journée, clôture, sauvegarde, que faire en cas de problème : une case
+à cocher par geste, à garder près de l'ordinateur.
 
 ## 6. Si l'ordinateur tombe en panne
 

@@ -99,6 +99,26 @@ export function registerEntrepriseRoutes(app: FastifyInstance, db: Db, dossierLo
     reply.code(200).header("Content-Type", resoudreTypeMimeLogo(infos.entreprise.logoUrl)).send(contenu);
   });
 
+  // coordonnées de la boutique de l'appelant (adresse, téléphones, e-mail, site web) : imprimées sous son nom, numéros repris dans les SMS de
+  // relance. Même encadrement que le reste du paramétrage (8.8). Chaîne vide = effacer ; champ absent = inchangé.
+  app.patch<{ Body: { adresse?: string; telephone?: string; telephoneWhatsapp?: string; email?: string; siteWeb?: string } }>(
+    "/api/v1/site/coordonnees",
+    { preHandler: [guards.authRequis, guards.gestionParametres] },
+    async (request, reply) => {
+      try {
+        const { adresse, telephone, telephoneWhatsapp, email, siteWeb } = request.body ?? {};
+        const site = modifierSite(db, request.user.siteId, { adresse, telephone, telephoneWhatsapp, email, siteWeb });
+        if (!site) {
+          reply.code(404).send({ erreur: "Site introuvable" });
+          return;
+        }
+        reply.code(200).send(site);
+      } catch (erreur) {
+        envoyerErreur(reply, erreur);
+      }
+    }
+  );
+
   // 11.4, 6.7 : "Compatibilité imprimante thermique 80mm (protocole
   // ESC/POS)" — configuration de l'imprimante réseau du site de l'appelant,
   // même encadrement que le reste du paramétrage (8.8)

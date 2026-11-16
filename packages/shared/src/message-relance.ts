@@ -5,6 +5,7 @@ export interface DonneesRelanceEcheance {
   dateFin: string; // déjà au format JJ/MM/AAAA
   joursRestants: number;
   rang: 1 | 2 | 3; // jalon atteint : 1 = le plus urgent
+  contact?: string; // fin du message : où joindre la boutique (voir texteContactMessage), absent ou vide si aucun numéro n'est renseigné
 }
 
 // le délai réel avant l'échéance, tel qu'on le dit à un client : « aujourd'hui », « demain », « dans 5 jours ». Sert au SMS comme au
@@ -29,5 +30,7 @@ export function messageRelanceEcheance(donnees: DonneesRelanceEcheance): string 
   const boutique = donnees.entreprise.trim();
   const phrase = `${introduction}votre abonnement ${donnees.libelleAbonnement} n°${donnees.numeroAbonnement} arrive à échéance ${delaiEcheance(donnees.joursRestants)} (${donnees.dateFin}).`;
   const texte = boutique ? `${boutique} : ${phrase}` : phrase.charAt(0).toUpperCase() + phrase.slice(1);
-  return `${texte} ${invitation}`;
+  const fin = `${texte} ${invitation}`;
+  const contact = donnees.contact?.trim();
+  return contact ? `${fin} ${contact}` : fin;
 }

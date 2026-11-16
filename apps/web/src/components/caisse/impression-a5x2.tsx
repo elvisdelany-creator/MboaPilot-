@@ -1,3 +1,4 @@
+import { lignesContactBoutique } from "@mboapilot/shared";
 import { QrCode } from "@/components/ui/qr-code";
 import { cn } from "@/lib/utils";
 import type { InfosEntreprise } from "@/lib/types";
@@ -100,6 +101,9 @@ function Exemplaire({ etiquette, infosEntreprise, logoUrl, document }: PropsFeui
           <p className="font-heading text-sm font-semibold">{entreprise?.nom ?? "—"}</p>
           {site?.nom && <p className="text-neutral-700">{site.nom}</p>}
           {site?.adresse && <p className="text-neutral-700">{site.adresse}</p>}
+          {lignesContactBoutique(site ?? {}).map((ligne) => (
+            <p key={ligne} className="text-neutral-700">{ligne}</p>
+          ))}
         </div>
         <div className="shrink-0 text-right">
           <p className="font-heading text-lg font-semibold uppercase tracking-wide">{document.titre}</p>

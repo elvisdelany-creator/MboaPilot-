@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { erreurAdressePublique, lireDateServeur, lireEntierSaisi } from "@mboapilot/shared";
+import { erreurAdressePublique, erreurEmail, erreurSiteWeb, lireDateServeur, lireEntierSaisi, MESSAGE_FORME_TELEPHONE, telephoneValide } from "@mboapilot/shared";
 import { toast } from "sonner";
 import { Download, ImagePlus } from "lucide-react";
 import {
@@ -9,6 +9,7 @@ import {
   configurerImprimanteRequete,
   exporterDonneesRequete,
   ErreurAuthentification,
+  modifierCoordonneesSiteRequete,
   modifierEntrepriseRequete,
   televerserLogoEntreprise,
   type Sauvegarde,
@@ -37,6 +38,13 @@ export function ParametresTab() {
   const [imprimanteHote, setImprimanteHote] = useState("");
   const [imprimantePort, setImprimantePort] = useState("9100");
   const [enCoursImprimante, setEnCoursImprimante] = useState(false);
+  // coordonnées de la boutique (site de l'utilisateur)
+  const [adresseSite, setAdresseSite] = useState("");
+  const [telephoneSite, setTelephoneSite] = useState("");
+  const [whatsappSite, setWhatsappSite] = useState("");
+  const [emailSite, setEmailSite] = useState("");
+  const [siteWebSite, setSiteWebSite] = useState("");
+  const [enCoursCoordonnees, setEnCoursCoordonnees] = useState(false);
   const [tauxTva, setTauxTva] = useState("");
   const [mentionsLegales, setMentionsLegales] = useState("");
   const [tauxCommission, setTauxCommission] = useState("");
@@ -97,6 +105,11 @@ export function ParametresTab() {
         setTauxGarantie(String(infos.entreprise.tauxGarantiePourcent));
         setPlafondRemise(String(infos.entreprise.plafondRemiseCaissierPourcent));
         setAdressePublique(infos.entreprise.adressePubliqueVerification ?? "");
+        setAdresseSite(infos.site.adresse ?? "");
+        setTelephoneSite(infos.site.telephone ?? "");
+        setWhatsappSite(infos.site.telephoneWhatsapp ?? "");
+        setEmailSite(infos.site.email ?? "");
+        setSiteWebSite(infos.site.siteWeb ?? "");
         setImprimanteHote(infos.site.imprimanteHote ?? "");
         setImprimantePort(String(infos.site.imprimantePort ?? 9100));
       })
@@ -288,6 +301,31 @@ export function ParametresTab() {
     }
   }
 
+  // coordonnées de la boutique : un champ vide est autorisé (effacé), un champ rempli doit être valide
+  const erreurTelephoneSite = telephoneSite.trim() !== "" && !telephoneValide(telephoneSite) ? `Le téléphone ${MESSAGE_FORME_TELEPHONE}` : null;
+  const erreurWhatsappSite = whatsappSite.trim() !== "" && !telephoneValide(whatsappSite) ? `Le numéro WhatsApp ${MESSAGE_FORME_TELEPHONE}` : null;
+  const erreurEmailSite = emailSite.trim() !== "" ? erreurEmail(emailSite) : null;
+  const erreurSiteWebSite = siteWebSite.trim() !== "" ? erreurSiteWeb(siteWebSite) : null;
+  const coordonneesInvalides = Boolean(erreurTelephoneSite || erreurWhatsappSite || erreurEmailSite || erreurSiteWebSite);
+  async function enregistrerCoordonnees() {
+    setEnCoursCoordonnees(true);
+    try {
+      await modifierCoordonneesSiteRequete(token, {
+        adresse: adresseSite.trim(),
+        telephone: telephoneSite.trim(),
+        telephoneWhatsapp: whatsappSite.trim(),
+        email: emailSite.trim(),
+        siteWeb: siteWebSite.trim(),
+      });
+      toast.success("Coordonnées de la boutique enregistrées.");
+      rechargerEntreprise();
+    } catch (erreur) {
+      gererErreur(erreur, "Échec de l'enregistrement des coordonnées.");
+    } finally {
+      setEnCoursCoordonnees(false);
+    }
+  }
+
   // 11.4, 6.7 : "Compatibilité imprimante thermique 80mm (protocole
   // ESC/POS)" — une chaîne vide efface la configuration (repli sur
   // l'impression navigateur existante).
@@ -311,6 +349,45 @@ export function ParametresTab() {
 
   return (
     <div className="space-y-4">
+      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Coordonnées de la boutique</p>
+      <Card className="max-w-xl gap-4 p-4">
+        <p className="text-sm text-muted-foreground">
+          Imprimées sous le nom de la boutique sur les tickets, les factures et les pro-formas. Les numéros de téléphone et WhatsApp sont aussi ajoutés à la
+          fin des SMS de relance, pour que le client puisse vous répondre. Tous les champs sont facultatifs.
+        </p>
+        <div>
+          <Label htmlFor="coordonnees-adresse">Adresse</Label>
+          <Input id="coordonnees-adresse" value={adresseSite} onChange={(e) => setAdresseSite(e.target.value)} maxLength={300} placeholder="Ex. Boulevard de la Liberté, Akwa, Douala" className="mt-1" />
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div>
+            <Label htmlFor="coordonnees-telephone">Téléphone</Label>
+            <Input id="coordonnees-telephone" type="tel" maxLength={30} value={telephoneSite} onChange={(e) => setTelephoneSite(e.target.value)} placeholder="Ex. 677 00 00 00" aria-invalid={erreurTelephoneSite !== null} className="mt-1" />
+            {erreurTelephoneSite && <p className="mt-1 text-xs text-destructive">{erreurTelephoneSite}</p>}
+          </div>
+          <div>
+            <Label htmlFor="coordonnees-whatsapp">Téléphone WhatsApp</Label>
+            <Input id="coordonnees-whatsapp" type="tel" maxLength={30} value={whatsappSite} onChange={(e) => setWhatsappSite(e.target.value)} placeholder="Ex. 699 11 22 33" aria-invalid={erreurWhatsappSite !== null} className="mt-1" />
+            {erreurWhatsappSite && <p className="mt-1 text-xs text-destructive">{erreurWhatsappSite}</p>}
+          </div>
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div>
+            <Label htmlFor="coordonnees-email">E-mail</Label>
+            <Input id="coordonnees-email" type="email" maxLength={254} value={emailSite} onChange={(e) => setEmailSite(e.target.value)} placeholder="Ex. contact@maboutique.cm" aria-invalid={erreurEmailSite !== null} className="mt-1" />
+            {erreurEmailSite && <p className="mt-1 text-xs text-destructive">{erreurEmailSite}</p>}
+          </div>
+          <div>
+            <Label htmlFor="coordonnees-site-web">Site web</Label>
+            <Input id="coordonnees-site-web" maxLength={200} value={siteWebSite} onChange={(e) => setSiteWebSite(e.target.value)} placeholder="Ex. www.maboutique.cm" aria-invalid={erreurSiteWebSite !== null} className="mt-1" />
+            {erreurSiteWebSite && <p className="mt-1 text-xs text-destructive">{erreurSiteWebSite}</p>}
+          </div>
+        </div>
+        <Button className="w-fit cursor-pointer" disabled={enCoursCoordonnees || coordonneesInvalides} onClick={enregistrerCoordonnees}>
+          {enCoursCoordonnees ? "Enregistrement…" : "Enregistrer"}
+        </Button>
+      </Card>
+
       <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Logo de l'entreprise</p>
       <Card className="max-w-xl gap-3 p-4">
         <div className="flex items-center gap-4">

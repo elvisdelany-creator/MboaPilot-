@@ -1,8 +1,8 @@
 import { eq } from "drizzle-orm";
 import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
-import { normaliserLibelle } from "@mboapilot/shared";
-import { texteFacultatif, texteObligatoire } from "../../lib/champs-texte.js";
+import { erreurEmail, erreurSiteWeb, normaliserLibelle } from "@mboapilot/shared";
+import { telephoneFacultatif, texteFacultatif, texteObligatoire } from "../../lib/champs-texte.js";
 import { verifierEntier } from "../../lib/validation.js";
 
 export interface CreerSiteInput {
@@ -40,6 +40,11 @@ export function listerSites(db: Db, idEntreprise: number) {
 export interface ModifierSiteInput {
   nom?: string;
   adresse?: string;
+  // coordonnées de la boutique (imprimées sur les documents, numéros repris dans les SMS de relance) : chaîne vide = effacer
+  telephone?: string;
+  telephoneWhatsapp?: string;
+  email?: string;
+  siteWeb?: string;
   actif?: boolean;
   // 11.4, 6.7 : "Compatibilité imprimante thermique 80mm (protocole
   // ESC/POS)" — chaîne vide pour imprimanteHote efface la configuration
@@ -57,6 +62,18 @@ export function modifierSite(db: Db, idSite: number, input: ModifierSiteInput) {
     if (existant) exigerNomSiteLibre(db, existant.idEntreprise, nom, idSite);
   }
   const adresse = texteFacultatif(input.adresse, "L'adresse du site", 300);
+  const telephone = telephoneFacultatif(input.telephone, "Le téléphone de la boutique");
+  const telephoneWhatsapp = telephoneFacultatif(input.telephoneWhatsapp, "Le téléphone WhatsApp de la boutique");
+  const email = texteFacultatif(input.email, "L'e-mail de la boutique", 254);
+  if (typeof email === "string") {
+    const erreur = erreurEmail(email);
+    if (erreur) throw new Error(erreur);
+  }
+  const siteWeb = texteFacultatif(input.siteWeb, "Le site web de la boutique", 200);
+  if (typeof siteWeb === "string") {
+    const erreur = erreurSiteWeb(siteWeb);
+    if (erreur) throw new Error(erreur);
+  }
   if (input.actif !== undefined && typeof input.actif !== "boolean") throw new Error("Le champ actif doit être vrai ou faux");
   if (input.imprimanteHote !== undefined && typeof input.imprimanteHote !== "string") throw new Error("L'hôte de l'imprimante doit être un texte");
   verifierEntier(input.imprimantePort, "Le port de l'imprimante", { min: 1, max: 65535, nullable: false });
@@ -67,6 +84,10 @@ export function modifierSite(db: Db, idSite: number, input: ModifierSiteInput) {
     .set({
       ...(nom !== undefined && { nom }),
       ...(adresse !== undefined && { adresse }),
+      ...(telephone !== undefined && { telephone }),
+      ...(telephoneWhatsapp !== undefined && { telephoneWhatsapp }),
+      ...(email !== undefined && { email }),
+      ...(siteWeb !== undefined && { siteWeb }),
       ...(input.actif !== undefined && { actif: input.actif ? 1 : 0 }),
       ...(efface && { imprimanteHote: null, imprimantePort: null }),
       ...(!efface && input.imprimanteHote !== undefined && { imprimanteHote: input.imprimanteHote }),

@@ -1,3 +1,5 @@
+import { lignesContactBoutique, type CoordonneesBoutique } from "@mboapilot/shared";
+
 export interface LigneTicketEscPos {
   libelle: string;
   montant: number;
@@ -5,7 +7,7 @@ export interface LigneTicketEscPos {
 
 export interface TicketEscPosInput {
   entreprise: { nom: string; devise: string; mentionsLegales: string | null };
-  site: { nom: string; adresse: string | null };
+  site: { nom: string; adresse: string | null } & CoordonneesBoutique;
   operation: string;
   numeroAbonnement: number | null;
   lignes: LigneTicketEscPos[];
@@ -82,6 +84,7 @@ export function construireTicketEscPos(donnees: TicketEscPosInput): Buffer {
 
   const morceaux: Buffer[] = [INIT, PAGE_WPC1252, centrer(true), gras(true), ligne(donnees.entreprise.nom), gras(false), ligne(donnees.site.nom)];
   if (donnees.site.adresse) morceaux.push(ligne(donnees.site.adresse));
+  for (const contact of lignesContactBoutique(donnees.site)) morceaux.push(ligne(contact));
   morceaux.push(centrer(false), separateur());
   morceaux.push(ligne(formateurDateHeure.format(new Date(donnees.dateHeure))));
   morceaux.push(ligne(donnees.numeroAbonnement !== null ? `${donnees.operation} — abonnement n° ${donnees.numeroAbonnement}` : donnees.operation));

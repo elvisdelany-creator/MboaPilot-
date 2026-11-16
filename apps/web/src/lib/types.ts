@@ -100,7 +100,18 @@ export interface InfosEntreprise {
     adressePubliqueVerification: string | null;
   };
   // 11.4, 6.7 : imprimante réseau ESC/POS rattachée au site — null si non configurée
-  site: { idSite: number; nom: string; adresse: string | null; imprimanteHote: string | null; imprimantePort: number | null };
+  site: {
+    idSite: number;
+    nom: string;
+    adresse: string | null;
+    // coordonnées de la boutique, imprimées sous son nom ; null = non renseigné
+    telephone: string | null;
+    telephoneWhatsapp: string | null;
+    email: string | null;
+    siteWeb: string | null;
+    imprimanteHote: string | null;
+    imprimantePort: number | null;
+  };
 }
 
 // 5.9 : compte fournisseur mutualisé (Netflix, Prime Vidéo, IPTV…)

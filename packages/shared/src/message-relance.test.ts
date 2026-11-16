@@ -62,3 +62,22 @@ describe("delaiEcheance", () => {
     expect(delaiEcheance(-1)).toBe("aujourd'hui");
   });
 });
+
+// le client doit pouvoir répondre : le numéro de la boutique (appel ou WhatsApp) termine le SMS quand il est renseigné
+describe("messageRelanceEcheance : contact de la boutique", () => {
+  it("ajoute le contact à la fin du message", () => {
+    const m = messageRelanceEcheance({ ...base, joursRestants: 3, rang: 2, contact: "Contact : 677 00 00 00 ou WhatsApp 699 11 22 33." });
+
+    expect(m).toBe(
+      "Boutique Akwa : rappel — votre abonnement CANAL+ EVASION n°12 arrive à échéance dans 3 jours (30/10/2026). Réabonnez-vous dès maintenant. Contact : 677 00 00 00 ou WhatsApp 699 11 22 33.",
+    );
+  });
+
+  it("sans contact (absent, vide ou espaces), le message est celui d'avant", () => {
+    const sans = messageRelanceEcheance({ ...base, joursRestants: 3, rang: 2 });
+
+    expect(messageRelanceEcheance({ ...base, joursRestants: 3, rang: 2, contact: "" })).toBe(sans);
+    expect(messageRelanceEcheance({ ...base, joursRestants: 3, rang: 2, contact: "   " })).toBe(sans);
+    expect(sans.endsWith("Réabonnez-vous dès maintenant.")).toBe(true);
+  });
+});

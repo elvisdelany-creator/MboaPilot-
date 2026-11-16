@@ -2,6 +2,7 @@ export interface DonneesSavPret {
   entreprise: string; // nom de la boutique, vide si inconnu
   numeroDossier: number;
   montantDu: number; // montant facturé à régler à la remise de l'appareil, 0 sous garantie ou sans frais
+  contact?: string; // fin du message : où joindre la boutique (voir texteContactMessage), absent ou vide si aucun numéro n'est renseigné
 }
 
 // milliers séparés par une espace ordinaire : Intl fr-FR emploie une espace fine insécable, que toutes les passerelles SMS ne
@@ -18,5 +19,7 @@ export function messageSavPret(donnees: DonneesSavPret): string {
   const phrase = `votre appareil (dossier n°${donnees.numeroDossier}) est prêt à être récupéré.`;
   const debut = boutique ? `${boutique} : ${phrase}` : phrase.charAt(0).toUpperCase() + phrase.slice(1);
   const reglement = donnees.montantDu > 0 ? `Montant à régler : ${montantSms(donnees.montantDu)} FCFA.` : "Aucun frais à régler.";
-  return `${debut} ${reglement}`;
+  const fin = `${debut} ${reglement}`;
+  const contact = donnees.contact?.trim();
+  return contact ? `${fin} ${contact}` : fin;
 }

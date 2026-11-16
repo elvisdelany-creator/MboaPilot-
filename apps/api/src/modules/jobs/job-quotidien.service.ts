@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm";
-import { classerUrgenceEcheance, decalerJour, evaluerExpiration, evaluerSuiviCommission, joursAvantEcheance, messageRelanceEcheance } from "@mboapilot/shared";
+import { classerUrgenceEcheance, decalerJour, evaluerExpiration, evaluerSuiviCommission, joursAvantEcheance, messageRelanceEcheance, texteContactMessage } from "@mboapilot/shared";
 import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
 import { trouverDureeConservationDonneesEntreprise, trouverJalonsAlerteEntreprise } from "../entreprise/entreprise.repository.js";
@@ -119,6 +119,8 @@ export function executerJobQuotidien(
             dateFin: formaterDateFrancaise(abonnement.dateFin),
             joursRestants,
             rang: jalon.rang,
+            // le client peut répondre : numéros de la boutique de l'abonnement (vide si non renseignés)
+            contact: texteContactMessage(db.select().from(schema.site).where(eq(schema.site.idSite, abonnement.siteId)).get() ?? {}),
           }),
           idAlerte: alerte.idAlerte,
         });

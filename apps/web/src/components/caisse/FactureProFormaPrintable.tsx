@@ -1,4 +1,5 @@
 import { ArrowLeft, Printer } from "lucide-react";
+import { lignesContactBoutique } from "@mboapilot/shared";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
@@ -78,6 +79,9 @@ export function FactureProFormaPrintable({ infosEntreprise, logoUrl, nomClient, 
           <p className="font-semibold text-card-foreground">{infosEntreprise?.entreprise.nom ?? "—"}</p>
           <p className="text-xs text-muted-foreground">{infosEntreprise?.site.nom}</p>
           {infosEntreprise?.site.adresse && <p className="text-xs text-muted-foreground">{infosEntreprise.site.adresse}</p>}
+          {lignesContactBoutique(infosEntreprise?.site ?? {}).map((ligne) => (
+            <p key={ligne} className="text-xs text-muted-foreground">{ligne}</p>
+          ))}
         </div>
 
         <Separator />

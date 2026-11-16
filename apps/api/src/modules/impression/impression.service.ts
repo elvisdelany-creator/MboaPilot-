@@ -80,7 +80,7 @@ export async function imprimerTicket(db: Db, fournisseur: FournisseurImpression,
   const donnees = construireTicketEscPos({
     ...params.ticket,
     entreprise: { nom: entreprise.nom, devise: entreprise.devise, mentionsLegales: entreprise.mentionsLegales },
-    site: { nom: site.nom, adresse: site.adresse },
+    site: { nom: site.nom, adresse: site.adresse, telephone: site.telephone, telephoneWhatsapp: site.telephoneWhatsapp, email: site.email, siteWeb: site.siteWeb },
   });
 
   await fournisseur.imprimer(site.imprimanteHote, site.imprimantePort ?? PORT_PAR_DEFAUT, donnees);

@@ -395,3 +395,17 @@ describe("changerStatutSav : montants invalides (5.10)", () => {
     expect(trouverDossierSav(db, idDossierSav)?.statut).toBe("RECU");
   });
 });
+
+describe("changerStatutSav : contact de la boutique dans le SMS « Prêt » (8.4)", () => {
+  it("termine le SMS par le numéro WhatsApp de la boutique quand il est renseigné", () => {
+    db.update(schema.site).set({ telephoneWhatsapp: "699 11 22 33" }).where(eq(schema.site.idSite, siteId)).run();
+    const idDossier = creerDossierSav(db, { siteId, descriptionPanne: "Ne s'allume plus", sousGarantie: false, userId, clientNom: "Mendo Luc", clientTelephone: "677889900" }).idDossierSav;
+    changerStatutSav(db, { idDossierSav: idDossier, nouveauStatut: "DIAGNOSTIC", userId });
+    changerStatutSav(db, { idDossierSav: idDossier, nouveauStatut: "REPARATION", userId });
+
+    changerStatutSav(db, { idDossierSav: idDossier, nouveauStatut: "PRET", userId, montantMainOeuvre: 5000 });
+
+    const notification = db.select().from(schema.notification).where(eq(schema.notification.idDossierSav, idDossier)).get();
+    expect(notification?.message).toBe(`Boutique Test : votre appareil (dossier n°${idDossier}) est prêt à être récupéré. Montant à régler : 5 000 FCFA. Contact WhatsApp : 699 11 22 33.`);
+  });
+});

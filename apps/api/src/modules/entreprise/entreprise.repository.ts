@@ -28,7 +28,18 @@ export interface InfosEntreprise {
     plafondRemiseCaissierPourcent: number;
     adressePubliqueVerification: string | null;
   };
-  site: { idSite: number; nom: string; adresse: string | null; imprimanteHote: string | null; imprimantePort: number | null };
+  site: {
+    idSite: number;
+    nom: string;
+    adresse: string | null;
+    // coordonnées de la boutique, imprimées sous son nom ; null = non renseigné
+    telephone: string | null;
+    telephoneWhatsapp: string | null;
+    email: string | null;
+    siteWeb: string | null;
+    imprimanteHote: string | null;
+    imprimantePort: number | null;
+  };
 }
 
 // 6.7 : identification de l'entreprise/site — en-tête du ticket de caisse,
@@ -62,7 +73,17 @@ export function trouverInfosEntrepriseParSite(db: Db, siteId: number): InfosEntr
       plafondRemiseCaissierPourcent: entreprise.plafondRemiseCaissierPourcent,
       adressePubliqueVerification: entreprise.adressePubliqueVerification,
     },
-    site: { idSite: site.idSite, nom: site.nom, adresse: site.adresse, imprimanteHote: site.imprimanteHote, imprimantePort: site.imprimantePort },
+    site: {
+      idSite: site.idSite,
+      nom: site.nom,
+      adresse: site.adresse,
+      telephone: site.telephone,
+      telephoneWhatsapp: site.telephoneWhatsapp,
+      email: site.email,
+      siteWeb: site.siteWeb,
+      imprimanteHote: site.imprimanteHote,
+      imprimantePort: site.imprimantePort,
+    },
   };
 }
 

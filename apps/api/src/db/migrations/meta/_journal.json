@@ -253,6 +253,13 @@
       "when": 1793125509046,
       "tag": "0035_frontiere_cloture_caisse",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "6",
+      "when": 1794840480661,
+      "tag": "0036_coordonnees_boutique",
+      "breakpoints": true
     }
   ]
 }

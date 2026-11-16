@@ -26,6 +26,7 @@ export { filtrerArticles, resoudreEntreeRecherche, type ArticleRecherchable, typ
 export { bornesJourDouala, heureDouala, jourDouala } from "./jour-douala.js";
 export { LIMITE_RESULTATS_RECHERCHE_ABONNES } from "./limite-recherche.js";
 export { MESSAGE_FORME_TELEPHONE, memeTelephone, telephoneValide } from "./telephone.js";
+export { erreurEmail, erreurSiteWeb, lignesContactBoutique, texteContactMessage, type CoordonneesBoutique } from "./coordonnees.js";
 export { lireEntierSaisi } from "./saisie-entier.js";
 export { AIDE_IDENTIFIANT_CONNEXION, erreurIdentifiantConnexion, normaliserIdentifiant } from "./identifiant-connexion.js";
 export { soldeFacture, soldeTotalDu, type FactureSolde, type PaiementSolde } from "./solde-facture.js";

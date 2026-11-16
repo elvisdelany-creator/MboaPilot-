@@ -6,6 +6,7 @@ import {
   chargerCatalogue,
   chargerComptesPartages,
   chargerInfosEntreprise,
+  chargerDisponibiliteMobileMoney,
   chargerOptions,
   chargerProduits,
   chargerUrlLogoEntreprise,
@@ -180,6 +181,15 @@ export function CaissePage({ onNaviguer, onOuvrirCatalogueAdministration, abonne
       })
       .catch((e) => gererErreur(e, "Impossible de charger le catalogue."));
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token]);
+
+  // mode Mobile Money masqué tant que le serveur ne le déclare pas utilisable (le simulateur confirmerait un paiement que personne n'a reçu) ;
+  // en cas de doute (réponse en erreur), il reste masqué
+  const [mobileMoneyDisponible, setMobileMoneyDisponible] = useState(false);
+  useEffect(() => {
+    chargerDisponibiliteMobileMoney(token)
+      .then(setMobileMoneyDisponible)
+      .catch(() => setMobileMoneyDisponible(false));
   }, [token]);
 
   useEffect(() => {
@@ -803,6 +813,7 @@ export function CaissePage({ onNaviguer, onOuvrirCatalogueAdministration, abonne
                 // une vente à reprendre (Mobile Money non abouti) existe déjà côté serveur : son client, ou l'absence de client,
                 // est acquis
                 clientRattache={abonneSelectionne !== null || venteAReprendre !== null}
+                mobileMoneyDisponible={mobileMoneyDisponible}
                 enCours={enCours}
                 onValider={validerVenteProduits}
                 onImprimerProForma={() => setProFormaVisible(true)}
@@ -821,6 +832,7 @@ export function CaissePage({ onNaviguer, onOuvrirCatalogueAdministration, abonne
               />
               <TicketPanel
                 abonneSelectionne={abonneSelectionne}
+                mobileMoneyDisponible={mobileMoneyDisponible}
                 formuleSelectionnee={formuleSelectionnee}
                 kitSelectionne={kitSelectionne}
                 numeroSerie={numeroSerie}

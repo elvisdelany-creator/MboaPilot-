@@ -13,11 +13,25 @@ const ERREUR_SITE_FACTURE = { erreur: "Cette facture n'appartient pas à votre s
 
 // 6.6 : paiement mobile (Orange Money et extensible) — mêmes rôles que les
 // autres opérations d'encaissement de la caisse (2.5.1).
-export function registerPaiementMobileRoutes(app: FastifyInstance, db: Db, fournisseur: FournisseurPaiementMobile, guards: RouteGuards) {
+// Le seul opérateur branché aujourd'hui est un simulateur qui confirme tout paiement : refusé par le serveur tant que le mode n'est pas disponible
+// (voir app.ts), pour qu'aucun client de l'API, ni un écran resté ouvert, ne puisse enregistrer un encaissement que personne n'a reçu.
+export const MESSAGE_MOBILE_MONEY_INDISPONIBLE =
+  "Le paiement Mobile Money n'est pas disponible : aucun opérateur réel n'est branché. Vérifiez le paiement sur le téléphone de la boutique, puis encaissez en virement avec la référence du SMS.";
+
+export function registerPaiementMobileRoutes(app: FastifyInstance, db: Db, fournisseur: FournisseurPaiementMobile, guards: RouteGuards, mobileMoneyDisponible: boolean) {
+  // la caisse l'interroge pour n'afficher le mode Mobile Money que s'il est utilisable
+  app.get("/api/v1/paiement-mobile/disponibilite", { preHandler: [guards.authRequis] }, async (_request, reply) => {
+    reply.code(200).send({ disponible: mobileMoneyDisponible });
+  });
+
   app.post<{ Body: InitierPaiementMobileParams }>(
     "/api/v1/paiements-mobiles",
     { preHandler: [guards.authRequis, guards.ventes] },
     async (request, reply) => {
+      if (!mobileMoneyDisponible) {
+        reply.code(403).send({ erreur: MESSAGE_MOBILE_MONEY_INDISPONIBLE });
+        return;
+      }
       const facture = identifiantLiable(request.body.idFacture) ? db.select().from(schema.facture).where(eq(schema.facture.idFacture, request.body.idFacture)).get() : undefined;
       if (facture && !siteAutorise(request.user, facture.siteId)) {
         reply.code(403).send(ERREUR_SITE_FACTURE);

@@ -44,6 +44,9 @@ export interface BuildAppOptions {
   // production, ou un fournisseur factice déterministe dans les tests —
   // par défaut le simulateur local (aucun accès réseau réel).
   fournisseurPaiementMobile?: FournisseurPaiementMobile;
+  // mode Mobile Money à la caisse. Par défaut : disponible en démo ou quand un fournisseur est branché explicitement ; sinon coupé, car le seul
+  // opérateur fourni est un simulateur qui confirme tout paiement (voir paiement-mobile/simulateur-orange-money.ts)
+  mobileMoneyActif?: boolean;
   // 2.6 : dossier de destination des sauvegardes (VACUUM INTO)
   dossierSauvegardes?: string;
   // 5.10 : dossier de stockage des photos jointes aux dossiers SAV
@@ -152,6 +155,7 @@ export function buildApp(db: Db, options: BuildAppOptions) {
   registerAuthRoutes(app, db, authRequis, { sansVerrouillage: options.modeDemo === true });
   registerInstallationRoutes(app, db);
   const fournisseurPaiementMobile = options.fournisseurPaiementMobile ?? new SimulateurOrangeMoney();
+  const mobileMoneyActif = options.mobileMoneyActif ?? (options.modeDemo === true || options.fournisseurPaiementMobile !== undefined);
   const fournisseurImpression = options.fournisseurImpression ?? new ImprimanteReseauTcp();
 
   // 10.3, 10.4 : un abonnement éditeur expiré ou une revalidation périodique
@@ -230,7 +234,7 @@ export function buildApp(db: Db, options: BuildAppOptions) {
   registerSavRoutes(app, db, options.dossierPhotosSav ?? dossierPhotosSav(), { authRequis, ventes, sav });
   registerApporteursRoutes(app, db, { authRequis, ventes, gestionApporteurs, consultationApporteurs });
   registerStockRoutes(app, db, { authRequis, ventes, gestionStock, lectureInterne });
-  registerPaiementMobileRoutes(app, db, fournisseurPaiementMobile, { authRequis, ventes });
+  registerPaiementMobileRoutes(app, db, fournisseurPaiementMobile, { authRequis, ventes }, mobileMoneyActif);
   registerTableauBordRoutes(app, db, { authRequis, ventes, pilotage });
   registerExportComptableRoutes(app, db, { authRequis, pilotage });
   registerUtilisateursRoutes(app, db, { authRequis, admin });

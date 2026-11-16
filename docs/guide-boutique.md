@@ -3,8 +3,8 @@
 Ce guide est pour le gérant. MboaPilot tourne **sur l'ordinateur de la boutique** : pas besoin d'Internet pour
 vendre, et rien n'est exposé en ligne. Les détails techniques sont dans `exploitation.md`.
 
-> ⚠️ **Avant la première vraie vente, lisez la section 4** : le paiement « Mobile Money » de l'application est
-> pour l'instant un **simulateur**.
+> ⚠️ **Avant la première vraie vente, lisez la section 4** : le paiement « Mobile Money » n'est pas branché à un
+> vrai opérateur ; l'application le **masque** donc à la caisse.
 
 ## 1. Ce qu'il faut
 
@@ -48,12 +48,15 @@ vendre, et rien n'est exposé en ligne. Les détails techniques sont dans `explo
 | **Comptant** | Fiable. |
 | **Chèque** | Fiable (banque, numéro, titulaire, date). |
 | **Virement** | Fiable (banque et référence). |
-| **Mobile Money** | ⚠️ **Simulateur.** L'application ne parle à aucun opérateur : elle déclare le paiement « confirmé » au bout de quelques secondes, **que le client ait payé ou non**. |
+| **Mobile Money** | ⛔ **Masqué à la caisse** : le seul opérateur fourni est un simulateur, qui déclarerait le paiement « confirmé » au bout de quelques secondes, **que le client ait payé ou non**. Le serveur refuse aussi de l'enregistrer (message « Le paiement Mobile Money n'est pas disponible »). |
 
-**Pour un vrai paiement Mobile Money, n'utilisez pas le mode « Mobile Money ».** Vérifiez d'abord la réception du
-paiement sur le téléphone de la boutique, puis encaissez en **Virement**, en indiquant l'opérateur comme banque
-(par exemple « Orange Money ») et **l'identifiant de transaction du SMS** comme référence. Il reste tracé et
-rapprochable. Le branchement à un vrai opérateur n'existe pas encore.
+**Pour un paiement Mobile Money d'un client**, vérifiez d'abord la réception du paiement sur le téléphone de la
+boutique, puis encaissez en **Virement**, en indiquant l'opérateur comme banque (par exemple « Orange Money ») et
+**l'identifiant de transaction du SMS** comme référence. Il reste tracé et rapprochable. Le branchement à un vrai
+opérateur n'existe pas encore.
+
+*Pour une formation ou un essai sur un poste* (jamais pour de l'argent réel), l'administrateur technique peut rouvrir
+le mode simulé en lançant MboaPilot avec la variable `MBOAPILOT_MOBILE_MONEY_SIMULE=1` (voir `exploitation.md`).
 
 ## 5. La journée et la sauvegarde
 

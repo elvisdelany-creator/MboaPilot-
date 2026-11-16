@@ -56,6 +56,8 @@ interface Props {
   // (null : pas de plafond propre au rôle)
   plafondRemise: (prixBase: number) => number;
   plafondRemisePourcent: number | null;
+  // faux : le mode Mobile Money n'est pas proposé (voir CaissePage)
+  mobileMoneyDisponible: boolean;
   enCours: boolean;
   onValider: (paiement: PaiementSaisi) => void;
   onEchangerMateriel: () => void;
@@ -86,6 +88,7 @@ export function TicketPanel({
   onChangerRemise,
   plafondRemise,
   plafondRemisePourcent,
+  mobileMoneyDisponible,
   enCours,
   onValider,
   onEchangerMateriel,
@@ -328,7 +331,7 @@ export function TicketPanel({
               <SelectItem value="CASH">Comptant (cash)</SelectItem>
               <SelectItem value="CHEQUE">Chèque</SelectItem>
               <SelectItem value="VIREMENT">Virement bancaire</SelectItem>
-              <SelectItem value="MOBILE_MONEY">Mobile Money (Orange Money)</SelectItem>
+              {mobileMoneyDisponible && <SelectItem value="MOBILE_MONEY">Mobile Money (Orange Money)</SelectItem>}
             </SelectContent>
           </Select>
         </div>

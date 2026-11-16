@@ -29,7 +29,10 @@ const dossierSauvegardes = dossierSauvegardesConfigure();
 const dossierInterfaceWeb = resoudreDossierInterfaceWeb();
 // démo publique (voir demo/mode-demo.ts) ; MBOAPILOT_PROXY=N : derrière N proxys d'hébergeur (1 en général), dont on lit l'adresse du visiteur
 const sautsProxy = Number(process.env.MBOAPILOT_PROXY ?? 0);
-const app = buildApp(db, { jwtSecret: obtenirSecretJwt(), dossierSauvegardes, dossierInterfaceWeb, modeDemo: estModeDemo(), faireConfianceAuProxy: Number.isFinite(sautsProxy) ? sautsProxy : 0 });
+// Mobile Money : le seul opérateur fourni est un simulateur qui confirme tout paiement. Coupé dans une vraie boutique ; MBOAPILOT_MOBILE_MONEY_SIMULE=1
+// le rouvre pour des essais (formation, démonstration sur un poste), jamais pour encaisser de l'argent réel.
+const mobileMoneySimule = process.env.MBOAPILOT_MOBILE_MONEY_SIMULE === "1" ? true : undefined;
+const app = buildApp(db, { jwtSecret: obtenirSecretJwt(), dossierSauvegardes, dossierInterfaceWeb, modeDemo: estModeDemo(), faireConfianceAuProxy: Number.isFinite(sautsProxy) ? sautsProxy : 0, mobileMoneyActif: mobileMoneySimule });
 const port = Number(process.env.PORT ?? 3001);
 // 2.2 : le poste de caisse n'écoute que sur lui-même. Seul un hébergement (démo publique) fixe MBOAPILOT_HOTE=0.0.0.0 pour recevoir le proxy de
 // l'hébergeur. Variable propre à MboaPilot, pas « HOST » : un nom aussi courant pourrait exister par hasard sur un poste de caisse et l'exposer au réseau.

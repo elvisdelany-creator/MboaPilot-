@@ -28,6 +28,8 @@ interface Props {
   plafondRemisePourcent: number | null;
   // 6.4 : un solde restant dû doit avoir un débiteur — sans client, seule une vente soldée (ou Mobile Money) peut être validée
   clientRattache: boolean;
+  // faux : le mode Mobile Money n'est pas proposé (voir CaissePage)
+  mobileMoneyDisponible: boolean;
   enCours: boolean;
   onValider: (paiement: PaiementSaisi) => void;
   onImprimerProForma: () => void;
@@ -51,6 +53,7 @@ export function TicketProduitsPanel({
   plafondRemise,
   plafondRemisePourcent,
   clientRattache,
+  mobileMoneyDisponible,
   enCours,
   onValider,
   onImprimerProForma,
@@ -197,7 +200,7 @@ export function TicketProduitsPanel({
               <SelectItem value="CASH">Comptant (cash)</SelectItem>
               <SelectItem value="CHEQUE">Chèque</SelectItem>
               <SelectItem value="VIREMENT">Virement bancaire</SelectItem>
-              <SelectItem value="MOBILE_MONEY">Mobile Money (Orange Money)</SelectItem>
+              {mobileMoneyDisponible && <SelectItem value="MOBILE_MONEY">Mobile Money (Orange Money)</SelectItem>}
             </SelectContent>
           </Select>
         </div>

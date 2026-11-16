@@ -1204,6 +1204,12 @@ export interface ResultatChargementDepart {
   notes: string[];
 }
 
+// Le seul opérateur Mobile Money fourni est un simulateur : le serveur dit si le mode est utilisable (démo, essai explicite, vrai opérateur)
+export async function chargerDisponibiliteMobileMoney(token: string): Promise<boolean> {
+  const reponse = await appelerServeur(`${BASE}/paiement-mobile/disponibilite`, { headers: headersAuth(token) });
+  return (await lireJson<{ disponible: boolean }>(reponse)).disponible === true;
+}
+
 export async function chargerOperateursDepart(token: string): Promise<OperateurDepart[]> {
   const reponse = await appelerServeur(`${BASE}/catalogue/depart`, { headers: headersAuth(token) });
   return lireJson<OperateurDepart[]>(reponse);

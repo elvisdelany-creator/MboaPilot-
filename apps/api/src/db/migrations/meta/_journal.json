@@ -260,6 +260,13 @@
       "when": 1794840480661,
       "tag": "0036_coordonnees_boutique",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "6",
+      "when": 1794849258072,
+      "tag": "0037_relances_whatsapp",
+      "breakpoints": true
     }
   ]
 }

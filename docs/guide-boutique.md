@@ -76,6 +76,10 @@ dossier tant que vous n'avez pas vérifié. Si vous préférez repartir de zéro
    > au client ; **c'est vous qui appuyez sur « envoyer »**, depuis votre propre WhatsApp (sur ce poste ou sur le
    > téléphone de la boutique). Si le numéro du client n'est pas utilisable (par exemple 10 chiffres sans indicatif),
    > le bouton est grisé : corrigez le numéro dans sa fiche, avec **9 chiffres** (Cameroun) ou l'indicatif en `+`.
+   > **Chaque clic est noté** dans la fiche du client (onglet Notifications : message, heure, nom de la personne, mention
+   > « WhatsApp ouvert : envoi à la main »), et la ligne du tableau de bord affiche « Relancé sur WhatsApp le … » :
+   > on voit tout de suite qui a déjà été relancé. L'application ne peut pas savoir si vous avez vraiment envoyé le
+   > message : elle note que WhatsApp a été ouvert.
 4. **Utilisateurs** : un compte par personne (caissier, technicien SAV, comptable, apporteur…). Pas de compte
    partagé : chaque action est tracée au nom de celui qui la fait.
 5. **Format d'impression** : sur l'écran du reçu, choisissez **Ticket 80 mm** ou **A5 × 2** (une feuille A4

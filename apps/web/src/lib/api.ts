@@ -1490,6 +1490,20 @@ export async function configurerImprimanteRequete(token: string, payload: { impr
   return lireJson<InfosEntreprise["site"]>(reponse);
 }
 
+// Relance WhatsApp ouverte depuis le tableau de bord : notée dans le journal des notifications du client (statut « ouverte », jamais « envoyée »)
+export async function enregistrerRelanceWhatsAppRequete(
+  token: string,
+  idAbonne: number,
+  payload: { evenement: "ALERTE_ECHEANCE" | "ABONNEMENT_EXPIRE"; message: string; numeroAbonnement: number },
+): Promise<{ dateEnvoi: string }> {
+  const reponse = await appelerServeur(`${BASE}/abonnes/${idAbonne}/relances-whatsapp`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headersAuth(token) },
+    body: JSON.stringify(payload),
+  });
+  return lireJson<{ dateEnvoi: string }>(reponse);
+}
+
 // coordonnées de la boutique de l'appelant : chaîne vide = effacer, champ absent = inchangé
 export interface CoordonneesSitePayload {
   adresse?: string;

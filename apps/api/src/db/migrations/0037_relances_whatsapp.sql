@@ -1,0 +1,2 @@
+ALTER TABLE `notification` ADD `numero_abonnement` integer REFERENCES abonnement(numero_abonnement);--> statement-breakpoint
+ALTER TABLE `notification` ADD `utilisateur_id` integer REFERENCES utilisateur(id_user);

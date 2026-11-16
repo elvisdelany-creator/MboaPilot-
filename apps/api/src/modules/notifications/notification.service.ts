@@ -1,4 +1,4 @@
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq, inArray, max } from "drizzle-orm";
 import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
 import type { CanalNotification, FournisseurNotification, ResultatEnvoi } from "./fournisseur.js";
@@ -92,12 +92,70 @@ export function envoyerNotificationClientPonctuel(db: Db, fournisseur: Fournisse
     .get();
 }
 
-// 8.3 : journal des notifications d'un abonné, consultable (statut d'envoi par canal)
+// 8.3 : journal des notifications d'un abonné, consultable (statut d'envoi par canal). `auteur` : la personne de la boutique qui a ouvert une relance
+// WhatsApp (null pour les SMS et e-mails automatiques).
 export function listerNotificationsAbonne(db: Db, idAbonne: number) {
   return db
-    .select()
+    .select({ notification: schema.notification, prenom: schema.utilisateur.prenom, nom: schema.utilisateur.nom })
     .from(schema.notification)
+    .leftJoin(schema.utilisateur, eq(schema.notification.utilisateurId, schema.utilisateur.idUser))
     .where(eq(schema.notification.idAbonne, idAbonne))
     .orderBy(desc(schema.notification.idNotification))
+    .all()
+    .map(({ notification, prenom, nom }) => ({ ...notification, auteur: prenom !== null && nom !== null ? `${prenom} ${nom}` : null }));
+}
+
+// --- Relances WhatsApp : le clic sur « Relancer sur WhatsApp » (tableau de bord) est noté dans le journal du client ---
+// L'application ouvre WhatsApp avec le message prêt ; c'est la personne de la boutique qui l'envoie. Le journal dit donc « ouverte », jamais
+// « envoyée » : rien ne permet de confirmer l'envoi.
+const EVENEMENTS_RELANCE_WHATSAPP = ["ALERTE_ECHEANCE", "ABONNEMENT_EXPIRE"] as const;
+const LONGUEUR_MAX_MESSAGE_RELANCE = 1000;
+
+export interface EnregistrerRelanceWhatsAppParams {
+  idAbonne: number;
+  evenement: (typeof EVENEMENTS_RELANCE_WHATSAPP)[number];
+  message: string;
+  numeroAbonnement?: number;
+  userId: number;
+}
+
+export function enregistrerRelanceWhatsApp(db: Db, params: EnregistrerRelanceWhatsAppParams) {
+  const abonne = db.select().from(schema.abonne).where(eq(schema.abonne.idAbonne, params.idAbonne)).get();
+  if (!abonne) throw new Error(`Abonné ${params.idAbonne} introuvable`);
+  // 11.3 : un abonné anonymisé n'a plus de numéro à qui écrire
+  if (!abonne.telephone || abonne.telephone === PLACEHOLDER_TELEPHONE) throw new Error("Cet abonné est anonymisé : il n'y a plus de numéro à qui écrire");
+  if (!EVENEMENTS_RELANCE_WHATSAPP.includes(params.evenement)) throw new Error("Événement de relance inconnu");
+  if (typeof params.message !== "string" || params.message.trim() === "") throw new Error("Le message de la relance est obligatoire");
+  if (params.message.length > LONGUEUR_MAX_MESSAGE_RELANCE) throw new Error(`Le message de la relance ne peut pas dépasser ${LONGUEUR_MAX_MESSAGE_RELANCE} caractères`);
+  if (params.numeroAbonnement !== undefined) {
+    const abonnement = db.select().from(schema.abonnement).where(eq(schema.abonnement.numeroAbonnement, params.numeroAbonnement)).get();
+    if (!abonnement || abonnement.idAbonne !== params.idAbonne) throw new Error(`Abonnement ${params.numeroAbonnement} introuvable pour ce client`);
+  }
+
+  return db
+    .insert(schema.notification)
+    .values({
+      idAbonne: params.idAbonne,
+      canal: "WHATSAPP",
+      evenement: params.evenement,
+      destinataire: abonne.telephone,
+      message: params.message.trim(),
+      statutEnvoi: "OUVERTE",
+      numeroAbonnement: params.numeroAbonnement,
+      utilisateurId: params.userId,
+    })
+    .returning()
+    .get();
+}
+
+// date de la dernière relance WhatsApp de chaque abonnement donné (absent de la table : jamais relancé) — « déjà relancé » du tableau de bord
+export function dernieresRelancesWhatsApp(db: Db, numerosAbonnement: number[]): Map<number, string> {
+  if (numerosAbonnement.length === 0) return new Map();
+  const lignes = db
+    .select({ numero: schema.notification.numeroAbonnement, derniere: max(schema.notification.dateEnvoi) })
+    .from(schema.notification)
+    .where(and(eq(schema.notification.canal, "WHATSAPP"), inArray(schema.notification.numeroAbonnement, numerosAbonnement)))
+    .groupBy(schema.notification.numeroAbonnement)
     .all();
+  return new Map(lignes.filter((l): l is { numero: number; derniere: string } => l.numero !== null && l.derniere !== null).map((l) => [l.numero, l.derniere]));
 }

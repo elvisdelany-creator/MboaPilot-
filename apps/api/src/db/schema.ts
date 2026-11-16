@@ -328,11 +328,16 @@ export const notification = sqliteTable("notification", {
   // 8.4 : nullable — une notification SAV_PRET peut cibler un client ponctuel
   // non-abonné (sav_dossier.client_telephone), sans aucun abonné rattaché.
   idAbonne: integer("id_abonne").references(() => abonne.idAbonne),
-  canal: text("canal", { enum: ["SMS", "EMAIL"] }).notNull(),
-  evenement: text("evenement", { enum: ["ALERTE_ECHEANCE", "SAV_PRET"] }).notNull(),
+  // WHATSAPP : relance ouverte depuis le tableau de bord (lien wa.me) ; la boutique envoie elle-même depuis son WhatsApp
+  canal: text("canal", { enum: ["SMS", "EMAIL", "WHATSAPP"] }).notNull(),
+  evenement: text("evenement", { enum: ["ALERTE_ECHEANCE", "SAV_PRET", "ABONNEMENT_EXPIRE"] }).notNull(),
   destinataire: text("destinataire").notNull(), // numéro ou e-mail au moment de l'envoi
   message: text("message").notNull(),
-  statutEnvoi: text("statut_envoi", { enum: ["ENVOYEE", "SIMULEE", "ECHOUEE"] }).notNull(),
+  // OUVERTE : WhatsApp a été ouvert avec le message prêt ; l'envoi est manuel et ne peut pas être confirmé par l'application
+  statutEnvoi: text("statut_envoi", { enum: ["ENVOYEE", "SIMULEE", "ECHOUEE", "OUVERTE"] }).notNull(),
+  // relance WhatsApp : l'abonnement concerné et la personne de la boutique qui a cliqué (NULL pour les SMS et e-mails automatiques)
+  numeroAbonnement: integer("numero_abonnement").references(() => abonnement.numeroAbonnement),
+  utilisateurId: integer("utilisateur_id").references(() => utilisateur.idUser),
   idAlerte: integer("id_alerte").references(() => alerteEcheance.idAlerte),
   idDossierSav: integer("id_dossier_sav").references((): AnySQLiteColumn => savDossier.idDossierSav),
   dateEnvoi: text("date_envoi").notNull().default(now),

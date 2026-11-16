@@ -157,6 +157,8 @@ export interface AlerteEcheance {
   rang: 1 | 2 | 3;
   joursRestants: number;
   dateFin: string;
+  // date de la dernière relance WhatsApp de cet abonnement, null s'il n'a jamais été relancé
+  derniereRelanceWhatsApp: string | null;
   abonne: Abonne;
   formule: Formule;
 }
@@ -167,6 +169,7 @@ export interface AbonnementExpire {
   numeroAbonnement: number;
   dateFin: string;
   joursDepuisExpiration: number;
+  derniereRelanceWhatsApp: string | null;
   abonne: Abonne;
   formule: Formule;
 }
@@ -473,13 +476,17 @@ export interface Paiement {
 export interface Notification {
   idNotification: number;
   idAbonne: number;
-  canal: "SMS" | "EMAIL";
-  evenement: "ALERTE_ECHEANCE" | "SAV_PRET";
+  canal: "SMS" | "EMAIL" | "WHATSAPP";
+  evenement: "ALERTE_ECHEANCE" | "SAV_PRET" | "ABONNEMENT_EXPIRE";
   destinataire: string;
   message: string;
-  statutEnvoi: "ENVOYEE" | "SIMULEE" | "ECHOUEE";
+  // OUVERTE : relance WhatsApp ouverte depuis le tableau de bord, envoyée à la main par la boutique (envoi non confirmable)
+  statutEnvoi: "ENVOYEE" | "SIMULEE" | "ECHOUEE" | "OUVERTE";
   idAlerte: number | null;
   idDossierSav: number | null;
+  numeroAbonnement: number | null;
+  // personne de la boutique qui a ouvert une relance WhatsApp ; null pour les SMS et e-mails automatiques
+  auteur: string | null;
   dateEnvoi: string;
 }
 

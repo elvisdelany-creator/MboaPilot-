@@ -8,6 +8,7 @@ import {
   GitMerge,
   History,
   Mail,
+  MessageCircle,
   MessageSquare,
   Pencil,
   Printer,
@@ -71,7 +72,7 @@ const VARIANTE_STATUT_ABONNEMENT: Record<string, "default" | "secondary" | "outl
 const LIBELLE_MODE_PAIEMENT: Record<string, string> = { CASH: "Comptant", CHEQUE: "Chèque", VIREMENT: "Virement", MOBILE_MONEY: "Mobile Money" };
 const LIBELLE_STATUT_COMMISSION: Record<string, string> = { EN_COURS: "En cours (probatoire)", CONFIRMEE: "Confirmée", ANNULEE: "Annulée" };
 const VARIANTE_STATUT_COMMISSION: Record<string, "secondary" | "default" | "destructive"> = { EN_COURS: "secondary", CONFIRMEE: "default", ANNULEE: "destructive" };
-const LIBELLE_EVENEMENT_NOTIFICATION: Record<string, string> = { ALERTE_ECHEANCE: "Alerte d'échéance", SAV_PRET: "Appareil prêt (SAV)" };
+const LIBELLE_EVENEMENT_NOTIFICATION: Record<string, string> = { ALERTE_ECHEANCE: "Alerte d'échéance", SAV_PRET: "Appareil prêt (SAV)", ABONNEMENT_EXPIRE: "Relance d'un abonnement expiré" };
 
 const LIBELLE_STATUT_SAV: Record<StatutSav, string> = {
   RECU: "Reçu",
@@ -745,7 +746,9 @@ export function ClientsPage({ onNaviguer, onReabonnerDepuisFiche }: Props) {
                       <li key={n.idNotification}>
                         <Card className="flex-row items-start justify-between gap-3 p-3">
                           <div className="flex items-start gap-2">
-                            {n.canal === "SMS" ? (
+                            {n.canal === "WHATSAPP" ? (
+                              <MessageCircle className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                            ) : n.canal === "SMS" ? (
                               <MessageSquare className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
                             ) : (
                               <Mail className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
@@ -754,12 +757,13 @@ export function ClientsPage({ onNaviguer, onReabonnerDepuisFiche }: Props) {
                               <p className="text-sm font-medium text-card-foreground">{LIBELLE_EVENEMENT_NOTIFICATION[n.evenement]}</p>
                               <p className="text-xs text-muted-foreground">
                                 {n.destinataire} · {formateurDateHeure.format(lireDateServeur(n.dateEnvoi))}
+                                {n.auteur ? ` · par ${n.auteur}` : ""}
                               </p>
                               <p className="mt-1 text-xs italic text-muted-foreground">« {n.message} »</p>
                             </div>
                           </div>
-                          <Badge variant={n.statutEnvoi === "ENVOYEE" ? "secondary" : n.statutEnvoi === "SIMULEE" ? "outline" : "destructive"} className="shrink-0">
-                            {n.statutEnvoi === "ENVOYEE" ? "Envoyée" : n.statutEnvoi === "SIMULEE" ? "Simulée : non envoyée" : "Échouée"}
+                          <Badge variant={n.statutEnvoi === "ENVOYEE" ? "secondary" : n.statutEnvoi === "SIMULEE" || n.statutEnvoi === "OUVERTE" ? "outline" : "destructive"} className="shrink-0">
+                            {n.statutEnvoi === "ENVOYEE" ? "Envoyée" : n.statutEnvoi === "SIMULEE" ? "Simulée : non envoyée" : n.statutEnvoi === "OUVERTE" ? "WhatsApp ouvert : envoi à la main" : "Échouée"}
                           </Badge>
                         </Card>
                       </li>

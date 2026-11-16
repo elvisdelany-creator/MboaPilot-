@@ -3,12 +3,15 @@ import { classerUrgenceEcheance, decalerJour, joursAvantEcheance } from "@mboapi
 import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
 import { trouverDureeRetentionExpiresParSite, trouverJalonsAlerteParSite } from "../entreprise/entreprise.repository.js";
+import { dernieresRelancesWhatsApp } from "../notifications/notification.service.js";
 
 export interface AlerteEcheanceDetaillee {
   numeroAbonnement: number;
   jalon: number; // 8.8 : jours du seuil configuré atteint (plus un libellé fixe "J-7")
   rang: 1 | 2 | 3; // 1 = le plus urgent, quels que soient les jalons configurés
   joursRestants: number;
+  // date de la dernière relance WhatsApp de cet abonnement (journal des notifications), null s'il n'a jamais été relancé
+  derniereRelanceWhatsApp: string | null;
   dateFin: string;
   // abonné et formule complets : le tableau de bord en a besoin pour
   // pré-sélectionner l'abonné (et sa famille) sur l'écran de caisse en un clic (4.4, 9.3)
@@ -41,7 +44,7 @@ export function listerAlertesEcheance(db: Db, siteId: number, aujourdHui: string
     .all()
     .filter((l) => idFamille === undefined || l.formule.idFamille === idFamille);
 
-  return lignes
+  const alertes = lignes
     .map((l) => ({
       numeroAbonnement: l.abonnement.numeroAbonnement,
       dateFin: l.abonnement.dateFin,
@@ -54,12 +57,17 @@ export function listerAlertesEcheance(db: Db, siteId: number, aujourdHui: string
     .filter((l): l is typeof l & { classement: NonNullable<typeof l.classement> } => l.classement !== null)
     .map((l) => ({ ...l, jalon: l.classement.jours, rang: l.classement.rang }))
     .sort((a, b) => a.joursRestants - b.joursRestants);
+
+  const relances = dernieresRelancesWhatsApp(db, alertes.map((a) => a.numeroAbonnement));
+  return alertes.map((a) => ({ ...a, derniereRelanceWhatsApp: relances.get(a.numeroAbonnement) ?? null }));
 }
 
 export interface AbonnementExpireDetaille {
   numeroAbonnement: number;
   dateFin: string;
   joursDepuisExpiration: number;
+  // date de la dernière relance WhatsApp de cet abonnement, null s'il n'a jamais été relancé
+  derniereRelanceWhatsApp: string | null;
   abonne: typeof schema.abonne.$inferSelect;
   formule: typeof schema.formule.$inferSelect;
 }
@@ -88,7 +96,7 @@ export function listerAbonnementsExpires(db: Db, siteId: number, aujourdHui: str
     .all()
     .filter((l) => idFamille === undefined || l.formule.idFamille === idFamille);
 
-  return lignes
+  const expires = lignes
     .map((l) => ({
       numeroAbonnement: l.abonnement.numeroAbonnement,
       dateFin: l.abonnement.dateFin,
@@ -98,4 +106,7 @@ export function listerAbonnementsExpires(db: Db, siteId: number, aujourdHui: str
     }))
     .filter((l) => l.joursDepuisExpiration <= dureeRetention)
     .sort((a, b) => a.joursDepuisExpiration - b.joursDepuisExpiration);
+
+  const relances = dernieresRelancesWhatsApp(db, expires.map((a) => a.numeroAbonnement));
+  return expires.map((a) => ({ ...a, derniereRelanceWhatsApp: relances.get(a.numeroAbonnement) ?? null }));
 }

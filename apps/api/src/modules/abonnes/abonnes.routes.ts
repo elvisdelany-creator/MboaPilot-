@@ -6,6 +6,7 @@ import { modifierAbonne, rechercherAbonnes, trouverAbonne, type ModifierAbonneIn
 import { construireFiche360 } from "./fiche-360.service.js";
 import { fusionnerAbonnes, type FusionnerAbonnesParams } from "./fusion-abonnes.service.js";
 import { anonymiserAbonne } from "./anonymisation.service.js";
+import { enregistrerRelanceWhatsApp, type EnregistrerRelanceWhatsAppParams } from "../notifications/notification.service.js";
 import { envoyerErreur } from "../../lib/erreurs-api.js";
 
 const ERREUR_SITE_ABONNE = { erreur: "Cet abonné n'appartient pas à votre site" };
@@ -81,6 +82,31 @@ export function registerAbonnesRoutes(
         return;
       }
       reply.code(200).send(abonne);
+    }
+  );
+
+  // Relance WhatsApp : la personne qui clique sur « Relancer sur WhatsApp » (tableau de bord) laisse une trace dans le journal des notifications du
+  // client (statut « ouverte » : l'envoi est manuel). Mêmes rôles que les listes de relance du tableau de bord.
+  app.post<{ Params: { idAbonne: string }; Body: Pick<EnregistrerRelanceWhatsAppParams, "evenement" | "message" | "numeroAbonnement"> }>(
+    "/api/v1/abonnes/:idAbonne/relances-whatsapp",
+    { preHandler: [guards.authRequis, guards.lectureFinanciere] },
+    async (request, reply) => {
+      const idAbonne = Number(request.params.idAbonne);
+      const abonne = trouverAbonne(db, idAbonne);
+      if (!abonne) {
+        reply.code(404).send({ erreur: "Abonné introuvable" });
+        return;
+      }
+      if (!siteAutorise(request.user, abonne.siteId)) {
+        reply.code(403).send(ERREUR_SITE_ABONNE);
+        return;
+      }
+      try {
+        const { evenement, message, numeroAbonnement } = request.body ?? ({} as typeof request.body);
+        reply.code(201).send(enregistrerRelanceWhatsApp(db, { idAbonne, evenement, message, numeroAbonnement, userId: request.user.idUser }));
+      } catch (erreur) {
+        envoyerErreur(reply, erreur);
+      }
     }
   );
 

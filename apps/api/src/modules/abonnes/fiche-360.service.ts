@@ -24,7 +24,7 @@ export interface Fiche360 {
   paiements: (typeof schema.paiement.$inferSelect)[];
   dossiersSav: (typeof schema.savDossier.$inferSelect)[];
   commissionsCanalplus: (typeof schema.suiviCommissionCanalplus.$inferSelect)[];
-  notifications: (typeof schema.notification.$inferSelect)[];
+  notifications: ReturnType<typeof listerNotificationsAbonne>;
 }
 
 // 8.1, 9.4 : fiche « 360° » — coordonnées, historique complet des

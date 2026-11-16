@@ -71,7 +71,11 @@ dossier tant que vous n'avez pas vérifié. Si vous préférez repartir de zéro
    pour les mentions obligatoires (numéro de registre du commerce, NIU…), imprimées **en bas** des documents.
    > ⚠️ **Les relances ne partent pas encore** : l'envoi de SMS et de WhatsApp n'est pas branché à un opérateur (voir
    > `exploitation.md` §7). Les messages sont préparés, avec votre numéro à la fin, et notés « Simulée : non envoyée »
-   > dans la fiche du client. Pour l'instant, appelez ou écrivez vous-même aux clients depuis le tableau de bord.
+   > dans la fiche du client. À la place, le **tableau de bord** propose, pour chaque abonnement à échéance et chaque
+   > abonnement expiré, un bouton **« Relancer sur WhatsApp »** : il ouvre WhatsApp avec le message déjà écrit, adressé
+   > au client ; **c'est vous qui appuyez sur « envoyer »**, depuis votre propre WhatsApp (sur ce poste ou sur le
+   > téléphone de la boutique). Si le numéro du client n'est pas utilisable (par exemple 10 chiffres sans indicatif),
+   > le bouton est grisé : corrigez le numéro dans sa fiche, avec **9 chiffres** (Cameroun) ou l'indicatif en `+`.
 4. **Utilisateurs** : un compte par personne (caissier, technicien SAV, comptable, apporteur…). Pas de compte
    partagé : chaque action est tracée au nom de celui qui la fait.
 5. **Format d'impression** : sur l'écran du reçu, choisissez **Ticket 80 mm** ou **A5 × 2** (une feuille A4

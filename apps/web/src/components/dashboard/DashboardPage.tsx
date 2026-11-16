@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { delaiEcheance, peutAccederVue, type RoleUtilisateur, jourDouala, lireDateServeur } from "@mboapilot/shared";
-import { AlertTriangle, History, PackageX, RotateCw, TrendingDown, Users } from "lucide-react";
+import { delaiEcheance, lienWhatsAppAbonnementExpire, lienWhatsAppRelanceEcheance, peutAccederVue, type RoleUtilisateur, jourDouala, lireDateServeur } from "@mboapilot/shared";
+import { AlertTriangle, History, MessageCircle, PackageX, RotateCw, TrendingDown, Users } from "lucide-react";
 import {
   chargerAbonnementsExpires,
   chargerAlertesEcheance,
@@ -11,6 +11,7 @@ import {
   chargerEvolutionCA,
   chargerFamilles,
   chargerIndicateursJour,
+  chargerInfosEntreprise,
   chargerMargeParArticle,
   chargerProduitsRotationLente,
   chargerResumesApporteurs,
@@ -40,6 +41,7 @@ import type {
   AlerteEcheance,
   CommissionCanalplusEnCours,
   Famille,
+  Formule,
   IndicateursJour,
   ModePaiement,
   PointEvolutionCA,
@@ -81,6 +83,35 @@ const LIBELLE_MODE_PAIEMENT: Record<ModePaiement, string> = {
 const formateurFcfa = new Intl.NumberFormat("fr-FR");
 const formateurDateCourte = new Intl.DateTimeFormat("fr-FR", { dateStyle: "short" });
 
+// « 2026-09-23 » devient « 23/09/2026 » : le message est lu par le client
+const dateFrancaise = (dateIso: string) => dateIso.split("-").reverse().join("/");
+
+// Relance d'un client par WhatsApp : ouvre la conversation avec le message déjà écrit (la personne de la boutique appuie sur « envoyer » depuis son
+// propre WhatsApp). Grisé quand le numéro du client ne permet pas de savoir à quel pays l'écrire.
+function BoutonRelanceWhatsApp({ lien, nomClient }: { lien: string | null; nomClient: string }) {
+  if (!lien) {
+    return (
+      <Button
+        variant="outline"
+        disabled
+        className="min-h-11 shrink-0 gap-2 sm:min-h-9"
+        title="Le numéro de ce client n'est pas utilisable pour WhatsApp : 9 chiffres (Cameroun) ou un indicatif commençant par + ou 00."
+      >
+        <MessageCircle className="size-4" aria-hidden="true" />
+        Relancer sur WhatsApp
+      </Button>
+    );
+  }
+  return (
+    <Button asChild variant="outline" className="min-h-11 shrink-0 cursor-pointer gap-2 sm:min-h-9">
+      <a href={lien} target="_blank" rel="noopener noreferrer" aria-label={`Relancer ${nomClient} sur WhatsApp (ouvre WhatsApp dans un nouvel onglet)`}>
+        <MessageCircle className="size-4" aria-hidden="true" />
+        Relancer sur WhatsApp
+      </a>
+    </Button>
+  );
+}
+
 // 9.3 : tableau de bord — liste priorisée des abonnements à échéance, triée
 // par urgence (J-1 en premier), avec accès direct au réabonnement en un clic.
 // Section de pilotage (8.6) réservée à Administrateur/Gérant/Comptable :
@@ -102,6 +133,15 @@ export function DashboardPage({ onNaviguer, onReabonnerDepuisAlerte, onReabonner
   // 4.4, 8.8 : liste dédiée « Abonnements expirés », filtrable par famille
   const [abonnementsExpires, setAbonnementsExpires] = useState<AbonnementExpire[]>([]);
   const [familles, setFamilles] = useState<Famille[]>([]);
+  // nom de la boutique : en tête des messages de relance
+  const [nomBoutique, setNomBoutique] = useState("");
+  useEffect(() => {
+    chargerInfosEntreprise(token)
+      .then((infos) => setNomBoutique(infos.entreprise.nom))
+      .catch(() => setNomBoutique(""));
+  }, [token]);
+  // « CANAL+ EVASION » : l'opérateur et la formule, tels que le client les connaît
+  const libelleAbonnement = (formule: Formule) => [familles.find((f) => f.idFamille === formule.idFamille)?.libelle, formule.libelle].filter(Boolean).join(" ");
   const [idFamilleFiltre, setIdFamilleFiltre] = useState<number | null>(null);
   const [alertesStock, setAlertesStock] = useState<Produit[]>([]);
   // 8.6, 9.3 : "État des stocks — produits à rotation lente"
@@ -522,11 +562,25 @@ export function DashboardPage({ onNaviguer, onReabonnerDepuisAlerte, onReabonner
                       </p>
                     </div>
                   </div>
-                  {peutVendre && (
-                    <Button className="shrink-0 cursor-pointer" onClick={() => onReabonnerDepuisAlerte(alerte)}>
-                      Réabonner
-                    </Button>
-                  )}
+                  <div className="flex shrink-0 flex-wrap items-center gap-2">
+                    <BoutonRelanceWhatsApp
+                      nomClient={`${alerte.abonne.prenom} ${alerte.abonne.nom}`}
+                      lien={lienWhatsAppRelanceEcheance({
+                        entreprise: nomBoutique,
+                        libelleAbonnement: libelleAbonnement(alerte.formule),
+                        numeroAbonnement: alerte.numeroAbonnement,
+                        dateFin: dateFrancaise(alerte.dateFin),
+                        joursRestants: alerte.joursRestants,
+                        rang: alerte.rang,
+                        telephone: alerte.abonne.telephone,
+                      })}
+                    />
+                    {peutVendre && (
+                      <Button className="shrink-0 cursor-pointer" onClick={() => onReabonnerDepuisAlerte(alerte)}>
+                        Réabonner
+                      </Button>
+                    )}
+                  </div>
                 </Card>
               </li>
             ))}
@@ -559,11 +613,23 @@ export function DashboardPage({ onNaviguer, onReabonnerDepuisAlerte, onReabonner
                         </p>
                       </div>
                     </div>
-                    {peutVendre && (
-                      <Button className="shrink-0 cursor-pointer" onClick={() => onReabonnerDepuisExpire(a)}>
-                        Réabonner
-                      </Button>
-                    )}
+                    <div className="flex shrink-0 flex-wrap items-center gap-2">
+                      <BoutonRelanceWhatsApp
+                        nomClient={`${a.abonne.prenom} ${a.abonne.nom}`}
+                        lien={lienWhatsAppAbonnementExpire({
+                          entreprise: nomBoutique,
+                          libelleAbonnement: libelleAbonnement(a.formule),
+                          numeroAbonnement: a.numeroAbonnement,
+                          dateFin: dateFrancaise(a.dateFin),
+                          telephone: a.abonne.telephone,
+                        })}
+                      />
+                      {peutVendre && (
+                        <Button className="shrink-0 cursor-pointer" onClick={() => onReabonnerDepuisExpire(a)}>
+                          Réabonner
+                        </Button>
+                      )}
+                    </div>
                   </Card>
                 </li>
               ))}

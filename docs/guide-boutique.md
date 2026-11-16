@@ -24,6 +24,34 @@ vendre, et rien n'est exposé en ligne. Les détails techniques sont dans `explo
 3. Créez tout de suite un **second administrateur** (Administration → Utilisateurs), par précaution.
 4. Pour que MboaPilot démarre tout seul à l'ouverture de Windows : **`demarrage-automatique-installer.bat`**.
 
+## 2 bis. Où vivent vos données (à décider avant le premier lancement)
+
+Par défaut, tout (clients, factures, sauvegardes, photos) est rangé dans `apps\api\data`, **à l'intérieur du dossier du
+projet**. Mieux vaut un dossier à part : mettre à jour, déplacer ou supprimer le dossier du projet n'emporte alors pas
+vos données.
+
+1. **Créez un dossier** hors du projet, par exemple `C:\MboaPilot-donnees` (évitez les accents dans le nom).
+2. **Créez un fichier texte `donnees.txt`** dans le dossier du projet, à côté de `lancer-mboapilot.bat`. Il contient
+   **une seule ligne : le chemin du dossier**, par exemple `C:\MboaPilot-donnees`. Attention : Windows masque souvent
+   les extensions et peut l'enregistrer sous le nom `donnees.txt.txt`, qui ne marcherait pas.
+3. **Lancez `lancer-mboapilot.bat`** : la fenêtre affiche `Dossier des donnees : C:\MboaPilot-donnees`. **Vérifiez cette
+   ligne.** Si elle affiche `...\apps\api\data`, le fichier n'a pas été pris en compte (nom ou emplacement).
+
+Ce réglage vaut aussi pour le démarrage automatique et pour `sauvegarde-externe.bat`. Le dossier est créé tout seul
+s'il n'existe pas. Pour les commandes saisies à la main (par exemple `npm run db:restaurer`), indiquez d'abord le
+dossier : `set MBOAPILOT_DATA_DIR=C:\MboaPilot-donnees` dans l'invite de commandes.
+
+**Ordre de priorité** : la variable `MBOAPILOT_DATA_DIR` si elle existe, sinon `donnees.txt`, sinon `apps\api\data`.
+
+> ⚠️ **Ne changez pas ce chemin après avoir commencé à travailler sans recopier vos données.** Si l'**assistant
+> d'installation** réapparaît alors que vous avez déjà des ventes, c'est que le lanceur n'a pas retrouvé votre dossier :
+> fermez-le, ne refaites **pas** l'installation, et vérifiez la ligne « Dossier des donnees ».
+
+**Si vous avez déjà des données dans `apps\api\data`** (essais précédents que vous voulez garder) : fermez MboaPilot,
+copiez **tout** le contenu de ce dossier (y compris les fichiers cachés `.encryption-key` et `.jwt-secret`, et les
+sous-dossiers) vers le nouveau dossier, créez `donnees.txt`, relancez, vérifiez un client récent, et gardez l'ancien
+dossier tant que vous n'avez pas vérifié. Si vous préférez repartir de zéro, laissez simplement l'ancien dossier de côté.
+
 ## 3. Avant la première vente
 
 À faire une seule fois, dans cet ordre :

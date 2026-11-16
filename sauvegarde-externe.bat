@@ -8,7 +8,11 @@ chcp 65001 >nul
 setlocal
 cd /d "%~dp0"
 
-if "%MBOAPILOT_DATA_DIR%"=="" (set "DONNEES=%~dp0apps\api\data") else (set "DONNEES=%MBOAPILOT_DATA_DIR%")
+rem dossier des donnees : meme regle que lancer-mboapilot.bat (variable MBOAPILOT_DATA_DIR, sinon donnees.txt, sinon apps\api\data)
+if not defined MBOAPILOT_DATA_DIR if exist "%~dp0donnees.txt" set /p MBOAPILOT_DATA_DIR=<"%~dp0donnees.txt"
+if defined MBOAPILOT_DATA_DIR set "MBOAPILOT_DATA_DIR=%MBOAPILOT_DATA_DIR:"=%"
+set "DONNEES=%~dp0apps\api\data"
+if defined MBOAPILOT_DATA_DIR set "DONNEES=%MBOAPILOT_DATA_DIR%"
 set "DESTINATION=%~1"
 set "INTERACTIF=0"
 if "%DESTINATION%"=="" (

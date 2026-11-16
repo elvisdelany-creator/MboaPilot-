@@ -8,6 +8,13 @@ cd /d "%~dp0"
 if "%PORT%"=="" set PORT=3001
 set "ADRESSE=http://127.0.0.1:%PORT%"
 
+rem dossier des donnees : MBOAPILOT_DATA_DIR s'il est defini ; sinon la premiere ligne du fichier donnees.txt (a cote de ce fichier) ; sinon apps\api\data
+rem (donnees.txt evite les pieges de setx : une variable n'est vue qu'apres une reconnexion Windows, et le lanceur repartirait en silence sur une base vide)
+if not defined MBOAPILOT_DATA_DIR if exist "%~dp0donnees.txt" set /p MBOAPILOT_DATA_DIR=<"%~dp0donnees.txt"
+if defined MBOAPILOT_DATA_DIR set "MBOAPILOT_DATA_DIR=%MBOAPILOT_DATA_DIR:"=%"
+set "DOSSIER_AFFICHE=%~dp0apps\api\data"
+if defined MBOAPILOT_DATA_DIR set "DOSSIER_AFFICHE=%MBOAPILOT_DATA_DIR%"
+
 rem deja demarre (deuxieme double-clic, ou demarrage automatique) : on ouvre simplement le navigateur
 powershell -NoProfile -Command "try { Invoke-WebRequest -UseBasicParsing -Uri '%ADRESSE%/api/v1/installation/etat' -TimeoutSec 2 | Out-Null; exit 0 } catch { exit 1 }" >nul 2>nul
 if not errorlevel 1 (
@@ -70,6 +77,7 @@ if not "%MBOAPILOT_SANS_NAVIGATEUR%"=="1" (
 )
 
 echo MboaPilot demarre sur %ADRESSE%
+echo Dossier des donnees : %DOSSIER_AFFICHE%
 echo Ne fermez pas cette fenetre tant que vous utilisez l'application : la fermer arrete MboaPilot.
 echo.
 call npm start

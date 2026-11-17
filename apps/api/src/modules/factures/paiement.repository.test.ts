@@ -145,7 +145,7 @@ describe("confirmerRapprochementVirement (6.5)", () => {
   it("passe un virement EN_ATTENTE à RAPPROCHE", () => {
     const paiement = creerPaiement(db, { idFacture, mode: "VIREMENT", montant: 10000, utilisateurId: userId, banque: "Afriland", referenceVirement: "VIR-001" });
 
-    const confirme = confirmerRapprochementVirement(db, paiement.idPaiement);
+    const confirme = confirmerRapprochementVirement(db, paiement.idPaiement, userId);
 
     expect(confirme.statutRapprochement).toBe("RAPPROCHE");
     const relu = db.select().from(schema.paiement).where(eq(schema.paiement.idPaiement, paiement.idPaiement)).get();
@@ -153,19 +153,19 @@ describe("confirmerRapprochementVirement (6.5)", () => {
   });
 
   it("rejette un paiement introuvable", () => {
-    expect(() => confirmerRapprochementVirement(db, 999999)).toThrow(/introuvable/);
+    expect(() => confirmerRapprochementVirement(db, 999999, userId)).toThrow(/introuvable/);
   });
 
   it("rejette un paiement qui n'est pas un virement", () => {
     const paiement = creerPaiement(db, { idFacture, mode: "CASH", montant: 10000, utilisateurId: userId });
 
-    expect(() => confirmerRapprochementVirement(db, paiement.idPaiement)).toThrow(/virement/i);
+    expect(() => confirmerRapprochementVirement(db, paiement.idPaiement, userId)).toThrow(/virement/i);
   });
 
   it("rejette un virement déjà rapproché", () => {
     const paiement = creerPaiement(db, { idFacture, mode: "VIREMENT", montant: 10000, utilisateurId: userId, banque: "Afriland", referenceVirement: "VIR-002" });
-    confirmerRapprochementVirement(db, paiement.idPaiement);
+    confirmerRapprochementVirement(db, paiement.idPaiement, userId);
 
-    expect(() => confirmerRapprochementVirement(db, paiement.idPaiement)).toThrow(/déjà/i);
+    expect(() => confirmerRapprochementVirement(db, paiement.idPaiement, userId)).toThrow(/déjà/i);
   });
 });

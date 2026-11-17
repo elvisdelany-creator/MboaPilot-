@@ -69,7 +69,7 @@ describe("listerVirementsARapprocher (6.5)", () => {
   it("ne liste ni les virements déjà rapprochés ni les autres modes de paiement", () => {
     const f = facture();
     const rapproche = paiement(f, "VIREMENT");
-    confirmerRapprochementVirement(db, rapproche.idPaiement);
+    confirmerRapprochementVirement(db, rapproche.idPaiement, userId);
     paiement(f, "CASH");
     paiement(f, "CHEQUE");
     paiement(f, "MOBILE_MONEY");
@@ -81,7 +81,7 @@ describe("listerVirementsARapprocher (6.5)", () => {
     const p = paiement(facture(), "VIREMENT");
     expect(listerVirementsARapprocher(db, siteId).total).toBe(1);
 
-    confirmerRapprochementVirement(db, p.idPaiement);
+    confirmerRapprochementVirement(db, p.idPaiement, userId);
 
     expect(listerVirementsARapprocher(db, siteId).total).toBe(0);
   });

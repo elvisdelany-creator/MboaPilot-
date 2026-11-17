@@ -23,6 +23,38 @@ export interface FicheApporteur {
   soldeCommissionDu: number;
 }
 
+// Ce que l'apporteur lui-même consulte : il est un partenaire EXTERNE. Il voit ses clients (nom, téléphone), ses commissions et ses règlements, pas
+// leur n° de CNI, leur adresse ni leur e-mail, ni les identifiants internes du personnel de la boutique. C'est exactement ce que montre son écran.
+export interface FicheApporteurRestreinte {
+  apporteur: FicheApporteur["apporteur"];
+  abonnes: { idAbonne: number; prenom: string; nom: string; telephone: string }[];
+  chiffreAffaires: number;
+  commissionsCanalplus: { idSuivi: number; numeroAbonnement: number; montantCommission: number; dateFinProbatoire: string; statut: string }[];
+  reglements: { idReglement: number; montant: number; modePaiement: string; reference: string | null; dateReglement: string }[];
+  montantCommissionConfirmee: number;
+  montantCommissionRegle: number;
+  soldeCommissionDu: number;
+}
+
+export function ficheVisibleParApporteur(fiche: FicheApporteur): FicheApporteurRestreinte {
+  return {
+    apporteur: fiche.apporteur,
+    abonnes: fiche.abonnes.map((a) => ({ idAbonne: a.idAbonne, prenom: a.prenom, nom: a.nom, telephone: a.telephone })),
+    chiffreAffaires: fiche.chiffreAffaires,
+    commissionsCanalplus: fiche.commissionsCanalplus.map((c) => ({
+      idSuivi: c.idSuivi,
+      numeroAbonnement: c.numeroAbonnement,
+      montantCommission: c.montantCommission,
+      dateFinProbatoire: c.dateFinProbatoire,
+      statut: c.statut,
+    })),
+    reglements: fiche.reglements.map((r) => ({ idReglement: r.idReglement, montant: r.montant, modePaiement: r.modePaiement, reference: r.reference, dateReglement: r.dateReglement })),
+    montantCommissionConfirmee: fiche.montantCommissionConfirmee,
+    montantCommissionRegle: fiche.montantCommissionRegle,
+    soldeCommissionDu: fiche.soldeCommissionDu,
+  };
+}
+
 function calculerSoldeCommission(db: Db, idApporteur: number) {
   const montantCommissionConfirmee = db
     .select()

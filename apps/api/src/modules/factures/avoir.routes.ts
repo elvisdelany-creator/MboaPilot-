@@ -178,7 +178,7 @@ export function registerAvoirRoutes(app: FastifyInstance, db: Db, guards: RouteG
         }
       }
       try {
-        reply.code(200).send(confirmerRapprochementVirement(db, idPaiement));
+        reply.code(200).send(confirmerRapprochementVirement(db, idPaiement, request.user.idUser));
       } catch (erreur) {
         envoyerErreur(reply, erreur);
       }

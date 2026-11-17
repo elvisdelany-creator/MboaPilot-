@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import type { Db } from "../../db/types.js";
 import type { Guard, RouteGuards } from "../auth/auth.plugin.js";
 import { creerApporteur, listerApporteurs, modifierApporteur, type CreerApporteurInput, type ModifierApporteurInput } from "./apporteur.repository.js";
-import { construireFicheApporteur, enregistrerReglement } from "./apporteur.service.js";
+import { construireFicheApporteur, enregistrerReglement, ficheVisibleParApporteur } from "./apporteur.service.js";
 import { envoyerErreur } from "../../lib/erreurs-api.js";
 
 // boutique à laquelle limiter la vue d'un apporteur, ou undefined pour la vue complète (administrateur, apporteur lui-même)
@@ -66,7 +66,8 @@ export function registerApporteursRoutes(
       }
       try {
         // 2.5.2 : chaque boutique ne voit de l'apporteur que ses propres clients ; l'administrateur et l'apporteur lui-même voient tout
-        reply.code(200).send(construireFicheApporteur(db, idApporteur, siteRestreint(request.user)));
+        const fiche = construireFicheApporteur(db, idApporteur, siteRestreint(request.user));
+        reply.code(200).send(request.user.role === "APPORTEUR" ? ficheVisibleParApporteur(fiche) : fiche);
       } catch (erreur) {
         envoyerErreur(reply, erreur);
       }

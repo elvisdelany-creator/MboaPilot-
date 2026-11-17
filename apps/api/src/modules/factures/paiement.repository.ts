@@ -145,11 +145,26 @@ export function listerVirementsARapprocher(db: Db, siteId: number, limite = LIMI
 // 6.5 : confirmation manuelle du rapprochement bancaire d'un virement, une
 // fois le relevé de banque vérifié — geste réservé à l'encadrement/finance
 // (guard gestionRapprochement, app.ts), jamais automatique.
-export function confirmerRapprochementVirement(db: Db, idPaiement: number) {
+// 11.5 : rapprocher un virement, c'est déclarer l'argent retrouvé sur le relevé de banque, un geste de contrôle financier : la ligne d'audit dit qui l'a
+// fait, quand, et de quel état à quel état. Le paiement et sa trace s'écrivent ensemble : sans trace, pas de rapprochement.
+export function confirmerRapprochementVirement(db: Db, idPaiement: number, acteurId: number) {
   const paiement = db.select().from(schema.paiement).where(eq(schema.paiement.idPaiement, idPaiement)).get();
   if (!paiement) throw new Error(`Paiement ${idPaiement} introuvable`);
   if (paiement.mode !== "VIREMENT") throw new Error("Seul un paiement par virement peut faire l'objet d'un rapprochement");
   if (paiement.statutRapprochement === "RAPPROCHE") throw new Error("Ce virement est déjà rapproché");
 
-  return db.update(schema.paiement).set({ statutRapprochement: "RAPPROCHE" }).where(eq(schema.paiement.idPaiement, idPaiement)).returning().get();
+  return db.transaction((tx) => {
+    const rapproche = tx.update(schema.paiement).set({ statutRapprochement: "RAPPROCHE" }).where(eq(schema.paiement.idPaiement, idPaiement)).returning().get();
+    tx.insert(schema.journalAudit)
+      .values({
+        utilisateurId: acteurId,
+        action: "MODIFICATION",
+        tableCible: "paiement",
+        idCible: String(idPaiement),
+        valeurAvant: JSON.stringify({ statutRapprochement: paiement.statutRapprochement }),
+        valeurApres: JSON.stringify({ statutRapprochement: "RAPPROCHE" }),
+      })
+      .run();
+    return rapproche;
+  });
 }

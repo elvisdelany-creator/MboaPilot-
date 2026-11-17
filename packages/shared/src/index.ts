@@ -45,4 +45,6 @@ export { decrireEntreeAudit, type ChangementAudit, type DescriptionAudit, type E
 export { construireUrlVerification, erreurAdressePublique, normaliserAdressePublique } from "./adresse-publique.js";
 export { brouillonCaisseEstVide, DUREE_BROUILLON_CAISSE_MS, lireBrouillonCaisse, serialiserBrouillonCaisse, type BrouillonCaisse, type LigneBrouillonCaisse } from "./brouillon-caisse.js";
 export { periodeDuMois } from "./periode-mois.js";
+export { raccourcisPeriode, type ClePeriodeRaccourci } from "./periodes-raccourcis.js";
 export { erreurDetailsPaiement, type DetailsPaiement } from "./details-paiement.js";
+export { dateHeureDouala, etatVersCsv, formaterValeurEtat, libellePeriodeEtat, nomFichierEtat, type ColonneEtat, type EtatImprimable, type SectionEtat, type TypeColonneEtat } from "./etat.js";

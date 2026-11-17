@@ -168,7 +168,7 @@ const LIBELLE_AUTRE = "Autre";
 //
 // Une facture de dossier SAV (main-d'œuvre sans article, pièces de type BIEN) est du chiffre d'affaires SAV dans son
 // ensemble : elle se repère une fois pour toutes par le lien du dossier, sans lecture par ligne.
-function creerResolveurFamilleLigne(db: Db): (ligne: typeof schema.ligneVente.$inferSelect) => string {
+export function creerResolveurFamilleLigne(db: Db): (ligne: typeof schema.ligneVente.$inferSelect) => string {
   const memo = new Map<string, string>();
   const facturesSav = new Set(
     db

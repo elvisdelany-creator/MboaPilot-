@@ -40,19 +40,35 @@ function plage(periode: PeriodeExport) {
 const dateFr = (horodatage: string) => jourDouala(horodatage).split("-").reverse().join("/");
 const nomComplet = (prenom: string | null, nom: string | null) => (nom === null ? "Sans client" : `${prenom} ${nom}`);
 
-function facturesDeLaPeriode(db: Db, siteId: number, periode: PeriodeExport) {
+export function facturesDeLaPeriode(db: Db, siteId: number, periode: PeriodeExport) {
   const { debut, fin } = plage(periode);
   return and(eq(schema.facture.siteId, siteId), eq(schema.facture.statut, "VALIDEE"), gte(schema.facture.dateCreation, debut), lt(schema.facture.dateCreation, fin));
 }
 
-function paiementsDeLaPeriode(siteId: number, periode: PeriodeExport) {
+export function paiementsDeLaPeriode(siteId: number, periode: PeriodeExport) {
   const { debut, fin } = plage(periode);
   return and(eq(schema.facture.siteId, siteId), gte(schema.paiement.datePaiement, debut), lt(schema.paiement.datePaiement, fin));
 }
 
 // Journal des ventes : une ligne par facture validée (les ventes en attente de paiement n'en font pas partie, comme du chiffre
 // d'affaires), les avoirs en négatif avec la facture qu'ils corrigent. Le plus ancien en premier.
-export function exporterJournalVentesCsv(db: Db, siteId: number, periode: PeriodeExport): { csv: string; nombre: number } {
+export interface LigneJournalVentes {
+  idFacture: number;
+  date: string; // AAAA-MM-JJ, jour de Douala
+  type: "VENTE" | "AVOIR";
+  factureOrigineId: number | null;
+  idAbonne: number | null;
+  client: string;
+  detail: string;
+  totalTtc: number;
+  taxe: number;
+  totalHt: number;
+  encaisse: number;
+  resteAPayer: number;
+}
+
+// Les lignes du journal avant leur mise en forme : l'export comptable (CSV) et l'état des ventes s'appuient sur ce seul calcul.
+export function listerJournalVentes(db: Db, siteId: number, periode: PeriodeExport): { lignes: LigneJournalVentes[] } {
   verifierPeriodeExport(periode);
   const filtre = facturesDeLaPeriode(db, siteId, periode);
 
@@ -117,29 +133,50 @@ export function exporterJournalVentesCsv(db: Db, siteId: number, periode: Period
       .map((a) => [a.idOrigine, a.total]),
   );
 
-  const lignes = factures.map(({ facture: f, prenom, nom }) => {
+  const lignes = factures.map(({ facture: f, prenom, nom }): LigneJournalVentes => {
     const paye = encaisse.get(f.idFacture) ?? 0;
     // même règle que l'application (solde = total + avoirs − encaissé) : une vente remboursée par avoir n'est pas une dette ; un avoir
     // non remboursé est un crédit du client (négatif). L'avoir lui-même est déjà déduit de sa vente : jamais une dette.
     const reste = f.type === "AVOIR" ? 0 : f.montantTotal + (avoirsParVente.get(f.idFacture) ?? 0) - paye;
-    return [
-      dateFr(f.dateCreation),
-      f.idFacture,
-      f.type === "AVOIR" ? "Avoir" : "Vente",
-      f.factureOrigineId ?? "",
-      f.idAbonne ?? "",
-      nomComplet(prenom, nom),
-      (detailParFacture.get(f.idFacture) ?? []).join(" + "),
-      f.montantTotal,
-      f.montantTaxe,
-      f.montantTotal - f.montantTaxe,
-      paye,
-      reste,
-    ];
+    return {
+      idFacture: f.idFacture,
+      date: jourDouala(f.dateCreation),
+      type: f.type,
+      factureOrigineId: f.factureOrigineId,
+      idAbonne: f.idAbonne,
+      client: nomComplet(prenom, nom),
+      detail: (detailParFacture.get(f.idFacture) ?? []).join(" + "),
+      totalTtc: f.montantTotal,
+      taxe: f.montantTaxe,
+      totalHt: f.montantTotal - f.montantTaxe,
+      encaisse: paye,
+      resteAPayer: reste,
+    };
   });
+  return { lignes };
+}
+
+const dateFrancaise = (jour: string) => jour.split("-").reverse().join("/");
+
+export function exporterJournalVentesCsv(db: Db, siteId: number, periode: PeriodeExport): { csv: string; nombre: number } {
+  const { lignes } = listerJournalVentes(db, siteId, periode);
+  const donnees = lignes.map((l) => [
+    dateFrancaise(l.date),
+    l.idFacture,
+    l.type === "AVOIR" ? "Avoir" : "Vente",
+    l.factureOrigineId ?? "",
+    l.idAbonne ?? "",
+    l.client,
+    l.detail,
+    l.totalTtc,
+    l.taxe,
+    l.totalHt,
+    l.encaisse,
+    l.resteAPayer,
+  ]);
 
   const entetes = ["Date", "N° facture", "Type", "Facture d'origine", "N° client", "Client", "Détail", "Total TTC", "dont TVA", "Total HT", "Encaissé", "Reste à payer"];
-  return { csv: construireCsv(entetes, lignes, ";"), nombre: lignes.length };
+  return { csv: construireCsv(entetes, donnees, ";"), nombre: donnees.length };
 }
 
 const LIBELLE_MODE = { CASH: "Espèces", CHEQUE: "Chèque", VIREMENT: "Virement", MOBILE_MONEY: "Mobile Money" } as const;

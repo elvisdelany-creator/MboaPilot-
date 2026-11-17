@@ -6,7 +6,7 @@
 
 export type RoleUtilisateur = "ADMINISTRATEUR" | "GERANT" | "CAISSIER" | "TECHNICIEN_SAV" | "COMPTABLE" | "APPORTEUR";
 
-export type VueApplication = "dashboard" | "caisse" | "sav" | "clients" | "apporteurs" | "stock" | "administration";
+export type VueApplication = "dashboard" | "caisse" | "sav" | "clients" | "apporteurs" | "stock" | "etats" | "administration";
 
 // ordre = ordre d'affichage de la navigation principale
 const ROLES_PAR_VUE: Record<VueApplication, readonly RoleUtilisateur[]> = {
@@ -16,6 +16,7 @@ const ROLES_PAR_VUE: Record<VueApplication, readonly RoleUtilisateur[]> = {
   clients: ["ADMINISTRATEUR", "GERANT", "CAISSIER", "COMPTABLE"], // lecture financière
   apporteurs: ["ADMINISTRATEUR", "GERANT"],
   stock: ["ADMINISTRATEUR", "GERANT"], // « Catalogue »
+  etats: ["ADMINISTRATEUR", "GERANT", "COMPTABLE"], // états de gestion : pilotage financier (exigerRole « pilotage »)
   administration: ["ADMINISTRATEUR", "GERANT"],
 };
 

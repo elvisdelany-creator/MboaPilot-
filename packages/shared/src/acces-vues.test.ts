@@ -8,11 +8,11 @@ import { peutAccederVue, vuesAccessibles, type RoleUtilisateur, type VueApplicat
 // l'ouverture ; un Technicien SAV voyait la Caisse de la même façon.
 describe("peutAccederVue (2.5.1)", () => {
   const ATTENDU: Record<RoleUtilisateur, VueApplication[]> = {
-    ADMINISTRATEUR: ["dashboard", "caisse", "sav", "clients", "apporteurs", "stock", "administration"],
-    GERANT: ["dashboard", "caisse", "sav", "clients", "apporteurs", "stock", "administration"],
+    ADMINISTRATEUR: ["dashboard", "caisse", "sav", "clients", "apporteurs", "stock", "etats", "administration"],
+    GERANT: ["dashboard", "caisse", "sav", "clients", "apporteurs", "stock", "etats", "administration"],
     CAISSIER: ["dashboard", "caisse", "sav", "clients"],
     TECHNICIEN_SAV: ["dashboard", "sav"],
-    COMPTABLE: ["dashboard", "clients"],
+    COMPTABLE: ["dashboard", "clients", "etats"],
     APPORTEUR: [],
   };
 
@@ -29,6 +29,13 @@ describe("peutAccederVue (2.5.1)", () => {
 
   it("refuse le SAV au Comptable", () => {
     expect(peutAccederVue("COMPTABLE", "sav")).toBe(false);
+  });
+
+  it("réserve les États au pilotage financier : refusés au Caissier, au Technicien SAV et à l'Apporteur", () => {
+    expect(peutAccederVue("CAISSIER", "etats")).toBe(false);
+    expect(peutAccederVue("TECHNICIEN_SAV", "etats")).toBe(false);
+    expect(peutAccederVue("APPORTEUR", "etats")).toBe(false);
+    expect(peutAccederVue("COMPTABLE", "etats")).toBe(true);
   });
 
   it("un rôle inconnu n'accède à rien", () => {

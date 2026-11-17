@@ -26,6 +26,7 @@ const ONGLETS: { vue: Vue; libelle: string }[] = [
   { vue: "clients", libelle: "Clients" },
   { vue: "apporteurs", libelle: "Apporteurs" },
   { vue: "stock", libelle: "Catalogue" },
+  { vue: "etats", libelle: "États" },
   { vue: "administration", libelle: "Administration" },
 ];
 

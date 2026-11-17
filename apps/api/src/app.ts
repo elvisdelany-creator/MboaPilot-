@@ -17,6 +17,7 @@ import { SimulateurOrangeMoney } from "./modules/paiement-mobile/simulateur-oran
 import type { FournisseurPaiementMobile } from "./modules/paiement-mobile/fournisseur.js";
 import { registerTableauBordRoutes } from "./modules/tableau-bord/tableau-bord.routes.js";
 import { registerExportComptableRoutes } from "./modules/export-comptable/export-comptable.routes.js";
+import { registerEtatsRoutes } from "./modules/etats/etats.routes.js";
 import { registerUtilisateursRoutes } from "./modules/utilisateurs/utilisateurs.routes.js";
 import { registerEntrepriseRoutes } from "./modules/entreprise/entreprise.routes.js";
 import { registerComptesPartagesRoutes } from "./modules/comptes-partages/comptes-partages.routes.js";
@@ -270,6 +271,8 @@ export function buildApp(db: Db, options: BuildAppOptions) {
   registerPaiementMobileRoutes(app, db, fournisseurPaiementMobile, { authRequis, ventes }, mobileMoneyActif);
   registerTableauBordRoutes(app, db, { authRequis, ventes, pilotage });
   registerExportComptableRoutes(app, db, { authRequis, pilotage });
+  // états de gestion imprimables (état des ventes) : écran, CSV, PDF — mêmes rôles que le pilotage financier
+  registerEtatsRoutes(app, db, { authRequis, pilotage });
   registerUtilisateursRoutes(app, db, { authRequis, admin });
   registerEntrepriseRoutes(app, db, options.dossierLogos ?? dossierLogos(), { authRequis, gestionParametres });
   registerComptesPartagesRoutes(app, db, { authRequis, ventes, gestionComptesPartages });

@@ -13,6 +13,7 @@ import { ApporteurFichePage } from "@/components/apporteurs/ApporteurFichePage";
 import { StockPage } from "@/components/stock/StockPage";
 import { ClientsPage } from "@/components/clients/ClientsPage";
 import { AdministrationPage } from "@/components/administration/AdministrationPage";
+import { EtatsPage } from "@/components/etats/EtatsPage";
 import { LicenceBanner } from "@/components/layout/LicenceBanner";
 import { VerificationFacturePage } from "@/components/verification/VerificationFacturePage";
 import type { Vue } from "@/components/layout/AppHeader";
@@ -25,6 +26,7 @@ type EtatVue =
   | { nom: "apporteurs" }
   | { nom: "stock"; idProduitInitial?: number; actionInitiale?: "achat" | "transfert" }
   | { nom: "clients" }
+  | { nom: "etats" }
   | { nom: "administration"; ongletInitial?: string };
 
 // Porte d'entrée sans session : l'assistant de première installation tant qu'aucun compte n'existe, la connexion sinon.
@@ -117,6 +119,8 @@ function Contenu() {
     contenuPage = <StockPage onNaviguer={naviguer} idProduitInitial={vue.idProduitInitial} actionInitiale={vue.actionInitiale} />;
   } else if (vue.nom === "clients") {
     contenuPage = <ClientsPage onNaviguer={naviguer} onReabonnerDepuisFiche={reabonnerDepuisFiche} />;
+  } else if (vue.nom === "etats") {
+    contenuPage = <EtatsPage onNaviguer={naviguer} />;
   } else if (vue.nom === "administration") {
     contenuPage = <AdministrationPage onNaviguer={naviguer} ongletInitial={vue.ongletInitial} />;
   } else {

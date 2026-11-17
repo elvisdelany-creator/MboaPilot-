@@ -1,3 +1,4 @@
+import type { EtatImprimable } from "@mboapilot/shared";
 import type {
   AbonnementExpire,
   AlerteEcheance,
@@ -293,6 +294,24 @@ export async function exporterJournalComptableRequete(token: string, journal: Jo
   if (!reponse.ok) return lireErreurExport(reponse);
   const nomFichier = /filename=([^;]+)/.exec(reponse.headers.get("content-disposition") ?? "")?.[1]?.trim() ?? `journal-${journal}-${du}-${au}.csv`;
   return { csv: await reponse.text(), nomFichier };
+}
+
+// États de gestion (état des ventes) : l'état complet pour l'écran, ou un fichier à télécharger. Les erreurs de période (400) sont montrées telles quelles.
+export async function chargerEtatVentes(token: string, du: string, au: string): Promise<EtatImprimable> {
+  const reponse = await appelerServeur(`${BASE}/etats/ventes?du=${du}&au=${au}`, { headers: headersAuth(token) });
+  if (!reponse.ok) return lireErreurExport(reponse);
+  return lireJson<EtatImprimable>(reponse);
+}
+
+export async function telechargerEtatVentes(token: string, format: "pdf" | "csv", du: string, au: string): Promise<{ blob: Blob; nomFichier: string }> {
+  const reponse = await appelerServeur(`${BASE}/etats/ventes/${format}?du=${du}&au=${au}`, { headers: headersAuth(token) });
+  // une erreur serveur imprévue (500) ne montre pas son message technique : l'utilisateur sait seulement que le fichier n'a pas pu être fabriqué
+  if (reponse.status >= 500) throw new Error(`Impossible de générer le ${format === "pdf" ? "PDF" : "CSV"}. Réessayez dans un instant.`);
+  if (!reponse.ok) return lireErreurExport(reponse);
+  const nomFichier = /filename=([^;]+)/.exec(reponse.headers.get("content-disposition") ?? "")?.[1]?.trim() ?? `etat-des-ventes-${du}-au-${au}.${format}`;
+  if (format === "pdf") return { blob: await reponse.blob(), nomFichier };
+  // le BOM UTF-8 en tête : sans lui, Excel lit les accents comme du Windows-1252 (« CÃ¢ble »)
+  return { blob: new Blob(["\uFEFF", await reponse.text()], { type: "text/csv;charset=utf-8" }), nomFichier };
 }
 
 // 6.5 : virements encaissés, pas encore retrouvés sur le relevé bancaire (le plus ancien d'abord) — `total` peut dépasser la liste

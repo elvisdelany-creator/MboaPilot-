@@ -109,7 +109,8 @@ describe("verrouillage des comptes en démo", () => {
 
     const bon = await app.inject({ method: "POST", url: "/api/v1/auth/login", payload: { identifiant: "gerant.demo", motDePasse: "motdepasse-secret" } });
     expect(bon.statusCode).toBe(200);
-  });
+    // 9 vraies vérifications de mot de passe : 4,3 s seul, plus de 5 s quand la suite complète occupe la machine
+  }, 60_000);
 
   it("hors démo, le verrouillage après 5 échecs reste en vigueur", async () => {
     const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });

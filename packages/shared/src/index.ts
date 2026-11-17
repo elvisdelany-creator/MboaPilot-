@@ -45,3 +45,4 @@ export { decrireEntreeAudit, type ChangementAudit, type DescriptionAudit, type E
 export { construireUrlVerification, erreurAdressePublique, normaliserAdressePublique } from "./adresse-publique.js";
 export { brouillonCaisseEstVide, DUREE_BROUILLON_CAISSE_MS, lireBrouillonCaisse, serialiserBrouillonCaisse, type BrouillonCaisse, type LigneBrouillonCaisse } from "./brouillon-caisse.js";
 export { periodeDuMois } from "./periode-mois.js";
+export { erreurDetailsPaiement, type DetailsPaiement } from "./details-paiement.js";

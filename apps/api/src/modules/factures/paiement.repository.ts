@@ -1,4 +1,5 @@
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
+import { erreurDetailsPaiement, jourDouala } from "@mboapilot/shared";
 import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
 
@@ -55,11 +56,20 @@ export function paiementMobileEnCours(db: Db, idFacture: number): boolean {
     .some((t) => new Date(t.dateExpiration).getTime() > Date.now());
 }
 
+// textes saisis à la main : sans espaces superflus (« 0012345 » et « 0012345 » doivent se rapprocher), jamais une chaîne vide à la place de « absent »
+const nettoyer = (valeur: unknown): string | undefined => (typeof valeur === "string" ? valeur.trim() || undefined : undefined);
+
 // 6.5 : "Comptant" et "Chèque" ont une validation "Immédiate" ; seul le
 // "Virement bancaire" est "Différée (rapprochement)" — un virement démarre
 // donc EN_ATTENTE de rapprochement, les autres modes n'ont aucun statut
 // (null, notion non applicable).
 export function creerPaiement(db: Db, params: CreerPaiementParams) {
+  // un chèque sans numéro ou un virement sans référence ne se rapproche plus du relevé de banque : la règle des écrans de caisse est aussi celle du
+  // serveur, quel que soit le client qui l'appelle. Un remboursement (montant négatif, avoir) sort de l'argent : aucun détail à exiger.
+  if (params.montant > 0) {
+    const erreur = erreurDetailsPaiement(params, jourDouala());
+    if (erreur) throw new Error(erreur);
+  }
   // encaisser autrement pendant qu'un Mobile Money peut encore aboutir ferait payer deux fois le client : les 5 000 FCFA en espèces,
   // puis les 5 000 FCFA débités à la confirmation. Un remboursement (montant négatif, avoir) n'est jamais bloqué, et la confirmation
   // du Mobile Money enregistre son propre paiement sans passer ici.
@@ -74,11 +84,11 @@ export function creerPaiement(db: Db, params: CreerPaiementParams) {
       montant: montantEncaisseNet(db, params),
       utilisateurId: params.utilisateurId,
       referenceTransaction: params.referenceTransaction,
-      banque: params.banque,
-      numeroCheque: params.numeroCheque,
-      titulaireCheque: params.titulaireCheque,
+      banque: nettoyer(params.banque),
+      numeroCheque: nettoyer(params.numeroCheque),
+      titulaireCheque: nettoyer(params.titulaireCheque),
       dateCheque: params.dateCheque,
-      referenceVirement: params.referenceVirement,
+      referenceVirement: nettoyer(params.referenceVirement),
       statutRapprochement: params.mode === "VIREMENT" ? "EN_ATTENTE" : null,
     })
     .returning()

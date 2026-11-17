@@ -7,12 +7,18 @@ import { installationNecessaire, installer, type SaisieInstallation } from "./in
 
 // Routes PUBLIQUES (aucun compte n'existe encore) : l'état de l'installation, et l'installation elle-même, qui n'est
 // acceptée qu'une seule fois. Elle ouvre directement la session du premier administrateur.
-export function registerInstallationRoutes(app: FastifyInstance, db: Db) {
+// refuserInstallation (mode hébergé) : un serveur neuf joignable depuis Internet serait pris par le premier venu qui ouvrirait l'assistant. On y
+// restaure la base d'une boutique installée sur un poste local (docs/exploitation.md).
+export function registerInstallationRoutes(app: FastifyInstance, db: Db, options: { refuserInstallation?: boolean } = {}) {
   app.get("/api/v1/installation/etat", async (_request, reply) => {
     reply.code(200).send({ installee: !installationNecessaire(db) });
   });
 
   app.post<{ Body: SaisieInstallation }>("/api/v1/installation", async (request, reply) => {
+    if (options.refuserInstallation) {
+      reply.code(403).send({ erreur: "L'installation est désactivée en mode hébergé : installez la boutique sur un poste local, puis restaurez sa base sur le serveur (voir docs/exploitation.md)." });
+      return;
+    }
     if (!installationNecessaire(db)) {
       reply.code(409).send({ erreur: "L'application est déjà installée" });
       return;

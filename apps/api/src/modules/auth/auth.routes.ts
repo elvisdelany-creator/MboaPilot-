@@ -1,12 +1,19 @@
 import { eq } from "drizzle-orm";
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
 import { signerSession, type Guard } from "./auth.plugin.js";
-import { authentifierAsync, changerSonMotDePasse, type OptionsAuthentification } from "./auth.service.js";
+import { authentifierAsync, changerSonMotDePasse, MESSAGE_VERROUILLE, type OptionsAuthentification } from "./auth.service.js";
+import { cleVerrouConnexion, type VerrouConnexion } from "./verrou-connexion.js";
 import { messageClient } from "../../lib/erreurs-api.js";
 
-export function registerAuthRoutes(app: FastifyInstance, db: Db, authRequis: Guard, optionsAuthentification: OptionsAuthentification = {}) {
+// Verrou par compte ET adresse (mode hébergé) : voir verrou-connexion.ts. `adresse` lit l'adresse du visiteur derrière le proxy.
+export interface VerrouParAdresse {
+  verrou: VerrouConnexion;
+  adresse: (request: FastifyRequest) => string;
+}
+
+export function registerAuthRoutes(app: FastifyInstance, db: Db, authRequis: Guard, optionsAuthentification: OptionsAuthentification = {}, verrouParAdresse?: VerrouParAdresse) {
   // Profil COURANT de l'appelant, relu en base : le rôle, le site et l'état du compte peuvent changer
   // pendant une session de 12 h, alors que le navigateur garde ceux reçus à la connexion. Sans jamais
   // exposer le hash du mot de passe.
@@ -40,7 +47,25 @@ export function registerAuthRoutes(app: FastifyInstance, db: Db, authRequis: Gua
     try {
       // corps absent, null ou tableau : traité comme des identifiants manquants (401 générique)
       const { identifiant, motDePasse } = (request.body ?? {}) as { identifiant?: string; motDePasse?: string };
-      const utilisateur = await authentifierAsync(db, identifiant as string, motDePasse as string, undefined, optionsAuthentification);
+      // identifiant inconnu ou existant : même verrou, donc même réponse (on ne peut pas deviner quels comptes existent) ; contrôlé avant le
+      // calcul du mot de passe, qui coûte cher
+      const cle = verrouParAdresse ? cleVerrouConnexion(identifiant, verrouParAdresse.adresse(request)) : null;
+      if (cle && verrouParAdresse) {
+        const verdict = verrouParAdresse.verrou.verifier(cle);
+        if (verdict.verrouille) {
+          reply.header("Retry-After", String(verdict.reessayerDansSecondes));
+          reply.code(401).send({ erreur: MESSAGE_VERROUILLE });
+          return;
+        }
+      }
+      let utilisateur;
+      try {
+        utilisateur = await authentifierAsync(db, identifiant as string, motDePasse as string, undefined, optionsAuthentification);
+      } catch (echec) {
+        if (cle && verrouParAdresse) verrouParAdresse.verrou.enregistrerEchec(cle);
+        throw echec;
+      }
+      if (cle && verrouParAdresse) verrouParAdresse.verrou.reinitialiser(cle);
       const token = signerSession(app, db, utilisateur.idUser);
       reply.code(200).send({ token, utilisateur });
     } catch (erreur) {

@@ -91,8 +91,8 @@ dossier tant que vous n'avez pas vérifié. Si vous préférez repartir de zéro
 | Mode | État |
 |---|---|
 | **Comptant** | Fiable. |
-| **Chèque** | Fiable (banque, numéro, titulaire, date). |
-| **Virement** | Fiable (banque et référence). |
+| **Chèque** | Fiable : banque, numéro, titulaire et date sont **obligatoires** (le serveur les exige aussi). Un chèque postdaté ne dépasse pas un an. |
+| **Virement** | Fiable : banque et référence sont **obligatoires** (le serveur les exige aussi). Il reste « à rapprocher » jusqu'à vérification sur le relevé de banque. |
 | **Mobile Money** | ⛔ **Masqué à la caisse** : le seul opérateur fourni est un simulateur, qui déclarerait le paiement « confirmé » au bout de quelques secondes, **que le client ait payé ou non**. Le serveur refuse aussi de l'enregistrer (message « Le paiement Mobile Money n'est pas disponible »). |
 
 **Pour un paiement Mobile Money d'un client**, vérifiez d'abord la réception du paiement sur le téléphone de la
@@ -134,13 +134,13 @@ l'administrateur se reconnecte avec son mot de passe habituel.
 ## 7. À ne pas faire
 
 - **Ne fermez pas la fenêtre du lanceur** pendant que vous travaillez.
-- **N'ouvrez pas MboaPilot sur Internet** (n'utilisez pas `MBOAPILOT_HOTE`) : l'application n'est protégée contre
-  les attaques en ligne que dans un mode hébergé qui reste à terminer.
+- **N'ouvrez pas MboaPilot sur Internet** (n'utilisez pas `MBOAPILOT_HOTE`) : le **mode hébergé** (protections
+  Internet) existe, mais il n'a pas encore été éprouvé en conditions réelles : ne l'utilisez qu'en suivant `exploitation.md` §9.
 - **N'utilisez jamais** les comptes de la démo publique ni `npm run db:seed:dev` sur la vraie base.
 - **Avant toute mise à jour** du code : une sauvegarde (voir `exploitation.md` §4).
 
 ## 8. Plus tard : passer en ligne
 
 Quand vous voudrez travailler à distance : un petit serveur (VPS) avec disque durable sur une adresse comme
-`app.nextservicescameroon.com`, le « mode hébergé » (protections Internet), et votre base importée par la même
+`app.nextservicescameroon.com`, le « mode hébergé » (protections Internet, `exploitation.md` §9), et votre base importée par la même
 restauration que ci-dessus. Rien de ce que vous aurez saisi en local n'est perdu.

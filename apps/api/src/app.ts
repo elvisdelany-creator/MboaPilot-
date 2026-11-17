@@ -35,6 +35,7 @@ import type { FournisseurImpression } from "./modules/impression/fournisseur.js"
 import { dossierLogos, dossierPhotosSav, dossierSauvegardes } from "./config/chemins.js";
 import { ecritureBloqueeEnDemo, estTeleversement, MESSAGE_FONCTION_DESACTIVEE_EN_DEMO } from "./demo/mode-demo.js";
 import { creerLimiteurDebit, type ConfigurationLimite } from "./demo/limiteur-debit.js";
+import { creerVerrouConnexion, type VerrouConnexion } from "./modules/auth/verrou-connexion.js";
 import { registerDemoRoutes } from "./demo/demo.routes.js";
 import { adresseDuVisiteur, protocoleAnnonce } from "./demo/adresse-visiteur.js";
 
@@ -62,6 +63,11 @@ export interface BuildAppOptions {
   // démo publique : refuse les écritures sensibles (comptes, mots de passe, licence, sauvegardes…), ne verrouille jamais un compte partagé et
   // plafonne le débit par adresse. Jamais sur la vraie base d'une boutique (voir demo/mode-demo.ts).
   modeDemo?: boolean;
+  // mode hébergé : serveur joignable depuis Internet, derrière un proxy HTTPS (voir config/mode-heberge.ts). Plafonds de débit par adresse, verrou
+  // de connexion par compte ET adresse, HSTS, HTTP simple refusé, assistant d'installation et simulateur Mobile Money fermés. Jamais avec la démo.
+  modeHeberge?: boolean;
+  // verrou de connexion du mode hébergé ; injectable pour les tests (horloge)
+  verrouConnexion?: VerrouConnexion;
   // derrière un proxy HTTPS de confiance (hébergeur) : nombre de proxys successifs dont on croit l'en-tête X-Forwarded-For (true = 1). Chacun
   // AJOUTE l'adresse qu'il voit à droite de l'en-tête, sans retirer ce que le visiteur y a mis : seules les adresses de droite sont fiables,
   // et on ne remonte que de ce nombre de proxys (jamais « tous », qui retiendrait l'adresse inventée par le visiteur et contournerait le
@@ -78,6 +84,14 @@ const LIMITES_DEMO_PAR_DEFAUT = {
   generale: { fenetreMs: 60_000, maximum: 600 },
   connexion: { fenetreMs: 60_000, maximum: 10 },
   televersement: { fenetreMs: 60_000, maximum: 8 },
+};
+
+// mode hébergé : une boutique (plusieurs postes, parfois derrière une même adresse) fait quelques dizaines d'appels par minute et par poste. Les
+// connexions restent à 10 par minute : chaque vérification de mot de passe coûte cher, et c'est le plafond contre les essais en rafale.
+const LIMITES_HEBERGE_PAR_DEFAUT = {
+  generale: { fenetreMs: 60_000, maximum: 1200 },
+  connexion: { fenetreMs: 60_000, maximum: 10 },
+  televersement: { fenetreMs: 60_000, maximum: 20 },
 };
 
 // 10.4 : préfixes toujours autorisés en écriture même en mode dégradé —
@@ -101,10 +115,21 @@ const POLITIQUE_CONTENU =
 export function buildApp(db: Db, options: BuildAppOptions) {
   // nombre de proxys d'hébergeur dont on lit l'en-tête X-Forwarded-For (voir demo/adresse-visiteur.ts) ; la confiance de Fastify reste désactivée
   const sautsProxy = options.faireConfianceAuProxy === true ? 1 : typeof options.faireConfianceAuProxy === "number" && options.faireConfianceAuProxy > 0 ? Math.floor(options.faireConfianceAuProxy) : 0;
+  if (options.modeHeberge && options.modeDemo) throw new Error("Le mode hébergé ne peut pas tourner avec la démo publique (boutique fictive à comptes partagés)");
   const app = Fastify();
 
+  // mode hébergé : le proxy annonce le protocole du visiteur. Du HTTP simple (proxy mal réglé) ferait circuler les mots de passe en clair : refusé.
+  // Sans annonce (sonde de santé locale), la requête passe : seul un proxy déclaré annonce le protocole.
+  if (options.modeHeberge) {
+    app.addHook("onRequest", async (request, reply) => {
+      if (!request.url.startsWith("/api/") || protocoleAnnonce(request.headers, sautsProxy) !== "http") return;
+      reply.code(400).send({ erreur: "HTTPS obligatoire : le proxy transmet cette requête en HTTP simple, ce qui ferait circuler les mots de passe en clair." });
+      return reply;
+    });
+  }
+
   // démo publique : le plafond de débit passe en premier (le moins coûteux), puis le refus des écritures sensibles
-  const limites = options.limiteDebit ?? (options.modeDemo ? LIMITES_DEMO_PAR_DEFAUT : undefined);
+  const limites = options.limiteDebit ?? (options.modeDemo ? LIMITES_DEMO_PAR_DEFAUT : options.modeHeberge ? LIMITES_HEBERGE_PAR_DEFAUT : undefined);
   if (limites) {
     const limiteurGeneral = creerLimiteurDebit(limites.generale);
     const limiteurConnexion = creerLimiteurDebit(limites.connexion);
@@ -142,7 +167,7 @@ export function buildApp(db: Db, options: BuildAppOptions) {
     if (request.url.startsWith("/api/")) reply.header("Cache-Control", "no-store");
     // démo publique, servie en HTTPS par le proxy de l'hébergeur : le navigateur n'utilisera plus que HTTPS pour ce domaine. Jamais sur un
     // poste de caisse local (HTTP) : le protocole n'est lu que derrière un proxy déclaré, qui l'annonce.
-    if (options.modeDemo && protocoleAnnonce(request.headers, sautsProxy) === "https") reply.header("Strict-Transport-Security", "max-age=31536000");
+    if ((options.modeDemo || options.modeHeberge) && protocoleAnnonce(request.headers, sautsProxy) === "https") reply.header("Strict-Transport-Security", "max-age=31536000");
     if (String(reply.getHeader("Content-Type") ?? "").startsWith("text/html")) reply.header("Content-Security-Policy", POLITIQUE_CONTENU);
     return payload;
   });
@@ -152,8 +177,16 @@ export function buildApp(db: Db, options: BuildAppOptions) {
   const authRequis = creerAuthRequis(db);
   // 5.10 : téléversement des photos optionnelles du dossier SAV (multipart/form-data)
   app.register(multipart);
-  registerAuthRoutes(app, db, authRequis, { sansVerrouillage: options.modeDemo === true });
-  registerInstallationRoutes(app, db);
+  // mode hébergé : le verrou par compte (le même pour tout le monde) laisserait n'importe qui bloquer l'administrateur à distance ; il cède la
+  // place au verrou par compte et adresse
+  registerAuthRoutes(
+    app,
+    db,
+    authRequis,
+    { sansVerrouillage: options.modeDemo === true || options.modeHeberge === true },
+    options.modeHeberge ? { verrou: options.verrouConnexion ?? creerVerrouConnexion(), adresse: (request) => adresseDuVisiteur(request.headers, request.ip, sautsProxy) } : undefined,
+  );
+  registerInstallationRoutes(app, db, { refuserInstallation: options.modeHeberge === true });
   const fournisseurPaiementMobile = options.fournisseurPaiementMobile ?? new SimulateurOrangeMoney();
   const mobileMoneyActif = options.mobileMoneyActif ?? (options.modeDemo === true || options.fournisseurPaiementMobile !== undefined);
   const fournisseurImpression = options.fournisseurImpression ?? new ImprimanteReseauTcp();

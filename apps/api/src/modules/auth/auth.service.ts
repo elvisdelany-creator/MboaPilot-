@@ -7,7 +7,7 @@ import { trouverPolitiqueMotDePasseParSite } from "../entreprise/entreprise.repo
 import { trouverUtilisateurParIdentifiant, type Role } from "../utilisateurs/utilisateur.repository.js";
 
 const MESSAGE_ERREUR = "Identifiants invalides";
-const MESSAGE_VERROUILLE = "Compte temporairement verrouillé après plusieurs échecs de connexion. Réessayez dans quelques minutes.";
+export const MESSAGE_VERROUILLE = "Compte temporairement verrouillé après plusieurs échecs de connexion. Réessayez dans quelques minutes.";
 // hash factice pour égaliser le temps de réponse identifiant inconnu / mot de passe
 // erroné et ne pas laisser fuiter, par canal temporel, l'existence d'un compte.
 const HASH_FACTICE = bcrypt.hashSync("hash-factice-anti-timing", 12);

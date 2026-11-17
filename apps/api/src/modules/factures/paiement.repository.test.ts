@@ -143,7 +143,7 @@ describe("creerPaiement — paiement Mobile Money en cours (6.6)", () => {
 
 describe("confirmerRapprochementVirement (6.5)", () => {
   it("passe un virement EN_ATTENTE à RAPPROCHE", () => {
-    const paiement = creerPaiement(db, { idFacture, mode: "VIREMENT", montant: 10000, utilisateurId: userId, referenceVirement: "VIR-001" });
+    const paiement = creerPaiement(db, { idFacture, mode: "VIREMENT", montant: 10000, utilisateurId: userId, banque: "Afriland", referenceVirement: "VIR-001" });
 
     const confirme = confirmerRapprochementVirement(db, paiement.idPaiement);
 
@@ -163,7 +163,7 @@ describe("confirmerRapprochementVirement (6.5)", () => {
   });
 
   it("rejette un virement déjà rapproché", () => {
-    const paiement = creerPaiement(db, { idFacture, mode: "VIREMENT", montant: 10000, utilisateurId: userId });
+    const paiement = creerPaiement(db, { idFacture, mode: "VIREMENT", montant: 10000, utilisateurId: userId, banque: "Afriland", referenceVirement: "VIR-002" });
     confirmerRapprochementVirement(db, paiement.idPaiement);
 
     expect(() => confirmerRapprochementVirement(db, paiement.idPaiement)).toThrow(/déjà/i);

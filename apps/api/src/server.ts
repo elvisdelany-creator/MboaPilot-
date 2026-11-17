@@ -10,6 +10,17 @@ import { revaliderLicence } from "./modules/licence/licence.service.js";
 import { dossierSauvegardes as dossierSauvegardesConfigure } from "./config/chemins.js";
 import { resoudreDossierInterfaceWeb } from "./lib/interface-web.js";
 import { estModeDemo } from "./demo/mode-demo.js";
+import { erreursConfigurationHeberge, estModeHeberge } from "./config/mode-heberge.js";
+
+// mode hébergé (MBOAPILOT_HEBERGE=1) : un serveur joignable depuis Internet refuse de démarrer avec une configuration dangereuse, avant de toucher
+// à la base. Hors mode hébergé (poste local), aucun contrôle : rien ne change.
+const erreursHeberge = erreursConfigurationHeberge();
+if (erreursHeberge.length > 0) {
+  console.error("[MboaPilot] Démarrage impossible en mode hébergé :");
+  for (const erreur of erreursHeberge) console.error(`  - ${erreur}`);
+  process.exit(1);
+}
+const modeHeberge = estModeHeberge();
 
 // 2.6 : base restaurée ou application mise à jour — mise à niveau avant toute requête
 appliquerMigrations(db);
@@ -32,7 +43,7 @@ const sautsProxy = Number(process.env.MBOAPILOT_PROXY ?? 0);
 // Mobile Money : le seul opérateur fourni est un simulateur qui confirme tout paiement. Coupé dans une vraie boutique ; MBOAPILOT_MOBILE_MONEY_SIMULE=1
 // le rouvre pour des essais (formation, démonstration sur un poste), jamais pour encaisser de l'argent réel.
 const mobileMoneySimule = process.env.MBOAPILOT_MOBILE_MONEY_SIMULE === "1" ? true : undefined;
-const app = buildApp(db, { jwtSecret: obtenirSecretJwt(), dossierSauvegardes, dossierInterfaceWeb, modeDemo: estModeDemo(), faireConfianceAuProxy: Number.isFinite(sautsProxy) ? sautsProxy : 0, mobileMoneyActif: mobileMoneySimule });
+const app = buildApp(db, { jwtSecret: obtenirSecretJwt(), dossierSauvegardes, dossierInterfaceWeb, modeDemo: estModeDemo(), modeHeberge, faireConfianceAuProxy: Number.isFinite(sautsProxy) ? sautsProxy : 0, mobileMoneyActif: mobileMoneySimule });
 const port = Number(process.env.PORT ?? 3001);
 // 2.2 : le poste de caisse n'écoute que sur lui-même. Seul un hébergement (démo publique) fixe MBOAPILOT_HOTE=0.0.0.0 pour recevoir le proxy de
 // l'hébergeur. Variable propre à MboaPilot, pas « HOST » : un nom aussi courant pourrait exister par hasard sur un poste de caisse et l'exposer au réseau.
@@ -42,6 +53,7 @@ app
   .listen({ port, host: hote })
   .then(() => {
     console.log(`MboaPilot API en écoute sur http://${hote}:${port}`);
+    if (modeHeberge) console.log("Mode hébergé actif : HTTPS obligatoire (via le proxy), plafonds de débit et verrou de connexion par adresse.");
     console.log(dossierInterfaceWeb ? `Interface web servie depuis ${dossierInterfaceWeb} : ouvrez http://${hote === "0.0.0.0" ? "127.0.0.1" : hote}:${port}` : "Interface web non construite (apps/web/dist absent) : lancez `npm run build` dans apps/web, ou le serveur de développement.");
     // 10.4 étape 2 : tentative de revalidation "au démarrage" — simulée en
     // l'absence de serveur de licence éditeur réel, réussit systématiquement

@@ -123,6 +123,16 @@ le mode simulé en lançant MboaPilot avec la variable `MBOAPILOT_MOBILE_MONEY_S
 A4) ou `docs/liste-de-controle.pdf`. Ouverture, journée, clôture, sauvegarde, que faire en cas de problème : une case
 à cocher par geste, à garder près de l'ordinateur.
 
+## 5 bis. États de gestion
+
+L'entrée **États** de la navigation (Administrateur, Gérant et Comptable) donne l'**état des ventes** d'une période : un récapitulatif par jour, la répartition par famille d'activité et par mode de paiement, puis le détail facture par facture et les totaux (TTC net des avoirs, TVA, HT, encaissé, reste à payer).
+
+1. Choisissez la période : un raccourci (aujourd'hui, hier, cette semaine, ce mois, mois dernier) ou deux dates. Les jours sont ceux de Douala ; la période ne peut pas dépasser 366 jours.
+2. **Imprimer** produit une page A4 avec l'en-tête de la boutique ; **Télécharger le PDF** enregistre le même état dans un fichier prêt à envoyer au comptable ; **Télécharger le CSV** donne un fichier pour Excel.
+3. Les avoirs apparaissent en négatif. Les ventes jamais encaissées (paiement Mobile Money abandonné) n'y figurent pas, comme dans le chiffre d'affaires.
+4. « Encaissé sur la période » compte les paiements reçus **pendant** la période ; « Reste à payer » est celui d'**aujourd'hui** sur les ventes de la période. Un solde encaissé après la période fait donc baisser le reste à payer sans changer l'encaissé de la période. La colonne « Encaissé à ce jour » du détail compte tous les paiements reçus à ce jour sur chaque facture, quelle que soit leur date : elle peut donc différer de « Encaissé sur la période », qui ne compte que les paiements reçus pendant la période (y compris ceux de factures plus anciennes).
+5. À l'écran et en PDF, le détail est limité aux **5 000 premières factures** (un message l'indique) : réduisez la période, ou prenez le CSV, qui n'est pas limité.
+
 ## 6. Si l'ordinateur tombe en panne
 
 Sur un autre ordinateur Windows : installez Node.js, recopiez le dossier du projet, puis suivez

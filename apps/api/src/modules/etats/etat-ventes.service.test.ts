@@ -78,7 +78,7 @@ describe("construireEtatVentes : détail facture par facture", () => {
     const s = section(construireEtatVentes(db, fx.siteId, NOVEMBRE).sections, "Détail facture par facture");
     const { f1, f2, f3, avoir, f4, f5 } = fx.factures;
 
-    expect(s.colonnes.map((c) => c.libelle)).toEqual(["Date", "N°", "Type", "Client", "Détail", "Total TTC", "Encaissé", "Reste à payer"]);
+    expect(s.colonnes.map((c) => c.libelle)).toEqual(["Date", "N°", "Type", "Client", "Détail", "Total TTC", "Encaissé à ce jour", "Reste à payer"]);
     expect(s.lignes).toEqual([
       ["2026-11-03", f1, "Vente", "Marie Ngo", "1 × EVASION + 1 × Câble HDMI", 11900, 11900, 0],
       ["2026-11-04", f2, "Vente", "Marie Ngo", "1 × 1 mois", 3500, 3500, 0], // acompte le 03/11 + solde le 01/12 : soldée aujourd'hui

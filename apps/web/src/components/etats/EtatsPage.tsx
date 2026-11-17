@@ -21,7 +21,7 @@ const STYLE_IMPRESSION = `@media print {
   @page { size: A4 portrait; margin: 12mm; }
   body { background: white; }
   .etats-page { display: block !important; height: auto !important; }
-  .etats-page header:not(.etat-entete), .etats-page .no-print { display: none !important; }
+  .etats-page header:not(.etat-entete), .no-print { display: none !important; }
   .etats-page main { overflow: visible !important; height: auto !important; padding: 0 !important; }
 }`;
 

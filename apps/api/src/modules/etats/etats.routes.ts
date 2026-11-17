@@ -25,7 +25,9 @@ export function registerEtatsRoutes(app: FastifyInstance, db: Db, guards: { auth
 
   app.get<Requete>("/api/v1/etats/ventes/csv", { preHandler }, async (request, reply) => {
     try {
-      const etat = construireEtatVentes(db, request.user.siteId, periode(request.query));
+      // Le CSV n'est jamais limité : c'est le recours que l'avertissement des autres formes propose (« …ou utilisez le CSV »). Une limite infinie
+      // garde donc toutes les factures du détail, sans avertissement, avec la ligne de totaux du détail.
+      const etat = construireEtatVentes(db, request.user.siteId, periode(request.query), { limiteDetail: Number.POSITIVE_INFINITY });
       reply
         .code(200)
         .header("Content-Type", "text/csv; charset=utf-8")

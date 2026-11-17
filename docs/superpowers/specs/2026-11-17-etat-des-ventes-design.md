@@ -54,7 +54,7 @@ interface EtatImprimable {
 }
 interface SectionEtat {
   titre: string;
-  colonnes: { cle: string; libelle: string; type: "texte" | "entier" | "fcfa" | "date"; alignement: "gauche" | "droite" }[];
+  colonnes: { cle: string; libelle: string; type: "texte" | "entier" | "fcfa" | "date"; alignement: "gauche" | "droite"; poids?: number }[]; // poids : largeur relative d'une colonne de texte dans le PDF (1 par défaut)
   lignes: (string | number)[][];                 // même ordre que les colonnes
   totaux?: (string | number)[];                  // ligne de totaux, même ordre
   messageVide?: string;                          // montré quand `lignes` est vide

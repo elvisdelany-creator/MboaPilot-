@@ -139,7 +139,7 @@ function sectionDetail(journal: LigneJournalVentes[], limite: number): SectionEt
       { cle: "client", libelle: "Client", type: "texte", alignement: "gauche", poids: 1.3 },
       { cle: "detail", libelle: "Détail", type: "texte", alignement: "gauche", poids: 2 },
       { cle: "ttc", libelle: "Total TTC", type: "fcfa", alignement: "droite" },
-      { cle: "encaisse", libelle: "Encaissé", type: "fcfa", alignement: "droite" },
+      { cle: "encaisse", libelle: "Encaissé à ce jour", type: "fcfa", alignement: "droite" },
       { cle: "reste", libelle: "Reste à payer", type: "fcfa", alignement: "droite" },
     ],
     lignes: journal.slice(0, limite).map((l) => [l.date, l.idFacture, l.type === "AVOIR" ? "Avoir" : "Vente", l.client, l.detail, l.totalTtc, l.encaisse, l.resteAPayer]),

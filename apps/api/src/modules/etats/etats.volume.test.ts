@@ -4,6 +4,7 @@ import { creerDbTest, type Db } from "../../test-utils/db.js";
 import { creerFixtureEtatVentes, type FixtureEtatVentes } from "../../test-utils/fixture-etat-ventes.js";
 import * as schema from "../../db/schema.js";
 import { buildApp } from "../../app.js";
+import { cederLaMain } from "../../lib/ceder-la-main.js";
 import { creerUtilisateur } from "../utilisateurs/utilisateur.repository.js";
 
 // Volume : au-delà de 5 000 factures, le détail de l'écran, du PDF et du JSON est coupé, mais le CSV (le recours que l'avertissement propose) ne l'est jamais.
@@ -73,5 +74,26 @@ describe("état des ventes au-delà de 5 000 factures", () => {
     expect(lignes.some((l) => l.startsWith("Avertissement"))).toBe(false);
     expect(reponse.body).not.toContain("Infinity");
     expect(lignes).toContain(`Total;;;;;${TOTAL_TTC_FIXTURE + sommeInseree};${ENCAISSE_FIXTURE};${RESTE_FIXTURE + sommeInseree}`);
+  }, 120_000);
+});
+
+describe("un gros état ne bloque pas le serveur", () => {
+  it("PDF de plus de 5 000 factures : les autres requêtes passent pendant sa fabrication (la route rend la main entre deux paquets)", async () => {
+    let tours = 0;
+    let actif = true;
+    const autreRequete = (async () => {
+      while (actif) {
+        tours += 1;
+        await cederLaMain();
+      }
+    })();
+
+    const reponse = await get(`/api/v1/etats/ventes/pdf?${QUERY}`);
+    actif = false;
+    await autreRequete;
+
+    expect(reponse.statusCode).toBe(200);
+    expect(reponse.rawPayload.subarray(0, 5).toString("latin1")).toBe("%PDF-");
+    expect(tours).toBeGreaterThanOrEqual(25); // 5 000 lignes de détail, une pause tous les 100
   }, 120_000);
 });

@@ -1,5 +1,5 @@
 import { eq, sql } from "drizzle-orm";
-import { lignesContactBoutique, type EtatImprimable, type SectionEtat } from "@mboapilot/shared";
+import { decalerJour, joursAvantEcheance, lignesContactBoutique, type EtatImprimable, type SectionEtat } from "@mboapilot/shared";
 import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
 import { trouverInfosEntrepriseParSite } from "../entreprise/entreprise.repository.js";
@@ -12,6 +12,7 @@ import {
   type PeriodeExport,
 } from "../export-comptable/export-comptable.service.js";
 import { creerResolveurFamilleLigne } from "../tableau-bord/tableau-bord.service.js";
+import { cederLaMain } from "../../lib/ceder-la-main.js";
 
 // État des ventes (premier des états de gestion) : une période, des sections, des totaux. Toute la logique de calcul est celle de l'application :
 // ventes validées de la boutique de la session, jour de Douala, avoirs en négatif, TVA figée sur la facture. Le détail vient du journal des ventes de
@@ -23,6 +24,7 @@ const MESSAGE_AUCUNE_VENTE = "Aucune vente sur cette période";
 export interface OptionsEtatVentes {
   limiteDetail?: number; // nombre maximal de factures montrées dans le détail
   maintenant?: Date; // instant de génération (injectable pour les tests)
+  joursParTranche?: number; // construireEtatVentesCedant : taille des tranches de calcul, en jours (par défaut : selon le volume de la période)
 }
 
 // « 5000 » devient « 5 000 » (espace simple : le PDF ne sait pas écrire l'espace insécable fine)
@@ -73,7 +75,7 @@ const somme2 = (jours: [string, { ventes: number; avoirs: number }][], champ: "v
 
 // Chiffre d'affaires par famille : même résolution que le tableau de bord (formule/kit/option → famille d'abonnement ; sinon Produits & Services, SAV).
 // Les lignes d'avoir sont en négatif : la somme des familles est bien le total TTC net.
-function sectionParFamille(db: Db, siteId: number, periode: PeriodeExport): SectionEtat {
+function repartitionFamilles(db: Db, siteId: number, periode: PeriodeExport): Map<string, number> {
   const lignes = db
     .select({ ligne: schema.ligneVente })
     .from(schema.ligneVente)
@@ -86,6 +88,10 @@ function sectionParFamille(db: Db, siteId: number, periode: PeriodeExport): Sect
     const famille = resoudreFamille(ligne);
     parFamille.set(famille, (parFamille.get(famille) ?? 0) + ligne.prixApplique);
   }
+  return parFamille;
+}
+
+function sectionParFamille(parFamille: Map<string, number>): SectionEtat {
   const triees = [...parFamille.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
   return {
     titre: "Répartition par famille d'activité",
@@ -103,7 +109,7 @@ const LIBELLES_MODES = { CASH: "Espèces", CHEQUE: "Chèque", VIREMENT: "Viremen
 
 // Encaissements de la période par mode, sur la date de chaque paiement (un acompte et son solde tombent chacun dans leur mois) ; un remboursement
 // est en négatif. Les quatre modes figurent toujours, à zéro s'il n'y a rien.
-function sectionParMode(db: Db, siteId: number, periode: PeriodeExport): { section: SectionEtat; total: number } {
+function encaissementsParMode(db: Db, siteId: number, periode: PeriodeExport): Map<string, number> {
   const paiements = db
     .select({ mode: schema.paiement.mode, total: sql<number>`sum(${schema.paiement.montant})` })
     .from(schema.paiement)
@@ -111,7 +117,10 @@ function sectionParMode(db: Db, siteId: number, periode: PeriodeExport): { secti
     .where(paiementsDeLaPeriode(siteId, periode))
     .groupBy(schema.paiement.mode)
     .all();
-  const parMode = new Map(paiements.map((p) => [p.mode, p.total]));
+  return new Map(paiements.map((p) => [p.mode, p.total]));
+}
+
+function sectionParMode(parMode: Map<string, number>): { section: SectionEtat; total: number } {
   const lignes = (Object.keys(LIBELLES_MODES) as (keyof typeof LIBELLES_MODES)[]).map((mode): [string, number] => [LIBELLES_MODES[mode], parMode.get(mode) ?? 0]);
   const total = lignes.reduce((somme, [, montant]) => somme + montant, 0);
   return {
@@ -167,19 +176,81 @@ function sectionTotaux(journal: LigneJournalVentes[], encaisseSurLaPeriode: numb
   };
 }
 
-export function construireEtatVentes(db: Db, siteId: number, periode: PeriodeExport, options: OptionsEtatVentes = {}): EtatImprimable {
-  verifierPeriodeExport(periode);
+// Mise en forme de l'état à partir des données brutes de la période (journal, familles, modes) : commune au calcul d'un seul bloc et au calcul par tranches
+function assemblerEtat(
+  db: Db,
+  siteId: number,
+  periode: PeriodeExport,
+  journal: LigneJournalVentes[],
+  parFamille: Map<string, number>,
+  parMode: Map<string, number>,
+  options: OptionsEtatVentes,
+): EtatImprimable {
   const limite = options.limiteDetail ?? LIMITE_DETAIL_PAR_DEFAUT;
-  const { lignes: journal } = listerJournalVentes(db, siteId, periode);
-  const modes = sectionParMode(db, siteId, periode);
-
+  const modes = sectionParMode(parMode);
   return {
     identifiant: "etat-des-ventes",
     titre: "État des ventes",
     periode: { du: periode.du, au: periode.au },
     entete: entete(db, siteId),
     genereLe: (options.maintenant ?? new Date()).toISOString(),
-    sections: [sectionParJour(journal), sectionParFamille(db, siteId, periode), modes.section, sectionDetail(journal, limite), sectionTotaux(journal, modes.total)],
+    sections: [sectionParJour(journal), sectionParFamille(parFamille), modes.section, sectionDetail(journal, limite), sectionTotaux(journal, modes.total)],
     avertissements: journal.length > limite ? [`Détail limité aux ${espacerMilliers(limite)} premières factures : réduisez la période ou utilisez le CSV.`] : [],
   };
+}
+
+// Calcul d'un seul bloc : simple et sans pause, pour les périodes courtes et les tests.
+export function construireEtatVentes(db: Db, siteId: number, periode: PeriodeExport, options: OptionsEtatVentes = {}): EtatImprimable {
+  verifierPeriodeExport(periode);
+  const { lignes: journal } = listerJournalVentes(db, siteId, periode);
+  return assemblerEtat(db, siteId, periode, journal, repartitionFamilles(db, siteId, periode), encaissementsParMode(db, siteId, periode), options);
+}
+
+const FACTURES_CIBLE_PAR_TRANCHE = 2500;
+const JOURS_MAX_PAR_TRANCHE = 31;
+
+// Taille des tranches de calcul, selon le volume. Chaque tranche coûte ~30 ms de frais fixes (mesuré sur un an de ventes : des tranches d'un jour font
+// passer le calcul de 1,2 s à 11,8 s) mais ne bloque le serveur que le temps de son contenu (des tranches d'un mois : 1,18 s au total, 122 ms de blocage
+// au pire, contre 1,25 s d'un seul bloc). On vise donc environ 2 500 factures par tranche, d'un à 31 jours.
+export function joursParTranchePourVolume(nombreFactures: number, nombreJours: number): number {
+  if (nombreFactures <= 0) return JOURS_MAX_PAR_TRANCHE;
+  return Math.min(JOURS_MAX_PAR_TRANCHE, Math.max(1, Math.floor((nombreJours * FACTURES_CIBLE_PAR_TRANCHE) / nombreFactures)));
+}
+
+// Découpe la période en tranches contiguës de `jours` jours (la dernière plus courte), sans trou ni recouvrement.
+export function decouperEnTranches(periode: PeriodeExport, jours: number): PeriodeExport[] {
+  const tranches: PeriodeExport[] = [];
+  for (let debut = periode.du; debut <= periode.au; debut = decalerJour(debut, jours)) {
+    const fin = decalerJour(debut, jours - 1);
+    tranches.push({ du: debut, au: fin < periode.au ? fin : periode.au });
+  }
+  return tranches;
+}
+
+// Le MÊME état que construireEtatVentes, calculé tranche par tranche avec une pause entre chacune. Sur un an de ventes (25 000 factures), le calcul d'un
+// seul bloc bloquait le serveur près de 3 secondes avec le PDF : un caissier qui encaisse au même moment attendait. Chaque tranche ne bloque plus que le
+// temps de quelques jours de ventes. Les tranches se recollent sans perte : le journal est trié par date de facture, les paiements d'une facture sont
+// lus en entier avec elle, les avoirs avec leur vente, et les familles et modes de paiement s'additionnent.
+export async function construireEtatVentesCedant(db: Db, siteId: number, periode: PeriodeExport, options: OptionsEtatVentes = {}): Promise<EtatImprimable> {
+  verifierPeriodeExport(periode);
+  const journal: LigneJournalVentes[] = [];
+  const parFamille = new Map<string, number>();
+  const parMode = new Map<string, number>();
+  const additionner = (total: Map<string, number>, partiel: Map<string, number>) => {
+    for (const [cle, montant] of partiel) total.set(cle, (total.get(cle) ?? 0) + montant);
+  };
+
+  let joursParTranche = options.joursParTranche;
+  if (joursParTranche === undefined) {
+    const { nombre } = db.select({ nombre: sql<number>`count(*)` }).from(schema.facture).where(facturesDeLaPeriode(db, siteId, periode)).get()!;
+    joursParTranche = joursParTranchePourVolume(nombre, joursAvantEcheance(periode.au, periode.du) + 1);
+  }
+
+  for (const tranche of decouperEnTranches(periode, joursParTranche)) {
+    for (const ligne of listerJournalVentes(db, siteId, tranche).lignes) journal.push(ligne);
+    additionner(parFamille, repartitionFamilles(db, siteId, tranche));
+    additionner(parMode, encaissementsParMode(db, siteId, tranche));
+    await cederLaMain();
+  }
+  return assemblerEtat(db, siteId, periode, journal, parFamille, parMode, options);
 }

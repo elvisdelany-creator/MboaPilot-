@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import type { EtatImprimable } from "@mboapilot/shared";
+import { cederLaMain } from "../../lib/ceder-la-main.js";
 import { rendreEtatPdf, texteCompatiblePdf } from "./etat-pdf.js";
 
 // pdfkit écrit le texte en hexadécimal dans des opérateurs Tj / TJ, en octets Windows-1252 : on le relit pour vérifier ce qui est réellement dessiné
@@ -147,5 +148,32 @@ describe("rendreEtatPdf", () => {
     const pdf = await rendreEtatPdf(etat({ entete: { nomBoutique: "Boutique ★ Démo", lignesContact: [] } }), sansCompression);
 
     expect(toutLeTexte(pdf)).toContain("Boutique ? Démo");
+  });
+});
+
+// Constaté en test de charge : un PDF d'un an (200 pages) bloquait le serveur près de 3 secondes, sans répondre aux autres requêtes. Le dessin rend donc
+// la main au serveur tous les 100 lignes.
+describe("rendreEtatPdf : rend la main au serveur pendant le dessin", () => {
+  it("un long tableau n'est pas dessiné d'un seul bloc : les autres requêtes passent entre deux paquets de lignes", async () => {
+    const lignes = Array.from({ length: 3000 }, (_, i) => [`2026-11-${String((i % 28) + 1).padStart(2, "0")}`, `Article ${i + 1}`, 1000 + i]);
+    const grand = etat({ sections: [{ ...etat().sections[0], lignes, totaux: undefined }] });
+
+    // une « autre requête » qui ne demande qu'un tour de boucle d'événements : elle n'avance que si le dessin cède la main
+    let tours = 0;
+    let actif = true;
+    const autreRequete = (async () => {
+      while (actif) {
+        tours += 1;
+        await cederLaMain();
+      }
+    })();
+    const pdf = await rendreEtatPdf(grand, sansCompression);
+    actif = false;
+    await autreRequete;
+
+    expect(tours).toBeGreaterThanOrEqual(25); // 3 000 lignes, une pause tous les 100
+    // la pause ne change rien au document : toutes les lignes y sont, sur plusieurs pages
+    expect((toutLeTexte(pdf).match(/Article \d+/g) ?? []).length).toBe(3000);
+    expect(nombreDePages(pdf)).toBeGreaterThan(30);
   });
 });

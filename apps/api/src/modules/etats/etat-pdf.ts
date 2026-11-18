@@ -1,4 +1,5 @@
 import PDFDocument from "pdfkit";
+import { cederLaMain } from "../../lib/ceder-la-main.js";
 import { dateHeureDouala, formaterValeurEtat, libellePeriodeEtat, type ColonneEtat, type EtatImprimable, type SectionEtat } from "@mboapilot/shared";
 
 // Rendu PDF d'un état : A4 portrait, police standard Helvetica (accents français gérés), tableaux dont l'en-tête reparaît à chaque page, « Page i / n »
@@ -16,6 +17,8 @@ const LARGEURS_FIXES = { date: 58, entier: 44, fcfa: 72 } as const;
 const POLICE = "Helvetica";
 const POLICE_GRAS = "Helvetica-Bold";
 const POLICE_ITALIQUE = "Helvetica-Oblique";
+// le dessin rend la main au serveur tous les 100 lignes : un PDF d'un an (200 pages) bloquait sinon le serveur près de 3 secondes
+const LIGNES_PAR_PAUSE = 100;
 
 // Les caractères de la police standard hors ASCII et Latin-1 : le jeu « Windows-1252 » (guillemets typographiques, tirets, point médian, ‰, œ…)
 const AUTRES_WIN_ANSI = new Set([
@@ -88,7 +91,7 @@ function dessinerEntete(doc: PDFKit.PDFDocument, etat: EtatImprimable): number {
   return y + 10;
 }
 
-function dessinerSection(doc: PDFKit.PDFDocument, section: SectionEtat, yDepart: number): number {
+async function dessinerSection(doc: PDFKit.PDFDocument, section: SectionEtat, yDepart: number): Promise<number> {
   const { colonnes } = section;
   const largeurs = largeursColonnes(colonnes);
   const libelles = colonnes.map((c) => texteCompatiblePdf(c.libelle));
@@ -113,7 +116,9 @@ function dessinerSection(doc: PDFKit.PDFDocument, section: SectionEtat, yDepart:
     doc.font(POLICE_ITALIQUE).fontSize(TAILLE_TEXTE).fillColor("#444444").text(texteCompatiblePdf(section.messageVide ?? "Aucune donnée"), MARGE + MARGE_CELLULE, y + MARGE_CELLULE, { width: LARGEUR_UTILE });
     y += 18;
   }
+  let dessinees = 0;
   for (const ligne of section.lignes) {
+    if (++dessinees % LIGNES_PAR_PAUSE === 0) await cederLaMain();
     const cellules = cellulesDe(ligne);
     if (y + hauteurLigne(doc, cellules, largeurs, "normale") > Y_MAX) y = nouvellePage();
     y = dessinerLigne(doc, cellules, colonnes, largeurs, y, "normale");
@@ -142,7 +147,7 @@ export async function rendreEtatPdf(etat: EtatImprimable, options: { compresser?
   });
 
   let y = dessinerEntete(doc, etat);
-  for (const section of etat.sections) y = dessinerSection(doc, section, y);
+  for (const section of etat.sections) y = await dessinerSection(doc, section, y);
 
   // pied de page, une fois le nombre de pages connu ; la marge basse est annulée le temps de l'écrire, sinon pdfkit ajouterait une page
   const { start, count } = doc.bufferedPageRange();

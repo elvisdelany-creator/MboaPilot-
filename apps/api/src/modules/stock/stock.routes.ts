@@ -13,7 +13,7 @@ import {
   type EnregistrerCasseParams,
   type ReceptionnerAchatParams,
 } from "./stock.service.js";
-import { transfererStock, type TransfererStockParams } from "./transfert.service.js";
+import { transfererStock, verifierParamsTransfert, type TransfererStockParams } from "./transfert.service.js";
 import { estRoleEncadrement, masquerCoutMargeProduit, trouverProduit } from "../produits/produit.repository.js";
 import { envoyerErreur } from "../../lib/erreurs-api.js";
 import { jourDouala } from "@mboapilot/shared";
@@ -129,6 +129,12 @@ export function registerStockRoutes(app: FastifyInstance, db: Db, guards: RouteG
     "/api/v1/stock/transferts",
     { preHandler: [guards.authRequis, guards.gestionStock] },
     async (request, reply) => {
+      try {
+        verifierParamsTransfert(request.body);
+      } catch (erreur) {
+        envoyerErreur(reply, erreur);
+        return;
+      }
       const produitSource = trouverProduit(db, request.body.idProduitSource);
       if (produitSource && !siteAutorise(request.user, produitSource.siteId)) {
         reply.code(403).send(ERREUR_SITE_PRODUIT);

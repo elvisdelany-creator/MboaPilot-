@@ -12,6 +12,7 @@ import {
 import { creerSite, listerSites, modifierSite, trouverSite, type CreerSiteInput, type ModifierSiteInput } from "./site.repository.js";
 import { listerJournalUnifie, type PerimetreJournal } from "./audit.repository.js";
 import { envoyerErreur } from "../../lib/erreurs-api.js";
+import { exigerCorpsObjet, verifierEntier } from "../../lib/validation.js";
 
 type CreerUtilisateurBody = Omit<CreerUtilisateurInput, "siteId"> & { siteId?: number };
 type CreerSiteBody = Omit<CreerSiteInput, "idEntreprise">;
@@ -31,6 +32,10 @@ export function registerUtilisateursRoutes(app: FastifyInstance, db: Db, guards:
     { preHandler: [guards.authRequis, guards.admin] },
     async (request, reply) => {
       try {
+        // un site ou un apporteur en tableau ou en objet faisait échouer la liaison SQL, avec un message générique
+        exigerCorpsObjet(request.body);
+        verifierEntier(request.body.siteId, "Le site", { min: 1, nullable: false });
+        verifierEntier(request.body.idApporteur, "L'apporteur", { min: 1 });
         const siteId = request.body.siteId ?? request.user.siteId;
         if (!trouverSite(db, siteId)) throw new Error(`Site ${siteId} introuvable`);
         const { motDePasseHash: _motDePasseHash, ...utilisateur } = creerUtilisateur(db, { ...request.body, siteId }, request.user.idUser);
@@ -75,6 +80,7 @@ export function registerUtilisateursRoutes(app: FastifyInstance, db: Db, guards:
     { preHandler: [guards.authRequis, guards.admin] },
     async (request, reply) => {
       try {
+        exigerCorpsObjet(request.body);
         const utilisateur = reinitialiserMotDePasse(db, Number(request.params.idUser), request.body.motDePasse, request.user.idUser);
         if (!utilisateur) throw new Error(`Utilisateur ${request.params.idUser} introuvable`);
         reply.code(200).send(utilisateur);

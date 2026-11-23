@@ -2,6 +2,7 @@ import { analyserCsv, construireCsv, normaliserLibelle } from "@mboapilot/shared
 import type { Db } from "../../db/types.js";
 import { listerProduits, creerProduit, modifierProduit, type CreerProduitInput } from "./produit.repository.js";
 import { enregistrerMouvement } from "../stock/stock.repository.js";
+import { cederLaMain } from "../../lib/ceder-la-main.js";
 
 const COLONNES = ["Type", "Libelle", "Categorie", "PrixVente", "CoutRevient", "SuiviStock", "SeuilAlerte"] as const;
 const TYPES_VALIDES = ["BIEN", "SERVICE", "SAV", "KIT"] as const;
@@ -43,6 +44,47 @@ export interface ResultatImportCsv {
 // tarifaire, sinon crée un nouvel article. Une ligne invalide est rapportée
 // sans interrompre le traitement des lignes suivantes.
 export function importerCatalogueCsv(db: Db, siteId: number, contenuCsv: string, userId: number): ResultatImportCsv {
+  const contexte = preparerImport(db, siteId, contenuCsv, userId);
+  // une seule transaction pour tout le fichier : un import interrompu (coupure de courant) ne laisse jamais un catalogue à moitié
+  // importé. Pour un petit fichier ou un test ; la route, elle, passe par importerCatalogueCsvCedant (voir plus bas).
+  importerTranche(db, contexte, 0, contexte.lignes.length);
+  return contexte.resultat;
+}
+
+// Importer 20 000 articles prend environ 9 secondes d'un seul bloc (0,4 ms par ligne, surtout la construction des requêtes) : le serveur
+// de la caisse ne répond plus à personne pendant ce temps. Le fichier est donc traité par tranches de 200 lignes (une centaine de
+// millisecondes chacune), avec une pause entre deux tranches pour laisser passer les autres requêtes.
+// Une transaction par tranche, et non plus une seule pour tout le fichier : un import interrompu en plein milieu (coupure de courant)
+// laisse les tranches déjà écrites. Il se rejoue sans risque : les articles déjà créés sont reconnus par leur libellé et simplement mis
+// à jour, la quantité de départ d'un article existant n'est jamais touchée.
+const LIGNES_PAR_TRANCHE = 200;
+
+export interface OptionsImportCsv {
+  lignesParTranche?: number;
+}
+
+export async function importerCatalogueCsvCedant(db: Db, siteId: number, contenuCsv: string, userId: number, options: OptionsImportCsv = {}): Promise<ResultatImportCsv> {
+  const contexte = preparerImport(db, siteId, contenuCsv, userId);
+  const taille = Math.max(1, Math.floor(options.lignesParTranche ?? LIGNES_PAR_TRANCHE));
+  for (let debut = 0; debut < contexte.lignes.length; debut += taille) {
+    importerTranche(db, contexte, debut, Math.min(debut + taille, contexte.lignes.length));
+    await cederLaMain();
+  }
+  return contexte.resultat;
+}
+
+interface ContexteImport {
+  siteId: number;
+  userId: number;
+  lignes: Record<string, string>[];
+  parLibelleMinuscule: Map<string, ReturnType<typeof listerProduits>[number]>;
+  resultat: ResultatImportCsv;
+}
+
+// lecture du fichier et contrôle des colonnes : rien n'est écrit tant que l'en-tête n'est pas bon
+function preparerImport(db: Db, siteId: number, contenuCsv: string, userId: number): ContexteImport {
+  // un nombre, un tableau ou un objet à la place du texte étaient parcourus comme un texte, ou faisaient échouer l'analyse sans dire pourquoi
+  if (typeof contenuCsv !== "string") throw new Error("Le contenu du fichier CSV est obligatoire (un texte)");
   const lignes = analyserCsv(contenuCsv);
   if (lignes.length > 0) {
     const colonnesManquantes = COLONNES.filter((c) => !(c in lignes[0]));
@@ -53,15 +95,17 @@ export function importerCatalogueCsv(db: Db, siteId: number, contenuCsv: string,
 
   const produitsExistants = listerProduits(db, siteId);
   const parLibelleMinuscule = new Map(produitsExistants.map((p) => [normaliserLibelle(p.libelle), p]));
-
   const resultat: ResultatImportCsv = { crees: 0, misAJour: 0, erreurs: [], stockInitialise: 0, stockIgnore: 0 };
+  return { siteId, userId, lignes, parLibelleMinuscule, resultat };
+}
 
-  // une seule transaction pour tout le fichier : bien plus rapide (une écriture disque par ligne sinon) et un import
-  // interrompu (coupure de courant) ne laisse jamais un catalogue à moitié importé. Chaque ligne a son propre point
-  // de reprise : une ligne invalide est rapportée et annulée seule, sans bloquer les suivantes.
+// Traite les lignes [debut, fin) dans une transaction. Chaque ligne a son propre point de reprise : une ligne invalide est
+// rapportée et annulée seule, sans bloquer les suivantes.
+function importerTranche(db: Db, contexte: ContexteImport, debut: number, fin: number): void {
+  const { siteId, userId, lignes, parLibelleMinuscule, resultat } = contexte;
   db.transaction(() => {
-    lignes.forEach((ligne, index) => {
-      const numeroLigne = index + 2; // +1 pour l'en-tête, +1 pour l'index 1-based
+    lignes.slice(debut, fin).forEach((ligne, decalage) => {
+      const numeroLigne = debut + decalage + 2; // +1 pour l'en-tête, +1 pour l'index 1-based
       try {
         db.transaction(() => {
           const { stockInitial, ...input } = analyserLigneCsv(ligne);
@@ -96,8 +140,6 @@ export function importerCatalogueCsv(db: Db, siteId: number, contenuCsv: string,
       }
     });
   });
-
-  return resultat;
 }
 
 function lireEntierPositif(valeur: string): number | undefined {

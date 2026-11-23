@@ -17,6 +17,9 @@ export const POLITIQUE_MDP_PAR_DEFAUT: PolitiqueMotDePasse = {
 // défaut sauf la longueur minimale, pour ne rien imposer de plus strict que
 // l'existant tant que l'administrateur ne l'a pas explicitement demandé.
 export function validerMotDePasse(motDePasse: string, politique: PolitiqueMotDePasse = POLITIQUE_MDP_PAR_DEFAUT): string[] {
+  // les types TypeScript n'existent pas à l'exécution : un corps JSON sans mot de passe, ou avec un nombre ou un tableau à sa place,
+  // ne doit pas faire planter le contrôle de longueur (message générique « requête mal formée » côté client)
+  if (typeof motDePasse !== "string") return ["Le mot de passe est obligatoire (un texte)"];
   const erreurs: string[] = [];
   if (motDePasse.length < politique.longueurMin) {
     erreurs.push(`Le mot de passe doit contenir au moins ${politique.longueurMin} caractères`);

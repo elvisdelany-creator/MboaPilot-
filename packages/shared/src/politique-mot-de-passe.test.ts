@@ -34,6 +34,13 @@ describe("validerMotDePasse (11.2 : politique de complexité minimale configurab
     expect(validerMotDePasse("avecspecial1!", politique)).toEqual([]);
   });
 
+  // un corps JSON peut porter n'importe quoi à la place du mot de passe : le contrôle répond au lieu de planter
+  it("refuse, en le disant, un mot de passe absent ou qui n'est pas un texte", () => {
+    for (const faux of [undefined, null, 123, ["abcdefgh"], { a: "abcdefgh" }, true]) {
+      expect(validerMotDePasse(faux as unknown as string)).toEqual(["Le mot de passe est obligatoire (un texte)"]);
+    }
+  });
+
   it("cumule toutes les règles violées", () => {
     const politique = { longueurMin: 10, exigerMajuscule: true, exigerChiffre: true, exigerCaractereSpecial: true };
     expect(validerMotDePasse("abc", politique)).toEqual([

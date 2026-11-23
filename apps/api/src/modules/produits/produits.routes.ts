@@ -14,8 +14,9 @@ import {
   type CreerProduitInput,
   type ModifierProduitInput,
 } from "./produit.repository.js";
-import { exporterCatalogueCsv, importerCatalogueCsv } from "./catalogue-import-export.service.js";
+import { exporterCatalogueCsv, importerCatalogueCsvCedant } from "./catalogue-import-export.service.js";
 import { envoyerErreur, gestionnaireErreurFastify } from "../../lib/erreurs-api.js";
+import { exigerCorpsObjet } from "../../lib/validation.js";
 
 const TAILLE_MAX_IMPORT_CSV_OCTETS = 10 * 1024 * 1024;
 
@@ -115,7 +116,8 @@ export function registerProduitsRoutes(app: FastifyInstance, db: Db, guards: Rou
     },
     async (request, reply) => {
       try {
-        reply.code(200).send(importerCatalogueCsv(db, request.user.siteId, request.body.contenuCsv, request.user.idUser));
+        exigerCorpsObjet(request.body);
+        reply.code(200).send(await importerCatalogueCsvCedant(db, request.user.siteId, request.body.contenuCsv, request.user.idUser));
       } catch (erreur) {
         envoyerErreur(reply, erreur);
       }

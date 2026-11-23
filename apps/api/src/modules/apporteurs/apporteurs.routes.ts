@@ -4,6 +4,7 @@ import type { Guard, RouteGuards } from "../auth/auth.plugin.js";
 import { creerApporteur, listerApporteurs, modifierApporteur, type CreerApporteurInput, type ModifierApporteurInput } from "./apporteur.repository.js";
 import { construireFicheApporteur, enregistrerReglement, ficheVisibleParApporteur } from "./apporteur.service.js";
 import { envoyerErreur } from "../../lib/erreurs-api.js";
+import { exigerCorpsObjet } from "../../lib/validation.js";
 
 // boutique à laquelle limiter la vue d'un apporteur, ou undefined pour la vue complète (administrateur, apporteur lui-même)
 export function siteRestreint(utilisateur: { role: string; siteId: number }): number | undefined {
@@ -82,7 +83,9 @@ export function registerApporteursRoutes(
     Body: { montant: number; modePaiement: "CASH" | "CHEQUE" | "VIREMENT" | "MOBILE_MONEY"; reference?: string; utilisateurId: number };
   }>("/api/v1/apporteurs/:idApporteur/reglements", { preHandler: [guards.authRequis, guards.gestionApporteurs] }, async (request, reply) => {
     try {
-      const reglement = enregistrerReglement(db, { apporteurId: Number(request.params.idApporteur), ...request.body });
+      exigerCorpsObjet(request.body);
+      // l'apporteur est celui de l'adresse : placé après le corps, un « apporteurId » du corps le remplaçait
+      const reglement = enregistrerReglement(db, { ...request.body, apporteurId: Number(request.params.idApporteur) });
       reply.code(201).send(reglement);
     } catch (erreur) {
       envoyerErreur(reply, erreur);

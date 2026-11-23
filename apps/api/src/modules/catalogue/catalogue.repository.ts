@@ -3,7 +3,7 @@ import { normaliserLibelle, type Kit as KitCalcul } from "@mboapilot/shared";
 import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
 import { construireKitCalcul } from "./kit-mapper.js";
-import { verifierEntier } from "../../lib/validation.js";
+import { exigerCorpsObjet, verifierEntier } from "../../lib/validation.js";
 import { texteObligatoire } from "../../lib/champs-texte.js";
 import { differencesAudit, journaliserAudit } from "../utilisateurs/audit.repository.js";
 
@@ -243,6 +243,10 @@ export interface LierOptionFormuleInput {
 // remplace le prix par défaut de l'option pour cette formule) — idempotent :
 // relier une paire déjà liée met simplement à jour le prix de surcharge
 export function lierOptionFormule(db: Db, input: LierOptionFormuleInput, acteurId: number | null = null) {
+  // la base refusait une paire incomplète par un message générique : le champ en cause est maintenant nommé
+  exigerCorpsObjet(input);
+  verifierEntier(input.idFormule, "La formule", { min: 1, requis: true, nullable: false });
+  verifierEntier(input.idOption, "L'option", { min: 1, requis: true, nullable: false });
   verifierEntier(input.prixSurcharge, "Le prix de surcharge de l'option");
   return db.transaction(() => lierOptionFormuleSansTransaction(db, input, acteurId));
 }
@@ -313,8 +317,22 @@ function validerPrixKit(input: { prixFixe?: number; prixParaboleAccessoires?: nu
   verifierEntier(input.prixKitReference, "Le prix de référence du kit");
 }
 
+const REGLES_PRIX_KIT = ["PRIX_FIXE", "PRIX_DECODEUR_VARIABLE_SELON_FORMULE", "PRIX_KIT_FIXE_PAR_DIFFERENTIEL"] as const;
+
+function verifierReglePrixKit(valeur: unknown, requise: boolean) {
+  if (valeur === undefined && !requise) return;
+  if (valeur === undefined || valeur === null) throw new Error("La règle de prix du kit est obligatoire");
+  if (typeof valeur !== "string" || !(REGLES_PRIX_KIT as readonly string[]).includes(valeur)) {
+    throw new Error(`La règle de prix du kit est invalide (${REGLES_PRIX_KIT.join(", ")} attendu)`);
+  }
+}
+
 export function creerKit(db: Db, input: CreerKitInput, acteurId: number | null = null) {
+  exigerCorpsObjet(input);
+  verifierEntier(input.idFamille, "La famille du kit", { min: 1, requis: true, nullable: false });
   const libelle = libelleCatalogue(input.libelle, "Le libellé du kit");
+  verifierReglePrixKit(input.reglePrix, true);
+  verifierEntier(input.idFormuleReference, "La formule de référence du kit", { min: 1 });
   exigerLibelleUnique(listerKits(db, input.idFamille).map((k) => ({ id: k.idKit, libelle: k.libelle })), libelle, "Un kit de cette famille porte déjà ce libellé");
   validerPrixKit(input);
 
@@ -353,6 +371,9 @@ export interface ModifierKitInput {
 }
 
 export function modifierKit(db: Db, idKit: number, input: ModifierKitInput, acteurId: number | null = null) {
+  exigerCorpsObjet(input);
+  verifierReglePrixKit(input.reglePrix, false);
+  verifierEntier(input.idFormuleReference, "La formule de référence du kit", { min: 1 });
   const libelle = input.libelle === undefined ? undefined : libelleCatalogue(input.libelle, "Le libellé du kit");
   if (libelle !== undefined) {
     const existant = db.select().from(schema.kit).where(eq(schema.kit.idKit, idKit)).get();

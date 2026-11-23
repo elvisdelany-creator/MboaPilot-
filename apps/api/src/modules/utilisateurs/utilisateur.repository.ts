@@ -13,8 +13,8 @@ export type Role = (typeof ROLES)[number];
 
 // le type Role n'existe qu'à la compilation : une valeur venue de l'API doit
 // être vérifiée à l'exécution, sinon un rôle inexistant est enregistré tel quel
-function exigerRoleValide(role: string) {
-  if (!(ROLES as readonly string[]).includes(role)) throw new Error(`Rôle inconnu "${role}" — attendu : ${ROLES.join(", ")}`);
+function exigerRoleValide(role: unknown) {
+  if (typeof role !== "string" || !(ROLES as readonly string[]).includes(role)) throw new Error(`Rôle inconnu${typeof role === "string" ? ` "${role}"` : " ou absent"} — attendu : ${ROLES.join(", ")}`);
 }
 
 export interface CreerUtilisateurInput {
@@ -35,7 +35,7 @@ export interface CreerUtilisateurInput {
 export function creerUtilisateur(db: Db, input: CreerUtilisateurInput, acteurId: number | null = null) {
   const nom = texteObligatoire(input.nom, "Le nom de l'utilisateur", 100);
   const prenom = texteObligatoire(input.prenom, "Le prénom de l'utilisateur", 100);
-  const identifiant = normaliserIdentifiant(input.identifiant);
+  const identifiant = normaliserIdentifiant(texteObligatoire(input.identifiant, "L'identifiant de l'utilisateur", 100));
   if (!identifiant) throw new Error("L'identifiant de l'utilisateur est obligatoire");
   const erreurIdentifiant = erreurIdentifiantConnexion(identifiant);
   if (erreurIdentifiant) throw new Error(erreurIdentifiant);

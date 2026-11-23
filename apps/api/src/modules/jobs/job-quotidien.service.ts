@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq, gte, lt, lte } from "drizzle-orm";
 import { classerUrgenceEcheance, decalerJour, evaluerExpiration, evaluerSuiviCommission, joursAvantEcheance, messageRelanceEcheance, texteContactMessage } from "@mboapilot/shared";
 import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
@@ -58,14 +58,24 @@ export function executerJobQuotidien(
     abonnesAnonymises: 0,
   };
 
-  const abonnementsActifs = db.select().from(schema.abonnement).where(eq(schema.abonnement.statut, "ACTIF")).all();
   // 8.8 : jalons paramétrables — mode local mono-entreprise (2.2), un seul
   // jeu de seuils pour tous les sites traités par ce job
   const jalonsConfigures = trouverJalonsAlerteEntreprise(db);
 
-  for (const abonnement of abonnementsActifs) {
-    const nouveauStatut = evaluerExpiration(abonnement.statut, abonnement.dateFin, aujourdHui);
-    if (nouveauStatut !== abonnement.statut) {
+  // Le job tourne d'un seul bloc dans le serveur de la caisse : seuls les abonnements concernés sont lus (sur 40 000 abonnements actifs, une
+  // poignée est à expirer ou à relancer un jour donné), et les expirations s'écrivent en un seul lot. Écrites une à une, 3 260 expirations
+  // après une longue interruption gelaient la caisse 4 à 5 secondes ; en un lot, une seconde. Le lot est atomique : une panne d'écriture au
+  // milieu n'en laisse aucune à moitié faite, et le job suivant les reprend toutes.
+  const aExpirer = db
+    .select()
+    .from(schema.abonnement)
+    .where(and(eq(schema.abonnement.statut, "ACTIF"), lt(schema.abonnement.dateFin, aujourdHui)))
+    .orderBy(schema.abonnement.numeroAbonnement)
+    .all();
+  db.transaction(() => {
+    for (const abonnement of aExpirer) {
+      const nouveauStatut = evaluerExpiration(abonnement.statut, abonnement.dateFin, aujourdHui);
+      if (nouveauStatut === abonnement.statut) continue;
       db.update(schema.abonnement)
         .set({ statut: nouveauStatut })
         .where(eq(schema.abonnement.numeroAbonnement, abonnement.numeroAbonnement))
@@ -81,9 +91,20 @@ export function executerJobQuotidien(
         })
         .run();
       resultat.abonnementsExpires += 1;
-      continue; // un abonnement qui vient d'expirer n'est plus éligible à une alerte de rappel
     }
+  });
 
+  // abonnements à relancer : encore actifs (fin incluse) et à moins de « jalon le plus anticipé » jours de leur fin. Un abonnement qui vient
+  // d'expirer n'est plus éligible à une alerte de rappel : sa date de fin est passée, il n'est pas dans cette fenêtre.
+  const fenetreJours = Math.max(jalonsConfigures.urgent, jalonsConfigures.modere, jalonsConfigures.anticipe);
+  const aRelancer = db
+    .select()
+    .from(schema.abonnement)
+    .where(and(eq(schema.abonnement.statut, "ACTIF"), gte(schema.abonnement.dateFin, aujourdHui), lte(schema.abonnement.dateFin, decalerJour(aujourdHui, fenetreJours))))
+    .orderBy(schema.abonnement.numeroAbonnement)
+    .all();
+
+  for (const abonnement of aRelancer) {
     // 4.4 : palier atteint (le plus urgent dont le seuil est franchi), et non plus « exactement le jour du seuil » :
     // si le poste était éteint le jour exact (dimanche, coupure), l'alerte est rattrapée au premier job suivant.
     const joursRestants = joursAvantEcheance(abonnement.dateFin, aujourdHui);

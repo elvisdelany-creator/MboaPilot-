@@ -130,13 +130,20 @@ function analyserLigneCsv(ligne: Record<string, string>): Omit<CreerProduitInput
   const stockInitial = brutStock === "" ? undefined : lireEntierPositif(brutStock);
   if (brutStock !== "" && stockInitial === undefined) throw new Error(`Stock initial invalide "${ligne.Stock}" — entier positif ou nul attendu`);
 
+  // « oui », « TRUE » ou « 2 » étaient lus comme « non suivi » sans un mot : l'article ne décomptait alors plus son stock et le commerçant
+  // ne s'en apercevait pas. Seuls 1 (suivi) et 0 ou vide (non suivi) sont acceptés ; le reste est une faute de frappe qu'on signale.
+  const brutSuivi = ligne.SuiviStock.trim();
+  if (brutSuivi !== "" && brutSuivi !== "0" && brutSuivi !== "1") {
+    throw new Error(`SuiviStock invalide "${ligne.SuiviStock}" — 1 (article suivi en stock) ou 0 (non suivi) attendu`);
+  }
+
   return {
     type: type as CreerProduitInput["type"],
     libelle,
     categorie: ligne.Categorie.trim() || undefined,
     prixVente,
     coutRevient,
-    suiviStock: ligne.SuiviStock.trim() === "1",
+    suiviStock: brutSuivi === "1",
     seuilAlerte,
     stockInitial,
   };

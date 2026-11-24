@@ -2,7 +2,8 @@ import type { FastifyInstance } from "fastify";
 import type { Db } from "../../db/types.js";
 import type { Guard } from "../auth/auth.plugin.js";
 import { envoyerErreur } from "../../lib/erreurs-api.js";
-import { apercuExportComptable, exporterJournalEncaissementsCsv, exporterJournalVentesCsv, type PeriodeExport } from "./export-comptable.service.js";
+import type { PeriodeExport } from "./export-comptable.service.js";
+import { apercuExportComptableCedant, exporterJournalEncaissementsCsvCedant, exporterJournalVentesCsvCedant } from "./export-comptable-cedant.js";
 
 type Requete = { Querystring: { du?: string; au?: string } };
 
@@ -14,20 +15,20 @@ export function registerExportComptableRoutes(app: FastifyInstance, db: Db, guar
 
   app.get<Requete>("/api/v1/export-comptable/apercu", { preHandler }, async (request, reply) => {
     try {
-      reply.code(200).send(apercuExportComptable(db, request.user.siteId, periode(request.query)));
+      reply.code(200).send(await apercuExportComptableCedant(db, request.user.siteId, periode(request.query)));
     } catch (erreur) {
       envoyerErreur(reply, erreur);
     }
   });
 
   for (const [chemin, nom, exporter] of [
-    ["ventes", "journal-ventes", exporterJournalVentesCsv],
-    ["encaissements", "journal-encaissements", exporterJournalEncaissementsCsv],
+    ["ventes", "journal-ventes", exporterJournalVentesCsvCedant],
+    ["encaissements", "journal-encaissements", exporterJournalEncaissementsCsvCedant],
   ] as const) {
     app.get<Requete>(`/api/v1/export-comptable/${chemin}`, { preHandler }, async (request, reply) => {
       try {
         const p = periode(request.query);
-        const { csv } = exporter(db, request.user.siteId, p);
+        const { csv } = await exporter(db, request.user.siteId, p);
         reply
           .code(200)
           .header("Content-Type", "text/csv; charset=utf-8")

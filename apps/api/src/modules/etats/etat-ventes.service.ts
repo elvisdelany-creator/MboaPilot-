@@ -1,4 +1,5 @@
 import { eq, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/sqlite-core";
 import { decalerJour, joursAvantEcheance, lignesContactBoutique, type EtatImprimable, type SectionEtat } from "@mboapilot/shared";
 import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
@@ -11,7 +12,7 @@ import {
   type LigneJournalVentes,
   type PeriodeExport,
 } from "../export-comptable/export-comptable.service.js";
-import { creerResolveurFamilleLigne } from "../tableau-bord/tableau-bord.service.js";
+import { LIBELLE_AUTRE, LIBELLE_PRODUITS_SERVICES, LIBELLE_SAV } from "../tableau-bord/tableau-bord.service.js";
 import { cederLaMain } from "../../lib/ceder-la-main.js";
 
 // État des ventes (premier des états de gestion) : une période, des sections, des totaux. Toute la logique de calcul est celle de l'application :
@@ -75,20 +76,33 @@ const somme2 = (jours: [string, { ventes: number; avoirs: number }][], champ: "v
 
 // Chiffre d'affaires par famille : même résolution que le tableau de bord (formule/kit/option → famille d'abonnement ; sinon Produits & Services, SAV).
 // Les lignes d'avoir sont en négatif : la somme des familles est bien le total TTC net.
-function repartitionFamilles(db: Db, siteId: number, periode: PeriodeExport): Map<string, number> {
+// Une seule requête groupée, qui applique les règles du résolveur du tableau de bord dans l'ordre : facture d'un dossier SAV, famille de l'abonnement de
+// la ligne, famille de son kit, article SAV ou autre article, sinon « Autre ». Retrouver la famille de chaque article et de chaque abonnement par des
+// requêtes une à une, refaites à chaque tranche, prenait plus de la moitié des 23 secondes d'un état sur un an de ventes à 100 000 factures.
+export function repartitionFamilles(db: Db, siteId: number, periode: PeriodeExport): Map<string, number> {
+  const familleAbonnement = alias(schema.familleAbonnement, "famille_de_l_abonnement");
+  const familleKit = alias(schema.familleAbonnement, "famille_du_kit");
+  const libelle = sql<string>`coalesce(
+    case when exists (select 1 from ${schema.savDossier} where ${schema.savDossier.idFacture} = ${schema.ligneVente.idFacture}) then ${LIBELLE_SAV} end,
+    ${familleAbonnement.libelle},
+    ${familleKit.libelle},
+    case when ${schema.ligneVente.idProduit} is not null then (case when ${schema.produit.type} = 'SAV' then ${LIBELLE_SAV} else ${LIBELLE_PRODUITS_SERVICES} end) end,
+    ${LIBELLE_AUTRE}
+  )`;
   const lignes = db
-    .select({ ligne: schema.ligneVente })
+    .select({ libelle, montant: sql<number>`sum(${schema.ligneVente.prixApplique})` })
     .from(schema.ligneVente)
     .innerJoin(schema.facture, eq(schema.ligneVente.idFacture, schema.facture.idFacture))
+    .leftJoin(schema.abonnement, eq(schema.ligneVente.numeroAbonnement, schema.abonnement.numeroAbonnement))
+    .leftJoin(schema.formule, eq(schema.abonnement.idFormule, schema.formule.idFormule))
+    .leftJoin(familleAbonnement, eq(schema.formule.idFamille, familleAbonnement.idFamille))
+    .leftJoin(schema.kit, eq(schema.ligneVente.idKit, schema.kit.idKit))
+    .leftJoin(familleKit, eq(schema.kit.idFamille, familleKit.idFamille))
+    .leftJoin(schema.produit, eq(schema.ligneVente.idProduit, schema.produit.idProduit))
     .where(facturesDeLaPeriode(db, siteId, periode))
+    .groupBy(libelle)
     .all();
-  const resoudreFamille = creerResolveurFamilleLigne(db);
-  const parFamille = new Map<string, number>();
-  for (const { ligne } of lignes) {
-    const famille = resoudreFamille(ligne);
-    parFamille.set(famille, (parFamille.get(famille) ?? 0) + ligne.prixApplique);
-  }
-  return parFamille;
+  return new Map(lignes.map((l) => [l.libelle, l.montant]));
 }
 
 function sectionParFamille(parFamille: Map<string, number>): SectionEtat {

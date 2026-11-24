@@ -94,11 +94,12 @@ export function listerJournalUnifie(db: Db, filtre: JournalUnifieFiltre = {}): E
   const auteur = { nom: schema.utilisateur.nom, prenom: schema.utilisateur.prenom };
 
   // journal central
-  {
+  // « ventes » : du journal central, seules les suppressions/annulations de factures et de paiements racontent l'histoire des ventes. Une lecture
+  // par table plutôt qu'un « IN (...) » : chacune parcourt l'index (table, date) dans l'ordre voulu, alors qu'un IN oblige à trier le tout.
+  const tablesDuJournal: (string | undefined)[] = parTable ? [filtre.tableCible] : perimetre === "ventes" ? SOURCES_VENTES : [undefined];
+  for (const tableDuJournal of tablesDuJournal) {
     const conditions = [];
-    if (parTable) conditions.push(eq(schema.journalAudit.tableCible, filtre.tableCible!));
-    // « ventes » : du journal central, seules les suppressions/annulations de factures et de paiements racontent l'histoire des ventes
-    else if (perimetre === "ventes") conditions.push(inArray(schema.journalAudit.tableCible, SOURCES_VENTES));
+    if (tableDuJournal !== undefined) conditions.push(eq(schema.journalAudit.tableCible, tableDuJournal));
     const reprise = apresCurseur(schema.journalAudit.dateAction, schema.journalAudit.idAudit, RANG_JOURNAL, point);
     if (reprise) conditions.push(reprise);
     const lignes = db

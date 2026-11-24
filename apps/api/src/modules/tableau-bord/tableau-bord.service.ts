@@ -155,9 +155,9 @@ export function listerEncaissementsJour(db: Db, siteId: number, aujourdHui: stri
   return MODES_PAIEMENT.map((mode) => ({ mode, total: totalParMode.get(mode) ?? 0 }));
 }
 
-const LIBELLE_PRODUITS_SERVICES = "Produits & Services";
-const LIBELLE_SAV = "SAV";
-const LIBELLE_AUTRE = "Autre";
+export const LIBELLE_PRODUITS_SERVICES = "Produits & Services";
+export const LIBELLE_SAV = "SAV";
+export const LIBELLE_AUTRE = "Autre";
 
 // résout le libellé de famille d'une ligne de vente : famille d'abonnement
 // (ligne rattachée à un abonnement ou à un kit), sinon Produits & Services

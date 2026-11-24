@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, gt, inArray, sql } from "drizzle-orm";
 import { calculerCoutMoyenPondere, joursAvantEcheance } from "@mboapilot/shared";
 import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
@@ -180,24 +180,36 @@ const SEUIL_ROTATION_LENTE_JOURS = 30;
 // jamais vendu), immobilise du capital sans se convertir en chiffre d'affaires.
 // Trié du plus critique (jamais vendu, ou invendu depuis le plus longtemps) au moins critique.
 export function listerProduitsRotationLente(db: Db, siteId: number, aujourdHui: string): ProduitRotationLente[] {
-  const produits = db
-    .select()
-    .from(schema.produit)
-    .where(and(eq(schema.produit.siteId, siteId), eq(schema.produit.suiviStock, 1)))
-    .all()
-    .filter((p) => p.quantiteStock > 0);
+  const produitsConcernes = and(eq(schema.produit.siteId, siteId), eq(schema.produit.suiviStock, 1), gt(schema.produit.quantiteStock, 0));
+  const produits = db.select().from(schema.produit).where(produitsConcernes).all();
+
+  // Les dates de dernière vente et de dernière réception de tous les articles en une seule lecture groupée (index
+  // article/type/date) : relire les mouvements article par article prenait 83 secondes à 5 000 articles et 200 000 mouvements.
+  const COLONNE_TYPE = schema.stockMouvement.typeMouvement;
+  const COLONNE_DATE = schema.stockMouvement.dateMouvement;
+  const datesParProduit = new Map(
+    db
+      .select({
+        idProduit: schema.stockMouvement.idProduit,
+        derniereVente: sql<string | null>`max(case when ${COLONNE_TYPE} = 'VENTE' then ${COLONNE_DATE} end)`,
+        derniereReception: sql<string | null>`max(case when ${COLONNE_TYPE} in ('ACHAT', 'TRANSFERT_ENTREE') then ${COLONNE_DATE} end)`,
+      })
+      .from(schema.stockMouvement)
+      .where(inArray(schema.stockMouvement.idProduit, db.select({ idProduit: schema.produit.idProduit }).from(schema.produit).where(produitsConcernes)))
+      .groupBy(schema.stockMouvement.idProduit)
+      .all()
+      .map((d) => [d.idProduit, d]),
+  );
 
   return produits
     .map((produit) => {
-      const mouvements = db.select().from(schema.stockMouvement).where(eq(schema.stockMouvement.idProduit, produit.idProduit)).all();
-      const dateLaPlusRecente = (types: string[]) =>
-        mouvements.filter((m) => types.includes(m.typeMouvement)).map((m) => m.dateMouvement).sort().at(-1) ?? null;
-      const derniereVente = dateLaPlusRecente(["VENTE"]);
+      const dates = datesParProduit.get(produit.idProduit);
+      const derniereVente = dates?.derniereVente ?? null;
       const joursDepuis = (date: string | null) => (date !== null ? -joursAvantEcheance(date.slice(0, 10), aujourdHui) : null);
       const joursDepuisDerniereVente = joursDepuis(derniereVente);
       // un article réceptionné récemment n'est pas « immobilisé » : le délai de 30 jours repart de la
       // dernière entrée en stock (achat, transfert reçu) quand elle est plus récente que la dernière vente
-      const joursDepuisReception = joursDepuis(dateLaPlusRecente(["ACHAT", "TRANSFERT_ENTREE"]));
+      const joursDepuisReception = joursDepuis(dates?.derniereReception ?? null);
       const joursSansActivite =
         joursDepuisDerniereVente === null ? joursDepuisReception : joursDepuisReception === null ? joursDepuisDerniereVente : Math.min(joursDepuisDerniereVente, joursDepuisReception);
       return { produit, derniereVente, joursDepuisDerniereVente, joursSansActivite };

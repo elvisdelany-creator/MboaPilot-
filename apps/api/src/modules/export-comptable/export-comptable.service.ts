@@ -160,24 +160,26 @@ const dateFrancaise = (jour: string) => jour.split("-").reverse().join("/");
 
 export function exporterJournalVentesCsv(db: Db, siteId: number, periode: PeriodeExport): { csv: string; nombre: number } {
   const { lignes } = listerJournalVentes(db, siteId, periode);
-  const donnees = lignes.map((l) => [
-    dateFrancaise(l.date),
-    l.idFacture,
-    l.type === "AVOIR" ? "Avoir" : "Vente",
-    l.factureOrigineId ?? "",
-    l.idAbonne ?? "",
-    l.client,
-    l.detail,
-    l.totalTtc,
-    l.taxe,
-    l.totalHt,
-    l.encaisse,
-    l.resteAPayer,
-  ]);
-
-  const entetes = ["Date", "N° facture", "Type", "Facture d'origine", "N° client", "Client", "Détail", "Total TTC", "dont TVA", "Total HT", "Encaissé", "Reste à payer"];
-  return { csv: construireCsv(entetes, donnees, ";"), nombre: donnees.length };
+  const donnees = lignes.map(ligneCsvVentes);
+  return { csv: construireCsv(ENTETES_VENTES, donnees, ";"), nombre: donnees.length };
 }
+
+export const ENTETES_VENTES = ["Date", "N° facture", "Type", "Facture d'origine", "N° client", "Client", "Détail", "Total TTC", "dont TVA", "Total HT", "Encaissé", "Reste à payer"];
+
+export const ligneCsvVentes = (l: LigneJournalVentes) => [
+  dateFrancaise(l.date),
+  l.idFacture,
+  l.type === "AVOIR" ? "Avoir" : "Vente",
+  l.factureOrigineId ?? "",
+  l.idAbonne ?? "",
+  l.client,
+  l.detail,
+  l.totalTtc,
+  l.taxe,
+  l.totalHt,
+  l.encaisse,
+  l.resteAPayer,
+];
 
 const LIBELLE_MODE = { CASH: "Espèces", CHEQUE: "Chèque", VIREMENT: "Virement", MOBILE_MONEY: "Mobile Money" } as const;
 const LIBELLE_RAPPROCHEMENT = { EN_ATTENTE: "En attente", RAPPROCHE: "Rapproché" } as const;
@@ -186,7 +188,14 @@ const LIBELLE_RAPPROCHEMENT = { EN_ATTENTE: "En attente", RAPPROCHE: "Rapproché
 // Un remboursement (avoir) est en négatif. La banque et la référence servent à le retrouver sur le relevé.
 export function exporterJournalEncaissementsCsv(db: Db, siteId: number, periode: PeriodeExport): { csv: string; nombre: number } {
   verifierPeriodeExport(periode);
+  const lignes = lignesEncaissements(db, siteId, periode);
+  return { csv: construireCsv(ENTETES_ENCAISSEMENTS, lignes, ";"), nombre: lignes.length };
+}
 
+export const ENTETES_ENCAISSEMENTS = ["Date", "Heure", "N° paiement", "N° facture", "Client", "Mode", "Montant", "Banque", "Référence", "Rapprochement", "Encaissé par"];
+
+// Les lignes du journal des encaissements d'une période (sans contrôle de la période : l'appelant l'a vérifiée, ou découpe une période vérifiée)
+export function lignesEncaissements(db: Db, siteId: number, periode: PeriodeExport) {
   const paiements = db
     .select({ paiement: schema.paiement, prenom: schema.abonne.prenom, nom: schema.abonne.nom, auteurPrenom: schema.utilisateur.prenom, auteurNom: schema.utilisateur.nom })
     .from(schema.paiement)
@@ -197,7 +206,7 @@ export function exporterJournalEncaissementsCsv(db: Db, siteId: number, periode:
     .orderBy(asc(schema.paiement.datePaiement), asc(schema.paiement.idPaiement))
     .all();
 
-  const lignes = paiements.map(({ paiement: p, prenom, nom, auteurPrenom, auteurNom }) => [
+  return paiements.map(({ paiement: p, prenom, nom, auteurPrenom, auteurNom }) => [
     dateFr(p.datePaiement),
     heureDouala(p.datePaiement),
     p.idPaiement,
@@ -210,9 +219,6 @@ export function exporterJournalEncaissementsCsv(db: Db, siteId: number, periode:
     p.statutRapprochement ? LIBELLE_RAPPROCHEMENT[p.statutRapprochement] : "—",
     auteurNom === null ? "" : `${auteurPrenom} ${auteurNom}`,
   ]);
-
-  const entetes = ["Date", "Heure", "N° paiement", "N° facture", "Client", "Mode", "Montant", "Banque", "Référence", "Rapprochement", "Encaissé par"];
-  return { csv: construireCsv(entetes, lignes, ";"), nombre: lignes.length };
 }
 
 export interface ApercuExportComptable {

@@ -30,3 +30,24 @@ describe("index de volumétrie (11.1)", () => {
     expect(colonnesIndexees("abonnement")).toContain("site_id,statut,date_fin");
   });
 });
+
+// Test grandeur nature à 50 000 abonnés, 200 000 factures et 200 000 mouvements de stock : l'écran « rotation lente » prenait 83 secondes et
+// bloquait toute la boutique, « ventes en attente » 8 secondes. Chaque article ou chaque facture relisait une table entière, faute d'index
+// sur la colonne qui les relie.
+describe("index des colonnes de liaison (volumétrie, suite)", () => {
+  it.each([
+    ["stock_mouvement", "id_produit,type_mouvement,date_mouvement"], // mouvements d'un article, dernière vente et dernière réception
+    ["sav_dossier", "id_facture"], // un dossier SAV déjà facturé
+    ["sav_dossier", "id_abonne"], // dossiers d'un client
+    ["transaction_mobile_money", "id_facture"], // paiement mobile en cours sur une vente
+    ["historique_abonnement", "numero_abonnement"], // historique d'un abonnement
+    ["ligne_vente", "numero_abonnement"], // lignes qui touchent un abonnement
+    ["suivi_commission_canalplus", "numero_abonnement"],
+    ["materiel_abonne", "numero_abonnement"],
+    ["facture", "id_abonne"], // fiche client : toutes ses factures
+    ["facture", "facture_origine_id"], // avoirs d'une vente : sans lui, chaque tranche d'un état relit toute la table des factures
+    ["notification", "id_abonne"], // fiche client : ses notifications
+  ])("%s : indexée par %s", (table, colonnes) => {
+    expect(colonnesIndexees(table)).toContain(colonnes);
+  });
+});

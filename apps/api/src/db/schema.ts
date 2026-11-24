@@ -249,7 +249,9 @@ export const materielAbonne = sqliteTable("materiel_abonne", {
   numeroSerie: text("numero_serie"),
   statut: text("statut", { enum: ["ACTIF", "REMPLACE"] }).notNull().default("ACTIF"),
   dateInstallation: text("date_installation").notNull().default(now),
-});
+}, (t) => ({
+  abonnementIdx: index("idx_materiel_abonne_abonnement").on(t.numeroAbonnement),
+}));
 
 // trace chaque changement de formule/option/matériel sur un abonnement (3.2.2)
 export const historiqueAbonnement = sqliteTable("historique_abonnement", {
@@ -263,7 +265,10 @@ export const historiqueAbonnement = sqliteTable("historique_abonnement", {
   motif: text("motif"),
   utilisateurId: integer("utilisateur_id").references(() => utilisateur.idUser), // NULL = job automatique (4.3)
   dateChangement: text("date_changement").notNull().default(now),
-});
+}, (t) => ({
+  abonnementIdx: index("idx_historique_abonnement_abonnement").on(t.numeroAbonnement),
+  dateIdx: index("idx_historique_abonnement_date").on(t.dateChangement, t.idHisto),
+}));
 
 // suivi de la période probatoire de 4 mois (119 jours) sur un recrutement CANAL+ — 6.2
 export const suiviCommissionCanalplus = sqliteTable("suivi_commission_canalplus", {
@@ -274,7 +279,9 @@ export const suiviCommissionCanalplus = sqliteTable("suivi_commission_canalplus"
   montantCommission: integer("montant_commission").notNull(),
   dateFinProbatoire: text("date_fin_probatoire").notNull(),
   statut: text("statut", { enum: ["EN_COURS", "CONFIRMEE", "ANNULEE"] }).notNull().default("EN_COURS"),
-});
+}, (t) => ({
+  abonnementIdx: index("idx_suivi_commission_abonnement").on(t.numeroAbonnement),
+}));
 
 // 6.2, 6.6 : "À la validation d'un recrutement CANAL+... le système crée
 // automatiquement un enregistrement de suivi de commission" — pour un
@@ -341,7 +348,9 @@ export const notification = sqliteTable("notification", {
   idAlerte: integer("id_alerte").references(() => alerteEcheance.idAlerte),
   idDossierSav: integer("id_dossier_sav").references((): AnySQLiteColumn => savDossier.idDossierSav),
   dateEnvoi: text("date_envoi").notNull().default(now),
-});
+}, (t) => ({
+  abonneIdx: index("idx_notification_abonne").on(t.idAbonne),
+}));
 
 // --- 3.2.3 Catalogue commercial, ventes et finance ---
 
@@ -384,7 +393,9 @@ export const historiquePrixProduit = sqliteTable("historique_prix_produit", {
   coutRevientApres: integer("cout_revient_apres").notNull(),
   utilisateurId: integer("utilisateur_id").notNull().references(() => utilisateur.idUser),
   dateChangement: text("date_changement").notNull().default(now),
-});
+}, (t) => ({
+  dateIdx: index("idx_historique_prix_date").on(t.dateChangement, t.idHistoPrix),
+}));
 
 export const stockMouvement = sqliteTable("stock_mouvement", {
   idMouvement: integer("id_mouvement").primaryKey({ autoIncrement: true }),
@@ -397,7 +408,11 @@ export const stockMouvement = sqliteTable("stock_mouvement", {
   motif: text("motif"), // obligatoire côté API pour CASSE/INVENTAIRE (5.2)
   dateMouvement: text("date_mouvement").notNull().default(now),
   utilisateurId: integer("utilisateur_id").notNull().references(() => utilisateur.idUser),
-});
+}, (t) => ({
+  // dernière vente et dernière réception d'un article (rotation lente), mouvements d'un article : un parcours d'index, pas de la table
+  produitTypeDateIdx: index("idx_stock_mouvement_produit_type_date").on(t.idProduit, t.typeMouvement, t.dateMouvement),
+  dateIdx: index("idx_stock_mouvement_date").on(t.dateMouvement, t.idMouvement),
+}));
 
 export const facture = sqliteTable("facture", {
   idFacture: integer("id_facture").primaryKey({ autoIncrement: true }),
@@ -420,6 +435,9 @@ export const facture = sqliteTable("facture", {
 }, (t) => ({
   // 11.1 : indicateurs du jour et courbe de CA = factures d'un site, d'un statut, sur une plage de dates
   siteStatutDateIdx: index("idx_facture_site_statut_date").on(t.siteId, t.statut, t.dateCreation),
+  abonneIdx: index("idx_facture_abonne").on(t.idAbonne),
+  dateIdx: index("idx_facture_date").on(t.dateCreation, t.idFacture),
+  origineIdx: index("idx_facture_origine").on(t.factureOrigineId),
 }));
 
 export const ligneVente = sqliteTable("ligne_vente", {
@@ -446,6 +464,7 @@ export const ligneVente = sqliteTable("ligne_vente", {
   ligneOrigineId: integer("ligne_origine_id").references((): AnySQLiteColumn => ligneVente.idLigne),
 }, (t) => ({
   factureIdx: index("idx_ligne_vente_facture").on(t.idFacture),
+  abonnementIdx: index("idx_ligne_vente_abonnement").on(t.numeroAbonnement),
 }));
 
 export const paiement = sqliteTable("paiement", {
@@ -496,7 +515,9 @@ export const transactionMobileMoney = sqliteTable("transaction_mobile_money", {
   referenceTransaction: text("reference_transaction"), // fournie par l'opérateur à la soumission
   dateCreation: text("date_creation").notNull().default(now),
   dateExpiration: text("date_expiration").notNull(), // délai de validation de l'OTP dépassé (6.6)
-});
+}, (t) => ({
+  factureIdx: index("idx_transaction_mobile_money_facture").on(t.idFacture),
+}));
 
 // 7.2, 7.3, 7.4 : réabonnement, changement de formule et échange de matériel modifient un abonnement existant dès la création de
 // leur facture, même quand le paiement (Mobile Money) n'est pas encore là. Tant que la facture reste BROUILLON, cette ligne garde
@@ -528,7 +549,10 @@ export const savDossier = sqliteTable("sav_dossier", {
   montantMainOeuvre: integer("montant_main_oeuvre").notNull().default(0),
   idFacture: integer("id_facture").references(() => facture.idFacture), // générée au passage en PRET (5.10, 8.4)
   dateReception: text("date_reception").notNull().default(now),
-});
+}, (t) => ({
+  factureIdx: index("idx_sav_dossier_facture").on(t.idFacture),
+  abonneIdx: index("idx_sav_dossier_abonne").on(t.idAbonne),
+}));
 
 // pièces de rechange affectées à un dossier SAV (5.10) — décrémente le stock du produit
 export const savPieceUtilisee = sqliteTable("sav_piece_utilisee", {
@@ -560,7 +584,9 @@ export const savHistorique = sqliteTable("sav_historique", {
   motif: text("motif"),
   utilisateurId: integer("utilisateur_id").references(() => utilisateur.idUser),
   dateChangement: text("date_changement").notNull().default(now),
-});
+}, (t) => ({
+  dateIdx: index("idx_sav_historique_date").on(t.dateChangement, t.idHistoSav),
+}));
 
 // journal d'audit immuable — 11.5 : jamais de UPDATE/DELETE applicatif sur cette table
 export const journalAudit = sqliteTable("journal_audit", {
@@ -574,6 +600,9 @@ export const journalAudit = sqliteTable("journal_audit", {
   dateAction: text("date_action").notNull().default(now),
 }, (t) => ({
   cibleIdx: index("idx_audit_cible").on(t.tableCible, t.idCible),
+  // le journal se lit du plus récent au plus ancien, 200 entrées à la fois : un parcours d'index, pas un tri de toute la table
+  dateIdx: index("idx_audit_date").on(t.dateAction, t.idAudit),
+  tableDateIdx: index("idx_audit_table_date").on(t.tableCible, t.dateAction, t.idAudit),
 }));
 
 // 13.1 : clôture de caisse quotidienne — non demandée explicitement mais

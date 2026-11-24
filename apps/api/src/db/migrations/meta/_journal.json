@@ -267,6 +267,13 @@
       "when": 1794849258072,
       "tag": "0037_relances_whatsapp",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "6",
+      "when": 1795513859001,
+      "tag": "0038_index_colonnes_de_liaison",
+      "breakpoints": true
     }
   ]
 }

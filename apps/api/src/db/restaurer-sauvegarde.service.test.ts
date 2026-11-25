@@ -1,16 +1,19 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import Database from "better-sqlite3";
 import { restaurerSauvegarde } from "./restaurer-sauvegarde.service.js";
+import { creerDbTest } from "../test-utils/db.js";
+import { creerSauvegarde } from "../modules/sauvegarde/sauvegarde.service.js";
+import * as schema from "./schema.js";
 
 let dossier: string;
 
 function creerBase(nom: string, valeur: string): string {
   const chemin = join(dossier, nom);
   const base = new Database(chemin);
-  base.exec("create table t(v text)");
+  base.exec("create table entreprise(id integer); create table utilisateur(id integer); create table t(v text)");
   base.prepare("insert into t values (?)").run(valeur);
   base.close();
   return chemin;
@@ -141,10 +144,95 @@ describe.skipIf(process.platform !== "win32")("restaurerSauvegarde : serveur enc
       expect(() => restaurerSauvegarde(sauvegarde, base)).toThrow(/arrêtez.*serveur/i);
       expect(() => restaurerSauvegarde(sauvegarde, base)).not.toThrow(/EBUSY|EPERM/);
       expect(existsSync(`${base}.avant-restauration`)).toBe(false);
+      expect(existsSync(`${base}.restauration-en-cours`)).toBe(false);
       expect(serveur.prepare("select v from t").get()).toEqual({ v: "actuelle" });
     } finally {
       serveur.close();
     }
     expect(lire(base)).toBe("actuelle");
+  });
+});
+
+// Test grandeur nature « reprise sur panne » : un fichier de 0 octet passe le contrôle d'intégrité de SQLite. Le restaurer remplaçait la base
+// de la boutique (39 factures) par une base vide, sans refus ni avertissement.
+describe("restaurerSauvegarde : seule une base MboaPilot est acceptée", () => {
+  it.each([
+    ["un fichier vide", (chemin: string) => writeFileSync(chemin, "")],
+    [
+      "une base SQLite d'un autre logiciel",
+      (chemin: string) => {
+        const autre = new Database(chemin);
+        autre.exec("create table contacts(nom text)");
+        autre.close();
+      },
+    ],
+  ])("refuse %s, sans toucher à la base actuelle", (_nom, fabriquer) => {
+    const base = creerBase("mboapilot.db", "actuelle");
+    const source = join(dossier, "source.db");
+    fabriquer(source);
+
+    expect(() => restaurerSauvegarde(source, base)).toThrow(/pas une sauvegarde MboaPilot.*annulée/);
+
+    expect(lire(base)).toBe("actuelle");
+    expect(readdirSync(dossier).filter((f) => f.startsWith("mboapilot.db."))).toEqual([]);
+  });
+
+  it("accepte une vraie sauvegarde MboaPilot", () => {
+    const origine = creerDbTest();
+    origine.insert(schema.entreprise).values({ nom: "Boutique sauvegardée" }).run();
+    const { nomFichier } = creerSauvegarde(origine, join(dossier, "backups"));
+    const base = creerBase("mboapilot.db", "actuelle");
+
+    restaurerSauvegarde(join(dossier, "backups", nomFichier), base);
+
+    const restauree = new Database(base, { readonly: true });
+    expect(restauree.prepare("select nom from entreprise").all()).toEqual([{ nom: "Boutique sauvegardée" }]);
+    restauree.close();
+  });
+});
+
+describe("restaurerSauvegarde : reprise après une restauration interrompue", () => {
+  // état laissé par une coupure entre la mise de côté de l'ancienne base et la mise en place de la nouvelle
+  function interrompue(): string {
+    const base = creerBase("mboapilot.db", "actuelle");
+    renameSync(base, `${base}.avant-restauration`);
+    return base;
+  }
+
+  it("une nouvelle restauration laisse l'ancienne base sous son nom documenté", () => {
+    const base = interrompue();
+
+    restaurerSauvegarde(creerBase("A.db", "sauvegarde-A"), base);
+
+    expect(lire(base)).toBe("sauvegarde-A");
+    expect(lire(`${base}.avant-restauration`)).toBe("actuelle");
+    expect(readdirSync(dossier).filter((f) => f.startsWith("mboapilot.db.avant-restauration"))).toHaveLength(1);
+  });
+
+  it("on peut revenir à la base d'avant en la désignant comme source", () => {
+    const base = interrompue();
+
+    restaurerSauvegarde(`${base}.avant-restauration`, base);
+
+    expect(lire(base)).toBe("actuelle");
+  });
+
+  it("annuler une restauration en désignant l'ancienne base rend bien l'ancienne, pas celle qu'on voulait quitter", () => {
+    const base = creerBase("mboapilot.db", "actuelle");
+    restaurerSauvegarde(creerBase("A.db", "mauvaise sauvegarde"), base);
+
+    restaurerSauvegarde(`${base}.avant-restauration`, base);
+
+    expect(lire(base)).toBe("actuelle");
+  });
+
+  it("remplace un reste de copie interrompue sans le garder", () => {
+    const base = creerBase("mboapilot.db", "actuelle");
+    writeFileSync(`${base}.restauration-en-cours`, "moitié de fichier");
+
+    restaurerSauvegarde(creerBase("A.db", "sauvegarde-A"), base);
+
+    expect(lire(base)).toBe("sauvegarde-A");
+    expect(existsSync(`${base}.restauration-en-cours`)).toBe(false);
   });
 });

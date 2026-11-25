@@ -2,6 +2,7 @@ import { and, eq, gte, lt, lte } from "drizzle-orm";
 import { classerUrgenceEcheance, decalerJour, evaluerExpiration, evaluerSuiviCommission, joursAvantEcheance, messageRelanceEcheance, texteContactMessage } from "@mboapilot/shared";
 import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
+import { sansAttendreLeDisque } from "../../db/sans-attendre-le-disque.js";
 import { trouverDureeConservationDonneesEntreprise, trouverJalonsAlerteEntreprise } from "../entreprise/entreprise.repository.js";
 import { listerAbonnesEligiblesAnonymisationAutomatique } from "../abonnes/abonne.repository.js";
 import { anonymiserAbonne } from "../abonnes/anonymisation.service.js";
@@ -49,6 +50,11 @@ export function executerJobQuotidien(
   aujourdHui: string,
   fournisseurNotification: FournisseurNotification = new SimulateurNotification()
 ): JobQuotidienResultat {
+  // chaque étape est reprise au job suivant si elle manque : inutile de figer la caisse à attendre le disque pour chaque rappel
+  return sansAttendreLeDisque(db, () => traiterJournee(db, aujourdHui, fournisseurNotification));
+}
+
+function traiterJournee(db: Db, aujourdHui: string, fournisseurNotification: FournisseurNotification): JobQuotidienResultat {
   const resultat: JobQuotidienResultat = {
     abonnementsExpires: 0,
     alertesCreees: 0,
@@ -120,31 +126,35 @@ export function executerJobQuotidien(
         .all()
         .some((a) => a.jalonJours === jalon.jours && a.dateDeclenchement >= debutFenetre);
       if (!dejaEnvoyee) {
-        const alerte = db
-          .insert(schema.alerteEcheance)
-          .values({ numeroAbonnement: abonnement.numeroAbonnement, jalonJours: jalon.jours, dateDeclenchement: aujourdHui })
-          .returning()
-          .get();
-        resultat.alertesCreees += 1;
+        // l'alerte et son message s'écrivent ensemble : une alerte restée seule après une coupure passait pour « client prévenu », et le
+        // rappel n'était plus jamais envoyé. Interrompue, l'opération est refaite entière au job suivant.
+        const notifications = db.transaction(() => {
+          const alerte = db
+            .insert(schema.alerteEcheance)
+            .values({ numeroAbonnement: abonnement.numeroAbonnement, jalonJours: jalon.jours, dateDeclenchement: aujourdHui })
+            .returning()
+            .get();
 
-        // 4.4 : J-7 courtoisie optionnelle, J-3/J-1 systématique — dans tous
-        // les cas conditionné à l'existence d'un canal de contact (géré par
-        // envoyerNotificationAbonne, qui n'envoie que sur les coordonnées renseignées)
-        const notifications = envoyerNotificationAbonne(db, fournisseurNotification, {
-          idAbonne: abonnement.idAbonne,
-          evenement: "ALERTE_ECHEANCE",
-          message: messageRelanceEcheance({
-            entreprise: db.select().from(schema.entreprise).get()?.nom ?? "",
-            libelleAbonnement: libelleAbonnement(db, abonnement.idFormule),
-            numeroAbonnement: abonnement.numeroAbonnement,
-            dateFin: formaterDateFrancaise(abonnement.dateFin),
-            joursRestants,
-            rang: jalon.rang,
-            // le client peut répondre : numéros de la boutique de l'abonnement (vide si non renseignés)
-            contact: texteContactMessage(db.select().from(schema.site).where(eq(schema.site.idSite, abonnement.siteId)).get() ?? {}),
-          }),
-          idAlerte: alerte.idAlerte,
+          // 4.4 : J-7 courtoisie optionnelle, J-3/J-1 systématique — dans tous
+          // les cas conditionné à l'existence d'un canal de contact (géré par
+          // envoyerNotificationAbonne, qui n'envoie que sur les coordonnées renseignées)
+          return envoyerNotificationAbonne(db, fournisseurNotification, {
+            idAbonne: abonnement.idAbonne,
+            evenement: "ALERTE_ECHEANCE",
+            message: messageRelanceEcheance({
+              entreprise: db.select().from(schema.entreprise).get()?.nom ?? "",
+              libelleAbonnement: libelleAbonnement(db, abonnement.idFormule),
+              numeroAbonnement: abonnement.numeroAbonnement,
+              dateFin: formaterDateFrancaise(abonnement.dateFin),
+              joursRestants,
+              rang: jalon.rang,
+              // le client peut répondre : numéros de la boutique de l'abonnement (vide si non renseignés)
+              contact: texteContactMessage(db.select().from(schema.site).where(eq(schema.site.idSite, abonnement.siteId)).get() ?? {}),
+            }),
+            idAlerte: alerte.idAlerte,
+          });
         });
+        resultat.alertesCreees += 1;
         resultat.notificationsTentees += notifications.length;
       }
     }

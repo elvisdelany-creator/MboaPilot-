@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { existsSync, mkdtempSync, rmSync, statSync } from "node:fs";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import Database from "better-sqlite3";
@@ -166,5 +166,51 @@ describe("sauvegarderApresCloture (2.6)", () => {
 
     expect(listerSauvegardes(dossierSauvegardes)).toHaveLength(1);
     expect(listerSauvegardes(dossierSauvegardes)[0].dateCreation.slice(0, 10)).toBe("2026-11-07");
+  });
+});
+
+// Test grandeur nature « reprise sur panne » : un serveur tué pendant la copie laissait 5 Mo sur 369 sous le nom d'une sauvegarde. Ce fichier
+// comptait comme la sauvegarde du jour, qui n'était donc pas refaite : la boutique se croyait protégée.
+describe("creerSauvegarde : une copie interrompue ne passe jamais pour une sauvegarde (2.6)", () => {
+  it("le fichier ne prend le nom d'une sauvegarde qu'une fois complet, et rien ne reste après un échec", () => {
+    const original = db.$client.prepare.bind(db.$client);
+    let listeesPendantLaCopie: unknown[] | null = null;
+    const espion = vi.spyOn(db.$client, "prepare").mockImplementation(((texte: string) => {
+      if (!texte.startsWith("VACUUM INTO")) return original(texte);
+      return {
+        run: (chemin: string) => {
+          writeFileSync(chemin, "début de copie");
+          listeesPendantLaCopie = listerSauvegardes(dossierSauvegardes);
+          throw new Error("disque plein");
+        },
+      };
+    }) as typeof db.$client.prepare);
+
+    expect(() => creerSauvegarde(db, dossierSauvegardes)).toThrow("disque plein");
+    espion.mockRestore();
+
+    expect(listeesPendantLaCopie).toEqual([]);
+    expect(readdirSync(dossierSauvegardes)).toEqual([]);
+  });
+
+  it("les restes d'une copie tuée sont ignorés, puis effacés à la sauvegarde suivante", () => {
+    mkdirSync(dossierSauvegardes, { recursive: true });
+    const reste = "mboapilot-sauvegarde-2026-09-04T03-00-00-000Z.db.partiel";
+    writeFileSync(join(dossierSauvegardes, reste), "début de copie");
+    writeFileSync(join(dossierSauvegardes, `${reste}-journal`), "");
+    expect(listerSauvegardes(dossierSauvegardes)).toEqual([]);
+
+    const sauvegarde = creerSauvegarde(db, dossierSauvegardes, new Date("2026-09-05T03:00:00.000Z"));
+
+    expect(readdirSync(dossierSauvegardes)).toEqual([sauvegarde.nomFichier]);
+  });
+
+  it("ne touche pas aux autres fichiers du dossier", () => {
+    mkdirSync(dossierSauvegardes, { recursive: true });
+    writeFileSync(join(dossierSauvegardes, "notes.txt"), "à garder");
+
+    creerSauvegarde(db, dossierSauvegardes);
+
+    expect(existsSync(join(dossierSauvegardes, "notes.txt"))).toBe(true);
   });
 });

@@ -47,31 +47,34 @@ export function creerUtilisateur(db: Db, input: CreerUtilisateurInput, acteurId:
   if (erreurs.length > 0) throw new Error(erreurs.join(" — "));
 
   const motDePasseHash = bcrypt.hashSync(input.motDePasse, TOURS_HACHAGE);
-  const utilisateur = db
-    .insert(schema.utilisateur)
-    .values({
-      siteId: input.siteId,
-      nom,
-      prenom,
-      identifiant,
-      motDePasseHash,
-      role: input.role,
-      idApporteur: input.idApporteur,
-    })
-    .returning()
-    .get();
+  // le compte et sa trace s'écrivent ensemble : une coupure entre les deux laissait un compte que le journal ignorait
+  return db.transaction(() => {
+    const utilisateur = db
+      .insert(schema.utilisateur)
+      .values({
+        siteId: input.siteId,
+        nom,
+        prenom,
+        identifiant,
+        motDePasseHash,
+        role: input.role,
+        idApporteur: input.idApporteur,
+      })
+      .returning()
+      .get();
 
-  db.insert(schema.journalAudit)
-    .values({
-      utilisateurId: acteurId,
-      action: "CREATION",
-      tableCible: "utilisateur",
-      idCible: String(utilisateur.idUser),
-      valeurApres: JSON.stringify({ siteId: utilisateur.siteId, identifiant: utilisateur.identifiant, role: utilisateur.role }),
-    })
-    .run();
+    db.insert(schema.journalAudit)
+      .values({
+        utilisateurId: acteurId,
+        action: "CREATION",
+        tableCible: "utilisateur",
+        idCible: String(utilisateur.idUser),
+        valeurApres: JSON.stringify({ siteId: utilisateur.siteId, identifiant: utilisateur.identifiant, role: utilisateur.role }),
+      })
+      .run();
 
-  return utilisateur;
+    return utilisateur;
+  });
 }
 
 // 8.7, 11.2 : réinitialisation du mot de passe d'un compte existant — même
@@ -86,26 +89,28 @@ export function reinitialiserMotDePasse(db: Db, idUser: number, nouveauMotDePass
   if (erreurs.length > 0) throw new Error(erreurs.join(" — "));
 
   const motDePasseHash = bcrypt.hashSync(nouveauMotDePasse, TOURS_HACHAGE);
-  const apres = db
-    .update(schema.utilisateur)
-    // un administrateur qui réinitialise le mot de passe d'un utilisateur verrouillé après des
-    // échecs de connexion le débloque aussi : sinon il resterait bloqué jusqu'à 15 minutes
-    .set({ motDePasseHash, tentativesEchouees: 0, verrouilleJusqua: null })
-    .where(eq(schema.utilisateur.idUser, idUser))
-    .returning(COLONNES_SANS_HASH)
-    .get();
+  return db.transaction(() => {
+    const apres = db
+      .update(schema.utilisateur)
+      // un administrateur qui réinitialise le mot de passe d'un utilisateur verrouillé après des
+      // échecs de connexion le débloque aussi : sinon il resterait bloqué jusqu'à 15 minutes
+      .set({ motDePasseHash, tentativesEchouees: 0, verrouilleJusqua: null })
+      .where(eq(schema.utilisateur.idUser, idUser))
+      .returning(COLONNES_SANS_HASH)
+      .get();
 
-  db.insert(schema.journalAudit)
-    .values({
-      utilisateurId: acteurId,
-      action: "MODIFICATION",
-      tableCible: "utilisateur",
-      idCible: String(idUser),
-      valeurApres: JSON.stringify({ action: "reinitialisation_mot_de_passe" }),
-    })
-    .run();
+    db.insert(schema.journalAudit)
+      .values({
+        utilisateurId: acteurId,
+        action: "MODIFICATION",
+        tableCible: "utilisateur",
+        idCible: String(idUser),
+        valeurApres: JSON.stringify({ action: "reinitialisation_mot_de_passe" }),
+      })
+      .run();
 
-  return apres;
+    return apres;
+  });
 }
 
 // insensible à la casse et aux espaces : un compte ancien enregistré avec des majuscules
@@ -146,26 +151,28 @@ export function modifierUtilisateur(db: Db, idUser: number, input: ModifierUtili
   const avant =db.select(COLONNES_SANS_HASH).from(schema.utilisateur).where(eq(schema.utilisateur.idUser, idUser)).get();
   if (!avant) return undefined;
 
-  const apres = db
-    .update(schema.utilisateur)
-    .set({
-      ...(input.actif !== undefined && { actif: input.actif ? 1 : 0 }),
-      ...(input.role !== undefined && { role: input.role }),
-    })
-    .where(eq(schema.utilisateur.idUser, idUser))
-    .returning(COLONNES_SANS_HASH)
-    .get();
+  return db.transaction(() => {
+    const apres = db
+      .update(schema.utilisateur)
+      .set({
+        ...(input.actif !== undefined && { actif: input.actif ? 1 : 0 }),
+        ...(input.role !== undefined && { role: input.role }),
+      })
+      .where(eq(schema.utilisateur.idUser, idUser))
+      .returning(COLONNES_SANS_HASH)
+      .get();
 
-  db.insert(schema.journalAudit)
-    .values({
-      utilisateurId: acteurId,
-      action: "MODIFICATION",
-      tableCible: "utilisateur",
-      idCible: String(idUser),
-      valeurAvant: JSON.stringify({ actif: avant.actif, role: avant.role }),
-      valeurApres: JSON.stringify({ actif: apres?.actif, role: apres?.role }),
-    })
-    .run();
+    db.insert(schema.journalAudit)
+      .values({
+        utilisateurId: acteurId,
+        action: "MODIFICATION",
+        tableCible: "utilisateur",
+        idCible: String(idUser),
+        valeurAvant: JSON.stringify({ actif: avant.actif, role: avant.role }),
+        valeurApres: JSON.stringify({ actif: apres?.actif, role: apres?.role }),
+      })
+      .run();
 
-  return apres;
+    return apres;
+  });
 }

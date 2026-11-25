@@ -307,38 +307,41 @@ export function modifierEntreprise(db: Db, idEntreprise: number, input: Modifier
   }
 
   // 11.5 : valeurs avant/après journalisées (taxes, garantie, jalons, politique de mot de passe…)
-  const apres = db
-    .update(schema.entreprise)
-    .set({
-      ...(input.tauxTva !== undefined && { tauxTva: input.tauxTva }),
-      ...(input.mentionsLegales !== undefined && { mentionsLegales: input.mentionsLegales }),
-      ...(input.tauxCommissionVendeurDefaut !== undefined && { tauxCommissionVendeurDefaut: input.tauxCommissionVendeurDefaut }),
-      ...(input.jalonAlerteUrgent !== undefined && { jalonAlerteUrgent }),
-      ...(input.jalonAlerteModere !== undefined && { jalonAlerteModere }),
-      ...(input.jalonAlerteAnticipe !== undefined && { jalonAlerteAnticipe }),
-      ...(input.dureeRetentionExpiresJours !== undefined && { dureeRetentionExpiresJours: input.dureeRetentionExpiresJours }),
-      ...(input.dureeConservationDonneesJours !== undefined && { dureeConservationDonneesJours: input.dureeConservationDonneesJours }),
-      ...(input.politiqueMdpLongueurMin !== undefined && { politiqueMdpLongueurMin: input.politiqueMdpLongueurMin }),
-      ...(input.politiqueMdpExigerMajuscule !== undefined && { politiqueMdpExigerMajuscule: input.politiqueMdpExigerMajuscule ? 1 : 0 }),
-      ...(input.politiqueMdpExigerChiffre !== undefined && { politiqueMdpExigerChiffre: input.politiqueMdpExigerChiffre ? 1 : 0 }),
-      ...(input.politiqueMdpExigerCaractereSpecial !== undefined && {
-        politiqueMdpExigerCaractereSpecial: input.politiqueMdpExigerCaractereSpecial ? 1 : 0,
-      }),
-      ...(input.delaiGraceReabonnementJours !== undefined && { delaiGraceReabonnementJours: input.delaiGraceReabonnementJours }),
-      ...(input.tauxGarantiePourcent !== undefined && { tauxGarantiePourcent: input.tauxGarantiePourcent }),
-      ...(input.plafondRemiseCaissierPourcent !== undefined && { plafondRemiseCaissierPourcent: input.plafondRemiseCaissierPourcent }),
-      // texte vide ou null : plus d'adresse, donc plus de QR sur les tickets
-      ...(input.adressePubliqueVerification !== undefined && {
-        adressePubliqueVerification: input.adressePubliqueVerification === null ? null : normaliserAdressePublique(input.adressePubliqueVerification),
-      }),
-    })
-    .where(eq(schema.entreprise.idEntreprise, idEntreprise))
-    .returning()
-    .get();
+  // dans la même transaction que le changement : une coupure ne laisse jamais un réglage modifié sans sa trace
+  return db.transaction(() => {
+    const apres = db
+      .update(schema.entreprise)
+      .set({
+        ...(input.tauxTva !== undefined && { tauxTva: input.tauxTva }),
+        ...(input.mentionsLegales !== undefined && { mentionsLegales: input.mentionsLegales }),
+        ...(input.tauxCommissionVendeurDefaut !== undefined && { tauxCommissionVendeurDefaut: input.tauxCommissionVendeurDefaut }),
+        ...(input.jalonAlerteUrgent !== undefined && { jalonAlerteUrgent }),
+        ...(input.jalonAlerteModere !== undefined && { jalonAlerteModere }),
+        ...(input.jalonAlerteAnticipe !== undefined && { jalonAlerteAnticipe }),
+        ...(input.dureeRetentionExpiresJours !== undefined && { dureeRetentionExpiresJours: input.dureeRetentionExpiresJours }),
+        ...(input.dureeConservationDonneesJours !== undefined && { dureeConservationDonneesJours: input.dureeConservationDonneesJours }),
+        ...(input.politiqueMdpLongueurMin !== undefined && { politiqueMdpLongueurMin: input.politiqueMdpLongueurMin }),
+        ...(input.politiqueMdpExigerMajuscule !== undefined && { politiqueMdpExigerMajuscule: input.politiqueMdpExigerMajuscule ? 1 : 0 }),
+        ...(input.politiqueMdpExigerChiffre !== undefined && { politiqueMdpExigerChiffre: input.politiqueMdpExigerChiffre ? 1 : 0 }),
+        ...(input.politiqueMdpExigerCaractereSpecial !== undefined && {
+          politiqueMdpExigerCaractereSpecial: input.politiqueMdpExigerCaractereSpecial ? 1 : 0,
+        }),
+        ...(input.delaiGraceReabonnementJours !== undefined && { delaiGraceReabonnementJours: input.delaiGraceReabonnementJours }),
+        ...(input.tauxGarantiePourcent !== undefined && { tauxGarantiePourcent: input.tauxGarantiePourcent }),
+        ...(input.plafondRemiseCaissierPourcent !== undefined && { plafondRemiseCaissierPourcent: input.plafondRemiseCaissierPourcent }),
+        // texte vide ou null : plus d'adresse, donc plus de QR sur les tickets
+        ...(input.adressePubliqueVerification !== undefined && {
+          adressePubliqueVerification: input.adressePubliqueVerification === null ? null : normaliserAdressePublique(input.adressePubliqueVerification),
+        }),
+      })
+      .where(eq(schema.entreprise.idEntreprise, idEntreprise))
+      .returning()
+      .get();
 
-  const diff = differencesAudit(actuelle, apres, CHAMPS_AUDITES_ENTREPRISE);
-  if (diff) journaliserAudit(db, { acteurId, action: "MODIFICATION", tableCible: "entreprise", idCible: idEntreprise, ...diff });
-  return apres;
+    const diff = differencesAudit(actuelle, apres, CHAMPS_AUDITES_ENTREPRISE);
+    if (diff) journaliserAudit(db, { acteurId, action: "MODIFICATION", tableCible: "entreprise", idCible: idEntreprise, ...diff });
+    return apres;
+  });
 }
 
 const CHAMPS_AUDITES_ENTREPRISE = [

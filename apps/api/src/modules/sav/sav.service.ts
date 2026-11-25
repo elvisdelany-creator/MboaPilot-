@@ -92,8 +92,13 @@ export function changerStatutSav(
   // atomique : facture, lignes, encaissement, dossier et historique s'écrivent ensemble ou pas du tout. Une coupure en cours de route
   // laissait une facture orpheline (la reprise en créait une seconde) ou un encaissement sans livraison.
   const { resultat, prevenirClient } = db.transaction(() => changerStatutSansNotification(db, params, fournisseurNotification));
-  // le message au client part une fois l'écriture acquise : un SMS envoyé ne se rattrape pas
-  prevenirClient?.();
+  // le message au client part une fois l'écriture acquise : un SMS envoyé ne se rattrape pas. Le dossier est alors enregistré : un message
+  // qui ne peut pas être noté dans le journal est signalé dans les traces du serveur, jamais présenté comme un échec du passage en « Prêt »
+  try {
+    prevenirClient?.();
+  } catch (erreur) {
+    console.error(`[API] dossier SAV ${params.idDossierSav} : statut enregistré, mais le message au client n'a pas pu l'être`, erreur);
+  }
   return resultat;
 }
 

@@ -23,25 +23,28 @@ export function creerDossierSav(db: Db, input: OuvrirDossierInput) {
   // un texte non vide ("non") est « vrai » : le dossier passerait sous garantie, donc facture gratuite
   verifierBooleen(input.sousGarantie, "Le champ sous garantie");
 
-  const dossier = db
-    .insert(schema.savDossier)
-    .values({
-      siteId: input.siteId,
-      idAbonne: input.idAbonne,
-      clientNom: texteFacultatif(input.clientNom, "Le nom du client", 100) ?? undefined,
-      clientTelephone: telephoneFacultatif(input.clientTelephone, "Le téléphone du client") ?? undefined,
-      descriptionPanne,
-      etatReception: texteFacultatif(input.etatReception, "L'état à la réception", 500) ?? undefined,
-      sousGarantie: input.sousGarantie ? 1 : 0,
-    })
-    .returning()
-    .get();
+  // le dossier et la première ligne de son historique s'écrivent ensemble
+  return db.transaction(() => {
+    const dossier = db
+      .insert(schema.savDossier)
+      .values({
+        siteId: input.siteId,
+        idAbonne: input.idAbonne,
+        clientNom: texteFacultatif(input.clientNom, "Le nom du client", 100) ?? undefined,
+        clientTelephone: telephoneFacultatif(input.clientTelephone, "Le téléphone du client") ?? undefined,
+        descriptionPanne,
+        etatReception: texteFacultatif(input.etatReception, "L'état à la réception", 500) ?? undefined,
+        sousGarantie: input.sousGarantie ? 1 : 0,
+      })
+      .returning()
+      .get();
 
-  db.insert(schema.savHistorique)
-    .values({ idDossierSav: dossier.idDossierSav, statutAvant: null, statutApres: "RECU", utilisateurId: input.userId })
-    .run();
+    db.insert(schema.savHistorique)
+      .values({ idDossierSav: dossier.idDossierSav, statutAvant: null, statutApres: "RECU", utilisateurId: input.userId })
+      .run();
 
-  return dossier;
+    return dossier;
+  });
 }
 
 export function trouverDossierSav(db: Db, idDossierSav: number) {

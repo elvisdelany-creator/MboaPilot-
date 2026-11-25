@@ -1,9 +1,12 @@
-import { existsSync, mkdirSync, readdirSync, statSync, unlinkSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, renameSync, rmSync, statSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
 import type { Db } from "../../db/types.js";
+import { forcerSurDisque } from "../../lib/disque.js";
 
 const PREFIXE_FICHIER = "mboapilot-sauvegarde-";
 const EXTENSION = ".db";
+// nom porté pendant la copie : il ne finit pas par « .db », donc ni la liste ni la restauration ne le prennent pour une sauvegarde
+const SUFFIXE_PARTIEL = ".partiel";
 const REGEX_NOM_FICHIER = /^mboapilot-sauvegarde-(\d{4}-\d{2}-\d{2}T\d{2})-(\d{2})-(\d{2})-(\d{3})Z\.db$/;
 
 export interface Sauvegarde {
@@ -32,12 +35,35 @@ function extraireDateDuNom(nomFichier: string): string | null {
 // 2.6, 💡 Conseil d'architecte : VACUUM INTO produit une copie cohérente et
 // compacte du fichier SQLite même à chaud (base ouverte, WAL), sans bloquer
 // les écritures en cours — contrairement à une copie physique brute du fichier.
+// La copie ne prend son nom définitif qu'une fois complète et sur le disque : un serveur arrêté en cours de route ne laisse jamais un
+// fichier tronqué qui passerait pour la sauvegarde du jour.
 export function creerSauvegarde(db: Db, dossierSauvegardes: string, maintenant = new Date()): Sauvegarde {
   mkdirSync(dossierSauvegardes, { recursive: true });
+  effacerCopiesInterrompues(dossierSauvegardes);
   const nomFichier = construireNomFichier(maintenant);
   const chemin = join(dossierSauvegardes, nomFichier);
-  db.$client.prepare("VACUUM INTO ?").run(chemin);
+  const partiel = `${chemin}${SUFFIXE_PARTIEL}`;
+  try {
+    db.$client.prepare("VACUUM INTO ?").run(partiel);
+    forcerSurDisque(partiel);
+    renameSync(partiel, chemin);
+  } catch (erreur) {
+    effacerCopiesInterrompues(dossierSauvegardes);
+    throw erreur;
+  }
   return { nomFichier, dateCreation: maintenant.toISOString(), tailleOctets: statSync(chemin).size };
+}
+
+// restes d'une copie interrompue (avec leur journal SQLite) : inutilisables, et aussi gros qu'une sauvegarde
+function effacerCopiesInterrompues(dossierSauvegardes: string): void {
+  for (const nom of readdirSync(dossierSauvegardes)) {
+    if (!nom.startsWith(PREFIXE_FICHIER) || !nom.includes(`${EXTENSION}${SUFFIXE_PARTIEL}`)) continue;
+    try {
+      rmSync(join(dossierSauvegardes, nom), { force: true });
+    } catch {
+      // fichier retenu par un autre programme (antivirus) : il sera effacé la prochaine fois, sans empêcher la sauvegarde
+    }
+  }
 }
 
 // 2.6 : sauvegarde de fin de journée, déclenchée par la clôture de caisse. La sauvegarde quotidienne a lieu au démarrage du serveur puis

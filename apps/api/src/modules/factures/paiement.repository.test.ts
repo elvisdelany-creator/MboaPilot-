@@ -79,19 +79,12 @@ describe("creerPaiement — monnaie rendue (8.5, 9.2, 13.1)", () => {
     expect(creerPaiement(db, { idFacture, mode: "CASH", montant: 6000, utilisateurId: userId }).montant).toBe(6000);
   });
 
-  it("un chèque garde son montant : il n'y a pas de monnaie à rendre", () => {
-    const paiement = creerPaiement(db, {
-      idFacture,
-      mode: "CHEQUE",
-      montant: 15000,
-      utilisateurId: userId,
-      banque: "Afriland",
-      numeroCheque: "123",
-      titulaireCheque: "Client",
-      dateCheque: "2026-09-01",
-    });
+  // un chèque n'est jamais rogné en silence comme des espèces : au-delà du dû il est refusé (faute de saisie), sinon gardé tel quel
+  it("un chèque n'a pas de monnaie à rendre : refusé au-delà du dû, gardé tel quel en dessous", () => {
+    const cheque = { idFacture, mode: "CHEQUE" as const, utilisateurId: userId, banque: "Afriland", numeroCheque: "123", titulaireCheque: "Client", dateCheque: "2026-09-01" };
 
-    expect(paiement.montant).toBe(15000);
+    expect(() => creerPaiement(db, { ...cheque, montant: 15000 })).toThrow(/dépasse le solde dû de la facture \(10 000 FCFA\)/);
+    expect(creerPaiement(db, { ...cheque, montant: 10000 }).montant).toBe(10000);
   });
 });
 

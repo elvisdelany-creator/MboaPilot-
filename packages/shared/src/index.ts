@@ -48,3 +48,4 @@ export { periodeDuMois } from "./periode-mois.js";
 export { raccourcisPeriode, type ClePeriodeRaccourci } from "./periodes-raccourcis.js";
 export { erreurDetailsPaiement, type DetailsPaiement } from "./details-paiement.js";
 export { dateHeureDouala, etatVersCsv, formaterValeurEtat, libellePeriodeEtat, nomFichierEtat, type ColonneEtat, type EtatImprimable, type SectionEtat, type TypeColonneEtat } from "./etat.js";
+export { montantAvoirLigne, type LigneCreditable } from "./montant-avoir.js";

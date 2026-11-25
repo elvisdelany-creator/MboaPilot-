@@ -1,6 +1,7 @@
 import { eq, sql } from "drizzle-orm";
 import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
+import { MESSAGE_MOBILE_CONFIRME, transactionMobileReussie } from "./paiement.repository.js";
 
 export interface AnnulerPaiementParams {
   idPaiement: number;
@@ -28,6 +29,11 @@ export function annulerPaiement(db: Db, params: AnnulerPaiementParams): AnnulerP
 function annulerPaiementSansTransaction(db: Db, params: AnnulerPaiementParams): AnnulerPaiementResultat {
   const paiement = db.select().from(schema.paiement).where(eq(schema.paiement.idPaiement, params.idPaiement)).get();
   if (!paiement) throw new Error(`Paiement ${params.idPaiement} introuvable`);
+  // 6.6 : un paiement confirmé par l'opérateur n'est pas une erreur de saisie — l'argent a quitté le compte du client. L'effacer permettait
+  // ensuite d'annuler la vente, avec la trace de sa transaction. Il se corrige par un avoir et un remboursement.
+  if (paiement.montant > 0 && paiement.referenceTransaction && transactionMobileReussie(db, paiement.idFacture, paiement.referenceTransaction)) {
+    throw new Error(MESSAGE_MOBILE_CONFIRME);
+  }
 
   db.insert(schema.journalAudit)
     .values({
@@ -41,15 +47,21 @@ function annulerPaiementSansTransaction(db: Db, params: AnnulerPaiementParams): 
 
   db.delete(schema.paiement).where(eq(schema.paiement.idPaiement, params.idPaiement)).run();
 
-  const totalPaye =
-    db
-      .select({ total: sql<number>`coalesce(sum(${schema.paiement.montant}), 0)` })
-      .from(schema.paiement)
-      .where(eq(schema.paiement.idFacture, paiement.idFacture))
-      .get()?.total ?? 0;
+  const restant = db
+    .select({ total: sql<number>`coalesce(sum(${schema.paiement.montant}), 0)`, nombre: sql<number>`count(*)` })
+    .from(schema.paiement)
+    .where(eq(schema.paiement.idFacture, paiement.idFacture))
+    .get()!;
+  const totalPaye = restant.total;
+  // un encaissement déjà remboursé ne se retire pas seul : il resterait de l'argent sorti sans jamais être entré. L'erreur annule la
+  // transaction entière, donc aussi la suppression et sa ligne d'audit.
+  if (paiement.montant > 0 && totalPaye < 0) {
+    throw new Error("Cet encaissement a fait l'objet d'un remboursement : annulez d'abord le remboursement, puis l'encaissement");
+  }
 
+  // « BROUILLON si plus aucun encaissement ne subsiste » : un encaissement et son remboursement qui s'annulent ne font pas un brouillon
   let statutFacture: "BROUILLON" | "VALIDEE" = "VALIDEE";
-  if (totalPaye === 0) {
+  if (restant.nombre === 0) {
     db.update(schema.facture).set({ statut: "BROUILLON" }).where(eq(schema.facture.idFacture, paiement.idFacture)).run();
     statutFacture = "BROUILLON";
   }

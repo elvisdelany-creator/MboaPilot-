@@ -15,6 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { chargerLignesFacture, emettreAvoirRequete, ErreurAuthentification, type LigneFacture } from "@/lib/api";
+import { montantAvoirLigne } from "@mboapilot/shared";
 import { useAuth } from "@/lib/auth-context";
 import type { Facture } from "@/lib/types";
 
@@ -81,8 +82,9 @@ export function EmettreAvoirDialog({ facture, onFerme, onSucces }: Props) {
   const total = lignesSelectionnees.reduce((somme, [idLigne, quantite]) => {
     const ligne = lignes.find((l) => l.idLigne === Number(idLigne));
     if (!ligne) return somme;
-    const prixUnitaire = ligne.prixApplique / ligne.quantite;
-    return somme + prixUnitaire * quantite;
+    // le même calcul que le serveur : ce qui est annoncé est exactement ce qui sera repris
+    const quantiteDejaCreditee = ligne.quantite - ligne.quantiteDisponible;
+    return somme + montantAvoirLigne({ ...ligne, quantiteDejaCreditee }, quantite);
   }, 0);
 
   async function confirmer() {
@@ -137,7 +139,10 @@ export function EmettreAvoirDialog({ facture, onFerme, onSucces }: Props) {
                 <Label htmlFor={`avoir-ligne-${ligne.idLigne}`} className="flex-1 font-normal text-card-foreground">
                   {ligne.libelleProduit ?? ligne.libelleKit ?? "Abonnement"}
                   <span className="ml-1 text-xs text-muted-foreground">
-                    ({ligne.quantite} × {formateurFcfa.format(Math.round(ligne.prixApplique / ligne.quantite))} FCFA)
+                    {/* une ligne remisée qui ne se divise pas juste s'affiche avec son total, jamais avec un prix unitaire arrondi */}
+                    {ligne.prixApplique % ligne.quantite === 0
+                      ? `(${ligne.quantite} × ${formateurFcfa.format(ligne.prixApplique / ligne.quantite)} FCFA)`
+                      : `(${ligne.quantite} pour ${formateurFcfa.format(ligne.prixApplique)} FCFA)`}
                   </span>
                   {ligne.quantiteDisponible < ligne.quantite && (
                     <span className="ml-1 text-xs text-muted-foreground">

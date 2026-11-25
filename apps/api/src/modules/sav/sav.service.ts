@@ -89,6 +89,19 @@ export function changerStatutSav(
   params: ChangerStatutSavParams,
   fournisseurNotification: FournisseurNotification = new SimulateurNotification()
 ): ChangerStatutSavResultat {
+  // atomique : facture, lignes, encaissement, dossier et historique s'écrivent ensemble ou pas du tout. Une coupure en cours de route
+  // laissait une facture orpheline (la reprise en créait une seconde) ou un encaissement sans livraison.
+  const { resultat, prevenirClient } = db.transaction(() => changerStatutSansNotification(db, params, fournisseurNotification));
+  // le message au client part une fois l'écriture acquise : un SMS envoyé ne se rattrape pas
+  prevenirClient?.();
+  return resultat;
+}
+
+function changerStatutSansNotification(
+  db: Db,
+  params: ChangerStatutSavParams,
+  fournisseurNotification: FournisseurNotification,
+): { resultat: ChangerStatutSavResultat; prevenirClient?: () => void } {
   const dossier = db.select().from(schema.savDossier).where(eq(schema.savDossier.idDossierSav, params.idDossierSav)).get();
   if (!dossier) throw new Error(`Dossier SAV ${params.idDossierSav} introuvable`);
 
@@ -112,6 +125,7 @@ export function changerStatutSav(
   let jetonVerification: string | null = null;
   let montantFacture: number | null = null;
   let statutFacture: "BROUILLON" | "VALIDEE" | null = null;
+  let prevenirClient: (() => void) | undefined;
 
   if (params.nouveauStatut === "PRET") {
     const montantMainOeuvre = params.montantMainOeuvre ?? 0;
@@ -186,20 +200,11 @@ export function changerStatutSav(
       // le client peut répondre : numéros de la boutique du dossier (vide si non renseignés)
       contact: texteContactMessage(db.select().from(schema.site).where(eq(schema.site.idSite, dossier.siteId)).get() ?? {}),
     });
-    if (dossier.idAbonne !== null) {
-      envoyerNotificationAbonne(db, fournisseurNotification, {
-        idAbonne: dossier.idAbonne,
-        evenement: "SAV_PRET",
-        message: messagePret,
-        idDossierSav: dossier.idDossierSav,
-      });
-    } else if (dossier.clientTelephone) {
-      envoyerNotificationClientPonctuel(db, fournisseurNotification, {
-        telephone: dossier.clientTelephone,
-        evenement: "SAV_PRET",
-        message: messagePret,
-        idDossierSav: dossier.idDossierSav,
-      });
+    const { idAbonne, clientTelephone, idDossierSav } = dossier;
+    if (idAbonne !== null) {
+      prevenirClient = () => envoyerNotificationAbonne(db, fournisseurNotification, { idAbonne, evenement: "SAV_PRET", message: messagePret, idDossierSav });
+    } else if (clientTelephone) {
+      prevenirClient = () => envoyerNotificationClientPonctuel(db, fournisseurNotification, { telephone: clientTelephone, evenement: "SAV_PRET", message: messagePret, idDossierSav });
     }
   }
 
@@ -242,5 +247,8 @@ export function changerStatutSav(
     })
     .run();
 
-  return { idDossierSav: dossier.idDossierSav, statut: params.nouveauStatut, idFacture, jetonVerification, montantFacture, statutFacture };
+  return {
+    resultat: { idDossierSav: dossier.idDossierSav, statut: params.nouveauStatut, idFacture, jetonVerification, montantFacture, statutFacture },
+    prevenirClient,
+  };
 }

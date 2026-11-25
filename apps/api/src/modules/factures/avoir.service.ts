@@ -1,4 +1,5 @@
 import { and, eq, sql } from "drizzle-orm";
+import { montantAvoirLigne } from "@mboapilot/shared";
 import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
 import { enregistrerMouvement } from "../stock/stock.repository.js";
@@ -46,15 +47,14 @@ export function creerAvoir(db: Db, params: CreerAvoirParams): AvoirResultat {
   return db.transaction(() => creerAvoirSansTransaction(db, params));
 }
 
-// quantité d'une ligne encore créditable : ce qui a été facturé moins ce que les avoirs déjà émis en ont repris
-function quantiteDisponibleLigne(db: Db, ligne: { idLigne: number; quantite: number }): number {
-  const dejaCredite = db
+// ce que les avoirs déjà émis ont repris d'une ligne : quantité et montant (positif)
+function dejaCrediteLigne(db: Db, idLigne: number): { quantite: number; montant: number } {
+  return db
     .select()
     .from(schema.ligneVente)
-    .where(eq(schema.ligneVente.ligneOrigineId, ligne.idLigne))
+    .where(eq(schema.ligneVente.ligneOrigineId, idLigne))
     .all()
-    .reduce((somme, l) => somme + l.quantite, 0);
-  return ligne.quantite - dejaCredite;
+    .reduce((total, l) => ({ quantite: total.quantite + l.quantite, montant: total.montant - l.prixApplique }), { quantite: 0, montant: 0 });
 }
 
 // ce que l'utilisateur reconnaît à l'écran : l'article, le kit ou l'abonnement, jamais le numéro de ligne interne
@@ -85,19 +85,23 @@ function creerAvoirSansTransaction(db: Db, params: CreerAvoirParams): AvoirResul
       throw new Error(`Ligne ${ligneInput.idLigneOrigine} introuvable sur la facture ${origine.idFacture}`);
     }
 
-    const disponible = quantiteDisponibleLigne(db, ligneOrigine);
+    const deja = dejaCrediteLigne(db, ligneOrigine.idLigne);
+    const disponible = ligneOrigine.quantite - deja.quantite;
     if (ligneInput.quantite > disponible) {
       throw new Error(`Quantité à créditer (${ligneInput.quantite}) supérieure à ce qui reste disponible pour « ${libelleLigne(db, ligneOrigine)} » (${disponible})`);
     }
 
-    const prixUnitaire = Math.round(ligneOrigine.prixApplique / ligneOrigine.quantite);
+    const montant = montantAvoirLigne(
+      { prixApplique: ligneOrigine.prixApplique, quantite: ligneOrigine.quantite, quantiteDejaCreditee: deja.quantite, montantDejaCredite: deja.montant },
+      ligneInput.quantite,
+    );
     return {
       ligneOrigineId: ligneOrigine.idLigne,
       idProduit: ligneOrigine.idProduit,
       idKit: ligneOrigine.idKit,
       numeroAbonnement: ligneOrigine.numeroAbonnement,
       quantite: ligneInput.quantite,
-      prixApplique: -(prixUnitaire * ligneInput.quantite),
+      prixApplique: -montant,
     };
   });
 
@@ -218,6 +222,10 @@ export function listerLignesFacture(db: Db, idFacture: number) {
     .leftJoin(schema.kit, eq(schema.ligneVente.idKit, schema.kit.idKit))
     .where(eq(schema.ligneVente.idFacture, idFacture))
     .all();
-  // la fenêtre d'avoir doit savoir ce qui a déjà été crédité, sinon elle propose des quantités que le serveur refusera
-  return lignes.map((l) => ({ ...l, quantiteDisponible: quantiteDisponibleLigne(db, l) }));
+  // la fenêtre d'avoir doit savoir ce qui a déjà été crédité (quantité, pour ne pas proposer ce que le serveur refusera ; montant, pour
+  // annoncer exactement ce que l'avoir reprendra)
+  return lignes.map((l) => {
+    const deja = dejaCrediteLigne(db, l.idLigne);
+    return { ...l, quantiteDisponible: l.quantite - deja.quantite, montantDejaCredite: deja.montant };
+  });
 }

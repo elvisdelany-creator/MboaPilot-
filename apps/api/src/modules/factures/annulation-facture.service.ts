@@ -3,7 +3,7 @@ import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
 import { enregistrerMouvement } from "../stock/stock.repository.js";
 import { restituerComposantsKit } from "../stock/stock.service.js";
-import { paiementMobileEnCours } from "./paiement.repository.js";
+import { paiementMobileEnCours, transactionMobileReussie } from "./paiement.repository.js";
 import { etatAbonnement, type DetailsOperationEnAttente, type TypeOperationAbonnement } from "../abonnements/operation-en-attente.repository.js";
 
 export interface AnnulerFactureEnAttenteParams {
@@ -34,6 +34,8 @@ export interface VenteEnAttente {
 type Facture = typeof schema.facture.$inferSelect;
 type Nature = { type: "PRODUITS" } | { type: "ABONNEMENT"; numeroAbonnement: number } | { type: TypeOperationAbonnement; numeroAbonnement: number };
 
+const MESSAGE_VENTE_DEBITEE =
+  "Un paiement Mobile Money a abouti sur cette vente : le client a été débité. Elle ne s'annule pas ; enregistrez l'encaissement, puis remboursez le client par un avoir";
 const MESSAGE_ABONNEMENT_EVOLUE = "L'abonnement a évolué depuis cette opération : annulez d'abord l'opération plus récente";
 
 // 6.4 : une facture BROUILLON « reste modifiable sans restriction » ; 9.1, 11.5 : aucune suppression de vente sans confirmation
@@ -95,6 +97,8 @@ export function annulerFactureEnAttente(db: Db, params: AnnulerFactureEnAttenteP
         "Seule une vente de produits ou un recrutement sans encaissement peut être annulé : cette facture porte un réabonnement, un changement d'abonnement, un échange de matériel ou un dossier SAV"
       );
     }
+    // supprimer la vente effacerait aussi la transaction : la seule preuve, hors journal d'audit, que le client a payé
+    if (transactionMobileReussie(db, facture.idFacture)) throw new Error(MESSAGE_VENTE_DEBITEE);
     if (paiementMobileEnCours(db, facture.idFacture)) {
       throw new Error("Un paiement Mobile Money est en cours sur cette vente : attendez son résultat avant de l'annuler");
     }
@@ -217,6 +221,7 @@ export function listerVentesEnAttente(db: Db, siteId: number): VenteEnAttente[] 
       type: nature.type,
       numeroAbonnement: nature.type === "PRODUITS" ? null : nature.numeroAbonnement,
       blocage: (() => {
+        if (transactionMobileReussie(db, facture.idFacture)) return MESSAGE_VENTE_DEBITEE;
         const operation = operationEnAttente(db, facture.idFacture);
         return operation ? blocageOperation(db, operation) : null;
       })(),

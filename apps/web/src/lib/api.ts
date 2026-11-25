@@ -162,6 +162,8 @@ export interface LigneFacture {
   quantite: number;
   // 6.4 : quantité encore créditable (facturée moins ce que les avoirs déjà émis en ont repris)
   quantiteDisponible: number;
+  // montant (positif) que ces avoirs ont déjà repris sur la ligne
+  montantDejaCredite: number;
   prixApplique: number;
   ligneOrigineId: number | null;
   libelleProduit: string | null;
@@ -1047,6 +1049,10 @@ export interface StatutLicence {
   joursRestantsGrace: number;
   // jours avant l'échéance de l'abonnement éditeur : négatif une fois dépassée
   joursRestantsAbonnement: number;
+  // identifiant de cette installation : l'éditeur en a besoin pour émettre une clé de renouvellement
+  empreinteInstallation: string;
+  // vrai quand l'éditeur a inscrit sa clé publique : l'abonnement se prolonge alors avec une clé signée, plus par saisie d'une date
+  renouvellementParCle: boolean;
 }
 
 export async function chargerEtatLicence(token: string): Promise<StatutLicence> {
@@ -1060,6 +1066,16 @@ export async function prolongerLicenceRequete(token: string, dateExpiration: str
     method: "PUT",
     headers: { "Content-Type": "application/json", ...headersAuth(token) },
     body: JSON.stringify({ dateExpiration }),
+  });
+  return lireJson<StatutLicence>(reponse);
+}
+
+// 10.4 : applique une clé de renouvellement signée par l'éditeur
+export async function appliquerCleLicenceRequete(token: string, cle: string): Promise<StatutLicence> {
+  const reponse = await appelerServeur(`${BASE}/licence/cle`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headersAuth(token) },
+    body: JSON.stringify({ cle }),
   });
   return lireJson<StatutLicence>(reponse);
 }

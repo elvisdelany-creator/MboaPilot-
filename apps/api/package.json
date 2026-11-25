@@ -11,6 +11,8 @@
     "dev": "tsx watch src/server.ts",
     "start": "tsx src/server.ts",
     "start:demo": "tsx src/server-demo.ts",
+    "licence:paire": "tsx src/outils/licence-editeur.ts paire",
+    "licence:emettre": "tsx src/outils/licence-editeur.ts emettre",
     "test": "vitest run"
   },
   "dependencies": {

@@ -23,25 +23,42 @@ export interface CreerPaiementParams {
 // ont un montant exact, sans rendu de monnaie.
 function montantEncaisseNet(db: Db, params: CreerPaiementParams): number {
   if (params.mode !== "CASH") return params.montant;
+  const solde = soldeRestantFacture(db, params.idFacture);
+  return solde !== undefined && solde > 0 ? Math.min(params.montant, solde) : params.montant;
+}
 
-  const facture = db.select().from(schema.facture).where(eq(schema.facture.idFacture, params.idFacture)).get();
-  if (!facture) return params.montant;
+// ce qui reste dû sur une facture : son total, moins les avoirs émis dessus (montants négatifs), moins les paiements déjà enregistrés
+function soldeRestantFacture(db: Db, idFacture: number): number | undefined {
+  const facture = db.select().from(schema.facture).where(eq(schema.facture.idFacture, idFacture)).get();
+  if (!facture) return undefined;
 
   const totalPaye =
     db
       .select({ total: sql<number>`coalesce(sum(${schema.paiement.montant}), 0)` })
       .from(schema.paiement)
-      .where(eq(schema.paiement.idFacture, params.idFacture))
+      .where(eq(schema.paiement.idFacture, idFacture))
       .get()?.total ?? 0;
   const totalAvoirs =
     db
       .select({ total: sql<number>`coalesce(sum(${schema.facture.montantTotal}), 0)` })
       .from(schema.facture)
-      .where(eq(schema.facture.factureOrigineId, params.idFacture))
+      .where(eq(schema.facture.factureOrigineId, idFacture))
       .get()?.total ?? 0;
 
-  const solde = facture.montantTotal + totalAvoirs - totalPaye;
-  return solde > 0 ? Math.min(params.montant, solde) : params.montant;
+  return facture.montantTotal + totalAvoirs - totalPaye;
+}
+
+// espaces simples (et non l'espace fine insécable d'Intl) : le message s'affiche tel quel
+const formaterFcfa = (montant: number) => String(montant).replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+
+// 6.5 : un chèque ou un virement a un montant exact, sans monnaie à rendre : au-delà du dû, c'est une faute de saisie (un zéro en trop
+// passait, et gonflait les encaissements du jour et le théorique de la clôture). Un paiement partiel reste permis.
+function refuserDepassementSansMonnaie(db: Db, params: CreerPaiementParams): void {
+  if (params.mode === "CASH" || params.montant <= 0) return;
+  const solde = soldeRestantFacture(db, params.idFacture);
+  if (solde === undefined || params.montant <= solde) return;
+  const libelle = params.mode === "CHEQUE" ? "par chèque" : params.mode === "VIREMENT" ? "par virement" : "par Mobile Money";
+  throw new Error(`Le montant ${libelle} (${formaterFcfa(params.montant)} FCFA) dépasse le solde dû de la facture (${formaterFcfa(Math.max(0, solde))} FCFA) : seules les espèces rendent la monnaie`);
 }
 
 // 6.6 : un paiement Mobile Money encore ouvert peut aboutir à tout moment. Le statut d'une transaction n'est actualisé qu'à la
@@ -54,6 +71,19 @@ export function paiementMobileEnCours(db: Db, idFacture: number): boolean {
     .where(and(eq(schema.transactionMobileMoney.idFacture, idFacture), inArray(schema.transactionMobileMoney.statut, ["INITIEE", "EN_ATTENTE"])))
     .all()
     .some((t) => new Date(t.dateExpiration).getTime() > Date.now());
+}
+
+export const MESSAGE_MOBILE_CONFIRME =
+  "Ce paiement Mobile Money a été confirmé par l'opérateur : le client a été débité. Il ne s'annule pas ; corrigez la vente par un avoir avec remboursement";
+
+// transaction que l'opérateur a confirmée sur cette facture (celle d'une référence donnée, ou n'importe laquelle)
+export function transactionMobileReussie(db: Db, idFacture: number, reference?: string): boolean {
+  return db
+    .select()
+    .from(schema.transactionMobileMoney)
+    .where(and(eq(schema.transactionMobileMoney.idFacture, idFacture), eq(schema.transactionMobileMoney.statut, "REUSSIE")))
+    .all()
+    .some((t) => reference === undefined || t.referenceTransaction === reference);
 }
 
 // textes saisis à la main : sans espaces superflus (« 0012345 » et « 0012345 » doivent se rapprocher), jamais une chaîne vide à la place de « absent »
@@ -76,6 +106,7 @@ export function creerPaiement(db: Db, params: CreerPaiementParams) {
   if (params.montant > 0 && paiementMobileEnCours(db, params.idFacture)) {
     throw new Error("Un paiement Mobile Money est en cours sur cette facture : attendez son résultat avant d'encaisser autrement, sous peine de faire payer le client deux fois");
   }
+  refuserDepassementSansMonnaie(db, params);
   return db
     .insert(schema.paiement)
     .values({

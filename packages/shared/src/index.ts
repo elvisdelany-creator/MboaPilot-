@@ -40,7 +40,7 @@ export { causeModeDegrade, DELAI_GRACE_LICENCE_JOURS, messageModeDegrade, type C
 export { classerEncaissement, type EtatEncaissement } from "./etat-encaissement.js";
 export { messageSavPret, type DonneesSavPret } from "./message-sav-pret.js";
 export { excedentEncaissementSuspect, SEUIL_EXCEDENT_ENCAISSEMENT_SUSPECT } from "./excedent-encaissement.js";
-export { peutAccederVue, vuesAccessibles, type RoleUtilisateur, type VueApplication } from "./acces-vues.js";
+export { peutAccederVue, peutSuivreEcheances, vuesAccessibles, type RoleUtilisateur, type VueApplication } from "./acces-vues.js";
 export { decrireEntreeAudit, type ChangementAudit, type DescriptionAudit, type EntreeAuditBrute } from "./description-audit.js";
 export { construireUrlVerification, erreurAdressePublique, normaliserAdressePublique } from "./adresse-publique.js";
 export { brouillonCaisseEstVide, DUREE_BROUILLON_CAISSE_MS, lireBrouillonCaisse, serialiserBrouillonCaisse, type BrouillonCaisse, type LigneBrouillonCaisse } from "./brouillon-caisse.js";

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { peutAccederVue, vuesAccessibles, type RoleUtilisateur, type VueApplication } from "./acces-vues.js";
+import { peutAccederVue, peutSuivreEcheances, vuesAccessibles, type RoleUtilisateur, type VueApplication } from "./acces-vues.js";
 
 // 2.5.1 : matrice des rôles — l'interface ne propose que les écrans que l'API
 // autorise (mêmes rôles que les gardes exigerRole de apps/api/src/app.ts).
@@ -41,5 +41,21 @@ describe("peutAccederVue (2.5.1)", () => {
   it("un rôle inconnu n'accède à rien", () => {
     expect(peutAccederVue("PIRATE" as never, "dashboard")).toBe(false);
     expect(vuesAccessibles("PIRATE" as never)).toEqual([]);
+  });
+});
+
+// Constaté en test grandeur nature : le tableau de bord demandait les échéances pour tout le monde ; le Technicien SAV recevait « Rôle non
+// autorisé » et la liste restait sur « Chargement… ».
+describe("peutSuivreEcheances (2.5.1 : abonnements à échéance et expirés, lecture financière)", () => {
+  it.each([
+    ["ADMINISTRATEUR", true],
+    ["GERANT", true],
+    ["CAISSIER", true],
+    ["COMPTABLE", true],
+    ["TECHNICIEN_SAV", false],
+    ["APPORTEUR", false],
+    ["PIRATE", false],
+  ])("%s : %s", (role, attendu) => {
+    expect(peutSuivreEcheances(role as RoleUtilisateur)).toBe(attendu);
   });
 });

@@ -20,6 +20,13 @@ const ROLES_PAR_VUE: Record<VueApplication, readonly RoleUtilisateur[]> = {
   administration: ["ADMINISTRATEUR", "GERANT"],
 };
 
+// abonnements à échéance et expirés : « lecture financière » (exigerRole « lectureFinanciere »), fermée au Technicien SAV et à l'Apporteur
+const ROLES_ECHEANCES: readonly RoleUtilisateur[] = ["ADMINISTRATEUR", "GERANT", "CAISSIER", "COMPTABLE"];
+
+export function peutSuivreEcheances(role: RoleUtilisateur): boolean {
+  return ROLES_ECHEANCES.includes(role);
+}
+
 export function peutAccederVue(role: RoleUtilisateur, vue: VueApplication): boolean {
   return ROLES_PAR_VUE[vue].includes(role);
 }

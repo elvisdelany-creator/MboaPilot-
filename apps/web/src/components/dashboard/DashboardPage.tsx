@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { delaiEcheance, lienWhatsApp, messageAbonnementExpire, messageRelanceEcheance, peutAccederVue, type RoleUtilisateur, jourDouala, lireDateServeur } from "@mboapilot/shared";
+import { delaiEcheance, lienWhatsApp, messageAbonnementExpire, messageRelanceEcheance, peutAccederVue, peutSuivreEcheances, type RoleUtilisateur, jourDouala, lireDateServeur } from "@mboapilot/shared";
 import { AlertTriangle, History, PackageX, RotateCw, TrendingDown, Users } from "lucide-react";
 import {
   chargerAbonnementsExpires,
@@ -105,6 +105,8 @@ export function DashboardPage({ onNaviguer, onReabonnerDepuisAlerte, onReabonner
   const peutAnnulerVentes = peutGererStock;
   // « Réabonner » ouvre la Caisse : proposé seulement aux rôles qui y ont accès (2.5.1)
   const peutVendre = peutAccederVue(session!.utilisateur.role as RoleUtilisateur, "caisse");
+  // le Technicien SAV n'a pas la lecture financière : ni demandées ni affichées, elles restaient sur « Chargement… » après un refus
+  const peutVoirEcheances = peutSuivreEcheances(session!.utilisateur.role as RoleUtilisateur);
 
   const [alertes, setAlertes] = useState<AlerteEcheance[] | null>(null);
   // 4.4, 8.8 : liste dédiée « Abonnements expirés », filtrable par famille
@@ -165,6 +167,8 @@ export function DashboardPage({ onNaviguer, onReabonnerDepuisAlerte, onReabonner
   };
   const [idFamilleFiltre, setIdFamilleFiltre] = useState<number | null>(null);
   const [alertesStock, setAlertesStock] = useState<Produit[]>([]);
+  // « aucune alerte » ne s'affiche qu'une fois la liste réellement lue
+  const [stockLu, setStockLu] = useState(false);
   // 8.6, 9.3 : "État des stocks — produits à rotation lente"
   const [rotationLente, setRotationLente] = useState<ProduitRotationLente[]>([]);
   const [indicateurs, setIndicateurs] = useState<IndicateursJour | null>(null);
@@ -200,18 +204,28 @@ export function DashboardPage({ onNaviguer, onReabonnerDepuisAlerte, onReabonner
   function charger() {
     const aujourdHui = jourDouala();
 
-    // 8.6 : filtrable par famille, comme la liste des abonnements expirés ci-dessous
-    chargerAlertesEcheance(token, siteId, idFamilleFiltre ?? undefined)
-      .then(setAlertes)
-      .catch((e) => gererErreur(e, "Impossible de charger les alertes."));
-    // 4.4, 8.8 : liste dédiée « Abonnements expirés », filtrable par famille
-    chargerAbonnementsExpires(token, siteId, idFamilleFiltre ?? undefined)
-      .then(setAbonnementsExpires)
-      .catch(() => setAbonnementsExpires([]));
+    if (peutVoirEcheances) {
+      // 8.6 : filtrable par famille, comme la liste des abonnements expirés ci-dessous
+      chargerAlertesEcheance(token, siteId, idFamilleFiltre ?? undefined)
+        .then(setAlertes)
+        .catch((e) => gererErreur(e, "Impossible de charger les alertes."));
+      // 4.4, 8.8 : liste dédiée « Abonnements expirés », filtrable par famille
+      chargerAbonnementsExpires(token, siteId, idFamilleFiltre ?? undefined)
+        .then(setAbonnementsExpires)
+        .catch(() => setAbonnementsExpires([]));
+    }
     // 8.6, 9.3 : état des stocks — alertes de rupture
     chargerAlertesStock(token, siteId)
-      .then(setAlertesStock)
-      .catch(() => setAlertesStock([]));
+      .then((produits) => {
+        setAlertesStock(produits);
+        setStockLu(true);
+      })
+      .catch((e) => {
+        setAlertesStock([]);
+        setStockLu(false);
+        // sans les échéances, c'est le contenu principal de l'écran : son échec est dit, et une session expirée ramène à la connexion
+        if (!peutVoirEcheances) gererErreur(e, "Impossible de charger les alertes de stock.");
+      });
     // 8.6, 9.3 : état des stocks — produits à rotation lente
     chargerProduitsRotationLente(token, siteId)
       .then(setRotationLente)
@@ -530,118 +544,129 @@ export function DashboardPage({ onNaviguer, onReabonnerDepuisAlerte, onReabonner
 
           {peutPiloter && <ExportComptableCard />}
 
-          <div className="mb-4 flex items-center justify-between gap-2">
-            <h2 className="font-heading text-lg font-semibold text-foreground">Abonnements à échéance</h2>
-            {/* 8.6 : filtre par famille, partagé avec la liste « Abonnements expirés » ci-dessous */}
-            <Select
-              value={idFamilleFiltre !== null ? String(idFamilleFiltre) : "toutes"}
-              onValueChange={(v) => setIdFamilleFiltre(v === "toutes" ? null : Number(v))}
-            >
-              <SelectTrigger className="h-8 w-40 text-xs" aria-label="Filtrer par famille">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="toutes">Toutes les familles</SelectItem>
-                {familles.map((f) => (
-                  <SelectItem key={f.idFamille} value={String(f.idFamille)}>
-                    {f.libelle}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          {peutVoirEcheances && (
+            <>
+              <div className="mb-4 flex items-center justify-between gap-2">
+                <h2 className="font-heading text-lg font-semibold text-foreground">Abonnements à échéance</h2>
+                {/* 8.6 : filtre par famille, partagé avec la liste « Abonnements expirés » ci-dessous */}
+                <Select
+                  value={idFamilleFiltre !== null ? String(idFamilleFiltre) : "toutes"}
+                  onValueChange={(v) => setIdFamilleFiltre(v === "toutes" ? null : Number(v))}
+                >
+                  <SelectTrigger className="h-8 w-40 text-xs" aria-label="Filtrer par famille">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="toutes">Toutes les familles</SelectItem>
+                    {familles.map((f) => (
+                      <SelectItem key={f.idFamille} value={String(f.idFamille)}>
+                        {f.libelle}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
 
-          {alertes === null && <p className="text-sm text-muted-foreground">Chargement…</p>}
+              {alertes === null && <p className="text-sm text-muted-foreground">Chargement…</p>}
 
-          {alertes !== null && alertesTriees.length === 0 && (
-            <Card className="items-center gap-2 p-8 text-center">
-              <p className="font-medium text-card-foreground">Aucune échéance à traiter.</p>
-              <p className="text-sm text-muted-foreground">Les abonnements proches de l'échéance apparaîtront ici automatiquement.</p>
-            </Card>
-          )}
-
-          <ul className="space-y-2">
-            {alertesTriees.map((alerte) => (
-              <li key={alerte.numeroAbonnement}>
-                <Card className="flex-col items-stretch gap-3 p-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
-                  <div className="flex min-w-0 flex-wrap items-center gap-3">
-                    <span
-                      className={cn(
-                        "flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold",
-                        STYLE_JALON[alerte.rang]
-                      )}
-                    >
-                      <AlertTriangle className="size-3.5" aria-hidden="true" />
-                      J-{alerte.jalon}
-                    </span>
-                    <div>
-                      <p className="font-medium text-card-foreground">
-                        {alerte.abonne.prenom} {alerte.abonne.nom}
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        {libelleEcheance(alerte.joursRestants)} · {alerte.formule.libelle} · {alerte.abonne.telephone}
-                      </p>
-                      {derniereRelance(alerte.numeroAbonnement, alerte.derniereRelanceWhatsApp) && (
-                        <p className="text-xs text-muted-foreground">Relancé sur WhatsApp le {derniereRelance(alerte.numeroAbonnement, alerte.derniereRelanceWhatsApp)}</p>
-                      )}
-                    </div>
-                  </div>
-                  <div className="flex shrink-0 flex-wrap items-center gap-2">
-                    {boutonRelanceEcheance(alerte)}
-                    {peutVendre && (
-                      <Button className="shrink-0 cursor-pointer" onClick={() => onReabonnerDepuisAlerte(alerte)}>
-                        Réabonner
-                      </Button>
-                    )}
-                  </div>
+              {alertes !== null && alertesTriees.length === 0 && (
+                <Card className="items-center gap-2 p-8 text-center">
+                  <p className="font-medium text-card-foreground">Aucune échéance à traiter.</p>
+                  <p className="text-sm text-muted-foreground">Les abonnements proches de l'échéance apparaîtront ici automatiquement.</p>
                 </Card>
-              </li>
-            ))}
-          </ul>
+              )}
 
-          <div className="mt-8">
-            <h2 className="mb-4 font-heading text-lg font-semibold text-foreground">Abonnements expirés</h2>
-
-            {abonnementsExpires.length === 0 && (
-              <Card className="items-center gap-2 p-8 text-center">
-                <p className="font-medium text-card-foreground">Aucun abonnement expiré à reconquérir.</p>
-              </Card>
-            )}
-
-            <ul className="space-y-2">
-              {abonnementsExpires.map((a) => (
-                <li key={a.numeroAbonnement}>
-                  <Card className="flex-col items-stretch gap-3 p-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
-                    <div className="flex min-w-0 flex-wrap items-center gap-3">
-                      <span className="flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-xs font-semibold text-muted-foreground">
-                        <History className="size-3.5" aria-hidden="true" />
-                        Expiré depuis {a.joursDepuisExpiration} j
-                      </span>
-                      <div>
-                        <p className="font-medium text-card-foreground">
-                          {a.abonne.prenom} {a.abonne.nom}
-                        </p>
-                        <p className="text-sm text-muted-foreground">
-                          {a.formule.libelle} · {a.abonne.telephone}
-                        </p>
-                        {derniereRelance(a.numeroAbonnement, a.derniereRelanceWhatsApp) && (
-                          <p className="text-xs text-muted-foreground">Relancé sur WhatsApp le {derniereRelance(a.numeroAbonnement, a.derniereRelanceWhatsApp)}</p>
+              <ul className="space-y-2">
+                {alertesTriees.map((alerte) => (
+                  <li key={alerte.numeroAbonnement}>
+                    <Card className="flex-col items-stretch gap-3 p-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+                      <div className="flex min-w-0 flex-wrap items-center gap-3">
+                        <span
+                          className={cn(
+                            "flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold",
+                            STYLE_JALON[alerte.rang]
+                          )}
+                        >
+                          <AlertTriangle className="size-3.5" aria-hidden="true" />
+                          J-{alerte.jalon}
+                        </span>
+                        <div>
+                          <p className="font-medium text-card-foreground">
+                            {alerte.abonne.prenom} {alerte.abonne.nom}
+                          </p>
+                          <p className="text-sm text-muted-foreground">
+                            {libelleEcheance(alerte.joursRestants)} · {alerte.formule.libelle} · {alerte.abonne.telephone}
+                          </p>
+                          {derniereRelance(alerte.numeroAbonnement, alerte.derniereRelanceWhatsApp) && (
+                            <p className="text-xs text-muted-foreground">Relancé sur WhatsApp le {derniereRelance(alerte.numeroAbonnement, alerte.derniereRelanceWhatsApp)}</p>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex shrink-0 flex-wrap items-center gap-2">
+                        {boutonRelanceEcheance(alerte)}
+                        {peutVendre && (
+                          <Button className="shrink-0 cursor-pointer" onClick={() => onReabonnerDepuisAlerte(alerte)}>
+                            Réabonner
+                          </Button>
                         )}
                       </div>
-                    </div>
-                    <div className="flex shrink-0 flex-wrap items-center gap-2">
-                      {boutonRelanceExpire(a)}
-                      {peutVendre && (
-                        <Button className="shrink-0 cursor-pointer" onClick={() => onReabonnerDepuisExpire(a)}>
-                          Réabonner
-                        </Button>
-                      )}
-                    </div>
+                    </Card>
+                  </li>
+                ))}
+              </ul>
+
+              <div className="mt-8">
+                <h2 className="mb-4 font-heading text-lg font-semibold text-foreground">Abonnements expirés</h2>
+
+                {abonnementsExpires.length === 0 && (
+                  <Card className="items-center gap-2 p-8 text-center">
+                    <p className="font-medium text-card-foreground">Aucun abonnement expiré à reconquérir.</p>
                   </Card>
-                </li>
-              ))}
-            </ul>
-          </div>
+                )}
+
+                <ul className="space-y-2">
+                  {abonnementsExpires.map((a) => (
+                    <li key={a.numeroAbonnement}>
+                      <Card className="flex-col items-stretch gap-3 p-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+                        <div className="flex min-w-0 flex-wrap items-center gap-3">
+                          <span className="flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-xs font-semibold text-muted-foreground">
+                            <History className="size-3.5" aria-hidden="true" />
+                            Expiré depuis {a.joursDepuisExpiration} j
+                          </span>
+                          <div>
+                            <p className="font-medium text-card-foreground">
+                              {a.abonne.prenom} {a.abonne.nom}
+                            </p>
+                            <p className="text-sm text-muted-foreground">
+                              {a.formule.libelle} · {a.abonne.telephone}
+                            </p>
+                            {derniereRelance(a.numeroAbonnement, a.derniereRelanceWhatsApp) && (
+                              <p className="text-xs text-muted-foreground">Relancé sur WhatsApp le {derniereRelance(a.numeroAbonnement, a.derniereRelanceWhatsApp)}</p>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex shrink-0 flex-wrap items-center gap-2">
+                          {boutonRelanceExpire(a)}
+                          {peutVendre && (
+                            <Button className="shrink-0 cursor-pointer" onClick={() => onReabonnerDepuisExpire(a)}>
+                              Réabonner
+                            </Button>
+                          )}
+                        </div>
+                      </Card>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </>
+          )}
+
+          {!peutVoirEcheances && stockLu && alertesStock.length === 0 && rotationLente.length === 0 && (
+            <Card className="items-center gap-2 p-8 text-center">
+              <p className="font-medium text-card-foreground">Aucune alerte de stock pour le moment.</p>
+              <p className="text-sm text-muted-foreground">Les dossiers de réparation sont dans l'onglet SAV.</p>
+            </Card>
+          )}
 
           {alertesStock.length > 0 && (
             <div className="mt-8">

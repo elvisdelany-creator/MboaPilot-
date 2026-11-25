@@ -173,3 +173,10 @@
     transition-duration: 0.01ms !important;
   }
 }
+
+/* sous le bandeau de licence, une page « haute comme la fenêtre » prend la hauteur qui reste (voir App.tsx) ; l'impression n'est pas concernée */
+@media screen {
+  .zone-page > .h-dvh {
+    height: 100%;
+  }
+}

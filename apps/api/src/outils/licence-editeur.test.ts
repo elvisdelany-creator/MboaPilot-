@@ -8,6 +8,7 @@ import { lireCle } from "../modules/licence/cle-renouvellement.js";
 
 // Outil de l'éditeur : crée sa paire de clés (une fois) puis émet les clés de renouvellement. La clé privée ne doit jamais se retrouver dans
 // le dépôt ni être écrasée par mégarde : sans elle, plus aucune boutique ne peut être renouvelée.
+const INSTALLATION = "1b4e28ba-2fa1-4d3b-a3f5-ef19b5a0c9d2";
 let dossier: string;
 let fichierPrive: string;
 let fichierPublic: string;
@@ -66,37 +67,51 @@ describe("outil de licence : émettre une clé", () => {
   });
 
   it("produit une clé que l'application accepte, pour l'installation et l'échéance demandées", () => {
-    executer("emettre", "--cle", fichierPrive, "--installation", "abc-123", "--expiration", "2027-12-31", "--palier", "PRO");
+    executer("emettre", "--cle", fichierPrive, "--installation", INSTALLATION, "--expiration", "2027-12-31", "--palier", "PRO");
 
     const cle = sorties.find((l) => l.startsWith("MBOA1."))!;
-    expect(lireCle(cle, clePubliqueInscrite())).toEqual({ installation: "abc-123", expiration: "2027-12-31", palier: "PRO", emise: "2026-11-25" });
+    expect(lireCle(cle, clePubliqueInscrite())).toEqual({ installation: INSTALLATION, expiration: "2027-12-31", palier: "PRO", emise: "2026-11-25" });
   });
 
-  it("formule Essentiel par défaut", () => {
-    executer("emettre", "--cle", fichierPrive, "--installation", "abc-123", "--expiration", "2027-12-31");
-    expect(lireCle(sorties.find((l) => l.startsWith("MBOA1."))!, clePubliqueInscrite()).palier).toBe("ESSENTIEL");
+  it("date l'émission à l'instant près, pour départager deux clés du même jour", () => {
+    executerOutilLicence(["emettre", "--cle", fichierPrive, "--installation", INSTALLATION.toUpperCase(), "--expiration", "2027-12-31", "--palier", "reseau"], {
+      fichierClePublique: fichierPublic,
+      ecrire: (ligne) => sorties.push(ligne),
+      aujourdHui: "2026-11-25",
+      horodatage: "2026-11-25T09:30:00.000Z",
+    });
+    expect(lireCle(sorties.find((l) => l.startsWith("MBOA1."))!, clePubliqueInscrite())).toMatchObject({ installation: INSTALLATION, palier: "RESEAU", emise: "2026-11-25T09:30:00.000Z" });
+  });
+
+  it("accepte une échéance à dix ans tout juste", () => {
+    executer("emettre", "--cle", fichierPrive, "--installation", INSTALLATION, "--expiration", "2036-11-25", "--palier", "PRO");
+    expect(sorties.some((l) => l.startsWith("MBOA1."))).toBe(true);
   });
 
   it.each([
     [["--installation", "abc", "--expiration", "2027-12-31"], /--cle/],
     [["--cle", "PRIVE", "--expiration", "2027-12-31"], /--installation/],
     [["--cle", "PRIVE", "--installation", "abc"], /--expiration/],
-    [["--cle", "PRIVE", "--installation", "abc", "--expiration", "31/12/2027"], /AAAA-MM-JJ/],
-    [["--cle", "PRIVE", "--installation", "abc", "--expiration", "2026-01-01"], /passée/],
-    [["--cle", "PRIVE", "--installation", "abc", "--expiration", "2027-12-31", "--palier", "OR"], /formule/i],
+    [["--cle", "PRIVE", "--installation", INSTALLATION, "--expiration", "31/12/2027", "--palier", "PRO"], /réelle au format/],
+    [["--cle", "PRIVE", "--installation", INSTALLATION, "--expiration", "2026-01-01", "--palier", "PRO"], /passée/],
+    [["--cle", "PRIVE", "--installation", INSTALLATION, "--expiration", "2027-12-31", "--palier", "OR"], /formule/i],
+    [["--cle", "PRIVE", "--installation", INSTALLATION, "--expiration", "2027-12-31"], /--palier/],
+    [["--cle", "PRIVE", "--installation", INSTALLATION.slice(0, -4), "--expiration", "2027-12-31", "--palier", "PRO"], /identifiant d'installation est incomplet/],
+    [["--cle", "PRIVE", "--installation", "ma-boutique", "--expiration", "2027-12-31", "--palier", "PRO"], /identifiant d'installation/],
+    [["--cle", "PRIVE", "--installation", INSTALLATION, "--expiration", "2040-01-01", "--palier", "PRO"], /dépasse 10 ans/],
   ])("refuse une demande incomplète ou fausse (%s)", (args, message) => {
     expect(() => executer("emettre", ...args.map((a) => (a === "PRIVE" ? fichierPrive : a)))).toThrow(message);
     expect(sorties.some((l) => l.startsWith("MBOA1."))).toBe(false);
   });
 
   it("dit simplement qu'un fichier de clé privée est introuvable", () => {
-    expect(() => executer("emettre", "--cle", join(dossier, "absent.pem"), "--installation", "abc", "--expiration", "2027-12-31")).toThrow(/Clé privée introuvable.*absent\.pem/);
+    expect(() => executer("emettre", "--cle", join(dossier, "absent.pem"), "--installation", INSTALLATION, "--expiration", "2027-12-31", "--palier", "PRO")).toThrow(/Clé privée introuvable.*absent\.pem/);
   });
 
   // une paire régénérée sans mettre à jour l'application produirait des clés que personne n'accepte
   it("prévient quand la clé privée ne correspond pas à la clé publique inscrite", () => {
     executer("paire", "--sortie", join(dossier, "nouvelle.pem"), "--remplacer");
-    expect(() => executer("emettre", "--cle", fichierPrive, "--installation", "abc", "--expiration", "2027-12-31")).toThrow(/ne correspond pas/);
+    expect(() => executer("emettre", "--cle", fichierPrive, "--installation", INSTALLATION, "--expiration", "2027-12-31", "--palier", "PRO")).toThrow(/ne correspond pas/);
   });
 
   it("une commande inconnue rappelle le mode d'emploi", () => {

@@ -30,15 +30,10 @@ process.env.MBOAPILOT_HOTE ??= "0.0.0.0";
 const { db } = await import("./db/client.js");
 const { appliquerMigrations } = await import("./db/appliquer-migrations.js");
 const { peuplerDemo } = await import("./demo/seed-demo.js");
-const { revaliderLicence } = await import("./modules/licence/licence.service.js");
 
 appliquerMigrations(db);
 peuplerDemo(db);
 console.log(`[MboaPilot démo] Boutique fictive prête dans ${dossierDemo}`);
-
-// la licence passe en lecture seule après 21 jours sans revalidation, qui n'a lieu qu'au démarrage : une démo qui tourne longtemps la
-// renouvelle elle-même
-setInterval(() => revaliderLicence(db, new Date().toISOString()), 12 * 3600 * 1000).unref();
 
 const heures = Number(process.env.MBOAPILOT_DEMO_REDEMARRAGE_HEURES ?? 0);
 if (Number.isFinite(heures) && heures > 0) {

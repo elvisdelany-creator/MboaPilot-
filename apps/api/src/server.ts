@@ -6,7 +6,7 @@ import { obtenirSecretJwt } from "./config/jwt-secret.js";
 import { obtenirCleChiffrement } from "./config/encryption-key.js";
 import { planifierJobQuotidien } from "./jobs/planificateur.js";
 import { planifierSauvegardeQuotidienne } from "./jobs/planificateur-sauvegarde.js";
-import { revaliderLicence } from "./modules/licence/licence.service.js";
+import { planifierRevalidationLicence } from "./jobs/planificateur-licence.js";
 import { CLE_PUBLIQUE_EDITEUR } from "./modules/licence/cle-publique-editeur.js";
 import { dossierSauvegardes as dossierSauvegardesConfigure } from "./config/chemins.js";
 import { resoudreDossierInterfaceWeb } from "./lib/interface-web.js";
@@ -56,10 +56,9 @@ app
     console.log(`MboaPilot API en écoute sur http://${hote}:${port}`);
     if (modeHeberge) console.log("Mode hébergé actif : HTTPS obligatoire (via le proxy), plafonds de débit et verrou de connexion par adresse.");
     console.log(dossierInterfaceWeb ? `Interface web servie depuis ${dossierInterfaceWeb} : ouvrez http://${hote === "0.0.0.0" ? "127.0.0.1" : hote}:${port}` : "Interface web non construite (apps/web/dist absent) : lancez `npm run build` dans apps/web, ou le serveur de développement.");
-    // 10.4 étape 2 : tentative de revalidation "au démarrage" — simulée en
-    // l'absence de serveur de licence éditeur réel, réussit systématiquement
-    // et repousse d'autant le délai de grâce hors ligne (21 j).
-    revaliderLicence(db, new Date().toISOString());
+    // 10.4 étape 2 : revalidation au démarrage puis chaque jour — simulée en l'absence de serveur de licence éditeur réel, elle réussit
+    // systématiquement et repousse d'autant le délai de grâce hors ligne (21 j)
+    planifierRevalidationLicence(db);
     planifierJobQuotidien(db);
     planifierSauvegardeQuotidienne(db, dossierSauvegardes);
     planifierCheckpoint(db);

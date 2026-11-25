@@ -13,7 +13,13 @@ export interface VerrouParAdresse {
   adresse: (request: FastifyRequest) => string;
 }
 
-export function registerAuthRoutes(app: FastifyInstance, db: Db, authRequis: Guard, optionsAuthentification: OptionsAuthentification = {}, verrouParAdresse?: VerrouParAdresse) {
+// 10.1 : places de la formule (voir modules/licence/places.ts) ; `prendrePlace` renvoie le message de refus, ou null
+export interface PlacesConnexion {
+  prendrePlace: (utilisateur: { idUser: number; role: string }) => string | null;
+  libererPlace: (idUser: number) => void;
+}
+
+export function registerAuthRoutes(app: FastifyInstance, db: Db, authRequis: Guard, optionsAuthentification: OptionsAuthentification = {}, verrouParAdresse?: VerrouParAdresse, places?: PlacesConnexion) {
   // Profil COURANT de l'appelant, relu en base : le rôle, le site et l'état du compte peuvent changer
   // pendant une session de 12 h, alors que le navigateur garde ceux reçus à la connexion. Sans jamais
   // exposer le hash du mot de passe.
@@ -28,6 +34,12 @@ export function registerAuthRoutes(app: FastifyInstance, db: Db, authRequis: Gua
   // changé depuis ne se renouvellent pas. L'identité vient du jeton, jamais du corps de la requête.
   app.post("/api/v1/auth/renouveler", { preHandler: [authRequis] }, async (request, reply) => {
     reply.code(200).send({ token: signerSession(app, db, request.user.idUser) });
+  });
+
+  // 10.1 : la déconnexion libère la place occupée. Le jeton, lui, n'est pas conservé par le serveur : le navigateur l'efface.
+  app.post("/api/v1/auth/deconnexion", { preHandler: [authRequis] }, async (request, reply) => {
+    places?.libererPlace(request.user.idUser);
+    reply.code(200).send({ ok: true });
   });
 
   // 2.5.1 : changement de SON propre mot de passe (le mot de passe actuel est revérifié) — jamais celui d'un autre :
@@ -66,6 +78,12 @@ export function registerAuthRoutes(app: FastifyInstance, db: Db, authRequis: Gua
         throw echec;
       }
       if (cle && verrouParAdresse) verrouParAdresse.verrou.reinitialiser(cle);
+      // mot de passe juste mais plus de place dans la formule : ce n'est pas un échec de connexion
+      const refus = places?.prendrePlace(utilisateur);
+      if (refus) {
+        reply.code(403).send({ erreur: refus });
+        return;
+      }
       const token = signerSession(app, db, utilisateur.idUser);
       reply.code(200).send({ token, utilisateur });
     } catch (erreur) {

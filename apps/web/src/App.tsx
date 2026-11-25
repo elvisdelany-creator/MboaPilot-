@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { peutAccederVue, vuesAccessibles, type RoleUtilisateur } from "@mboapilot/shared";
 import { Toaster } from "@/components/ui/sonner";
 import { AuthProvider, useAuth } from "@/lib/auth-context";
@@ -52,6 +52,17 @@ function PorteEntree() {
   return etat === "installer" ? <InstallationPage /> : <LoginPage />;
 }
 
+// Le bandeau de licence prend sa place en haut de l'écran et la page se contente du reste : empilé au-dessus d'une page haute comme la fenêtre,
+// il la rallongeait d'autant (second défilement, bouton de validation repoussé sous l'écran). À l'impression, rien n'est contraint.
+function Coquille({ token, children }: { token: string; children: ReactNode }) {
+  return (
+    <div className="flex h-dvh flex-col print:block print:h-auto">
+      <LicenceBanner token={token} />
+      <div className="zone-page min-h-0 flex-1">{children}</div>
+    </div>
+  );
+}
+
 function Contenu() {
   const { session } = useAuth();
   const [vueDemandee, setVue] = useState<EtatVue>({ nom: "dashboard" });
@@ -62,10 +73,9 @@ function Contenu() {
   // routes sont de toute façon bloquées côté serveur, on ne les propose même pas.
   if (session.utilisateur.role === "APPORTEUR") {
     return (
-      <>
-        <LicenceBanner token={session.token} />
+      <Coquille token={session.token}>
         <ApporteurFichePage />
-      </>
+      </Coquille>
     );
   }
 
@@ -135,12 +145,7 @@ function Contenu() {
     );
   }
 
-  return (
-    <>
-      <LicenceBanner token={session.token} />
-      {contenuPage}
-    </>
-  );
+  return <Coquille token={session.token}>{contenuPage}</Coquille>;
 }
 
 // remonte Contenu à chaque changement d'utilisateur connecté (déconnexion

@@ -78,6 +78,8 @@ export const licence = sqliteTable("licence", {
   // dernière revalidation périodique réussie auprès du serveur de licence
   // (simulée) — sert de point de départ au délai de grâce hors ligne (21 j)
   derniereRevalidationReussie: text("derniere_revalidation_reussie").notNull(),
+  // date d'émission de la dernière clé de renouvellement appliquée ; null : échéance d'essai ou saisie à la main
+  cleEmiseLe: text("cle_emise_le"),
 });
 
 export const site = sqliteTable("site", {

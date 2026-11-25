@@ -30,7 +30,7 @@ tests automatiques** :
 | Des connexions simultanées figent le petit serveur (chaque vérification de mot de passe coûte ~2 s) et l'hébergeur le redémarre | La vérification est **asynchrone** : le serveur répond aux autres requêtes, sonde de santé comprise, pendant le calcul |
 | Remplir le disque avec des photos ou des imports | Les envois de fichiers sont plafonnés (ci-dessus) et limités à 1 Mo chacun |
 | Navigateur qui retombe en HTTP | En-tête HSTS ajouté quand la requête arrive en HTTPS |
-| Licence qui passe en lecture seule après 21 jours | Revalidée automatiquement toutes les 12 h |
+| Licence qui passe en lecture seule après 21 jours | Revalidée automatiquement chaque jour, comme sur un poste de boutique |
 | Effacer par erreur de vraies données | Le lanceur n'efface qu'un dossier dont le nom contient « demo », et n'utilise jamais le dossier des vraies données |
 
 À savoir : un visiteur peut **modifier le catalogue, vendre, encaisser, clôturer la caisse**. C'est voulu (c'est ce

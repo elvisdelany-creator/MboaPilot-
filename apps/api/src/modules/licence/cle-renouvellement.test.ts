@@ -103,10 +103,10 @@ describe("appliquer une clé de renouvellement", () => {
     expect(() => appliquer(cleValide({ expiration: "2026-11-25" }))).toThrow(/déjà expirée/);
   });
 
-  it("refuse de rejouer une clé, ou d'appliquer une clé qui ne prolonge pas", () => {
+  it("refuse de rejouer une clé, ou d'appliquer une clé émise avant elle", () => {
     appliquer(cleValide());
-    expect(() => appliquer(cleValide())).toThrow(/ne prolonge pas/);
-    expect(() => appliquer(cleValide({ expiration: "2027-01-01" }))).toThrow(/ne prolonge pas.*2028-06-30/);
+    expect(() => appliquer(cleValide())).toThrow(/déjà appliquée/);
+    expect(() => appliquer(cleValide({ expiration: "2027-01-01", emise: "2026-11-24" }))).toThrow(/déjà appliquée/);
     expect(licence().dateExpirationAbonnement).toBe("2028-06-30");
     expect(audits()).toHaveLength(1);
   });
@@ -134,13 +134,13 @@ describe("routes de la licence", () => {
 
   it("avec la clé publique de l'éditeur : la saisie d'une date est refusée, la clé prolonge, même en lecture seule", async () => {
     const { appeler } = await ouvrir(editeur.publique);
-    db.update(schema.licence).set({ dateExpirationAbonnement: "2020-01-01" }).run();
+    db.update(schema.licence).set({ dateExpirationAbonnement: "2026-10-01" }).run();
 
     expect((await appeler("GET", "/api/v1/licence/etat")).json()).toMatchObject({ renouvellementParCle: true, empreinteInstallation: installation, etat: "DEGRADE" });
     const parDate = await appeler("PUT", "/api/v1/licence/expiration", { dateExpiration: dansJours(3000) });
     expect(parDate.statusCode).toBe(400);
     expect(parDate.json().erreur).toMatch(/clé de renouvellement/);
-    expect(licence().dateExpirationAbonnement).toBe("2020-01-01");
+    expect(licence().dateExpirationAbonnement).toBe("2026-10-01");
 
     const parCle = await appeler("POST", "/api/v1/licence/cle", { cle: cleValide({ expiration: dansJours(365) }) });
     expect(parCle.statusCode).toBe(200);

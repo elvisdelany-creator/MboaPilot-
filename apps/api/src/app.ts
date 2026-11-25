@@ -26,7 +26,9 @@ import { registerSauvegardeRoutes } from "./modules/sauvegarde/sauvegarde.routes
 import { registerAvoirRoutes } from "./modules/factures/avoir.routes.js";
 import { registerLicenceRoutes } from "./modules/licence/licence.routes.js";
 import { registerInstallationRoutes } from "./modules/installation/installation.routes.js";
-import { obtenirOuCreerLicence, calculerEtatLicence } from "./modules/licence/licence.service.js";
+import { obtenirOuCreerLicence, calculerEtatLicence, plafonnerEcheanceSansCle } from "./modules/licence/licence.service.js";
+import { limitesFormule, messagePlacesOccupees, refusFormule } from "./modules/licence/formules.js";
+import { creerRegistrePlaces } from "./modules/licence/places.js";
 import { messageModeDegrade } from "@mboapilot/shared";
 import { registerClotureCaisseRoutes } from "./modules/caisse/cloture-caisse.routes.js";
 import { registerImpressionRoutes } from "./modules/impression/impression.routes.js";
@@ -108,6 +110,10 @@ const PREFIXES_ECRITURE_TOUJOURS_AUTORISES = ["/api/v1/auth", "/api/v1/licence",
 // de paiement (elles restent refusées) : on n'ajoute rien à ce qui s'est passé, on le constate.
 const CONFIRMATION_PAIEMENT_MOBILE = /^\/api\/v1\/paiements-mobiles\/\d+\/actualiser$/;
 
+// 10.1 : ce qu'un écran ouvert fait tout seul (profil relu, session renouvelée, état de la licence) et la gestion de la licence ou de la
+// déconnexion ne prennent pas une des places de la formule Essentiel
+const ROUTES_SANS_PLACE = new Set(["/api/v1/auth/moi", "/api/v1/auth/renouveler", "/api/v1/auth/deconnexion", "/api/v1/licence/etat", "/api/v1/licence/revalider", "/api/v1/licence/cle"]);
+
 // Politique de contenu de la page de l'interface : tout vient du poste lui-même. Les styles en ligne sont tolérés (attributs
 // `style` de React, feuille d'impression) ; le QR s'affiche en data:, les logos et photos en blob:. Aucun script extérieur,
 // aucun objet, aucun affichage de l'application dans le cadre d'un autre site.
@@ -177,7 +183,18 @@ export function buildApp(db: Db, options: BuildAppOptions) {
   app.setErrorHandler(gestionnaireErreurFastify);
   app.setNotFoundHandler(options.dossierInterfaceWeb ? creerGestionnaireInterfaceWeb(options.dossierInterfaceWeb) : gestionnaireRouteInconnue);
   registerAuthPlugin(app, options.jwtSecret);
-  const authRequis = creerAuthRequis(db);
+  // 10.1 : les limites des formules ne valent qu'avec des clés de renouvellement (voir modules/licence/formules.ts)
+  const formulesAppliquees = options.clePubliqueLicence !== undefined && options.clePubliqueLicence !== "";
+  const limitesLicence = () => limitesFormule(obtenirOuCreerLicence(db, new Date().toISOString()).palier);
+  const places = creerRegistrePlaces();
+  // l'administrateur entre toujours : c'est lui qui renouvelle la licence
+  const prendrePlace = (utilisateur: { idUser: number; role: string }): string | null => {
+    if (!formulesAppliquees) return null;
+    const maximum = limitesLicence().personnesConnectees;
+    if (!Number.isFinite(maximum) || places.occuper(utilisateur.idUser, maximum, utilisateur.role === "ADMINISTRATEUR")) return null;
+    return messagePlacesOccupees(maximum);
+  };
+  const authRequis = creerAuthRequis(db, (utilisateur, route) => (ROUTES_SANS_PLACE.has(route) ? null : prendrePlace(utilisateur)));
   // 5.10 : téléversement des photos optionnelles du dossier SAV (multipart/form-data)
   app.register(multipart);
   // mode hébergé : le verrou par compte (le même pour tout le monde) laisserait n'importe qui bloquer l'administrateur à distance ; il cède la
@@ -188,6 +205,7 @@ export function buildApp(db: Db, options: BuildAppOptions) {
     authRequis,
     { sansVerrouillage: options.modeDemo === true || options.modeHeberge === true },
     options.modeHeberge ? { verrou: options.verrouConnexion ?? creerVerrouConnexion(), adresse: (request) => adresseDuVisiteur(request.headers, request.ip, sautsProxy) } : undefined,
+    { prendrePlace, libererPlace: (idUser) => places.liberer(idUser) },
   );
   registerInstallationRoutes(app, db, { refuserInstallation: options.modeHeberge === true });
   const fournisseurPaiementMobile = options.fournisseurPaiementMobile ?? new SimulateurOrangeMoney();
@@ -206,8 +224,15 @@ export function buildApp(db: Db, options: BuildAppOptions) {
     const licence = obtenirOuCreerLicence(db, new Date().toISOString());
     const statut = calculerEtatLicence(licence, new Date().toISOString());
     if (statut.etat === "DEGRADE") {
-      reply.code(403).send({ erreur: messageModeDegrade(statut) });
+      return reply.code(403).send({ erreur: messageModeDegrade(statut) });
     }
+  });
+
+  // 10.1 : ce qui dépasse la formule souscrite est refusé, consultations d'export comptable comprises
+  app.addHook("preHandler", async (request, reply) => {
+    if (!formulesAppliquees || reply.sent) return;
+    const refus = refusFormule(db, limitesLicence(), request);
+    if (refus) return reply.code(403).send({ erreur: refus });
   });
 
   // 2.5.1 : seuls Administrateur, Gérant et Caissier peuvent réaliser une vente
@@ -286,6 +311,8 @@ export function buildApp(db: Db, options: BuildAppOptions) {
   registerAvoirRoutes(app, db, { authRequis, ventes, gestionAvoirs, lectureFinanciere, gestionRapprochement });
   // 10.4 : état de la licence éditeur, consultable par tout utilisateur connecté
   registerLicenceRoutes(app, db, { authRequis, admin }, options.clePubliqueLicence);
+  // une clé publique illisible vient d'être refusée par les routes ci-dessus : le plafonnement n'a lieu qu'avec une clé valable
+  if (formulesAppliquees) plafonnerEcheanceSansCle(db, new Date().toISOString());
   // 13.1 : clôture de caisse quotidienne (fond d'ouverture, comptage, écart théorique/réel)
   // la sauvegarde de fin de journée n'a lieu que si le dossier est fourni (le serveur le fait) : un test qui ne le donne pas n'écrit jamais dans les vraies données
   registerClotureCaisseRoutes(app, db, { authRequis, ventes, validationCloture }, { dossierSauvegardes: options.dossierSauvegardes });

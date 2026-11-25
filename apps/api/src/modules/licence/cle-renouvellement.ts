@@ -7,12 +7,16 @@ import { createPrivateKey, createPublicKey, sign, verify, type KeyObject } from 
 export const PREFIXE_CLE = "MBOA1";
 export const PALIERS_LICENCE = ["ESSENTIEL", "PRO", "RESEAU"] as const;
 const LONGUEUR_MAX_CLE = 2000;
+const LONGUEUR_MAX_COLLEE = 10_000; // la clé et le message qui l'accompagne
+export const DUREE_MAX_PROLONGATION_JOURS = 3653; // 10 ans
+// la clé au milieu d'un texte : le contenu commence toujours par « eyJ » (un objet JSON), la signature Ed25519 fait toujours 86 caractères
+const MOTIF_CLE_DANS_UN_TEXTE = /MBOA1\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]{86}/;
 
 export interface ContenuCle {
   installation: string; // empreinte de l'installation à laquelle la clé est destinée
   expiration: string; // AAAA-MM-JJ, dernier jour couvert
   palier: string;
-  emise: string; // AAAA-MM-JJ
+  emise: string; // date, ou date et heure, d'émission : la clé la plus récente l'emporte
 }
 
 const ILLISIBLE = `La clé de renouvellement est illisible : collez-la en entier (elle commence par ${PREFIXE_CLE}.)`;
@@ -35,8 +39,10 @@ export function emettreCle(clePriveePem: string, contenu: ContenuCle): string {
 // vérifie la signature puis la forme du contenu ; les règles métier (installation, dates, formule) sont à l'appelant
 export function lireCle(texte: unknown, clePublique: string): ContenuCle {
   if (typeof texte !== "string" || texte.trim() === "") throw new Error("La clé de renouvellement est obligatoire");
-  // collée depuis un message ou un courriel, elle arrive souvent coupée en plusieurs lignes
-  const cle = texte.replace(/\s+/g, "");
+  // collée depuis un message ou un courriel, elle arrive coupée en plusieurs lignes, semée de caractères invisibles, entre guillemets ou
+  // avec le texte qui l'entoure
+  const compact = texte.slice(0, LONGUEUR_MAX_COLLEE).replace(/[\s\u200B-\u200D\u2060\uFEFF]+/g, "");
+  const cle = MOTIF_CLE_DANS_UN_TEXTE.exec(compact)?.[0] ?? compact;
   const morceaux = cle.split(".");
   if (cle.length > LONGUEUR_MAX_CLE || morceaux.length !== 3 || morceaux[0] !== PREFIXE_CLE) throw new Error(ILLISIBLE);
 

@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
-import { chargerProfilCourant, ErreurAuthentification, login as loginRequete, renouvelerSessionRequete } from "./api";
+import { chargerProfilCourant, deconnexionRequete, ErreurAuthentification, login as loginRequete, renouvelerSessionRequete } from "./api";
 import type { Utilisateur } from "./types";
 
 const CLE_SESSION = "mboapilot.session";
@@ -51,6 +51,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   function deconnecter() {
+    // sans attendre la réponse : la déconnexion à l'écran ne dépend pas du serveur (injoignable, ou session déjà expirée)
+    if (session) deconnexionRequete(session.token).catch(() => {});
     setSession(null);
     localStorage.removeItem(CLE_SESSION);
   }

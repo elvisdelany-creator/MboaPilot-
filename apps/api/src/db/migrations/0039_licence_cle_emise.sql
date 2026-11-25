@@ -1,0 +1,1 @@
+ALTER TABLE `licence` ADD `cle_emise_le` text;

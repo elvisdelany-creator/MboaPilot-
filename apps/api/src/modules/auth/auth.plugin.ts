@@ -56,7 +56,8 @@ const METHODES_ECRITURE = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 // sont toujours relus en base à chaque requête, jamais fait confiance à la
 // valeur figée dans le jeton — sinon désactiver un compte ou changer son
 // rôle (Administration) n'aurait aucun effet tant que le jeton n'expire pas.
-export function creerAuthRequis(db: Db) {
+// `refuserAcces` : contrôle appliqué à un utilisateur authentifié (places de la formule, 10.1) ; renvoie le message de refus, ou null.
+export function creerAuthRequis(db: Db, refuserAcces?: (utilisateur: { idUser: number; role: Role }, route: string) => string | null) {
   return async function authRequis(request: FastifyRequest, reply: FastifyReply) {
     try {
       await request.jwtVerify();
@@ -82,6 +83,13 @@ export function creerAuthRequis(db: Db) {
       role: utilisateurCourant.role,
       idApporteur: utilisateurCourant.idApporteur,
     };
+
+    const refus = refuserAcces?.(request.user, request.routeOptions.url ?? "");
+    if (refus) {
+      // « await » : la suite (rôle, traitement) ne doit pas s'exécuter pendant que le refus part
+      await reply.code(403).send({ erreur: refus });
+      return;
+    }
 
     // 11.5 : l'auteur d'une action (journal d'audit, « créé par », paiements)
     // est toujours l'utilisateur authentifié — un userId fourni par le client,

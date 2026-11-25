@@ -88,6 +88,11 @@ export async function login(identifiant: string, motDePasse: string): Promise<{ 
   return lireJson(reponse);
 }
 
+// 10.1 : libère la place occupée par cet utilisateur (formule Essentiel : deux personnes connectées en même temps)
+export async function deconnexionRequete(token: string): Promise<void> {
+  await appelerServeur(`${BASE}/auth/deconnexion`, { method: "POST", headers: headersAuth(token) });
+}
+
 // Première installation : tant qu'aucun compte n'existe, l'application propose l'assistant d'installation (routes publiques)
 export async function chargerEtatInstallation(): Promise<{ installee: boolean }> {
   const reponse = await appelerServeur(`${BASE}/installation/etat`);

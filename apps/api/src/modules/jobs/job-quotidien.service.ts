@@ -31,7 +31,53 @@ function licenceDegradee(db: Db, aujourdHui: string): boolean {
   return licence !== undefined && calculerEtatLicence(licence, `${aujourdHui}T12:00:00.000Z`).etat === "DEGRADE";
 }
 
+// Une date avancée par erreur (horloge du poste) expirait des abonnements encore valables, et corriger l'heure ne les rétablissait pas. Un
+// abonnement expiré par la tâche elle-même alors que sa date de fin n'est pas passée ne peut venir que de là : il redevient actif, avec sa trace.
+// Les suivis de commission faussés à cette occasion reprennent leur cours.
+function retablirApresErreurHorloge(db: Db, aujourdHui: string): number {
+  const suspects = db
+    .select()
+    .from(schema.abonnement)
+    .where(and(eq(schema.abonnement.statut, "EXPIRE"), gte(schema.abonnement.dateFin, aujourdHui)))
+    .all();
+
+  return db.transaction(() => {
+    let retablis = 0;
+    for (const { numeroAbonnement } of suspects) {
+      const changements = db
+        .select()
+        .from(schema.historiqueAbonnement)
+        .where(and(eq(schema.historiqueAbonnement.numeroAbonnement, numeroAbonnement), eq(schema.historiqueAbonnement.typeChangement, "STATUT")))
+        .orderBy(schema.historiqueAbonnement.idHisto)
+        .all();
+      const dernier = changements.at(-1);
+      if (dernier?.valeurApres !== "EXPIRE" || dernier.motif !== "expiration_automatique") continue;
+
+      db.update(schema.abonnement).set({ statut: "ACTIF" }).where(eq(schema.abonnement.numeroAbonnement, numeroAbonnement)).run();
+      db.insert(schema.historiqueAbonnement)
+        .values({ numeroAbonnement, typeChangement: "STATUT", valeurAvant: "EXPIRE", valeurApres: "ACTIF", motif: "correction_horloge", utilisateurId: null })
+        .run();
+      // la commission annulée par cette fausse expiration reprend son suivi ; après une première expiration plus ancienne, qui a pu l'annuler
+      // à bon droit, elle est laissée telle quelle
+      if (changements.filter((c) => c.motif === "expiration_automatique").length === 1) {
+        db.update(schema.suiviCommissionCanalplus)
+          .set({ statut: "EN_COURS" })
+          .where(and(eq(schema.suiviCommissionCanalplus.numeroAbonnement, numeroAbonnement), eq(schema.suiviCommissionCanalplus.statut, "ANNULEE")))
+          .run();
+      }
+      retablis += 1;
+    }
+    // une commission ne s'acquiert qu'après sa période probatoire : confirmée avant, elle l'a été avec une fausse date
+    db.update(schema.suiviCommissionCanalplus)
+      .set({ statut: "EN_COURS" })
+      .where(and(eq(schema.suiviCommissionCanalplus.statut, "CONFIRMEE"), gte(schema.suiviCommissionCanalplus.dateFinProbatoire, aujourdHui)))
+      .run();
+    return retablis;
+  });
+}
+
 export interface JobQuotidienResultat {
+  abonnementsRetablis: number;
   abonnementsExpires: number;
   alertesCreees: number;
   notificationsTentees: number;
@@ -56,6 +102,7 @@ export function executerJobQuotidien(
 
 function traiterJournee(db: Db, aujourdHui: string, fournisseurNotification: FournisseurNotification): JobQuotidienResultat {
   const resultat: JobQuotidienResultat = {
+    abonnementsRetablis: retablirApresErreurHorloge(db, aujourdHui),
     abonnementsExpires: 0,
     alertesCreees: 0,
     notificationsTentees: 0,
@@ -124,7 +171,8 @@ function traiterJournee(db: Db, aujourdHui: string, fournisseurNotification: Fou
         .from(schema.alerteEcheance)
         .where(eq(schema.alerteEcheance.numeroAbonnement, abonnement.numeroAbonnement))
         .all()
-        .some((a) => a.jalonJours === jalon.jours && a.dateDeclenchement >= debutFenetre);
+        // une alerte datée du futur (horloge avancée par erreur) ne dispense pas du vrai rappel
+        .some((a) => a.jalonJours === jalon.jours && a.dateDeclenchement >= debutFenetre && a.dateDeclenchement <= aujourdHui);
       if (!dejaEnvoyee) {
         // l'alerte et son message s'écrivent ensemble : une alerte restée seule après une coupure passait pour « client prévenu », et le
         // rappel n'était plus jamais envoyé. Interrompue, l'opération est refaite entière au job suivant.

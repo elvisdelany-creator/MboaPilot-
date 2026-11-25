@@ -5345,7 +5345,7 @@ describe("GET /api/v1/abonnes : paramètre de recherche q (4.5)", () => {
 // « erreur » — l'utilisateur voyait « Erreur inattendue » au lieu de la raison du blocage.
 describe("mode dégradé de la licence : blocage des écritures (10.4)", () => {
   function expirerLicence() {
-    db.insert(schema.licence).values({ empreinteInstallation: "inst-test", dateExpirationAbonnement: "2020-01-01", derniereRevalidationReussie: new Date().toISOString() }).run();
+    db.insert(schema.licence).values({ empreinteInstallation: "inst-test", dateExpirationAbonnement: "2026-10-01", derniereRevalidationReussie: new Date().toISOString() }).run();
   }
 
   it("refuse une écriture avec une explication lisible sous la clé « erreur » (celle que l'interface affiche)", async () => {
@@ -5386,7 +5386,7 @@ describe("mode dégradé de la licence : blocage des écritures (10.4)", () => {
     expect(initiation.statusCode).toBe(201);
 
     // la licence bascule après l'initiation, avant la confirmation (celle de l'installation existe déjà : on l'expire, on n'en ajoute pas une)
-    db.update(schema.licence).set({ dateExpirationAbonnement: "2020-01-01" }).run();
+    db.update(schema.licence).set({ dateExpirationAbonnement: "2026-10-01" }).run();
     fournisseur.statut = "REUSSIE"; // le client a été débité
 
     const confirmation = await app.inject({ method: "POST", url: `/api/v1/paiements-mobiles/${initiation.json().idTransaction}/actualiser`, headers: authHeader(token) });
@@ -6117,7 +6117,7 @@ describe("PUT /api/v1/licence/expiration : prolonger l'abonnement (10.4, pilote)
     const app = buildApp(db, { jwtSecret: JWT_SECRET_TEST });
     creerUtilisateur(db, { siteId, nom: "Admin", prenom: "A", identifiant: "admin-licence3", motDePasse: "motdepasse-secret", role: "ADMINISTRATEUR" });
     const token = await connecter(app, "admin-licence3");
-    db.insert(schema.licence).values({ empreinteInstallation: "e", dateExpirationAbonnement: "2020-01-01", derniereRevalidationReussie: new Date().toISOString() }).run();
+    db.insert(schema.licence).values({ empreinteInstallation: "e", dateExpirationAbonnement: "2026-10-01", derniereRevalidationReussie: new Date().toISOString() }).run();
     const bloque = await app.inject({ method: "POST", url: "/api/v1/sav/dossiers", headers: authHeader(token), payload: { descriptionPanne: "x", sousGarantie: false } });
     expect(bloque.statusCode).toBe(403); // lecture seule : une écriture ordinaire est refusée
 

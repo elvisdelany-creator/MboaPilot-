@@ -3,10 +3,12 @@ import { eq } from "drizzle-orm";
 import { DELAI_GRACE_LICENCE_JOURS, joursAvantEcheance } from "@mboapilot/shared";
 import type { Db } from "../../db/types.js";
 import * as schema from "../../db/schema.js";
-import { lireCle, PALIERS_LICENCE } from "./cle-renouvellement.js";
+import { DUREE_MAX_PROLONGATION_JOURS, lireCle, PALIERS_LICENCE } from "./cle-renouvellement.js";
 
 export const DELAI_GRACE_JOURS = DELAI_GRACE_LICENCE_JOURS;
 const DUREE_ABONNEMENT_INITIAL_JOURS = 365;
+// avant cette date, MboaPilot n'existait pas : une échéance antérieure vient forcément d'une horloge déréglée (pile du poste usée)
+export const DATE_PLANCHER_HORLOGE = "2026-09-01";
 
 export interface LicenceInfo {
   palier: string;
@@ -35,10 +37,10 @@ function ajouterJours(dateIso: string, jours: number): string {
 // créée à la volée au premier accès (mode local zero-config, 2.2), avec une
 // empreinte d'installation stable pour toute la durée de vie de la base.
 export function obtenirOuCreerLicence(db: Db, maintenant: string): typeof schema.licence.$inferSelect {
-  const existante = db.select().from(schema.licence).get();
-  if (existante) return existante;
-
   const aujourdHui = maintenant.slice(0, 10);
+  const existante = db.select().from(schema.licence).get();
+  if (existante) return corrigerEssaiNeAvecHorlogeFausse(db, existante, maintenant);
+
   return db
     .insert(schema.licence)
     .values({
@@ -48,6 +50,25 @@ export function obtenirOuCreerLicence(db: Db, maintenant: string): typeof schema
     })
     .returning()
     .get();
+}
+
+// L'année d'essai créée un jour où l'horloge était restée dans le passé expirait avant même l'existence de l'application : la boutique passait en
+// lecture seule dès l'heure corrigée. Elle repart pour un an à la première lecture faite avec une date plausible.
+function corrigerEssaiNeAvecHorlogeFausse(db: Db, licence: typeof schema.licence.$inferSelect, maintenant: string): typeof schema.licence.$inferSelect {
+  const aujourdHui = maintenant.slice(0, 10);
+  if (licence.dateExpirationAbonnement.slice(0, 10) >= DATE_PLANCHER_HORLOGE || aujourdHui < DATE_PLANCHER_HORLOGE) return licence;
+  return enregistrerEcheance(db, { licence, userId: null, maintenant, valeurs: { dateExpirationAbonnement: ajouterJours(aujourdHui, DUREE_ABONNEMENT_INITIAL_JOURS) } });
+}
+
+// À l'activation des clés, une échéance saisie à la main pendant le pilote (jusqu'à 10 ans) resterait acquise sans clé : elle est ramenée à un an
+// au plus. Rien n'est touché si l'horloge du poste recule par rapport à la dernière revalidation : « un an » serait alors compté trop tôt.
+export function plafonnerEcheanceSansCle(db: Db, maintenant: string): void {
+  const licence = db.select().from(schema.licence).get();
+  if (!licence || licence.cleEmiseLe !== null) return;
+  const aujourdHui = maintenant.slice(0, 10);
+  const plafond = ajouterJours(aujourdHui, DUREE_ABONNEMENT_INITIAL_JOURS);
+  if (licence.dateExpirationAbonnement.slice(0, 10) <= plafond || aujourdHui < licence.derniereRevalidationReussie.slice(0, 10)) return;
+  enregistrerEcheance(db, { licence, userId: null, maintenant: licence.derniereRevalidationReussie, valeurs: { dateExpirationAbonnement: plafond } });
 }
 
 // 10.4 étape 2 : "tente une revalidation périodique... auprès du serveur de
@@ -83,8 +104,6 @@ export function calculerEtatLicence(licence: LicenceInfo, maintenant: string): S
   };
 }
 
-const DUREE_MAX_PROLONGATION_JOURS = 3653; // 10 ans
-
 // « AAAA-MM-JJ » existant au calendrier (ni 2028-13-40, ni 2028-02-30)
 function estDateIsoReelle(valeur: unknown): valeur is string {
   if (typeof valeur !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(valeur)) return false;
@@ -99,11 +118,13 @@ export interface AppliquerCleParams {
   maintenant?: string;
 }
 
-// 10.4 : renouvellement par clé signée de l'éditeur. La clé doit viser cette installation, couvrir au-delà d'aujourd'hui et de l'échéance
-// actuelle (une ancienne clé rejouée ne fait rien). Elle fixe l'échéance et la formule, et revalide la licence. Tracée dans le journal.
+// 10.4 : renouvellement par clé signée de l'éditeur. La clé doit viser cette installation, couvrir au-delà d'aujourd'hui et avoir été émise
+// après la dernière appliquée : une ancienne clé rejouée ne fait rien, et une clé plus récente peut changer de formule sans repousser l'échéance
+// ou corriger une échéance émise par erreur. La première clé remplace l'échéance d'essai ou saisie à la main. Elle fixe l'échéance et la formule,
+// et revalide la licence. Tracée dans le journal.
 export function appliquerCleRenouvellement(db: Db, params: AppliquerCleParams): typeof schema.licence.$inferSelect {
   const maintenant = params.maintenant ?? new Date().toISOString();
-  const { installation, expiration, palier } = lireCle(params.cle, params.clePublique);
+  const { installation, expiration, palier, emise } = lireCle(params.cle, params.clePublique);
 
   const licence = obtenirOuCreerLicence(db, maintenant);
   if (installation !== licence.empreinteInstallation) {
@@ -112,23 +133,24 @@ export function appliquerCleRenouvellement(db: Db, params: AppliquerCleParams): 
   if (!estDateIsoReelle(expiration)) throw new Error("La date d'échéance portée par la clé est invalide : demandez-en une nouvelle");
   if (!(PALIERS_LICENCE as readonly string[]).includes(palier)) throw new Error(`La formule « ${palier} » portée par la clé est inconnue de cette version : mettez l'application à jour`);
   const aujourdHui = maintenant.slice(0, 10);
-  const actuelle = licence.dateExpirationAbonnement.slice(0, 10);
   if (expiration <= aujourdHui) throw new Error(`Cette clé est déjà expirée (échéance ${expiration}) : demandez-en une nouvelle`);
-  if (expiration <= actuelle) throw new Error(`Cette clé ne prolonge pas l'abonnement : elle s'arrête au ${expiration}, l'échéance actuelle est le ${actuelle}`);
+  if (licence.cleEmiseLe !== null && emise <= licence.cleEmiseLe) {
+    throw new Error("Cette clé est déjà appliquée, ou une clé plus récente l'est déjà : demandez-en une nouvelle à votre éditeur");
+  }
   if (expiration > ajouterJours(aujourdHui, DUREE_MAX_PROLONGATION_JOURS)) throw new Error("La clé dépasse 10 ans : demandez-en une nouvelle");
 
-  return enregistrerEcheance(db, { licence, userId: params.userId, maintenant, valeurs: { dateExpirationAbonnement: expiration, palier } });
+  return enregistrerEcheance(db, { licence, userId: params.userId, maintenant, valeurs: { dateExpirationAbonnement: expiration, palier }, cleEmiseLe: emise });
 }
 
 // nouvelle échéance, revalidation et trace d'audit s'écrivent ensemble
 function enregistrerEcheance(
   db: Db,
-  p: { licence: typeof schema.licence.$inferSelect; userId: number; maintenant: string; valeurs: { dateExpirationAbonnement: string; palier?: string } },
+  p: { licence: typeof schema.licence.$inferSelect; userId: number | null; maintenant: string; valeurs: { dateExpirationAbonnement: string; palier?: string }; cleEmiseLe?: string },
 ) {
   return db.transaction(() => {
     const apres = db
       .update(schema.licence)
-      .set({ ...p.valeurs, derniereRevalidationReussie: p.maintenant })
+      .set({ ...p.valeurs, derniereRevalidationReussie: p.maintenant, ...(p.cleEmiseLe !== undefined && { cleEmiseLe: p.cleEmiseLe }) })
       .where(eq(schema.licence.idLicence, p.licence.idLicence))
       .returning()
       .get();

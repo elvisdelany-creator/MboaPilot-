@@ -7,6 +7,9 @@ data/
 
 # dossier choisi par le gerant pour ses donnees (voir docs/guide-boutique.md)
 donnees.txt
+# repères écrits par le lanceur et le serveur de la boutique
+.dernier-dossier-donnees
+.version-en-service
 
 # clés privées (outil de licence de l'éditeur) : jamais dans le dépôt
 *.pem

@@ -6,6 +6,8 @@
 // ⚠️ Le serveur MboaPilot doit être arrêté avant restauration : une bascule à
 // chaud du fichier SQLite sous une connexion ouverte (mode WAL) risquerait de
 // désynchroniser le processus en cours avec les fichiers -wal/-shm.
+// en premier : la restauration vise le même dossier que le lanceur (donnees.txt), pas apps/api/data
+import "../config/appliquer-donnees-txt.js";
 import { cheminBase } from "../config/chemins.js";
 import { restaurerSauvegarde } from "./restaurer-sauvegarde.service.js";
 
@@ -16,6 +18,8 @@ if (!cheminSauvegarde) {
   console.error("Usage : npm run db:restaurer -- <chemin-vers-la-sauvegarde.db>");
   process.exit(1);
 }
+
+console.log(`Base de la boutique : ${DB_PATH}`);
 
 try {
   restaurerSauvegarde(cheminSauvegarde, DB_PATH);

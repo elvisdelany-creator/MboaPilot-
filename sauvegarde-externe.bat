@@ -1,53 +1,32 @@
 @echo off
 rem MboaPilot - copie de securite HORS de l'ordinateur (cle USB, second disque, dossier reseau).
 rem Usage : double-clic (le dossier de destination est demande), ou  sauvegarde-externe.bat E:\MboaPilot-copie
-rem Copie les sauvegardes, la cle de chiffrement (.encryption-key), les photos SAV et le logo.
-rem Ne copie JAMAIS la base en cours d'utilisation (mboapilot.db et son journal) : ce fichier peut etre vide ou perime tant que
-rem MboaPilot tourne. Les sauvegardes du dossier backups\ sont, elles, completes (une par jour, et a la cloture de caisse).
+rem Copie les sauvegardes, la cle de chiffrement (.encryption-key), les photos SAV et le logo, jamais la base en service.
+rem Le travail est fait par apps\api\src\outils\copie-externe.ts (meme dossier de donnees que lancer-mboapilot.bat).
+rem Code de sortie : 0 copie a jour, 1 echec, 2 copie sans sauvegarde recente.
 chcp 65001 >nul
 setlocal
 cd /d "%~dp0"
 
-rem dossier des donnees : meme regle que lancer-mboapilot.bat (variable MBOAPILOT_DATA_DIR, sinon donnees.txt, sinon apps\api\data)
-if not defined MBOAPILOT_DATA_DIR if exist "%~dp0donnees.txt" set /p MBOAPILOT_DATA_DIR=<"%~dp0donnees.txt"
-if defined MBOAPILOT_DATA_DIR set "MBOAPILOT_DATA_DIR=%MBOAPILOT_DATA_DIR:"=%"
-set "DONNEES=%~dp0apps\api\data"
-if defined MBOAPILOT_DATA_DIR set "DONNEES=%MBOAPILOT_DATA_DIR%"
-set "DESTINATION=%~1"
+set "MBOAPILOT_DESTINATION=%~1"
 set "INTERACTIF=0"
-if "%DESTINATION%"=="" (
+if not defined MBOAPILOT_DESTINATION (
   set "INTERACTIF=1"
-  set /p "DESTINATION=Dossier de destination (par exemple E:\MboaPilot-copie) : "
+  set /p "MBOAPILOT_DESTINATION=Dossier de destination (par exemple E:\MboaPilot-copie) : "
 )
-if "%DESTINATION%"=="" (
+if defined MBOAPILOT_DESTINATION set "MBOAPILOT_DESTINATION=%MBOAPILOT_DESTINATION:"=%"
+if not defined MBOAPILOT_DESTINATION (
   echo Aucune destination indiquee : rien n'a ete copie.
   if "%INTERACTIF%"=="1" pause
   exit /b 1
 )
-if not exist "%DONNEES%\" (
-  echo Dossier de donnees introuvable : %DONNEES%
+if not exist "node_modules" (
+  echo Les composants de MboaPilot ne sont pas installes : lancez d'abord lancer-mboapilot.bat.
   if "%INTERACTIF%"=="1" pause
   exit /b 1
 )
 
-echo Copie de "%DONNEES%" vers "%DESTINATION%" ...
-robocopy "%DONNEES%" "%DESTINATION%" /E /XF mboapilot.db mboapilot.db-wal mboapilot.db-shm .jwt-secret /NFL /NDL /NJH /NJS /NP >nul
-rem robocopy : 0 a 7 = succes (8 et plus = echec)
-if errorlevel 8 (
-  echo ECHEC de la copie : verifiez que la destination est branchee et qu'il reste de la place.
-  if "%INTERACTIF%"=="1" pause
-  exit /b 1
-)
-
-dir /b "%DESTINATION%\backups\mboapilot-sauvegarde-*.db" >nul 2>nul
-if errorlevel 1 (
-  echo ATTENTION : aucune sauvegarde trouvee a la destination. Dans MboaPilot, faites Administration, Parametres, "Exporter mes donnees",
-  echo ou cloturez la caisse, puis relancez cette copie.
-  if "%INTERACTIF%"=="1" pause
-  exit /b 2
-)
-
-echo Copie terminee : "%DESTINATION%"
-echo Gardez ce support en lieu sur, hors de l'ordinateur de la boutique.
+call npm run --silent copie:externe --workspace=apps/api
+set "CODE=%errorlevel%"
 if "%INTERACTIF%"=="1" pause
-exit /b 0
+exit /b %CODE%

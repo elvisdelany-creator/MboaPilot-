@@ -35,11 +35,15 @@ vos données.
    **une seule ligne : le chemin du dossier**, par exemple `C:\MboaPilot-donnees`. Attention : Windows masque souvent
    les extensions et peut l'enregistrer sous le nom `donnees.txt.txt`, qui ne marcherait pas.
 3. **Lancez `lancer-mboapilot.bat`** : la fenêtre affiche `Dossier des donnees : C:\MboaPilot-donnees`. **Vérifiez cette
-   ligne.** Si elle affiche `...\apps\api\data`, le fichier n'a pas été pris en compte (nom ou emplacement).
+   ligne.** Si elle affiche `...\apps\api\data`, le fichier n'a pas été pris en compte (emplacement).
 
-Ce réglage vaut aussi pour le démarrage automatique et pour `sauvegarde-externe.bat`. Le dossier est créé tout seul
-s'il n'existe pas. Pour les commandes saisies à la main (par exemple `npm run db:restaurer`), indiquez d'abord le
-dossier : `set MBOAPILOT_DATA_DIR=C:\MboaPilot-donnees` dans l'invite de commandes.
+Ce réglage vaut aussi pour le démarrage automatique, pour `sauvegarde-externe.bat` et pour la restauration d'une
+sauvegarde : rien d'autre à régler. Le dossier est créé tout seul s'il n'existe pas.
+
+MboaPilot **refuse de démarrer** plutôt que d'ouvrir une boutique vide par erreur : si `donnees.txt` est vide ou
+illisible, s'il s'appelle `donnees.txt.txt`, s'il désigne un dossier vide alors que votre boutique est toujours à
+son ancien emplacement, ou s'il a disparu alors que la boutique était ailleurs que dans `apps\api\data`. Le message
+dit quoi corriger.
 
 **Ordre de priorité** : la variable `MBOAPILOT_DATA_DIR` si elle existe, sinon `donnees.txt`, sinon `apps\api\data`.
 
@@ -111,11 +115,12 @@ le mode simulé en lançant MboaPilot avec la variable `MBOAPILOT_MOBILE_MONEY_S
 - **Chaque jour, copiez la sauvegarde hors de l'ordinateur** : branchez la clé USB et double-cliquez sur
   **`sauvegarde-externe.bat`** (il demande le dossier de destination, par exemple `E:\MboaPilot-copie`). Il copie les
   sauvegardes **et** la clé de chiffrement `.encryption-key`, les photos SAV et le logo. Rangez la clé ailleurs que
-  près de l'ordinateur : un vol ou un incendie emporterait les deux.
+  près de l'ordinateur : un vol ou un incendie emporterait les deux. **Lisez la dernière ligne** : « Copie terminée »
+  donne la date de la dernière sauvegarde copiée ; « ATTENTION » signifie qu'il n'y en a pas de récente.
 - **Si vous n'avez pas clôturé la caisse** (journée sans clôture, ou vente faite après la clôture), faites d'abord
   **Administration → Paramètres → Exporter mes données** : cela crée à l'instant une sauvegarde qui contient toutes
-  les ventes, sinon la copie peut ne contenir que la sauvegarde du démarrage. Le script dit « aucune sauvegarde
-  trouvée » s'il n'y en a aucune.
+  les ventes, sinon la copie peut ne contenir que la sauvegarde du démarrage. Le script le signale quand il n'y a
+  aucune sauvegarde, ou aucune de moins de deux jours.
 - **Ne copiez jamais le seul fichier `mboapilot.db`** pendant que MboaPilot tourne : il peut être vide ou périmé.
   Utilisez toujours le script ou « Exporter mes données ».
 
@@ -135,7 +140,8 @@ L'entrée **États** de la navigation (Administrateur, Gérant et Comptable) don
 
 ## 6. Si l'ordinateur tombe en panne
 
-Sur un autre ordinateur Windows : installez Node.js, recopiez le dossier du projet, puis suivez
+Sur un autre ordinateur Windows : installez Node.js, recopiez le dossier du projet, créez `donnees.txt` (section
+2 bis), lancez une fois `lancer-mboapilot.bat` puis fermez-le, et suivez
 `exploitation.md` §3 (« Restaurer sur un autre poste ») avec la clé USB : une commande
 (`npm run db:restaurer -- fichier-de-sauvegarde.db`), puis copiez `.encryption-key`, `sav-photos` et `logos`.
 Cette procédure a été essayée de bout en bout : clients, factures, utilisateurs et catalogue sont retrouvés et
